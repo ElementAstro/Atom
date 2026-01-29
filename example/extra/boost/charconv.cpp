@@ -16,10 +16,13 @@ int main() {
         FormatOptions intOptions;
         intOptions.thousandsSeparator = ',';
         intOptions.uppercase = true;
-        std::string intStrWithOptions = BoostCharConv::intToString(intValue, 10, intOptions);
-        std::cout << "Integer to string with options: " << intStrWithOptions << std::endl;
+        std::string intStrWithOptions =
+            BoostCharConv::intToString(intValue, 10, intOptions);
+        std::cout << "Integer to string with options: " << intStrWithOptions
+                  << std::endl;
     } catch (const std::exception& e) {
-        std::cerr << "Integer to string conversion failed: " << e.what() << std::endl;
+        std::cerr << "Integer to string conversion failed: " << e.what()
+                  << std::endl;
     }
 
     // Floating-point to string conversion
@@ -33,10 +36,13 @@ int main() {
         floatOptions.format = NumberFormat::SCIENTIFIC;
         floatOptions.precision = 2;
         floatOptions.uppercase = true;
-        std::string floatStrWithOptions = BoostCharConv::floatToString(floatValue, floatOptions);
-        std::cout << "Floating-point to string with options: " << floatStrWithOptions << std::endl;
+        std::string floatStrWithOptions =
+            BoostCharConv::floatToString(floatValue, floatOptions);
+        std::cout << "Floating-point to string with options: "
+                  << floatStrWithOptions << std::endl;
     } catch (const std::exception& e) {
-        std::cerr << "Floating-point to string conversion failed: " << e.what() << std::endl;
+        std::cerr << "Floating-point to string conversion failed: " << e.what()
+                  << std::endl;
     }
 
     // String to integer conversion
@@ -45,7 +51,8 @@ int main() {
         int intValue = BoostCharConv::stringToInt<int>(intStr);
         std::cout << "String to integer: " << intValue << std::endl;
     } catch (const std::exception& e) {
-        std::cerr << "String to integer conversion failed: " << e.what() << std::endl;
+        std::cerr << "String to integer conversion failed: " << e.what()
+                  << std::endl;
     }
 
     // String to floating-point conversion
@@ -54,7 +61,8 @@ int main() {
         double floatValue = BoostCharConv::stringToFloat<double>(floatStr);
         std::cout << "String to floating-point: " << floatValue << std::endl;
     } catch (const std::exception& e) {
-        std::cerr << "String to floating-point conversion failed: " << e.what() << std::endl;
+        std::cerr << "String to floating-point conversion failed: " << e.what()
+                  << std::endl;
     }
 
     // General toString and fromString conversions
@@ -68,10 +76,12 @@ int main() {
         std::cout << "General toString (float): " << floatStr << std::endl;
 
         int intValueFromStr = BoostCharConv::fromString<int>(intStr);
-        std::cout << "General fromString (int): " << intValueFromStr << std::endl;
+        std::cout << "General fromString (int): " << intValueFromStr
+                  << std::endl;
 
         double floatValueFromStr = BoostCharConv::fromString<double>(floatStr);
-        std::cout << "General fromString (float): " << floatValueFromStr << std::endl;
+        std::cout << "General fromString (float): " << floatValueFromStr
+                  << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "General conversion failed: " << e.what() << std::endl;
     }
@@ -87,10 +97,13 @@ int main() {
         std::cout << "Special value to string (Inf): " << infStr << std::endl;
 
         double negInfValue = -std::numeric_limits<double>::infinity();
-        std::string negInfStr = BoostCharConv::specialValueToString(negInfValue);
-        std::cout << "Special value to string (Neg Inf): " << negInfStr << std::endl;
+        std::string negInfStr =
+            BoostCharConv::specialValueToString(negInfValue);
+        std::cout << "Special value to string (Neg Inf): " << negInfStr
+                  << std::endl;
     } catch (const std::exception& e) {
-        std::cerr << "Special value to string conversion failed: " << e.what() << std::endl;
+        std::cerr << "Special value to string conversion failed: " << e.what()
+                  << std::endl;
     }
 
     return 0;

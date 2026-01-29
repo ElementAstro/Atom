@@ -578,7 +578,9 @@ TEST_F(DaemonTest, WritePidFileErrorHandling) {
     fs::create_directories(readonly_dir);
 
     // Try to make directory read-only (this might not work on all systems)
-    fs::permissions(readonly_dir, fs::perms::owner_read | fs::perms::group_read | fs::perms::others_read);
+    fs::permissions(readonly_dir, fs::perms::owner_read |
+                                      fs::perms::group_read |
+                                      fs::perms::others_read);
 
     fs::path readonly_pid_file = readonly_dir / "readonly.pid";
 
@@ -632,7 +634,8 @@ TEST_F(DaemonTest, DaemonGuardRestartCount) {
     EXPECT_EQ(guard.getRestartCount(), 0);
 
     // The restart count is typically incremented by daemon restart logic
-    // which is not easily testable in unit tests, but we can verify the getter works
+    // which is not easily testable in unit tests, but we can verify the getter
+    // works
 }
 
 TEST_F(DaemonTest, DaemonGuardToStringWithData) {
@@ -648,7 +651,8 @@ TEST_F(DaemonTest, DaemonGuardToStringWithData) {
     EXPECT_NE(str.find("mainId="), std::string::npos);
     EXPECT_NE(str.find("restartCount=0"), std::string::npos);
 
-    // The exact format depends on the implementation, but it should be informative
+    // The exact format depends on the implementation, but it should be
+    // informative
     EXPECT_GT(str.length(), 20);  // Should be a reasonable length
 }
 

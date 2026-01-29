@@ -3,19 +3,14 @@
 #include "clipboard_error.hpp"
 
 #include <atomic>
-#include <chrono>
 #include <concepts>
-#include <cstddef>
 #include <functional>
-#include <future>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
-#include <system_error>
-#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -28,46 +23,6 @@
 #endif
 
 namespace clip {
-
-/**
- * @brief Configuration options for clipboard operations
- */
-struct ClipboardConfig {
-    std::chrono::milliseconds timeout{5000};           // Operation timeout
-    std::chrono::milliseconds cache_ttl{1000};         // Cache time-to-live
-    std::chrono::milliseconds poll_interval{50};       // Polling interval for Linux
-    size_t max_cache_size{10 * 1024 * 1024};          // Max cache size (10MB)
-    size_t max_retry_count{10};                        // Max retry attempts
-    bool enable_caching{true};                         // Enable intelligent caching
-    bool enable_monitoring{true};                      // Enable change monitoring
-    bool enable_metrics{false};                       // Enable performance metrics
-};
-
-/**
- * @brief Performance metrics for clipboard operations
- */
-struct ClipboardMetrics {
-    std::atomic<uint64_t> operations_count{0};
-    std::atomic<uint64_t> cache_hits{0};
-    std::atomic<uint64_t> cache_misses{0};
-    std::atomic<uint64_t> errors_count{0};
-    std::atomic<uint64_t> bytes_transferred{0};
-    std::chrono::steady_clock::time_point start_time{std::chrono::steady_clock::now()};
-
-    void reset() noexcept {
-        operations_count = 0;
-        cache_hits = 0;
-        cache_misses = 0;
-        errors_count = 0;
-        bytes_transferred = 0;
-        start_time = std::chrono::steady_clock::now();
-    }
-
-    double get_cache_hit_ratio() const noexcept {
-        auto total = cache_hits.load() + cache_misses.load();
-        return total > 0 ? static_cast<double>(cache_hits.load()) / total : 0.0;
-    }
-};
 
 /**
  * @brief Strong type for clipboard format identifiers
@@ -83,20 +38,6 @@ struct ClipboardFormat {
     constexpr auto operator<=>(const ClipboardFormat& other) const noexcept =
         default;
 };
-
-}  // namespace clip
-
-// Hash function for ClipboardFormat to enable use in unordered_map
-namespace std {
-template <>
-struct hash<clip::ClipboardFormat> {
-    std::size_t operator()(const clip::ClipboardFormat& format) const noexcept {
-        return std::hash<unsigned int>{}(format.value);
-    }
-};
-}  // namespace std
-
-namespace clip {
 
 /**
  * @brief Predefined clipboard formats
@@ -140,44 +81,44 @@ public:
     ClipboardResult(const T& value) : m_value(value) {}
     ClipboardResult(std::error_code error) noexcept : m_error(error) {}
 
-    constexpr bool has_value() const noexcept { return m_value.has_value(); }
-    constexpr explicit operator bool() const noexcept { return has_value(); }
+    bool has_value() const noexcept { return m_value.has_value(); }
+    explicit operator bool() const noexcept { return has_value(); }
 
-    constexpr const T& value() const& {
+    const T& value() const& {
         if (!has_value())
             throw std::runtime_error("ClipboardResult has no value");
         return *m_value;
     }
 
-    constexpr T& value() & {
+    T& value() & {
         if (!has_value())
             throw std::runtime_error("ClipboardResult has no value");
         return *m_value;
     }
 
-    constexpr T&& value() && {
+    T&& value() && {
         if (!has_value())
             throw std::runtime_error("ClipboardResult has no value");
         return std::move(*m_value);
     }
 
-    constexpr const T& operator*() const& noexcept { return *m_value; }
-    constexpr T& operator*() & noexcept { return *m_value; }
-    constexpr T&& operator*() && noexcept { return std::move(*m_value); }
+    const T& operator*() const& noexcept { return *m_value; }
+    T& operator*() & noexcept { return *m_value; }
+    T&& operator*() && noexcept { return std::move(*m_value); }
 
-    constexpr const T* operator->() const noexcept { return &*m_value; }
-    constexpr T* operator->() noexcept { return &*m_value; }
+    const T* operator->() const noexcept { return &*m_value; }
+    T* operator->() noexcept { return &*m_value; }
 
     std::error_code error() const noexcept { return m_error; }
 
     template <typename U>
-    constexpr T value_or(U&& default_value) const& {
+    T value_or(U&& default_value) const& {
         return has_value() ? *m_value
                            : static_cast<T>(std::forward<U>(default_value));
     }
 
     template <typename U>
-    constexpr T value_or(U&& default_value) && {
+    T value_or(U&& default_value) && {
         return has_value() ? std::move(*m_value)
                            : static_cast<T>(std::forward<U>(default_value));
     }
@@ -195,10 +136,10 @@ public:
     ClipboardResult() noexcept = default;
     ClipboardResult(std::error_code error) noexcept : m_error(error) {}
 
-    constexpr bool has_value() const noexcept { return !m_error; }
-    constexpr explicit operator bool() const noexcept { return has_value(); }
+    bool has_value() const noexcept { return !m_error; }
+    explicit operator bool() const noexcept { return has_value(); }
 
-    constexpr void value() const {
+    void value() const {
         if (!has_value())
             throw std::runtime_error("ClipboardResult has error");
     }
@@ -516,73 +457,6 @@ public:
     [[nodiscard]] static ClipboardResult<ClipboardFormat> registerFormatSafe(
         std::string_view formatName) noexcept;
 
-    // ============================================================================
-    // Configuration and Performance Management
-    // ============================================================================
-
-    /**
-     * @brief Update clipboard configuration
-     * @param config New configuration settings
-     */
-    void setConfig(const ClipboardConfig& config) noexcept;
-
-    /**
-     * @brief Get current clipboard configuration
-     * @return Current configuration settings
-     */
-    [[nodiscard]] const ClipboardConfig& getConfig() const noexcept;
-
-    /**
-     * @brief Get performance metrics
-     * @return Current performance metrics
-     */
-    [[nodiscard]] const ClipboardMetrics& getMetrics() const noexcept;
-
-    /**
-     * @brief Reset performance metrics
-     */
-    void resetMetrics() noexcept;
-
-    /**
-     * @brief Clear clipboard cache
-     */
-    void clearCache() noexcept;
-
-    // ============================================================================
-    // Asynchronous Operations
-    // ============================================================================
-
-    /**
-     * @brief Asynchronously set text to clipboard
-     * @param text Text to set
-     * @return Future that resolves when operation completes
-     */
-    [[nodiscard]] std::future<ClipboardResult<void>> setTextAsync(
-        std::string text);
-
-    /**
-     * @brief Asynchronously get text from clipboard
-     * @return Future that resolves with clipboard text
-     */
-    [[nodiscard]] std::future<ClipboardResult<std::string>> getTextAsync();
-
-    /**
-     * @brief Asynchronously set binary data to clipboard
-     * @param format Data format
-     * @param data Data to set
-     * @return Future that resolves when operation completes
-     */
-    [[nodiscard]] std::future<ClipboardResult<void>> setDataAsync(
-        ClipboardFormat format, std::vector<std::byte> data);
-
-    /**
-     * @brief Asynchronously get binary data from clipboard
-     * @param format Data format to retrieve
-     * @return Future that resolves with clipboard data
-     */
-    [[nodiscard]] std::future<ClipboardResult<std::vector<std::byte>>>
-        getDataAsync(ClipboardFormat format);
-
     /**
      * @class Impl
      * @brief Platform-specific implementation details (PIMPL pattern)
@@ -603,10 +477,6 @@ private:
 
     std::unique_ptr<Impl> pImpl;
 
-    // Configuration and metrics
-    ClipboardConfig m_config;
-    mutable ClipboardMetrics m_metrics;
-
     // Callback management
     mutable std::mutex m_callbackMutex;
     std::unordered_map<std::size_t, ClipboardChangeCallback> m_callbacks;
@@ -615,29 +485,8 @@ private:
     // Change monitoring
     mutable std::atomic<bool> m_hasChanged{false};
 
-    // Caching system
-    struct CacheEntry {
-        std::vector<std::byte> data;
-        std::chrono::steady_clock::time_point timestamp{std::chrono::steady_clock::now()};
-        ClipboardFormat format{0};
-
-        CacheEntry() = default;
-        CacheEntry(std::vector<std::byte> d, ClipboardFormat f)
-            : data(std::move(d)), timestamp(std::chrono::steady_clock::now()), format(f) {}
-    };
-    mutable std::mutex m_cacheMutex;
-    mutable std::unordered_map<ClipboardFormat, CacheEntry> m_cache;
-
-    // Thread pool for async operations
-    mutable std::mutex m_threadMutex;
-    mutable std::vector<std::thread> m_workerThreads;
-    mutable std::atomic<bool> m_shutdown{false};
-
-    // Helper methods
+    // Helper method to notify callbacks
     void notifyCallbacks() const noexcept;
-    bool isCacheValid(const CacheEntry& entry) const noexcept;
-    void cleanupCache() const noexcept;
-    void shutdownThreads() noexcept;
 };
 
 // ============================================================================

@@ -7,7 +7,6 @@
 #include <thread>
 #include "types.h"
 
-
 using namespace modern_log;
 
 TEST(LevelEnumTest, LevelValuesAreCorrect) {

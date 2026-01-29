@@ -8,10 +8,15 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(crontab, m) {
-    m.doc() = "Crontab management module for the atom package";
-
-    // Register exception translations
+/**
+ * @brief Registers exception translations for the crontab module.
+ *
+ * This function sets up proper exception handling to translate C++ exceptions
+ * to appropriate Python exceptions for better error reporting.
+ *
+ * @param m The pybind11 module to register exceptions for
+ */
+void registerExceptionTranslations(py::module_& m) {
     py::register_exception_translator([](std::exception_ptr p) {
         try {
             if (p)
@@ -24,8 +29,17 @@ PYBIND11_MODULE(crontab, m) {
             PyErr_SetString(PyExc_Exception, e.what());
         }
     });
+}
 
-    // CronValidationResult struct binding
+/**
+ * @brief Binds the CronValidationResult struct to Python.
+ *
+ * This function creates Python bindings for the CronValidationResult struct
+ * which contains validation results for cron expressions.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindCronValidationResult(py::module_& m) {
     py::class_<CronValidationResult>(m, "CronValidationResult",
                                      R"(Result of cron expression validation.
 
@@ -50,8 +64,17 @@ Attributes:
                                   : "Invalid cron expression: " + self.message;
             },
             "String representation of validation result.");
+}
 
-    // CronJob struct binding
+/**
+ * @brief Binds the CronJob struct to Python.
+ *
+ * This function creates Python bindings for the CronJob struct which represents
+ * a single cron job with its schedule, command, and metadata.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindCronJob(py::module_& m) {
     py::class_<CronJob>(
         m, "CronJob",
         R"(Represents a Cron job with a scheduled time and command.
@@ -107,8 +130,17 @@ Examples:
                        (self.enabled_ ? " (enabled)" : " (disabled)");
             },
             "String representation of the cron job.");
+}
 
-    // CronManager class binding
+/**
+ * @brief Binds the CronManager class to Python.
+ *
+ * This function creates Python bindings for the CronManager class which
+ * provides comprehensive cron job management functionality.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindCronManager(py::module_& m) {
     py::class_<CronManager>(m, "CronManager",
                             R"(Manages a collection of Cron jobs.
 
@@ -123,244 +155,98 @@ Examples:
     >>> jobs = manager.list_cron_jobs()
 )")
         .def(py::init<>(), "Default constructor for CronManager.")
+
+        // Job creation and deletion methods
         .def("create_cron_job", &CronManager::createCronJob, py::arg("job"),
-             R"(Adds a new Cron job.
-
-Args:
-    job: The CronJob object to be added.
-
-Returns:
-    True if the job was added successfully, false otherwise.
-)")
-        .def_static("validate_cron_expression",
-                    &CronManager::validateCronExpression, py::arg("cron_expr"),
-                    R"(Validates a cron expression.
-
-Args:
-    cron_expr: The cron expression to validate.
-
-Returns:
-    A CronValidationResult with validity flag and message.
-)")
+             "Adds a new Cron job.")
         .def("delete_cron_job", &CronManager::deleteCronJob, py::arg("command"),
-             R"(Deletes a Cron job with the specified command.
-
-Args:
-    command: The command of the Cron job to be deleted.
-
-Returns:
-    True if the job was deleted successfully, false otherwise.
-)")
+             "Deletes a Cron job with the specified command.")
         .def("delete_cron_job_by_id", &CronManager::deleteCronJobById,
-             py::arg("id"),
-             R"(Deletes a Cron job by its unique identifier.
+             py::arg("id"), "Deletes a Cron job by its unique identifier.")
+        .def("batch_create_jobs", &CronManager::batchCreateJobs,
+             py::arg("jobs"), "Batch creation of multiple Cron jobs.")
+        .def("batch_delete_jobs", &CronManager::batchDeleteJobs,
+             py::arg("commands"), "Batch deletion of multiple Cron jobs.")
+        .def("clear_all_jobs", &CronManager::clearAllJobs,
+             "Clears all cron jobs in memory and from system crontab.")
 
-Args:
-    id: The unique identifier of the job.
-
-Returns:
-    True if the job was deleted successfully, false otherwise.
-)")
+        // Job listing and searching methods
         .def("list_cron_jobs", &CronManager::listCronJobs,
-             R"(Lists all current Cron jobs.
-
-Returns:
-    A list of all current CronJob objects.
-)")
+             "Lists all current Cron jobs.")
         .def("list_cron_jobs_by_category", &CronManager::listCronJobsByCategory,
              py::arg("category"),
-             R"(Lists all current Cron jobs in a specific category.
-
-Args:
-    category: The category to filter by.
-
-Returns:
-    A list of CronJob objects in the specified category.
-)")
-        .def("get_categories", &CronManager::getCategories,
-             R"(Gets all available job categories.
-
-Returns:
-    A list of category names.
-)")
-        .def("export_to_json", &CronManager::exportToJSON, py::arg("filename"),
-             R"(Exports all Cron jobs to a JSON file.
-
-Args:
-    filename: The name of the file to export to.
-
-Returns:
-    True if the export was successful, false otherwise.
-)")
-        .def("import_from_json", &CronManager::importFromJSON,
-             py::arg("filename"),
-             R"(Imports Cron jobs from a JSON file.
-
-Args:
-    filename: The name of the file to import from.
-
-Returns:
-    True if the import was successful, false otherwise.
-)")
-        .def("update_cron_job", &CronManager::updateCronJob,
-             py::arg("old_command"), py::arg("new_job"),
-             R"(Updates an existing Cron job.
-
-Args:
-    old_command: The command of the Cron job to be updated.
-    new_job: The new CronJob object to replace the old one.
-
-Returns:
-    True if the job was updated successfully, false otherwise.
-)")
-        .def("update_cron_job_by_id", &CronManager::updateCronJobById,
-             py::arg("id"), py::arg("new_job"),
-             R"(Updates a Cron job by its unique identifier.
-
-Args:
-    id: The unique identifier of the job.
-    new_job: The new CronJob object to replace the old one.
-
-Returns:
-    True if the job was updated successfully, false otherwise.
-)")
+             "Lists all current Cron jobs in a specific category.")
+        .def("search_cron_jobs", &CronManager::searchCronJobs, py::arg("query"),
+             "Searches for Cron jobs that match the specified query.")
         .def("view_cron_job", &CronManager::viewCronJob, py::arg("command"),
-             R"(Views the details of a Cron job with the specified command.
-
-Args:
-    command: The command of the Cron job to view.
-
-Returns:
-    The CronJob object with the specified command.
-
-Raises:
-    RuntimeError: If the job is not found.
-)")
+             "Views the details of a Cron job with the specified command.")
         .def("view_cron_job_by_id", &CronManager::viewCronJobById,
              py::arg("id"),
-             R"(Views the details of a Cron job by its unique identifier.
+             "Views the details of a Cron job by its unique identifier.")
 
-Args:
-    id: The unique identifier of the job.
-
-Returns:
-    The CronJob object with the specified id.
-
-Raises:
-    RuntimeError: If the job is not found.
-)")
-        .def("search_cron_jobs", &CronManager::searchCronJobs, py::arg("query"),
-             R"(Searches for Cron jobs that match the specified query.
-
-Args:
-    query: The query string to search for.
-
-Returns:
-    A list of CronJob objects that match the query.
-)")
-        .def("statistics", &CronManager::statistics,
-             R"(Gets statistics about the current Cron jobs.
-
-Returns:
-    A dictionary with statistics about the jobs.
-)")
+        // Job update and status methods
+        .def("update_cron_job", &CronManager::updateCronJob,
+             py::arg("old_command"), py::arg("new_job"),
+             "Updates an existing Cron job.")
+        .def("update_cron_job_by_id", &CronManager::updateCronJobById,
+             py::arg("id"), py::arg("new_job"),
+             "Updates a Cron job by its unique identifier.")
         .def("enable_cron_job", &CronManager::enableCronJob, py::arg("command"),
-             R"(Enables a Cron job with the specified command.
-
-Args:
-    command: The command of the Cron job to enable.
-
-Returns:
-    True if the job was enabled successfully, false otherwise.
-)")
+             "Enables a Cron job with the specified command.")
         .def("disable_cron_job", &CronManager::disableCronJob,
              py::arg("command"),
-             R"(Disables a Cron job with the specified command.
-
-Args:
-    command: The command of the Cron job to disable.
-
-Returns:
-    True if the job was disabled successfully, false otherwise.
-)")
+             "Disables a Cron job with the specified command.")
         .def("set_job_enabled_by_id", &CronManager::setJobEnabledById,
              py::arg("id"), py::arg("enabled"),
-             R"(Enable or disable a Cron job by its unique identifier.
-
-Args:
-    id: The unique identifier of the job.
-    enabled: Whether to enable or disable the job.
-
-Returns:
-    True if the operation was successful, false otherwise.
-)")
+             "Enable or disable a Cron job by its unique identifier.")
         .def("enable_cron_jobs_by_category",
              &CronManager::enableCronJobsByCategory, py::arg("category"),
-             R"(Enables all Cron jobs in a specific category.
-
-Args:
-    category: The category of jobs to enable.
-
-Returns:
-    Number of jobs successfully enabled.
-)")
+             "Enables all Cron jobs in a specific category.")
         .def("disable_cron_jobs_by_category",
              &CronManager::disableCronJobsByCategory, py::arg("category"),
-             R"(Disables all Cron jobs in a specific category.
+             "Disables all Cron jobs in a specific category.")
 
-Args:
-    category: The category of jobs to disable.
-
-Returns:
-    Number of jobs successfully disabled.
-)")
-        .def("export_to_crontab", &CronManager::exportToCrontab,
-             R"(Exports enabled Cron jobs to the system crontab.
-
-Returns:
-    True if the export was successful, false otherwise.
-)")
-        .def("batch_create_jobs", &CronManager::batchCreateJobs,
-             py::arg("jobs"),
-             R"(Batch creation of multiple Cron jobs.
-
-Args:
-    jobs: List of CronJob objects to create.
-
-Returns:
-    Number of jobs successfully created.
-)")
-        .def("batch_delete_jobs", &CronManager::batchDeleteJobs,
-             py::arg("commands"),
-             R"(Batch deletion of multiple Cron jobs.
-
-Args:
-    commands: List of commands identifying jobs to delete.
-
-Returns:
-    Number of jobs successfully deleted.
-)")
+        // Utility and management methods
+        .def_static("validate_cron_expression",
+                    &CronManager::validateCronExpression, py::arg("cron_expr"),
+                    "Validates a cron expression.")
+        .def("get_categories", &CronManager::getCategories,
+             "Gets all available job categories.")
+        .def("statistics", &CronManager::statistics,
+             "Gets statistics about the current Cron jobs.")
         .def("record_job_execution", &CronManager::recordJobExecution,
-             py::arg("command"),
-             R"(Records that a job has been executed.
+             py::arg("command"), "Records that a job has been executed.")
 
-Args:
-    command: The command of the executed job.
+        // Import/Export methods
+        .def("export_to_json", &CronManager::exportToJSON, py::arg("filename"),
+             "Exports all Cron jobs to a JSON file.")
+        .def("import_from_json", &CronManager::importFromJSON,
+             py::arg("filename"), "Imports Cron jobs from a JSON file.")
+        .def("export_to_crontab", &CronManager::exportToCrontab,
+             "Exports enabled Cron jobs to the system crontab.");
+}
 
-Returns:
-    True if the job was found and updated, false otherwise.
-)")
-        .def("clear_all_jobs", &CronManager::clearAllJobs,
-             R"(Clears all cron jobs in memory and from system crontab.
-
-Returns:
-    True if all jobs were cleared successfully, false otherwise.
-)");
-
-    // Additional examples in module docstring
+/**
+ * @brief Adds comprehensive module documentation and usage examples.
+ *
+ * This function sets the module's __doc__ attribute with detailed documentation
+ * including usage examples for cron job management.
+ *
+ * @param m The pybind11 module to add documentation to
+ */
+void addModuleDocumentation(py::module_& m) {
     m.attr("__doc__") = R"(Crontab management module for the atom package.
 
 This module provides classes for managing cron jobs in both memory and the system crontab.
+
+Key Features:
+- Create, update, delete, and list cron jobs
+- Validate cron expressions
+- Import/export jobs to JSON files
+- Export jobs to system crontab
+- Batch operations for multiple jobs
+- Category-based job organization
+- Job execution tracking and statistics
 
 Examples:
     >>> from atom.system.crontab import CronManager, CronJob
@@ -379,7 +265,29 @@ Examples:
     >>> if result.valid:
     ...     print("Valid cron expression")
     >>>
+    >>> # List all jobs in a category
+    >>> backup_jobs = manager.list_cron_jobs_by_category("backups")
+    >>>
     >>> # Export jobs to system crontab
     >>> manager.export_to_crontab()
+    >>>
+    >>> # Get statistics
+    >>> stats = manager.statistics()
+    >>> print(f"Total jobs: {stats['total_jobs']}")
 )";
+}
+
+PYBIND11_MODULE(crontab, m) {
+    m.doc() = "Crontab management module for the atom package";
+
+    // Register exception translations
+    registerExceptionTranslations(m);
+
+    // Bind core data structures
+    bindCronValidationResult(m);
+    bindCronJob(m);
+    bindCronManager(m);
+
+    // Add module documentation
+    addModuleDocumentation(m);
 }

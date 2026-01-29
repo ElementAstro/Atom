@@ -50,7 +50,8 @@ inline auto getTypeRegistry() -> std::unordered_map<std::string, TypeInfo>& {
 
 /*!
  * \class TypeCaster
- * \brief Optimized type casting functionality with enhanced performance and caching
+ * \brief Optimized type casting functionality with enhanced performance and
+ * caching
  */
 class alignas(64) TypeCaster {  // Cache line alignment for better performance
 public:
@@ -74,8 +75,11 @@ public:
 
             double getAverageExecutionTime() const noexcept {
                 auto count = execution_count.load(std::memory_order_relaxed);
-                if (count == 0) return 0.0;
-                return static_cast<double>(total_execution_time_ns.load(std::memory_order_relaxed)) / count;
+                if (count == 0)
+                    return 0.0;
+                return static_cast<double>(total_execution_time_ns.load(
+                           std::memory_order_relaxed)) /
+                       count;
             }
         };
 
@@ -93,25 +97,34 @@ public:
             : conversions(other.conversions),
               cached_time(other.cached_time),
               use_count(other.use_count.load(std::memory_order_relaxed)),
-              success_count(other.success_count.load(std::memory_order_relaxed)),
-              failure_count(other.failure_count.load(std::memory_order_relaxed)),
+              success_count(
+                  other.success_count.load(std::memory_order_relaxed)),
+              failure_count(
+                  other.failure_count.load(std::memory_order_relaxed)),
               average_execution_time_ns(other.average_execution_time_ns) {}
 
         ConversionPath(ConversionPath&& other) noexcept
             : conversions(std::move(other.conversions)),
               cached_time(other.cached_time),
               use_count(other.use_count.load(std::memory_order_relaxed)),
-              success_count(other.success_count.load(std::memory_order_relaxed)),
-              failure_count(other.failure_count.load(std::memory_order_relaxed)),
+              success_count(
+                  other.success_count.load(std::memory_order_relaxed)),
+              failure_count(
+                  other.failure_count.load(std::memory_order_relaxed)),
               average_execution_time_ns(other.average_execution_time_ns) {}
 
         ConversionPath& operator=(const ConversionPath& other) {
             if (this != &other) {
                 conversions = other.conversions;
                 cached_time = other.cached_time;
-                use_count.store(other.use_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
-                success_count.store(other.success_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
-                failure_count.store(other.failure_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                use_count.store(other.use_count.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+                success_count.store(
+                    other.success_count.load(std::memory_order_relaxed),
+                    std::memory_order_relaxed);
+                failure_count.store(
+                    other.failure_count.load(std::memory_order_relaxed),
+                    std::memory_order_relaxed);
                 average_execution_time_ns = other.average_execution_time_ns;
             }
             return *this;
@@ -121,9 +134,14 @@ public:
             if (this != &other) {
                 conversions = std::move(other.conversions);
                 cached_time = other.cached_time;
-                use_count.store(other.use_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
-                success_count.store(other.success_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
-                failure_count.store(other.failure_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+                use_count.store(other.use_count.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+                success_count.store(
+                    other.success_count.load(std::memory_order_relaxed),
+                    std::memory_order_relaxed);
+                failure_count.store(
+                    other.failure_count.load(std::memory_order_relaxed),
+                    std::memory_order_relaxed);
                 average_execution_time_ns = other.average_execution_time_ns;
             }
             return *this;
@@ -142,8 +160,11 @@ public:
 
         double getSuccessRate() const noexcept {
             auto total = use_count.load(std::memory_order_relaxed);
-            if (total == 0) return 0.0;
-            return static_cast<double>(success_count.load(std::memory_order_relaxed)) / total;
+            if (total == 0)
+                return 0.0;
+            return static_cast<double>(
+                       success_count.load(std::memory_order_relaxed)) /
+                   total;
         }
 
         bool isExpired() const noexcept {
@@ -153,20 +174,23 @@ public:
 
         // Enhanced: Cache efficiency metrics
         bool shouldEvict() const noexcept {
-            return isExpired() || getSuccessRate() < 0.1; // Evict if success rate < 10%
+            return isExpired() ||
+                   getSuccessRate() < 0.1;  // Evict if success rate < 10%
         }
     };
 
     // Optimized: Custom hash function for TypeInfo pairs
     struct TypeInfoPairHash {
-        std::size_t operator()(const std::pair<TypeInfo, TypeInfo>& p) const noexcept {
+        std::size_t operator()(
+            const std::pair<TypeInfo, TypeInfo>& p) const noexcept {
             auto h1 = p.first.getHash();
             auto h2 = p.second.getHash();
             return h1 ^ (h2 << 1);  // Simple but effective hash combination
         }
     };
 
-    using PathCache = std::unordered_map<std::pair<TypeInfo, TypeInfo>, ConversionPath, TypeInfoPairHash>;
+    using PathCache = std::unordered_map<std::pair<TypeInfo, TypeInfo>,
+                                         ConversionPath, TypeInfoPairHash>;
 
 public:
     /*!
@@ -174,6 +198,32 @@ public:
      * \note Prefer using createShared() for creating instances.
      */
     TypeCaster() { registerBuiltinTypes(); }
+
+    TypeCaster(const TypeCaster&) = delete;
+    auto operator=(const TypeCaster&) -> TypeCaster& = delete;
+
+    TypeCaster(TypeCaster&& other) noexcept
+        : conversions_(std::move(other.conversions_)),
+          conversion_paths_cache_(std::move(other.conversion_paths_cache_)),
+          type_name_map_(std::move(other.type_name_map_)),
+          type_alias_map_(std::move(other.type_alias_map_)),
+          type_group_map_(std::move(other.type_group_map_)),
+          m_enumMaps_(std::move(other.m_enumMaps_)),
+          type_mutex_(),
+          conversion_mutex_(),
+          enum_mutex_() {}
+
+    auto operator=(TypeCaster&& other) noexcept -> TypeCaster& {
+        if (this != &other) {
+            conversions_ = std::move(other.conversions_);
+            conversion_paths_cache_ = std::move(other.conversion_paths_cache_);
+            type_name_map_ = std::move(other.type_name_map_);
+            type_alias_map_ = std::move(other.type_alias_map_);
+            type_group_map_ = std::move(other.type_group_map_);
+            m_enumMaps_ = std::move(other.m_enumMaps_);
+        }
+        return *this;
+    }
 
     /*!
      * \brief Creates a shared pointer to a new TypeCaster instance.
@@ -241,7 +291,8 @@ private:
 
                 // Check if cache is still valid
                 if (now - cached_path.cached_time < CACHE_TTL) {
-                    cached_path.use_count.fetch_add(1, std::memory_order_relaxed);
+                    cached_path.use_count.fetch_add(1,
+                                                    std::memory_order_relaxed);
 
                     // Apply cached conversions
                     std::any result = input;
@@ -416,8 +467,8 @@ private:
      * \throws std::invalid_argument if the enum value is invalid.
      */
     template <typename EnumType>
-    auto enumToString(EnumType value, const std::string& enum_name)
-        -> std::string {
+    auto enumToString(EnumType value,
+                      const std::string& enum_name) -> std::string {
         std::shared_lock enumLock(enum_mutex_);
         const auto& enumMap = getEnumMap<EnumType>(enum_name);
         for (const auto& [key, enumValue] : enumMap) {
@@ -595,6 +646,160 @@ private:
             m_enumMaps_.at(enum_name));
     }
 };
+
+//==============================================================================
+// C++23 Enhanced Type Caster Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for types that can be cast
+ */
+template <typename From, typename To>
+concept Castable =
+    std::is_convertible_v<From, To> || requires(From f) { static_cast<To>(f); };
+
+/**
+ * @brief Concept for types with explicit conversion
+ */
+template <typename From, typename To>
+concept ExplicitlyCastable = requires(From f) { static_cast<To>(f); } &&
+                             !std::is_convertible_v<From, To>;
+
+/**
+ * @brief Safe cast with optional result
+ */
+template <typename To, typename From>
+auto safeCast(const From& value) -> std::optional<To> {
+    if constexpr (std::is_convertible_v<From, To>) {
+        return static_cast<To>(value);
+    } else {
+        return std::nullopt;
+    }
+}
+
+/**
+ * @brief Cast with default value on failure
+ */
+template <typename To, typename From>
+auto castOrDefault(const From& value, To default_value) -> To {
+    if constexpr (std::is_convertible_v<From, To>) {
+        return static_cast<To>(value);
+    } else {
+        return default_value;
+    }
+}
+
+/**
+ * @brief Fluent type caster builder
+ */
+class TypeCasterBuilder {
+    TypeCaster caster_;
+
+public:
+    TypeCasterBuilder() = default;
+
+    template <typename From, typename To>
+    TypeCasterBuilder& addConversion(std::function<To(const From&)> converter) {
+        caster_.template registerConversion<From, To>(
+            [converter](const std::any& input) -> std::any {
+                return converter(std::any_cast<From>(input));
+            });
+        return *this;
+    }
+
+    template <typename T>
+    TypeCasterBuilder& registerType(std::string_view alias = "") {
+        caster_.registerType<T>(std::string(alias));
+        return *this;
+    }
+
+    template <typename From, typename To>
+    TypeCasterBuilder& addBidirectional(
+        std::function<To(const From&)> forward,
+        std::function<From(const To&)> backward) {
+        addConversion<From, To>(std::move(forward));
+        addConversion<To, From>(std::move(backward));
+        return *this;
+    }
+
+    TypeCaster build() { return std::move(caster_); }
+
+    std::shared_ptr<TypeCaster> buildShared() {
+        return std::make_shared<TypeCaster>(std::move(caster_));
+    }
+};
+
+/**
+ * @brief Create a type caster builder
+ */
+inline auto buildTypeCaster() -> TypeCasterBuilder {
+    return TypeCasterBuilder{};
+}
+
+/**
+ * @brief Type cast chain for multi-step conversions
+ */
+template <typename... Steps>
+class CastChain;
+
+template <typename First, typename Second, typename... Rest>
+class CastChain<First, Second, Rest...> {
+public:
+    static auto cast(const First& value)
+        -> std::optional<typename CastChain<Rest...>::result_type> {
+        if (auto mid = safeCast<Second>(value)) {
+            return CastChain<Second, Rest...>::cast(*mid);
+        }
+        return std::nullopt;
+    }
+
+    using result_type = typename CastChain<Second, Rest...>::result_type;
+};
+
+template <typename First, typename Second>
+class CastChain<First, Second> {
+public:
+    using result_type = Second;
+    static auto cast(const First& value) -> std::optional<Second> {
+        return safeCast<Second>(value);
+    }
+};
+
+/**
+ * @brief Dynamic type caster with runtime type discovery
+ */
+class DynamicCaster {
+    TypeCaster caster_;
+
+public:
+    template <typename To>
+    auto cast(const std::any& value) -> std::optional<To> {
+        try {
+            auto result = caster_.convert<To>(value);
+            return std::any_cast<To>(result);
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+
+    template <typename From, typename To>
+    void registerCast(std::function<To(const From&)> converter) {
+        caster_.template registerConversion<From, To>(
+            [converter](const std::any& input) -> std::any {
+                return converter(std::any_cast<From>(input));
+            });
+    }
+
+    TypeCaster& getCaster() { return caster_; }
+};
+
+/**
+ * @brief Global type caster singleton
+ */
+inline TypeCaster& getGlobalTypeCaster() {
+    static TypeCaster instance;
+    return instance;
+}
 
 }  // namespace atom::meta
 

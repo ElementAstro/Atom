@@ -15,8 +15,7 @@
 
 #include "atom/meta/stepper.hpp"
 
-// Helper function to print results
-template <typename T>
+// Helper function to print resultstemplate <typename T>
 void printResult(const atom::meta::Result<T>& result) {
     if (result.isSuccess()) {
         try {
@@ -31,16 +30,15 @@ void printResult(const atom::meta::Result<T>& result) {
     }
 }
 
-// Helper function to print execution stats
-void printStats(const atom::meta::FunctionSequence::ExecutionStats& stats) {
-    std::cout << "Execution Statistics:" << std::endl;
-    std::cout << "  Total execution time: "
-              << stats.totalExecutionTime.count() / 1000000.0 << " ms"
-              << std::endl;
-    std::cout << "  Invocation count: " << stats.invocationCount << std::endl;
-    std::cout << "  Cache hits: " << stats.cacheHits << std::endl;
-    std::cout << "  Cache misses: " << stats.cacheMisses << std::endl;
-    std::cout << "  Error count: " << stats.errorCount << std::endl;
+// Helper function to print execution statsvoid printStats(const
+// atom::meta::FunctionSequence::ExecutionStats& stats) {
+std::cout << "Execution Statistics:" << std::endl;
+std::cout << "  Total execution time: "
+          << stats.totalExecutionTime.count() / 1000000.0 << " ms" << std::endl;
+std::cout << "  Invocation count: " << stats.invocationCount << std::endl;
+std::cout << "  Cache hits: " << stats.cacheHits << std::endl;
+std::cout << "  Cache misses: " << stats.cacheMisses << std::endl;
+std::cout << "  Error count: " << stats.errorCount << std::endl;
 }
 
 int main() {

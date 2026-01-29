@@ -65,7 +65,8 @@ int main() {
             std::cout << "Translation successful: " << std::boolalpha << true
                       << std::endl;
         } else {
-            std::cout << "Translation failed with error code: " << static_cast<int>(result.error().error()) << std::endl;
+            std::cout << "Translation failed with error code: "
+                      << static_cast<int>(result.error().error()) << std::endl;
         }
     }
 

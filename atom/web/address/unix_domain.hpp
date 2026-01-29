@@ -1,6 +1,8 @@
 #ifndef ATOM_WEB_ADDRESS_UNIX_DOMAIN_HPP
 #define ATOM_WEB_ADDRESS_UNIX_DOMAIN_HPP
 
+#include <compare>
+#include <filesystem>
 #include "address.hpp"
 
 namespace atom::web {
@@ -11,6 +13,12 @@ namespace atom::web {
  */
 class UnixDomain : public Address {
 public:
+#ifdef _WIN32
+    static constexpr size_t MAX_PATH_LENGTH = 260;  // MAX_PATH
+#else
+    static constexpr size_t MAX_PATH_LENGTH = 108;  // Unix socket path limit
+#endif
+
     UnixDomain() = default;
 
     /**
@@ -47,8 +55,8 @@ public:
      * otherwise.
      * @override
      */
-    auto isInRange(std::string_view start, std::string_view end)
-        -> bool override;
+    auto isInRange(std::string_view start,
+                   std::string_view end) -> bool override;
 
     /**
      * @brief Converts the Unix domain socket address to its binary
@@ -109,9 +117,8 @@ public:
      * @return True if paths are in the same directory, false otherwise.
      * @override
      */
-    [[nodiscard]] auto isSameSubnet(const Address& other,
-                                    std::string_view mask) const
-        -> bool override;
+    [[nodiscard]] auto isSameSubnet(
+        const Address& other, std::string_view mask) const -> bool override;
 
     /**
      * @brief Converts the Unix domain socket address to its hexadecimal
@@ -120,6 +127,46 @@ public:
      * @override
      */
     [[nodiscard]] auto toHex() const -> std::string override;
+
+    /**
+     * @brief Three-way comparison for Unix domain socket addresses.
+     * @param other The other address to compare.
+     * @return Comparison result.
+     */
+    [[nodiscard]] auto operator<=>(const Address& other) const
+        -> std::partial_ordering override;
+
+    /**
+     * @brief Get the path as a filesystem path object.
+     * @return The path as std::filesystem::path.
+     */
+    [[nodiscard]] auto getPath() const -> std::filesystem::path {
+        return std::filesystem::path(addressStr);
+    }
+
+    /**
+     * @brief Check if the socket file exists.
+     * @return True if the socket file exists.
+     */
+    [[nodiscard]] auto exists() const -> bool;
+
+    /**
+     * @brief Check if this is an abstract socket (Linux-specific).
+     * @return True if abstract socket (path starts with null byte).
+     */
+    [[nodiscard]] auto isAbstract() const -> bool;
+
+    /**
+     * @brief Get the filename portion of the path.
+     * @return The filename.
+     */
+    [[nodiscard]] auto getFilename() const -> std::string;
+
+    /**
+     * @brief Get the parent directory of the socket path.
+     * @return The parent directory path.
+     */
+    [[nodiscard]] auto getParentPath() const -> std::string;
 
     /**
      * @brief Validates a Unix domain socket path.
@@ -143,6 +190,24 @@ private:
      */
     [[nodiscard]] static auto getDirectoryPath(std::string_view path)
         -> std::string;
+
+    /**
+     * @brief Create a Unix domain socket address from a filesystem path.
+     * @param path The filesystem path.
+     * @return UnixDomain address.
+     */
+    [[nodiscard]] static auto fromPath(const std::filesystem::path& path)
+        -> UnixDomain;
+
+#ifndef _WIN32
+    /**
+     * @brief Create an abstract socket address (Linux-specific).
+     * @param name The abstract socket name (without leading null byte).
+     * @return UnixDomain address.
+     */
+    [[nodiscard]] static auto createAbstract(std::string_view name)
+        -> UnixDomain;
+#endif
 };
 
 }  // namespace atom::web

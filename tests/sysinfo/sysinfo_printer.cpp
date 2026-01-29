@@ -1,321 +1,305 @@
-#include "atom/sysinfo/sysinfo_printer.hpp"
+/*
+ * sysinfo_printer.cpp
+ *
+ * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ */
+
+/*************************************************
+
+Date: 2024-12-22
+
+Description: Unit Tests for System Information Printer Module
+Tests formatting functions and report generation.
+
+**************************************************/
+
 #include <gtest/gtest.h>
-#include <gmock/gmock.h>
-#include <fstream>
-#include <filesystem>
+#include <memory>
+#include <string>
+
+#include "atom/sysinfo/battery.hpp"
+#include "atom/sysinfo/cpu.hpp"
+#include "atom/sysinfo/memory.hpp"
+#include "atom/sysinfo/os.hpp"
+#include "atom/sysinfo/sysinfo_printer.hpp"
 
 using namespace atom::system;
-using namespace testing;
 
-class SysinfoPrinterTest : public ::testing::Test {
+namespace atom::sysinfo::test {
+
+// ============================================================================
+// System Information Printer Tests
+// ============================================================================
+
+class SysInfoPrinterTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Create a temporary directory for test files
-        testDir_ = std::filesystem::temp_directory_path() / "sysinfo_printer_test";
-        std::filesystem::create_directories(testDir_);
+        // Setup system information printer tests
+        printer = std::make_unique<SystemInfoPrinter>();
     }
 
     void TearDown() override {
-        // Clean up test files
-        if (std::filesystem::exists(testDir_)) {
-            std::filesystem::remove_all(testDir_);
-        }
+        // Cleanup
+        printer.reset();
     }
 
-    std::filesystem::path testDir_;
+    std::unique_ptr<SystemInfoPrinter> printer;
 };
 
-// Test SystemInfoPrinter basic construction
-TEST_F(SysinfoPrinterTest, BasicConstruction) {
-    EXPECT_NO_THROW({
-        SystemInfoPrinter printer;
+TEST_F(SysInfoPrinterTest, FormatBatteryInfo) {
+    // Test battery information formatting
+    auto batteryInfo = getBatteryInfo();
 
-        // Should be able to create multiple instances
-        SystemInfoPrinter printer2;
-        SystemInfoPrinter printer3;
+    if (batteryInfo.has_value()) {
+        std::string formatted =
+            SystemInfoPrinter::formatBatteryInfo(batteryInfo.value());
 
-        // Use the printers to avoid unused variable warnings
-        (void)printer;
-        (void)printer2;
-        (void)printer3;
-    });
-}
+        // Formatted output should not be empty
+        EXPECT_FALSE(formatted.empty());
+        EXPECT_GT(formatted.length(), 0);
 
-// Test legacy static methods
-TEST_F(SysinfoPrinterTest, LegacyStaticMethods) {
-    EXPECT_NO_THROW({
-        // Test generateFullReport
-        std::string fullReport = SystemInfoPrinter::generateFullReport();
-        EXPECT_FALSE(fullReport.empty());
-
-        // Test generateSimpleReport
-        std::string simpleReport = SystemInfoPrinter::generateSimpleReport();
-        EXPECT_FALSE(simpleReport.empty());
-
-        // Test generatePerformanceReport
-        std::string perfReport = SystemInfoPrinter::generatePerformanceReport();
-        EXPECT_FALSE(perfReport.empty());
-
-        // Test generateSecurityReport
-        std::string secReport = SystemInfoPrinter::generateSecurityReport();
-        EXPECT_FALSE(secReport.empty());
-
-        // Reports should be different (unless system is very limited)
-        EXPECT_TRUE(fullReport != simpleReport || fullReport.length() < 100);
-    });
-}
-
-// Test report generation with different types
-TEST_F(SysinfoPrinterTest, ReportGeneration) {
-    EXPECT_NO_THROW({
-        // Test different report types using static methods
-        std::string fullReport = SystemInfoPrinter::generateFullReport();
-        EXPECT_FALSE(fullReport.empty());
-
-        std::string simpleReport = SystemInfoPrinter::generateSimpleReport();
-        EXPECT_FALSE(simpleReport.empty());
-
-        std::string perfReport = SystemInfoPrinter::generatePerformanceReport();
-        EXPECT_FALSE(perfReport.empty());
-
-        std::string secReport = SystemInfoPrinter::generateSecurityReport();
-        EXPECT_FALSE(secReport.empty());
-
-        // Note: generateHardwareReport and generateNetworkReport are not available
-        // in the current API, so we skip these tests
-
-        // Reports should contain some expected content
-        EXPECT_TRUE(fullReport.find("System") != std::string::npos ||
-                   fullReport.find("CPU") != std::string::npos ||
-                   fullReport.find("Memory") != std::string::npos);
-    });
-}
-
-// Test export functionality
-TEST_F(SysinfoPrinterTest, ExportFunctionality) {
-    EXPECT_NO_THROW({
-        // Test HTML export
-        std::string htmlFile = (testDir_ / "test_report.html").string();
-        bool htmlSuccess = SystemInfoPrinter::exportToHTML(htmlFile);
-        EXPECT_TRUE(htmlSuccess);
-
-        if (htmlSuccess) {
-            EXPECT_TRUE(std::filesystem::exists(htmlFile));
-
-            // Check file content
-            std::ifstream file(htmlFile);
-            std::string content((std::istreambuf_iterator<char>(file)),
-                               std::istreambuf_iterator<char>());
-            EXPECT_FALSE(content.empty());
-            EXPECT_NE(content.find("html"), std::string::npos);
-        }
-
-        // Test JSON export
-        std::string jsonFile = (testDir_ / "test_report.json").string();
-        bool jsonSuccess = SystemInfoPrinter::exportToJSON(jsonFile);
-        EXPECT_TRUE(jsonSuccess);
-
-        if (jsonSuccess) {
-            EXPECT_TRUE(std::filesystem::exists(jsonFile));
-
-            // Check file content
-            std::ifstream file(jsonFile);
-            std::string content((std::istreambuf_iterator<char>(file)),
-                               std::istreambuf_iterator<char>());
-            EXPECT_FALSE(content.empty());
-            EXPECT_TRUE(content.find("{") != std::string::npos ||
-                       content.find("[") != std::string::npos);
-        }
-
-        // Test Markdown export
-        std::string mdFile = (testDir_ / "test_report.md").string();
-        bool mdSuccess = SystemInfoPrinter::exportToMarkdown(mdFile);
-        EXPECT_TRUE(mdSuccess);
-
-        if (mdSuccess) {
-            EXPECT_TRUE(std::filesystem::exists(mdFile));
-
-            // Check file content
-            std::ifstream file(mdFile);
-            std::string content((std::istreambuf_iterator<char>(file)),
-                               std::istreambuf_iterator<char>());
-            EXPECT_FALSE(content.empty());
-            EXPECT_TRUE(content.find("#") != std::string::npos ||
-                       content.find("*") != std::string::npos);
-        }
-    });
-}
-
-// Test formatting functions
-TEST_F(SysinfoPrinterTest, FormattingFunctions) {
-    EXPECT_NO_THROW({
-        // Test formatBytes
-        std::string bytes1 = SystemInfoPrinter::formatBytes(1024);
-        EXPECT_FALSE(bytes1.empty());
-        EXPECT_TRUE(bytes1.find("KB") != std::string::npos ||
-                   bytes1.find("B") != std::string::npos);
-
-        std::string bytes2 = SystemInfoPrinter::formatBytes(1048576);
-        EXPECT_FALSE(bytes2.empty());
-        EXPECT_TRUE(bytes2.find("MB") != std::string::npos ||
-                   bytes2.find("KB") != std::string::npos);
-
-        // Test formatPercentage
-        std::string percent1 = SystemInfoPrinter::formatPercentage(50.5);
-        EXPECT_FALSE(percent1.empty());
-        EXPECT_NE(percent1.find("50"), std::string::npos);
-
-        std::string percent2 = SystemInfoPrinter::formatPercentage(100.0);
-        EXPECT_FALSE(percent2.empty());
-        EXPECT_NE(percent2.find("100"), std::string::npos);
-
-        // Note: formatUptime and formatSize are not available in the current API
-
-        // Test createTableHeader
-        std::string header = SystemInfoPrinter::createTableHeader("Test Header");
-        EXPECT_FALSE(header.empty());
-        EXPECT_NE(header.find("Test Header"), std::string::npos);
-
-        // Test createTableFooter
-        std::string footer = SystemInfoPrinter::createTableFooter();
-        EXPECT_FALSE(footer.empty());
-    });
-}
-
-// Test individual component formatting
-TEST_F(SysinfoPrinterTest, ComponentFormatting) {
-    EXPECT_NO_THROW({
-        // Test CPU formatting
-        auto cpuInfo = getCpuInfo();
-        std::string cpuFormatted = SystemInfoPrinter::formatCpuInfo(cpuInfo);
-        EXPECT_FALSE(cpuFormatted.empty());
-
-        // Test Memory formatting
-        auto memInfo = getDetailedMemoryStats();
-        std::string memFormatted = SystemInfoPrinter::formatMemoryInfo(memInfo);
-        EXPECT_FALSE(memFormatted.empty());
-
-        // Test OS formatting
-        auto osInfo = getOperatingSystemInfo();
-        std::string osFormatted = SystemInfoPrinter::formatOsInfo(osInfo);
-        EXPECT_FALSE(osFormatted.empty());
-
-        // Test Battery formatting
-        auto batteryInfo = atom::system::battery::getBatteryInfo();
-        if (batteryInfo.has_value()) {
-            std::string batteryFormatted = SystemInfoPrinter::formatBatteryInfo(batteryInfo.value());
-            EXPECT_FALSE(batteryFormatted.empty());
-        }
-
-        // Test Disk formatting
-        auto diskInfo = getDiskInfo();
-        std::string diskFormatted = SystemInfoPrinter::formatDiskInfo(diskInfo);
-        EXPECT_FALSE(diskFormatted.empty());
-
-        // Test BIOS formatting (using BiosInfo from bios module)
-        auto& biosInstance = atom::system::BiosInfo::getInstance();
-        const auto& biosInfo = biosInstance.getBiosInfo();
-        std::string biosFormatted = SystemInfoPrinter::formatBiosInfo(biosInfo);
-        EXPECT_FALSE(biosFormatted.empty());
-    });
-}
-
-// Test error handling
-TEST_F(SysinfoPrinterTest, ErrorHandling) {
-    EXPECT_NO_THROW({
-        // Test export to invalid path
-        std::string invalidPath = "/invalid/path/that/does/not/exist/report.html";
-        bool result = SystemInfoPrinter::exportToHTML(invalidPath);
-        // Should handle gracefully (may succeed or fail depending on system)
-        EXPECT_TRUE(result == true || result == false);
-
-        // Test export to read-only directory (if possible)
-        std::string readOnlyPath = "/tmp/readonly_test_report.html";
-        bool readOnlyResult = SystemInfoPrinter::exportToHTML(readOnlyPath);
-        EXPECT_TRUE(readOnlyResult == true || readOnlyResult == false);
-    });
-}
-
-// Test deprecated global functions
-TEST_F(SysinfoPrinterTest, DeprecatedGlobalFunctions) {
-    // Suppress deprecation warnings for testing
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-
-    EXPECT_NO_THROW({
-        // Test deprecated generateSystemReport
-        std::string globalReport = generateSystemReport();
-        EXPECT_FALSE(globalReport.empty());
-
-        // Test deprecated exportSystemReportToHTML
-        std::string globalHtmlFile = (testDir_ / "global_report.html").string();
-        bool globalResult = exportSystemReportToHTML(globalHtmlFile);
-        EXPECT_TRUE(globalResult == true || globalResult == false);
-    });
-
-    #pragma GCC diagnostic pop
-}
-
-// Test concurrent access
-TEST_F(SysinfoPrinterTest, ConcurrentAccess) {
-    const int num_threads = 3;
-    std::vector<std::thread> threads;
-    std::vector<bool> results(num_threads, false);
-
-    // Launch multiple threads accessing printer functions concurrently
-    for (int i = 0; i < num_threads; ++i) {
-        threads.emplace_back([&, i]() {
-            try {
-                std::string fullReport = SystemInfoPrinter::generateFullReport();
-                std::string simpleReport = SystemInfoPrinter::generateSimpleReport();
-                std::string perfReport = SystemInfoPrinter::generatePerformanceReport();
-
-                // Basic validation
-                EXPECT_FALSE(fullReport.empty());
-                EXPECT_FALSE(simpleReport.empty());
-                EXPECT_FALSE(perfReport.empty());
-
-                results[i] = true;
-            } catch (...) {
-                results[i] = false;
-            }
+        // Should contain some expected keywords
+        EXPECT_TRUE(formatted.find("Battery") != std::string::npos ||
+                    formatted.find("Power") != std::string::npos ||
+                    formatted.find("Charge") != std::string::npos);
+    } else {
+        // If no battery is present, formatting should handle gracefully
+        BatteryInfo emptyInfo;
+        EXPECT_NO_THROW({
+            std::string formatted =
+                SystemInfoPrinter::formatBatteryInfo(emptyInfo);
         });
     }
+}
 
-    // Wait for all threads to complete
-    for (auto& thread : threads) {
-        thread.join();
-    }
+TEST_F(SysInfoPrinterTest, FormatCpuInfo) {
+    // Test CPU information formatting
+    CpuInfo cpuInfo = getCpuInfo();
+    std::string formatted = SystemInfoPrinter::formatCpuInfo(cpuInfo);
 
-    // All threads should have completed successfully
-    for (bool result : results) {
-        EXPECT_TRUE(result);
+    // Formatted output should not be empty
+    EXPECT_FALSE(formatted.empty());
+    EXPECT_GT(formatted.length(), 0);
+
+    // Should contain some expected keywords
+    EXPECT_TRUE(formatted.find("CPU") != std::string::npos ||
+                formatted.find("Processor") != std::string::npos ||
+                formatted.find("Core") != std::string::npos);
+
+    // Should contain CPU model if available
+    if (!cpuInfo.model.empty()) {
+        EXPECT_TRUE(formatted.find(cpuInfo.model) != std::string::npos);
     }
 }
 
-// Test performance
-TEST_F(SysinfoPrinterTest, Performance) {
+TEST_F(SysInfoPrinterTest, FormatMemoryInfo) {
+    // Test memory information formatting
+    MemoryInfo memInfo = getDetailedMemoryStats();
+    std::string formatted = SystemInfoPrinter::formatMemoryInfo(memInfo);
+
+    // Formatted output should not be empty
+    EXPECT_FALSE(formatted.empty());
+    EXPECT_GT(formatted.length(), 0);
+
+    // Should contain some expected keywords
+    EXPECT_TRUE(formatted.find("Memory") != std::string::npos ||
+                formatted.find("RAM") != std::string::npos ||
+                formatted.find("Physical") != std::string::npos);
+}
+
+TEST_F(SysInfoPrinterTest, FormatOsInfo) {
+    // Test OS information formatting
+    OperatingSystemInfo osInfo = getOperatingSystemInfo();
+    std::string formatted = SystemInfoPrinter::formatOsInfo(osInfo);
+
+    // Formatted output should not be empty
+    EXPECT_FALSE(formatted.empty());
+    EXPECT_GT(formatted.length(), 0);
+
+    // Should contain some expected keywords
+    EXPECT_TRUE(formatted.find("Operating System") != std::string::npos ||
+                formatted.find("OS") != std::string::npos ||
+                formatted.find("System") != std::string::npos);
+
+    // Should contain OS name if available
+    if (!osInfo.osName.empty()) {
+        EXPECT_TRUE(formatted.find(osInfo.osName) != std::string::npos);
+    }
+}
+
+TEST_F(SysInfoPrinterTest, FormatGpuInfo) {
+    // Test GPU information formatting
+    std::string formatted = SystemInfoPrinter::formatGpuInfo();
+
+    // Formatted output should not be empty (even if no GPU detected)
+    EXPECT_FALSE(formatted.empty());
+    EXPECT_GT(formatted.length(), 0);
+
+    // Should contain some expected keywords
+    EXPECT_TRUE(formatted.find("GPU") != std::string::npos ||
+                formatted.find("Graphics") != std::string::npos ||
+                formatted.find("Video") != std::string::npos ||
+                formatted.find("Display") != std::string::npos);
+}
+
+// ============================================================================
+// Report Generation Tests
+// ============================================================================
+
+TEST_F(SysInfoPrinterTest, GenerateFullReport) {
+    // Test full report generation
+    std::string report = SystemInfoPrinter::generateFullReport();
+
+    // Report should not be empty
+    EXPECT_FALSE(report.empty());
+    EXPECT_GT(report.length(), 100);  // Should be substantial
+
+    // Should contain sections for different components
+    EXPECT_TRUE(report.find("CPU") != std::string::npos ||
+                report.find("Processor") != std::string::npos);
+    EXPECT_TRUE(report.find("Memory") != std::string::npos ||
+                report.find("RAM") != std::string::npos);
+    EXPECT_TRUE(report.find("Operating System") != std::string::npos ||
+                report.find("OS") != std::string::npos);
+}
+
+TEST_F(SysInfoPrinterTest, GenerateSimpleReport) {
+    // Test simple report generation
+    std::string report = SystemInfoPrinter::generateSimpleReport();
+
+    // Report should not be empty
+    EXPECT_FALSE(report.empty());
+    EXPECT_GT(report.length(), 50);  // Should have some content
+
+    // Simple report should be shorter than full report
+    std::string fullReport = SystemInfoPrinter::generateFullReport();
+    EXPECT_LT(report.length(), fullReport.length());
+}
+
+TEST_F(SysInfoPrinterTest, GeneratePerformanceReport) {
+    // Test performance report generation
+    std::string report = SystemInfoPrinter::generatePerformanceReport();
+
+    // Report should not be empty
+    EXPECT_FALSE(report.empty());
+    EXPECT_GT(report.length(), 50);
+
+    // Should contain performance-related keywords
+    EXPECT_TRUE(report.find("Performance") != std::string::npos ||
+                report.find("Usage") != std::string::npos ||
+                report.find("Load") != std::string::npos ||
+                report.find("Speed") != std::string::npos);
+}
+
+TEST_F(SysInfoPrinterTest, GenerateSecurityReport) {
+    // Test security report generation
+    std::string report = SystemInfoPrinter::generateSecurityReport();
+
+    // Report should not be empty
+    EXPECT_FALSE(report.empty());
+    EXPECT_GT(report.length(), 50);
+
+    // Should contain security-related keywords
+    EXPECT_TRUE(report.find("Security") != std::string::npos ||
+                report.find("Secure") != std::string::npos ||
+                report.find("Protection") != std::string::npos ||
+                report.find("Encryption") != std::string::npos);
+}
+
+// ============================================================================
+// Formatting Quality Tests
+// ============================================================================
+
+TEST_F(SysInfoPrinterTest, FormattingConsistency) {
+    // Test that formatting is consistent across multiple calls
+    CpuInfo cpuInfo = getCpuInfo();
+
+    std::string formatted1 = SystemInfoPrinter::formatCpuInfo(cpuInfo);
+    std::string formatted2 = SystemInfoPrinter::formatCpuInfo(cpuInfo);
+
+    EXPECT_EQ(formatted1, formatted2);
+}
+
+TEST_F(SysInfoPrinterTest, ReportStructure) {
+    // Test that reports have proper structure
+    std::string fullReport = SystemInfoPrinter::generateFullReport();
+
+    // Should have some structure indicators (headers, sections, etc.)
+    EXPECT_TRUE(fullReport.find("=") != std::string::npos ||
+                fullReport.find("-") != std::string::npos ||
+                fullReport.find("*") != std::string::npos ||
+                fullReport.find(":") != std::string::npos);
+
+    // Should have line breaks for readability
+    EXPECT_TRUE(fullReport.find("\n") != std::string::npos);
+}
+
+TEST_F(SysInfoPrinterTest, NoSensitiveInformation) {
+    // Test that reports don't contain obviously sensitive information
+    std::string fullReport = SystemInfoPrinter::generateFullReport();
+
+    // Should not contain common sensitive patterns
+    EXPECT_TRUE(fullReport.find("password") == std::string::npos);
+    EXPECT_TRUE(fullReport.find("secret") == std::string::npos);
+    EXPECT_TRUE(fullReport.find("key") == std::string::npos ||
+                fullReport.find("keyboard") !=
+                    std::string::npos);  // "keyboard" is OK
+}
+
+// ============================================================================
+// Edge Cases and Error Handling Tests
+// ============================================================================
+
+TEST_F(SysInfoPrinterTest, EmptyDataHandling) {
+    // Test handling of empty data structures
+    BatteryInfo emptyBattery;
+    CpuInfo emptyCpu;
+    MemoryInfo emptyMemory;
+    OperatingSystemInfo emptyOs;
+
+    EXPECT_NO_THROW({ SystemInfoPrinter::formatBatteryInfo(emptyBattery); });
+
+    EXPECT_NO_THROW({ SystemInfoPrinter::formatCpuInfo(emptyCpu); });
+
+    EXPECT_NO_THROW({ SystemInfoPrinter::formatMemoryInfo(emptyMemory); });
+
+    EXPECT_NO_THROW({ SystemInfoPrinter::formatOsInfo(emptyOs); });
+}
+
+TEST_F(SysInfoPrinterTest, NoThrowGuarantee) {
+    // Test that all methods provide no-throw guarantee
+    EXPECT_NO_THROW(SystemInfoPrinter::generateFullReport());
+    EXPECT_NO_THROW(SystemInfoPrinter::generateSimpleReport());
+    EXPECT_NO_THROW(SystemInfoPrinter::generatePerformanceReport());
+    EXPECT_NO_THROW(SystemInfoPrinter::generateSecurityReport());
+    EXPECT_NO_THROW(SystemInfoPrinter::formatGpuInfo());
+}
+
+TEST_F(SysInfoPrinterTest, LargeDataHandling) {
+    // Test handling of potentially large data
+    std::string fullReport = SystemInfoPrinter::generateFullReport();
+
+    // Report should be reasonable in size (not empty, but not excessively
+    // large)
+    EXPECT_GT(fullReport.length(), 100);
+    EXPECT_LT(fullReport.length(), 1000000);  // 1MB limit for sanity
+}
+
+// ============================================================================
+// Static Method Tests
+// ============================================================================
+
+TEST_F(SysInfoPrinterTest, StaticMethodsWork) {
+    // Test that static methods work without instance
     EXPECT_NO_THROW({
-        // Measure time for full report generation
-        auto start = std::chrono::high_resolution_clock::now();
-        std::string fullReport = SystemInfoPrinter::generateFullReport();
-        auto end = std::chrono::high_resolution_clock::now();
+        std::string report = SystemInfoPrinter::generateFullReport();
+        EXPECT_FALSE(report.empty());
+    });
 
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-
-        // Report generation should complete within reasonable time (10 seconds)
-        EXPECT_LT(duration.count(), 10000);
-        EXPECT_FALSE(fullReport.empty());
-
-        // Measure time for simple report generation
-        start = std::chrono::high_resolution_clock::now();
-        std::string simpleReport = SystemInfoPrinter::generateSimpleReport();
-        end = std::chrono::high_resolution_clock::now();
-
-        auto simpleDuration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-
-        // Simple report should be faster than full report
-        EXPECT_LE(simpleDuration.count(), duration.count() + 1000); // Allow some variance
-        EXPECT_FALSE(simpleReport.empty());
+    EXPECT_NO_THROW({
+        std::string gpu = SystemInfoPrinter::formatGpuInfo();
+        EXPECT_FALSE(gpu.empty());
     });
 }
+
+}  // namespace atom::sysinfo::test

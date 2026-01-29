@@ -29,8 +29,10 @@ public:
     MOCK_METHOD(void, close, ());
     MOCK_METHOD(bool, isOpen, (), (const));
     MOCK_METHOD(std::vector<uint8_t>, read, (size_t));
-    MOCK_METHOD(std::vector<uint8_t>, readExactly, (size_t, std::chrono::milliseconds));
-    MOCK_METHOD(void, asyncRead, (size_t, std::function<void(std::vector<uint8_t>)>));
+    MOCK_METHOD(std::vector<uint8_t>, readExactly,
+                (size_t, std::chrono::milliseconds));
+    MOCK_METHOD(void, asyncRead,
+                (size_t, std::function<void(std::vector<uint8_t>)>));
     MOCK_METHOD(std::vector<uint8_t>, readAvailable, ());
     MOCK_METHOD(size_t, write, (std::span<const uint8_t>));
     MOCK_METHOD(size_t, write, (const std::string&));
@@ -86,23 +88,21 @@ protected:
 // Test opening and closing a serial port
 TEST_F(SerialPortTest, OpenClosePort) {
     // Setup expectations
-    EXPECT_CALL(*mockImpl, open(testPort, _))
-        .Times(1);
+    EXPECT_CALL(*mockImpl, open(testPort, _)).Times(1);
 
     EXPECT_CALL(*mockImpl, isOpen())
         .WillOnce(Return(true))
         .WillOnce(Return(false));
 
-    EXPECT_CALL(*mockImpl, close())
-        .Times(1);
+    EXPECT_CALL(*mockImpl, close()).Times(1);
 
-    EXPECT_CALL(*mockImpl, getPortName())
-        .WillOnce(Return(testPort));
+    EXPECT_CALL(*mockImpl, getPortName()).WillOnce(Return(testPort));
 
     // Create a SerialPort with our mock implementation
     // Note: In a real test, you would need a way to inject the mock
     SerialPort port;
-    // For testing purposes, we'll simulate the behavior as if the mock was injected
+    // For testing purposes, we'll simulate the behavior as if the mock was
+    // injected
 
     // Open the port
     port.open(testPort, config);
@@ -124,10 +124,12 @@ TEST_F(SerialPortTest, OpenClosePort) {
 TEST_F(SerialPortTest, OpenInvalidPort) {
     // Setup expectations
     EXPECT_CALL(*mockImpl, open("invalid_port", _))
-        .WillOnce(Throw(SerialIOException("Failed to open port: Access denied")));
+        .WillOnce(
+            Throw(SerialIOException("Failed to open port: Access denied")));
 
     // Try to open an invalid port
-    // Note: Since we're simulating behavior, we'll just verify the expectation was set
+    // Note: Since we're simulating behavior, we'll just verify the expectation
+    // was set
     try {
         mockImpl->open("invalid_port", config);
         FAIL() << "Expected SerialIOException";
@@ -139,20 +141,16 @@ TEST_F(SerialPortTest, OpenInvalidPort) {
 // Test reading data from the port
 TEST_F(SerialPortTest, ReadData) {
     // Setup expectations
-    EXPECT_CALL(*mockImpl, isOpen())
-        .WillRepeatedly(Return(true));
+    EXPECT_CALL(*mockImpl, isOpen()).WillRepeatedly(Return(true));
 
-    EXPECT_CALL(*mockImpl, read(5))
-        .WillOnce(Return(testData));
+    EXPECT_CALL(*mockImpl, read(5)).WillOnce(Return(testData));
 
     EXPECT_CALL(*mockImpl, readExactly(3, 1000ms))
         .WillOnce(Return(std::vector<uint8_t>{0x01, 0x02, 0x03}));
 
-    EXPECT_CALL(*mockImpl, readAvailable())
-        .WillOnce(Return(testData));
+    EXPECT_CALL(*mockImpl, readAvailable()).WillOnce(Return(testData));
 
-    EXPECT_CALL(*mockImpl, available())
-        .WillOnce(Return(5));
+    EXPECT_CALL(*mockImpl, available()).WillOnce(Return(5));
 
     // Test regular read
     auto data = mockImpl->read(5);
@@ -179,8 +177,7 @@ TEST_F(SerialPortTest, ReadData) {
 // Test reading from a closed port (should throw an exception)
 TEST_F(SerialPortTest, ReadFromClosedPort) {
     // Setup expectations
-    EXPECT_CALL(*mockImpl, isOpen())
-        .WillRepeatedly(Return(false));
+    EXPECT_CALL(*mockImpl, isOpen()).WillRepeatedly(Return(false));
 
     EXPECT_CALL(*mockImpl, read(_))
         .WillOnce(Throw(SerialPortNotOpenException()));
@@ -208,8 +205,7 @@ TEST_F(SerialPortTest, ReadFromClosedPort) {
 // Test read timeout
 TEST_F(SerialPortTest, ReadTimeout) {
     // Setup expectations
-    EXPECT_CALL(*mockImpl, isOpen())
-        .WillRepeatedly(Return(true));
+    EXPECT_CALL(*mockImpl, isOpen()).WillRepeatedly(Return(true));
 
     EXPECT_CALL(*mockImpl, readExactly(10, _))
         .WillOnce(Throw(SerialTimeoutException()));
@@ -231,11 +227,11 @@ TEST_F(SerialPortTest, AsyncRead) {
     std::condition_variable cv;
 
     // Setup expectations
-    EXPECT_CALL(*mockImpl, isOpen())
-        .WillRepeatedly(Return(true));
+    EXPECT_CALL(*mockImpl, isOpen()).WillRepeatedly(Return(true));
 
     EXPECT_CALL(*mockImpl, asyncRead(_, _))
-        .WillOnce([this, &receivedData, &dataReceived, &cv](size_t maxBytes, auto callback) {
+        .WillOnce([this, &receivedData, &dataReceived, &cv](size_t maxBytes,
+                                                            auto callback) {
             // Simulate async read by calling the callback with test data
             std::thread([this, callback, &receivedData, &dataReceived, &cv]() {
                 std::this_thread::sleep_for(100ms);
@@ -253,7 +249,8 @@ TEST_F(SerialPortTest, AsyncRead) {
     // Wait for async read to complete
     {
         std::unique_lock<std::mutex> lock(mutex);
-        cv.wait_for(lock, 5s, [&dataReceived]() { return dataReceived.load(); });
+        cv.wait_for(lock, 5s,
+                    [&dataReceived]() { return dataReceived.load(); });
     }
 
     // Verify received data
@@ -265,8 +262,7 @@ TEST_F(SerialPortTest, AsyncRead) {
 // Test writing data to the port
 TEST_F(SerialPortTest, WriteData) {
     // Setup expectations
-    EXPECT_CALL(*mockImpl, isOpen())
-        .WillRepeatedly(Return(true));
+    EXPECT_CALL(*mockImpl, isOpen()).WillRepeatedly(Return(true));
 
     EXPECT_CALL(*mockImpl, write(std::span<const uint8_t>(testData)))
         .WillOnce(Return(5));
@@ -274,11 +270,9 @@ TEST_F(SerialPortTest, WriteData) {
     EXPECT_CALL(*mockImpl, write(std::string("Hello Serial")))
         .WillOnce(Return(12));
 
-    EXPECT_CALL(*mockImpl, flush())
-        .Times(1);
+    EXPECT_CALL(*mockImpl, flush()).Times(1);
 
-    EXPECT_CALL(*mockImpl, drain())
-        .Times(1);
+    EXPECT_CALL(*mockImpl, drain()).Times(1);
 
     // Test writing binary data
     size_t bytesWritten = mockImpl->write(std::span<const uint8_t>(testData));
@@ -298,8 +292,7 @@ TEST_F(SerialPortTest, WriteData) {
 // Test writing to a closed port (should throw an exception)
 TEST_F(SerialPortTest, WriteToClosedPort) {
     // Setup expectations
-    EXPECT_CALL(*mockImpl, isOpen())
-        .WillRepeatedly(Return(false));
+    EXPECT_CALL(*mockImpl, isOpen()).WillRepeatedly(Return(false));
 
     EXPECT_CALL(*mockImpl, write(std::span<const uint8_t>(_)))
         .WillOnce(Throw(SerialPortNotOpenException()));
@@ -316,8 +309,7 @@ TEST_F(SerialPortTest, WriteToClosedPort) {
 // Test write timeout
 TEST_F(SerialPortTest, WriteTimeout) {
     // Setup expectations
-    EXPECT_CALL(*mockImpl, isOpen())
-        .WillRepeatedly(Return(true));
+    EXPECT_CALL(*mockImpl, isOpen()).WillRepeatedly(Return(true));
 
     EXPECT_CALL(*mockImpl, write(std::span<const uint8_t>(_)))
         .WillOnce(Throw(SerialTimeoutException()));
@@ -334,14 +326,11 @@ TEST_F(SerialPortTest, WriteTimeout) {
 // Test configuration functions
 TEST_F(SerialPortTest, Configuration) {
     // Setup expectations
-    EXPECT_CALL(*mockImpl, isOpen())
-        .WillRepeatedly(Return(true));
+    EXPECT_CALL(*mockImpl, isOpen()).WillRepeatedly(Return(true));
 
-    EXPECT_CALL(*mockImpl, setConfig(_))
-        .Times(1);
+    EXPECT_CALL(*mockImpl, setConfig(_)).Times(1);
 
-    EXPECT_CALL(*mockImpl, getConfig())
-        .WillOnce(Return(config));
+    EXPECT_CALL(*mockImpl, getConfig()).WillOnce(Return(config));
 
     // Set configuration
     mockImpl->setConfig(config);
@@ -362,26 +351,19 @@ TEST_F(SerialPortTest, Configuration) {
 // Test signal control functions
 TEST_F(SerialPortTest, SignalControl) {
     // Setup expectations
-    EXPECT_CALL(*mockImpl, isOpen())
-        .WillRepeatedly(Return(true));
+    EXPECT_CALL(*mockImpl, isOpen()).WillRepeatedly(Return(true));
 
-    EXPECT_CALL(*mockImpl, setDTR(true))
-        .Times(1);
+    EXPECT_CALL(*mockImpl, setDTR(true)).Times(1);
 
-    EXPECT_CALL(*mockImpl, setRTS(false))
-        .Times(1);
+    EXPECT_CALL(*mockImpl, setRTS(false)).Times(1);
 
-    EXPECT_CALL(*mockImpl, getCTS())
-        .WillOnce(Return(true));
+    EXPECT_CALL(*mockImpl, getCTS()).WillOnce(Return(true));
 
-    EXPECT_CALL(*mockImpl, getDSR())
-        .WillOnce(Return(false));
+    EXPECT_CALL(*mockImpl, getDSR()).WillOnce(Return(false));
 
-    EXPECT_CALL(*mockImpl, getRI())
-        .WillOnce(Return(false));
+    EXPECT_CALL(*mockImpl, getRI()).WillOnce(Return(false));
 
-    EXPECT_CALL(*mockImpl, getCD())
-        .WillOnce(Return(true));
+    EXPECT_CALL(*mockImpl, getCD()).WillOnce(Return(true));
 
     // Set DTR
     mockImpl->setDTR(true);
@@ -468,8 +450,8 @@ TEST_F(SerialPortTest, MoveSemantics) {
     // Move-construct a second port
     // SerialPort port2(std::move(port1));
 
-    // Verify port2 is now connected and port1 is in a valid but unspecified state
-    // EXPECT_TRUE(port2.isOpen());
+    // Verify port2 is now connected and port1 is in a valid but unspecified
+    // state EXPECT_TRUE(port2.isOpen());
 
     // Create another port
     // SerialPort port3;
@@ -477,18 +459,18 @@ TEST_F(SerialPortTest, MoveSemantics) {
     // Move-assign from port2
     // port3 = std::move(port2);
 
-    // Verify port3 is now connected and port2 is in a valid but unspecified state
-    // EXPECT_TRUE(port3.isOpen());
+    // Verify port3 is now connected and port2 is in a valid but unspecified
+    // state EXPECT_TRUE(port3.isOpen());
 }
 
 // Test handling I/O errors
 TEST_F(SerialPortTest, IOErrors) {
     // Setup expectations
-    EXPECT_CALL(*mockImpl, isOpen())
-        .WillRepeatedly(Return(true));
+    EXPECT_CALL(*mockImpl, isOpen()).WillRepeatedly(Return(true));
 
     EXPECT_CALL(*mockImpl, read(_))
-        .WillOnce(Throw(SerialIOException("Hardware error: device disconnected")));
+        .WillOnce(
+            Throw(SerialIOException("Hardware error: device disconnected")));
 
     EXPECT_CALL(*mockImpl, write(std::span<const uint8_t>(_)))
         .WillOnce(Throw(SerialIOException("Write error: device disconnected")));
@@ -513,15 +495,15 @@ TEST_F(SerialPortTest, IOErrors) {
 // Test handling port configuration errors
 TEST_F(SerialPortTest, ConfigurationErrors) {
     // Setup expectations
-    EXPECT_CALL(*mockImpl, isOpen())
-        .WillRepeatedly(Return(true));
+    EXPECT_CALL(*mockImpl, isOpen()).WillRepeatedly(Return(true));
 
     // Invalid baud rate
     SerialConfig invalidConfig = config;
     invalidConfig.baudRate = -1;
 
     EXPECT_CALL(*mockImpl, setConfig(invalidConfig))
-        .WillOnce(Throw(SerialIOException("Invalid configuration: baud rate out of range")));
+        .WillOnce(Throw(SerialIOException(
+            "Invalid configuration: baud rate out of range")));
 
     // Test configuration error
     try {
@@ -535,13 +517,12 @@ TEST_F(SerialPortTest, ConfigurationErrors) {
 // Test edge case: zero-length read/write
 TEST_F(SerialPortTest, ZeroLengthOperations) {
     // Setup expectations
-    EXPECT_CALL(*mockImpl, isOpen())
-        .WillRepeatedly(Return(true));
+    EXPECT_CALL(*mockImpl, isOpen()).WillRepeatedly(Return(true));
 
-    EXPECT_CALL(*mockImpl, read(0))
-        .WillOnce(Return(std::vector<uint8_t>{}));
+    EXPECT_CALL(*mockImpl, read(0)).WillOnce(Return(std::vector<uint8_t>{}));
 
-    EXPECT_CALL(*mockImpl, write(std::span<const uint8_t>(std::vector<uint8_t>{})))
+    EXPECT_CALL(*mockImpl,
+                write(std::span<const uint8_t>(std::vector<uint8_t>{})))
         .WillOnce(Return(0));
 
     // Test zero-length read
@@ -554,7 +535,7 @@ TEST_F(SerialPortTest, ZeroLengthOperations) {
     EXPECT_EQ(bytesWritten, 0);
 }
 
-} // namespace serial
+}  // namespace serial
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

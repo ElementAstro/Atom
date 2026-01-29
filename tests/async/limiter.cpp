@@ -11,13 +11,9 @@ using namespace std::chrono_literals;
 
 class RateLimiterTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        limiter_ = std::make_unique<RateLimiter>();
-    }
+    void SetUp() override { limiter_ = std::make_unique<RateLimiter>(); }
 
-    void TearDown() override {
-        limiter_.reset();
-    }
+    void TearDown() override { limiter_.reset(); }
 
     std::unique_ptr<RateLimiter> limiter_;
 };
@@ -56,10 +52,12 @@ TEST_F(RateLimiterTest, InvalidParameters) {
     std::string func_name = "test_func";
 
     // Invalid max_requests (0)
-    EXPECT_THROW(limiter_->setFunctionLimit(func_name, 0, 1s), std::invalid_argument);
+    EXPECT_THROW(limiter_->setFunctionLimit(func_name, 0, 1s),
+                 std::invalid_argument);
 
     // Invalid time_window (0s)
-    EXPECT_THROW(limiter_->setFunctionLimit(func_name, 1, 0s), std::invalid_argument);
+    EXPECT_THROW(limiter_->setFunctionLimit(func_name, 1, 0s),
+                 std::invalid_argument);
 }
 
 // Test batch function limits
@@ -67,17 +65,18 @@ TEST_F(RateLimiterTest, BatchFunctionLimits) {
     std::vector<std::pair<std::string_view, RateLimiter::Settings>> settings = {
         {"func_A", RateLimiter::Settings(1, 1s)},
         {"func_B", RateLimiter::Settings(2, 2s)},
-        {"func_C", RateLimiter::Settings(3, 3s)}
-    };
+        {"func_C", RateLimiter::Settings(3, 3s)}};
 
     EXPECT_NO_THROW(limiter_->setFunctionLimits(settings));
 
     // Test invalid settings in batch
-    std::vector<std::pair<std::string_view, RateLimiter::Settings>> invalid_settings = {
-        {"func_D", RateLimiter::Settings(1, 1s)},
-        {"func_E", RateLimiter::Settings(0, 1s)}  // Invalid
-    };
-    EXPECT_THROW(limiter_->setFunctionLimits(invalid_settings), std::invalid_argument);
+    std::vector<std::pair<std::string_view, RateLimiter::Settings>>
+        invalid_settings = {
+            {"func_D", RateLimiter::Settings(1, 1s)},
+            {"func_E", RateLimiter::Settings(0, 1s)}  // Invalid
+        };
+    EXPECT_THROW(limiter_->setFunctionLimits(invalid_settings),
+                 std::invalid_argument);
 }
 
 // Test Settings constructor
@@ -188,9 +187,11 @@ TEST_F(RateLimiterTest, ConcurrentAccess) {
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([this, i]() {
             for (int j = 0; j < operations_per_thread; ++j) {
-                std::string func_name = "thread_" + std::to_string(i) + "_func_" + std::to_string(j);
+                std::string func_name = "thread_" + std::to_string(i) +
+                                        "_func_" + std::to_string(j);
                 limiter_->setFunctionLimit(func_name, 1, 1s);
-                [[maybe_unused]] auto rejected = limiter_->getRejectedRequests(func_name);
+                [[maybe_unused]] auto rejected =
+                    limiter_->getRejectedRequests(func_name);
                 limiter_->resetFunction(func_name);
             }
         });

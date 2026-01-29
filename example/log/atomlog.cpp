@@ -5,10 +5,10 @@ int main() {
 
     // Create a logger instance with a log file name, minimum log level, max
     // file size, and max files.
-    Logger logger("logfile.log", LogLevel::DEBUG, 1048576, 5);
+    Logger logger("logfile.log", LogLevel::DEBUG_LEVEL, 1048576, 5);
 
     // Set the logging level to INFO.
-    logger.setLevel(LogLevel::INFO);
+    logger.setLevel(LogLevel::INFO_LEVEL);
 
     // Set a custom logging pattern.
     logger.setPattern("[%Y-%m-%d %H:%M:%S] [%l] %v");
@@ -31,7 +31,8 @@ int main() {
     logger.critical("This is a critical message with value: {}", 42);
 
     // Register a sink logger.
-    auto sinkLogger = std::make_shared<Logger>("sinklog.log", LogLevel::DEBUG);
+    auto sinkLogger =
+        std::make_shared<Logger>("sinklog.log", LogLevel::DEBUG_LEVEL);
     logger.registerSink(sinkLogger);
 
     // Log a message that will also be sent to the sink logger.

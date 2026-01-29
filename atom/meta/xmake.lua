@@ -18,7 +18,42 @@ local source_files = {
 
 -- Define header files
 local header_files = {
-    "global_ptr.hpp"
+    "abi.hpp",
+    "any.hpp",
+    "anymeta.hpp",
+    "awaitable.hpp",
+    "bind_first.hpp",
+    "concept.hpp",
+    "constructor.hpp",
+    "container_traits.hpp",
+    "conversion.hpp",
+    "decorate.hpp",
+    "enum.hpp",
+    "facade.hpp",
+    "facade_any.hpp",
+    "facade_proxy.hpp",
+    "ffi.hpp",
+    "field_count.hpp",
+    "func_traits.hpp",
+    "global_ptr.hpp",
+    "god.hpp",
+    "invoke.hpp",
+    "member.hpp",
+    "overload.hpp",
+    "property.hpp",
+    "proxy.hpp",
+    "proxy_params.hpp",
+    "raw_name.hpp",
+    "refl.hpp",
+    "refl_json.hpp",
+    "refl_yaml.hpp",
+    "signature.hpp",
+    "stepper.hpp",
+    "template_traits.hpp",
+    "time.hpp",
+    "type_caster.hpp",
+    "type_info.hpp",
+    "vany.hpp"
 }
 
 -- Object Library

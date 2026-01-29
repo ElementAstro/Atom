@@ -19,11 +19,11 @@ namespace atom::extra::boost::test {
 
 using ::testing::ContainerEq;
 using ::testing::Eq;
+using ::testing::Gt;
 using ::testing::HasSubstr;
 using ::testing::IsFalse;
 using ::testing::IsTrue;
 using ::testing::Lt;
-using ::testing::Gt;
 using ::testing::Not;
 using ::testing::SizeIs;
 using ::testing::StartsWith;
@@ -37,7 +37,8 @@ protected:
         nilUUID = std::make_unique<UUID>(::boost::uuids::nil_uuid());
 
         // Create a UUID from a fixed string for consistent testing
-        const std::string testUUIDString = "123e4567-e89b-12d3-a456-426614174000";
+        const std::string testUUIDString =
+            "123e4567-e89b-12d3-a456-426614174000";
         fixedUUID = std::make_unique<UUID>(testUUIDString);
 
         // Static predefined namespace UUIDs
@@ -58,8 +59,7 @@ protected:
     static bool isValidUUIDString(const std::string& str) {
         std::regex uuidRegex(
             "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-            std::regex::icase
-        );
+            std::regex::icase);
         return std::regex_match(str, uuidRegex);
     }
 
@@ -168,7 +168,7 @@ TEST_F(UUIDTest, Format) {
     // Random UUID format
     UUID randomUUID;
     std::string randomFormat = randomUUID.format();
-    EXPECT_TRUE(randomFormat.size() == 38); // {UUID} format adds 2 chars
+    EXPECT_TRUE(randomFormat.size() == 38);  // {UUID} format adds 2 chars
     EXPECT_EQ(randomFormat.front(), '{');
     EXPECT_EQ(randomFormat.back(), '}');
 }
@@ -178,7 +178,8 @@ TEST_F(UUIDTest, ByteConversion) {
     // Test toBytes
     std::vector<uint8_t> nilBytes = nilUUID->toBytes();
     EXPECT_EQ(nilBytes.size(), atom::extra::boost::UUID_SIZE);
-    EXPECT_TRUE(std::all_of(nilBytes.begin(), nilBytes.end(), [](uint8_t b) { return b == 0; }));
+    EXPECT_TRUE(std::all_of(nilBytes.begin(), nilBytes.end(),
+                            [](uint8_t b) { return b == 0; }));
 
     std::vector<uint8_t> fixedBytes = fixedUUID->toBytes();
     EXPECT_EQ(fixedBytes.size(), atom::extra::boost::UUID_SIZE);
@@ -188,15 +189,18 @@ TEST_F(UUIDTest, ByteConversion) {
     EXPECT_TRUE(reconstructedNil.isNil());
     EXPECT_EQ(reconstructedNil, *nilUUID);
 
-    UUID reconstructedFixed = UUID::fromBytes(std::span<const uint8_t>(fixedBytes));
+    UUID reconstructedFixed =
+        UUID::fromBytes(std::span<const uint8_t>(fixedBytes));
     EXPECT_EQ(reconstructedFixed, *fixedUUID);
 
     // Test fromBytes with invalid input
     std::vector<uint8_t> tooShort(15, 0);
-    EXPECT_THROW(UUID::fromBytes(std::span<const uint8_t>(tooShort)), std::invalid_argument);
+    EXPECT_THROW(UUID::fromBytes(std::span<const uint8_t>(tooShort)),
+                 std::invalid_argument);
 
     std::vector<uint8_t> tooLong(17, 0);
-    EXPECT_THROW(UUID::fromBytes(std::span<const uint8_t>(tooLong)), std::invalid_argument);
+    EXPECT_THROW(UUID::fromBytes(std::span<const uint8_t>(tooLong)),
+                 std::invalid_argument);
 }
 
 // Test toUint64 method
@@ -217,15 +221,18 @@ TEST_F(UUIDTest, ToUint64) {
 TEST_F(UUIDTest, NamespaceUUIDs) {
     // Test DNS namespace UUID
     EXPECT_FALSE(dnsNamespaceUUID->isNil());
-    EXPECT_EQ(dnsNamespaceUUID->toString(), "6ba7b810-9dad-11d1-80b4-00c04fd430c8");
+    EXPECT_EQ(dnsNamespaceUUID->toString(),
+              "6ba7b810-9dad-11d1-80b4-00c04fd430c8");
 
     // Test URL namespace UUID
     EXPECT_FALSE(urlNamespaceUUID->isNil());
-    EXPECT_EQ(urlNamespaceUUID->toString(), "6ba7b811-9dad-11d1-80b4-00c04fd430c8");
+    EXPECT_EQ(urlNamespaceUUID->toString(),
+              "6ba7b811-9dad-11d1-80b4-00c04fd430c8");
 
     // Test OID namespace UUID
     EXPECT_FALSE(oidNamespaceUUID->isNil());
-    EXPECT_EQ(oidNamespaceUUID->toString(), "6ba7b812-9dad-11d1-80b4-00c04fd430c8");
+    EXPECT_EQ(oidNamespaceUUID->toString(),
+              "6ba7b812-9dad-11d1-80b4-00c04fd430c8");
 }
 
 // Test v3 (name-based MD5) UUID generation
@@ -362,9 +369,7 @@ TEST_F(UUIDTest, GetTimestamp) {
     // If it's actually a v1 UUID, test getTimestamp
     if (v1UUID.version() == 1) {
         // Getting timestamp should not throw for v1 UUID
-        EXPECT_NO_THROW({
-            auto timestamp = v1UUID.getTimestamp();
-        });
+        EXPECT_NO_THROW({ auto timestamp = v1UUID.getTimestamp(); });
 
         // Timestamp should be recent
         auto timestamp = v1UUID.getTimestamp();
@@ -372,8 +377,10 @@ TEST_F(UUIDTest, GetTimestamp) {
 
         // It should be within a reasonable time range from now
         // Note: This is approximate and may fail if time zones are involved
-        auto timeDiff = std::chrono::duration_cast<std::chrono::days>(now - timestamp).count();
-        EXPECT_LE(std::abs(timeDiff), 366); // Within a year (generous margin)
+        auto timeDiff =
+            std::chrono::duration_cast<std::chrono::days>(now - timestamp)
+                .count();
+        EXPECT_LE(std::abs(timeDiff), 366);  // Within a year (generous margin)
     }
 
     // Getting timestamp from non-v1 UUID should throw
@@ -404,7 +411,8 @@ TEST_F(UUIDTest, HashFunction) {
     std::unordered_set<UUID> uuidSet;
     uuidSet.insert(u1);
     uuidSet.insert(u2);
-    uuidSet.insert(u1Copy); // Should not increase the size since u1 is already there
+    uuidSet.insert(
+        u1Copy);  // Should not increase the size since u1 is already there
 
     EXPECT_EQ(uuidSet.size(), 2);
     EXPECT_TRUE(uuidSet.contains(u1));
@@ -413,7 +421,7 @@ TEST_F(UUIDTest, HashFunction) {
     std::unordered_map<UUID, int> uuidMap;
     uuidMap[u1] = 1;
     uuidMap[u2] = 2;
-    uuidMap[u1Copy] = 3; // Should update the value for u1
+    uuidMap[u1Copy] = 3;  // Should update the value for u1
 
     EXPECT_EQ(uuidMap.size(), 2);
     EXPECT_EQ(uuidMap[u1], 3);
@@ -442,7 +450,8 @@ TEST_F(UUIDTest, Uniqueness) {
     for (int i = 0; i < NUM_UUIDS; ++i) {
         UUID uuid = UUID::v4();
         std::string uuidStr = uuid.toString();
-        EXPECT_TRUE(uuidStrings.insert(uuidStr).second) << "UUID collision detected: " << uuidStr;
+        EXPECT_TRUE(uuidStrings.insert(uuidStr).second)
+            << "UUID collision detected: " << uuidStr;
     }
 
     EXPECT_EQ(uuidStrings.size(), NUM_UUIDS);
@@ -453,21 +462,25 @@ TEST_F(UUIDTest, EdgeCases) {
     // Invalid string for UUID constructor
     EXPECT_THROW(UUID("not-a-uuid"), std::runtime_error);
     EXPECT_THROW(UUID("123456789"), std::runtime_error);
-    EXPECT_THROW(UUID("123e4567-e89b-12d3-a456-4266141740"), std::runtime_error); // Too short
+    EXPECT_THROW(UUID("123e4567-e89b-12d3-a456-4266141740"),
+                 std::runtime_error);  // Too short
 
     // Empty string for UUID constructor
     EXPECT_THROW(UUID(""), std::runtime_error);
 
     // Invalid bytes for fromBytes
     std::vector<uint8_t> tooShort(15, 0);
-    EXPECT_THROW(UUID::fromBytes(std::span<const uint8_t>(tooShort)), std::invalid_argument);
+    EXPECT_THROW(UUID::fromBytes(std::span<const uint8_t>(tooShort)),
+                 std::invalid_argument);
 
     std::vector<uint8_t> tooLong(17, 0);
-    EXPECT_THROW(UUID::fromBytes(std::span<const uint8_t>(tooLong)), std::invalid_argument);
+    EXPECT_THROW(UUID::fromBytes(std::span<const uint8_t>(tooLong)),
+                 std::invalid_argument);
 
     // Empty bytes should throw
     std::vector<uint8_t> empty;
-    EXPECT_THROW(UUID::fromBytes(std::span<const uint8_t>(empty)), std::invalid_argument);
+    EXPECT_THROW(UUID::fromBytes(std::span<const uint8_t>(empty)),
+                 std::invalid_argument);
 }
 
 // Verify that UUIDs can be sorted (for use in ordered containers)
@@ -489,6 +502,6 @@ TEST_F(UUIDTest, SortingBehavior) {
     EXPECT_EQ(uuids, uuidsCopy);
 }
 
-} // namespace atom::extra::boost::test
+}  // namespace atom::extra::boost::test
 
-#endif // ATOM_EXTRA_BOOST_TEST_UUID_HPP
+#endif  // ATOM_EXTRA_BOOST_TEST_UUID_HPP

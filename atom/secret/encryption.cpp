@@ -1,490 +1,824 @@
 #include "encryption.hpp"
 
-#include <openssl/evp.h>
-#include <openssl/kdf.h>
-#include <openssl/rand.h>
 #include <openssl/aes.h>
-#include <spdlog/spdlog.h>
-#include <vector>
-#include <mutex>
-#include <algorithm>
+#include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
 
-#ifdef _WIN32
-#include <intrin.h>
-#include <immintrin.h>
-#elif defined(__x86_64__) || defined(__i386__)
-#include <cpuid.h>
-#include <immintrin.h>
+#include <atomic>
+#include <cstdlib>
+#include <cstring>
+#include <iomanip>
+#include <sstream>
+
+#if defined(_WIN32)
+#include <windows.h>
+#elif defined(__linux__)
+#include <sys/mman.h>
+#include <unistd.h>
+#elif defined(__APPLE__)
+#include <sys/mman.h>
+#include <unistd.h>
 #endif
 
 #include "atom/error/exception.hpp"
 
 namespace atom::secret {
 
-// Static member definitions
-HardwareCapabilities Encryption::s_hwCapabilities;
-bool Encryption::s_initialized = false;
+SslCipherContext::SslCipherContext() : ctx(EVP_CIPHER_CTX_new()) {
+    if (!ctx) {
+        THROW_RUNTIME_ERROR("Failed to create OpenSSL cipher context");
+    }
+}
 
-namespace {
-// RAII wrapper for OpenSSL EVP_CIPHER_CTX
-class CipherContext {
-public:
-    CipherContext() : ctx_(EVP_CIPHER_CTX_new()) {
-        if (!ctx_) {
-            spdlog::error("Failed to create OpenSSL cipher context.");
-            THROW_RUNTIME_ERROR("Failed to create OpenSSL cipher context.");
-        }
+SslCipherContext::~SslCipherContext() {
+    if (ctx) {
+        EVP_CIPHER_CTX_free(ctx);
+        ctx = nullptr;
     }
-    ~CipherContext() {
-        if (ctx_) {
-            EVP_CIPHER_CTX_free(ctx_);
-        }
-    }
-    CipherContext(const CipherContext&) = delete;
-    CipherContext& operator=(const CipherContext&) = delete;
-    CipherContext(CipherContext&& other) noexcept : ctx_(other.ctx_) {
-        other.ctx_ = nullptr;
-    }
-    CipherContext& operator=(CipherContext&& other) noexcept {
-        if (this != &other) {
-            if (ctx_)
-                EVP_CIPHER_CTX_free(ctx_);
-            ctx_ = other.ctx_;
-            other.ctx_ = nullptr;
-        }
-        return *this;
-    }
-    EVP_CIPHER_CTX* get() const { return ctx_; }
+}
 
-private:
-    EVP_CIPHER_CTX* ctx_;
-};
+SslCipherContext::SslCipherContext(SslCipherContext&& other) noexcept
+    : ctx(other.ctx) {
+    other.ctx = nullptr;
+}
 
-// Secure memory zeroing
-void secure_zero(void* ptr, size_t size) {
-#ifdef _WIN32
-    SecureZeroMemory(ptr, size);
+SslCipherContext& SslCipherContext::operator=(
+    SslCipherContext&& other) noexcept {
+    if (this != &other) {
+        if (ctx) {
+            EVP_CIPHER_CTX_free(ctx);
+        }
+        ctx = other.ctx;
+        other.ctx = nullptr;
+    }
+    return *this;
+}
+
+// ============================================================================
+// SecureMemory Implementation
+// ============================================================================
+
+void SecureMemory::secureClear(void* ptr, size_t size) noexcept {
+    if (!ptr || size == 0) {
+        return;
+    }
+
+    // First pass: overwrite with random data
+    if (RAND_bytes(static_cast<unsigned char*>(ptr), static_cast<int>(size)) !=
+        1) {
+        // Fallback to deterministic pattern if random fails
+        std::memset(ptr, 0xAA, size);
+        std::memset(ptr, 0x55, size);
+    }
+
+    // Second pass: zero out
+    std::memset(ptr, 0, size);
+
+    // Memory barrier to prevent compiler optimization
+    std::atomic_signal_fence(std::memory_order_acq_rel);
+}
+
+void SecureMemory::secureClear(std::string& str) noexcept {
+    if (!str.empty()) {
+        secureClear(str.data(), str.size());
+        str.clear();
+        str.shrink_to_fit();
+    }
+}
+
+template <typename T>
+void SecureMemory::secureClear(std::vector<T>& vec) noexcept {
+    if (!vec.empty()) {
+        secureClear(vec.data(), vec.size() * sizeof(T));
+        vec.clear();
+        vec.shrink_to_fit();
+    }
+}
+
+// Explicit template instantiations
+template void SecureMemory::secureClear<uint8_t>(
+    std::vector<uint8_t>&) noexcept;
+template void SecureMemory::secureClear<char>(std::vector<char>&) noexcept;
+
+bool SecureMemory::lockMemory(void* ptr, size_t size) noexcept {
+    if (!ptr || size == 0) {
+        return false;
+    }
+
+#if defined(_WIN32)
+    return VirtualLock(ptr, size) != 0;
+#elif defined(__linux__) || defined(__APPLE__)
+    return mlock(ptr, size) == 0;
 #else
-    volatile unsigned char* p = static_cast<volatile unsigned char*>(ptr);
-    while (size--) {
-        *p++ = 0;
-    }
+    // Platform not supported, but don't fail
+    return true;
 #endif
 }
 
-}  // namespace
-
-// SecureMemoryPool implementation
-class SecureMemoryPool::Impl {
-public:
-    std::unique_ptr<std::vector<unsigned char>> getBuffer(size_t size) {
-        std::lock_guard<std::mutex> lock(mutex_);
-
-        // Try to find a suitable buffer in the pool
-        auto it = std::find_if(pool_.begin(), pool_.end(),
-            [size](const std::unique_ptr<std::vector<unsigned char>>& buf) {
-                return buf && buf->capacity() >= size;
-            });
-
-        if (it != pool_.end()) {
-            auto buffer = std::move(*it);
-            pool_.erase(it);
-            buffer->resize(size);
-            return buffer;
-        }
-
-        // Create new buffer
-        auto buffer = std::make_unique<std::vector<unsigned char>>();
-        buffer->reserve(std::max(size, static_cast<size_t>(1024))); // Minimum 1KB
-        buffer->resize(size);
-        return buffer;
+bool SecureMemory::unlockMemory(void* ptr, size_t size) noexcept {
+    if (!ptr || size == 0) {
+        return false;
     }
 
-    void returnBuffer(std::unique_ptr<std::vector<unsigned char>> buffer) {
-        if (!buffer) return;
+#if defined(_WIN32)
+    return VirtualUnlock(ptr, size) != 0;
+#elif defined(__linux__) || defined(__APPLE__)
+    return munlock(ptr, size) == 0;
+#else
+    // Platform not supported, but don't fail
+    return true;
+#endif
+}
 
-        std::lock_guard<std::mutex> lock(mutex_);
-
-        // Clear the buffer securely
-        secure_zero(buffer->data(), buffer->size());
-
-        // Keep pool size reasonable
-        if (pool_.size() < 10) {
-            pool_.push_back(std::move(buffer));
-        }
-        // Otherwise let it be destroyed
+void* SecureMemory::allocateSecure(size_t size) noexcept {
+    if (size == 0) {
+        return nullptr;
     }
 
-private:
-    std::mutex mutex_;
-    std::vector<std::unique_ptr<std::vector<unsigned char>>> pool_;
-};
-
-SecureMemoryPool& SecureMemoryPool::getInstance() {
-    static SecureMemoryPool instance;
-    if (!instance.pImpl) {
-        instance.pImpl = std::make_unique<Impl>();
+#if defined(_WIN32)
+    void* ptr = _aligned_malloc(size, 64);
+#else
+    void* ptr = nullptr;
+    if (posix_memalign(&ptr, 64, size) != 0) {
+        ptr = nullptr;
     }
-    return instance;
-}
-
-std::unique_ptr<std::vector<unsigned char>> SecureMemoryPool::getBuffer(size_t size) {
-    return pImpl->getBuffer(size);
-}
-
-void SecureMemoryPool::returnBuffer(std::unique_ptr<std::vector<unsigned char>> buffer) {
-    pImpl->returnBuffer(std::move(buffer));
-}
-
-// Hardware capability detection
-HardwareCapabilities Encryption::detectHardwareCapabilities() {
-    HardwareCapabilities caps;
-
-#if defined(__x86_64__) || defined(__i386__)
-    unsigned int eax, ebx, ecx, edx;
-
-    // Check for AES-NI (CPUID.01H:ECX.AES[bit 25])
-    __cpuid(1, eax, ebx, ecx, edx);
-    caps.aesni_available = (ecx & (1 << 25)) != 0;
-    caps.rdrand_available = (ecx & (1 << 30)) != 0;
-
-    // Check for AVX2 (CPUID.07H:EBX.AVX2[bit 5])
-    __cpuid_count(7, 0, eax, ebx, ecx, edx);
-    caps.avx2_available = (ebx & (1 << 5)) != 0;
-    caps.sha_available = (ebx & (1 << 29)) != 0;
-
-#elif defined(_WIN32)
-    int cpuInfo[4];
-
-    // Check for AES-NI
-    __cpuid(cpuInfo, 1);
-    caps.aesni_available = (cpuInfo[2] & (1 << 25)) != 0;
-    caps.rdrand_available = (cpuInfo[2] & (1 << 30)) != 0;
-
-    // Check for AVX2
-    __cpuidex(cpuInfo, 7, 0);
-    caps.avx2_available = (cpuInfo[1] & (1 << 5)) != 0;
-    caps.sha_available = (cpuInfo[1] & (1 << 29)) != 0;
 #endif
 
-    return caps;
-}
-
-void Encryption::initialize() {
-    if (!s_initialized) {
-        s_hwCapabilities = detectHardwareCapabilities();
-        s_initialized = true;
-
-        spdlog::info("Encryption module initialized. Hardware capabilities: "
-                    "AES-NI={}, AVX2={}, SHA={}, RDRAND={}",
-                    s_hwCapabilities.aesni_available,
-                    s_hwCapabilities.avx2_available,
-                    s_hwCapabilities.sha_available,
-                    s_hwCapabilities.rdrand_available);
-    }
-}
-
-const HardwareCapabilities& Encryption::getHardwareCapabilities() {
-    if (!s_initialized) {
-        initialize();
-    }
-    return s_hwCapabilities;
-}
-
-Result<std::vector<unsigned char>> Encryption::deriveKey(
-    std::string_view password,
-    std::string_view salt,
-    int iterations,
-    int key_len) {
-
-    if (password.empty() || salt.empty() || key_len <= 0 || iterations <= 0) {
-        return Result<std::vector<unsigned char>>::Failure(
-            ErrorCode::InvalidArgument, std::string("Invalid parameters for key derivation"));
+    if (ptr && !lockMemory(ptr, size)) {
+        // Failed to lock memory, continue without lock
     }
 
-    auto buffer = SecureMemoryPool::getInstance().getBuffer(key_len);
-
-    if (PKCS5_PBKDF2_HMAC(password.data(), password.length(),
-                          reinterpret_cast<const unsigned char*>(salt.data()),
-                          salt.length(), iterations, EVP_sha256(), key_len,
-                          buffer->data()) == 0) {
-        spdlog::error("PBKDF2 key derivation failed.");
-        return Result<std::vector<unsigned char>>::Failure(
-            ErrorCode::KeyDerivationFailed, std::string("PBKDF2 key derivation failed"));
-    }
-
-    std::vector<unsigned char> key(buffer->begin(), buffer->end());
-    SecureMemoryPool::getInstance().returnBuffer(std::move(buffer));
-
-    return Result<std::vector<unsigned char>>(std::move(key));
+    return ptr;
 }
 
-// Legacy method for backward compatibility
-std::vector<unsigned char> Encryption::derive_key(std::string_view password,
-                                                  std::string_view salt,
-                                                  int key_len) {
-    auto result = deriveKey(password, salt, 100000, key_len);
-    if (result.isError()) {
-        spdlog::error("Legacy derive_key failed: {}", result.errorMessage());
-        THROW_RUNTIME_ERROR("PBKDF2 key derivation failed.");
+void SecureMemory::freeSecure(void* ptr, size_t size) noexcept {
+    if (!ptr) {
+        return;
     }
-    return result.value();
+
+    // Clear memory before freeing
+    secureClear(ptr, size);
+
+    // Unlock memory
+    unlockMemory(ptr, size);
+
+    // Free memory
+#if defined(_WIN32)
+    _aligned_free(ptr);
+#else
+    std::free(ptr);
+#endif
 }
 
-Result<std::vector<unsigned char>> Encryption::encrypt(
-    std::string_view plaintext,
-    const std::vector<unsigned char>& key,
-    const std::vector<unsigned char>& iv,
-    const std::vector<unsigned char>& aad,
-    const EncryptionOptions& options) {
+// ============================================================================
+// SecureBuffer Template Implementation
+// ============================================================================
 
-    // Dispatch to appropriate encryption method
-    switch (options.encryptionMethod) {
-        case EncryptionOptions::Method::AES_GCM:
-        case EncryptionOptions::Method::AES_256_GCM:
-        case EncryptionOptions::Method::AES_128_GCM:
-            return encryptAESGCM(plaintext, key, iv, aad);
-        case EncryptionOptions::Method::AES_CBC:
-            return encryptAESCBC(plaintext, key, iv);
-        case EncryptionOptions::Method::CHACHA20_POLY1305:
-            return encryptChaCha20Poly1305(plaintext, key, iv, aad);
-        default:
-            return Result<std::vector<unsigned char>>::Failure(
-                ErrorCode::InvalidArgument, std::string("Unsupported encryption method"));
+template <typename T>
+SecureBuffer<T>::SecureBuffer(size_t size)
+    : data_(static_cast<T*>(SecureMemory::allocateSecure(size * sizeof(T)))),
+      size_(data_ ? size : 0) {}
+
+template <typename T>
+SecureBuffer<T>::~SecureBuffer() {
+    if (data_) {
+        SecureMemory::freeSecure(data_, size_ * sizeof(T));
+        data_ = nullptr;
+        size_ = 0;
     }
 }
 
-Result<std::vector<unsigned char>> Encryption::encryptAESGCM(
-    std::string_view plaintext,
-    const std::vector<unsigned char>& key,
-    const std::vector<unsigned char>& iv,
-    const std::vector<unsigned char>& aad) {
-    CipherContext ctx;
-    int len;
-    int ciphertext_len;
-    std::vector<unsigned char> ciphertext(plaintext.length() +
-                                          16);  // 16 for GCM tag
-
-    if (1 != EVP_EncryptInit_ex(ctx.get(), EVP_aes_256_gcm(), nullptr, nullptr,
-                                nullptr)) {
-        return Result<std::vector<unsigned char>>::Failure("EncryptInit failed.");
-    }
-    if (1 != EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_IVLEN, iv.size(),
-                                 nullptr)) {
-        return Result<std::vector<unsigned char>>::Failure(
-            "Setting IV length failed.");
-    }
-    if (1 != EVP_EncryptInit_ex(ctx.get(), nullptr, nullptr, key.data(),
-                                iv.data())) {
-        return Result<std::vector<unsigned char>>::Failure(
-            "EncryptInit with key and IV failed.");
-    }
-    if (1 !=
-        EVP_EncryptUpdate(ctx.get(), nullptr, &len, aad.data(), aad.size())) {
-        return Result<std::vector<unsigned char>>::Failure(
-            "EncryptUpdate for AAD failed.");
-    }
-    if (1 != EVP_EncryptUpdate(
-                 ctx.get(), ciphertext.data(), &len,
-                 reinterpret_cast<const unsigned char*>(plaintext.data()),
-                 plaintext.size())) {
-        return Result<std::vector<unsigned char>>::Failure(
-            "EncryptUpdate for plaintext failed.");
-    }
-    ciphertext_len = len;
-
-    if (1 != EVP_EncryptFinal_ex(ctx.get(), ciphertext.data() + len, &len)) {
-        return Result<std::vector<unsigned char>>::Failure(
-            "EncryptFinal failed.");
-    }
-    ciphertext_len += len;
-    ciphertext.resize(ciphertext_len);
-
-    std::vector<unsigned char> tag(16);
-    if (1 !=
-        EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_GET_TAG, 16, tag.data())) {
-        return Result<std::vector<unsigned char>>::Failure(
-            "Getting GCM tag failed.");
-    }
-
-    // Append tag to ciphertext
-    ciphertext.insert(ciphertext.end(), tag.begin(), tag.end());
-
-    return Result(std::move(ciphertext));
+template <typename T>
+SecureBuffer<T>::SecureBuffer(SecureBuffer&& other) noexcept
+    : data_(other.data_), size_(other.size_) {
+    other.data_ = nullptr;
+    other.size_ = 0;
 }
 
-Result<std::string> Encryption::decrypt(
-    const std::vector<unsigned char>& ciphertext_with_tag,
-    const std::vector<unsigned char>& key,
-    const std::vector<unsigned char>& iv,
-    const std::vector<unsigned char>& aad,
-    const EncryptionOptions& options) {
-
-    // Dispatch to appropriate decryption method
-    switch (options.encryptionMethod) {
-        case EncryptionOptions::Method::AES_GCM:
-        case EncryptionOptions::Method::AES_256_GCM:
-        case EncryptionOptions::Method::AES_128_GCM:
-            return decryptAESGCM(ciphertext_with_tag, key, iv, aad);
-        case EncryptionOptions::Method::AES_CBC:
-            return decryptAESCBC(ciphertext_with_tag, key, iv);
-        case EncryptionOptions::Method::CHACHA20_POLY1305:
-            return decryptChaCha20Poly1305(ciphertext_with_tag, key, iv, aad);
-        default:
-            return Result<std::string>::Failure(
-                ErrorCode::InvalidArgument, std::string("Unsupported encryption method"));
+template <typename T>
+SecureBuffer<T>& SecureBuffer<T>::operator=(SecureBuffer&& other) noexcept {
+    if (this != &other) {
+        if (data_) {
+            SecureMemory::freeSecure(data_, size_ * sizeof(T));
+        }
+        data_ = other.data_;
+        size_ = other.size_;
+        other.data_ = nullptr;
+        other.size_ = 0;
     }
+    return *this;
 }
 
-Result<std::string> Encryption::decryptAESGCM(
-    const std::vector<unsigned char>& ciphertext_with_tag,
-    const std::vector<unsigned char>& key,
-    const std::vector<unsigned char>& iv,
-    const std::vector<unsigned char>& aad) {
-    if (ciphertext_with_tag.size() < 16) {
-        return Result<std::string>(
-            "Invalid ciphertext: too short to contain a tag.");
+// Explicit template instantiations
+template class SecureBuffer<uint8_t>;
+template class SecureBuffer<char>;
+
+// ============================================================================
+// KeyDerivation Implementation
+// ============================================================================
+
+Result<std::vector<uint8_t>> KeyDerivation::deriveKey(
+    std::string_view password, const std::vector<uint8_t>& salt, int iterations,
+    size_t keyLength) {
+    if (password.empty()) {
+        return Result<std::vector<uint8_t>>::error("Password cannot be empty");
     }
 
-    std::vector<unsigned char> tag(ciphertext_with_tag.end() - 16,
-                                   ciphertext_with_tag.end());
-    std::vector<unsigned char> ciphertext(ciphertext_with_tag.begin(),
-                                          ciphertext_with_tag.end() - 16);
-
-    CipherContext ctx;
-    int len;
-    int plaintext_len;
-    std::string plaintext;
-    plaintext.resize(ciphertext.size());
-
-    if (1 != EVP_DecryptInit_ex(ctx.get(), EVP_aes_256_gcm(), nullptr, nullptr,
-                                nullptr)) {
-        return Result<std::string>("DecryptInit failed.");
-    }
-    if (1 != EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_IVLEN, iv.size(),
-                                 nullptr)) {
-        return Result<std::string>("Setting IV length failed.");
-    }
-    if (1 != EVP_DecryptInit_ex(ctx.get(), nullptr, nullptr, key.data(),
-                                iv.data())) {
-        return Result<std::string>("DecryptInit with key and IV failed.");
-    }
-    if (1 !=
-        EVP_DecryptUpdate(ctx.get(), nullptr, &len, aad.data(), aad.size())) {
-        return Result<std::string>("DecryptUpdate for AAD failed.");
-    }
-    if (1 != EVP_DecryptUpdate(ctx.get(),
-                               reinterpret_cast<unsigned char*>(&plaintext[0]),
-                               &len, ciphertext.data(), ciphertext.size())) {
-        return Result<std::string>("DecryptUpdate for ciphertext failed.");
-    }
-    plaintext_len = len;
-
-    if (1 != EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_TAG, tag.size(),
-                                 (void*)tag.data())) {
-        return Result<std::string>("Setting GCM tag failed.");
+    if (salt.empty()) {
+        return Result<std::vector<uint8_t>>::error("Salt cannot be empty");
     }
 
-    int ret = EVP_DecryptFinal_ex(
-        ctx.get(), reinterpret_cast<unsigned char*>(&plaintext[0]) + len, &len);
-
-    if (ret > 0) {
-        plaintext_len += len;
-        plaintext.resize(plaintext_len);
-        return Result(std::move(plaintext));
-    } else {
-        return Result<std::string>(
-            "Decryption failed: GCM tag verification failed.");
-    }
-}
-
-Result<std::vector<unsigned char>> Encryption::randomBytes(int len, bool use_hardware_rng) {
-    if (len <= 0) {
-        return Result<std::vector<unsigned char>>::Failure(
-            ErrorCode::InvalidArgument, std::string("Invalid length for random bytes"));
+    if (iterations < 1000) {
+        return Result<std::vector<uint8_t>>::error(
+            "Iteration count too low (minimum 1000)");
     }
 
-    auto buffer = SecureMemoryPool::getInstance().getBuffer(len);
-
-    int result = 0;
-    if (use_hardware_rng && getHardwareCapabilities().rdrand_available) {
-        // Try hardware RNG first
-        result = RAND_bytes(buffer->data(), len);
-    } else {
-        // Use OpenSSL's PRNG
-        result = RAND_bytes(buffer->data(), len);
+    if (keyLength == 0 || keyLength > 1024) {
+        return Result<std::vector<uint8_t>>::error("Invalid key length");
     }
+
+    std::vector<uint8_t> derivedKey(keyLength);
+
+    int result = PKCS5_PBKDF2_HMAC(
+        password.data(), static_cast<int>(password.length()), salt.data(),
+        static_cast<int>(salt.size()), iterations, EVP_sha256(),
+        static_cast<int>(keyLength), derivedKey.data());
 
     if (result != 1) {
-        spdlog::error("Failed to generate random bytes.");
-        return Result<std::vector<unsigned char>>::Failure(
-            ErrorCode::PlatformError, std::string("Failed to generate random bytes"));
+        return Result<std::vector<uint8_t>>::error("Key derivation failed");
     }
 
-    std::vector<unsigned char> bytes(buffer->begin(), buffer->end());
-    SecureMemoryPool::getInstance().returnBuffer(std::move(buffer));
-
-    return Result<std::vector<unsigned char>>(std::move(bytes));
+    return Result<std::vector<uint8_t>>(std::move(derivedKey));
 }
 
-// Legacy method for backward compatibility
-std::vector<unsigned char> Encryption::random_bytes(int len) {
-    auto result = randomBytes(len, true);
-    if (result.isError()) {
-        spdlog::error("Legacy random_bytes failed: {}", result.errorMessage());
-        THROW_RUNTIME_ERROR("Failed to generate random bytes.");
+Result<std::vector<uint8_t>> KeyDerivation::generateSalt(size_t length) {
+    if (length == 0 || length > 1024) {
+        return Result<std::vector<uint8_t>>::error("Invalid salt length");
     }
-    return result.value();
+
+    std::vector<uint8_t> salt(length);
+
+    if (RAND_bytes(salt.data(), static_cast<int>(length)) != 1) {
+        return Result<std::vector<uint8_t>>::error(
+            "Failed to generate random salt");
+    }
+
+    return Result<std::vector<uint8_t>>(std::move(salt));
 }
 
-// Placeholder implementations for additional encryption methods
-Result<std::vector<unsigned char>> Encryption::encryptAESCBC(
-    std::string_view plaintext,
-    const std::vector<unsigned char>& key,
-    const std::vector<unsigned char>& iv) {
-    // For now, fall back to AES-GCM
-    std::vector<unsigned char> empty_aad;
-    return encryptAESGCM(plaintext, key, iv, empty_aad);
+Result<std::vector<uint8_t>> KeyDerivation::generateKey(size_t length) {
+    if (length == 0 || length > 1024) {
+        return Result<std::vector<uint8_t>>::error("Invalid key length");
+    }
+
+    std::vector<uint8_t> key(length);
+
+    if (RAND_bytes(key.data(), static_cast<int>(length)) != 1) {
+        return Result<std::vector<uint8_t>>::error(
+            "Failed to generate random key");
+    }
+
+    return Result<std::vector<uint8_t>>(std::move(key));
 }
 
-Result<std::vector<unsigned char>> Encryption::encryptChaCha20Poly1305(
-    std::string_view plaintext,
-    const std::vector<unsigned char>& key,
-    const std::vector<unsigned char>& iv,
-    const std::vector<unsigned char>& aad) {
-    // For now, fall back to AES-GCM
-    return encryptAESGCM(plaintext, key, iv, aad);
+// ============================================================================
+// EncryptedData Implementation
+// ============================================================================
+
+std::vector<uint8_t> EncryptedData::serialize() const {
+    std::vector<uint8_t> result;
+
+    // Format:
+    // [version:1][method:1][iterations:4][salt_len:4][iv_len:4][tag_len:4][cipher_len:4]
+    //         [salt][iv][tag][ciphertext]
+
+    const uint8_t version = 1;
+    result.push_back(version);
+    result.push_back(static_cast<uint8_t>(method));
+
+    // Write iterations (4 bytes, big-endian)
+    uint32_t iter = static_cast<uint32_t>(keyIterations);
+    result.push_back((iter >> 24) & 0xFF);
+    result.push_back((iter >> 16) & 0xFF);
+    result.push_back((iter >> 8) & 0xFF);
+    result.push_back(iter & 0xFF);
+
+    // Write lengths (4 bytes each, big-endian)
+    auto writeLengthBE = [&result](uint32_t len) {
+        result.push_back((len >> 24) & 0xFF);
+        result.push_back((len >> 16) & 0xFF);
+        result.push_back((len >> 8) & 0xFF);
+        result.push_back(len & 0xFF);
+    };
+
+    writeLengthBE(static_cast<uint32_t>(salt.size()));
+    writeLengthBE(static_cast<uint32_t>(iv.size()));
+    writeLengthBE(static_cast<uint32_t>(tag.size()));
+    writeLengthBE(static_cast<uint32_t>(ciphertext.size()));
+
+    // Write data
+    result.insert(result.end(), salt.begin(), salt.end());
+    result.insert(result.end(), iv.begin(), iv.end());
+    result.insert(result.end(), tag.begin(), tag.end());
+    result.insert(result.end(), ciphertext.begin(), ciphertext.end());
+
+    return result;
 }
 
-Result<std::string> Encryption::decryptAESCBC(
-    const std::vector<unsigned char>& ciphertext,
-    const std::vector<unsigned char>& key,
-    const std::vector<unsigned char>& iv) {
-    // For now, fall back to AES-GCM
-    std::vector<unsigned char> empty_aad;
-    return decryptAESGCM(ciphertext, key, iv, empty_aad);
+Result<EncryptedData> EncryptedData::deserialize(
+    const std::vector<uint8_t>& data) {
+    if (data.size() < 22) {  // Minimum header size
+        return Result<EncryptedData>::error("Invalid encrypted data format");
+    }
+
+    size_t pos = 0;
+
+    // Read version
+    uint8_t version = data[pos++];
+    if (version != 1) {
+        return Result<EncryptedData>::error(
+            "Unsupported encrypted data version");
+    }
+
+    // Read method
+    uint8_t methodByte = data[pos++];
+    if (methodByte > 2) {
+        return Result<EncryptedData>::error("Unknown encryption method");
+    }
+
+    EncryptionOptions::Method method =
+        static_cast<EncryptionOptions::Method>(methodByte);
+
+    // Read iterations (4 bytes, big-endian)
+    if (pos + 4 > data.size()) {
+        return Result<EncryptedData>::error("Truncated encrypted data");
+    }
+
+    uint32_t iterations = (static_cast<uint32_t>(data[pos]) << 24) |
+                          (static_cast<uint32_t>(data[pos + 1]) << 16) |
+                          (static_cast<uint32_t>(data[pos + 2]) << 8) |
+                          static_cast<uint32_t>(data[pos + 3]);
+    pos += 4;
+
+    // Read lengths
+    auto readLengthBE = [&data, &pos]() -> uint32_t {
+        if (pos + 4 > data.size())
+            return 0;
+        uint32_t len = (static_cast<uint32_t>(data[pos]) << 24) |
+                       (static_cast<uint32_t>(data[pos + 1]) << 16) |
+                       (static_cast<uint32_t>(data[pos + 2]) << 8) |
+                       static_cast<uint32_t>(data[pos + 3]);
+        pos += 4;
+        return len;
+    };
+
+    uint32_t saltLen = readLengthBE();
+    uint32_t ivLen = readLengthBE();
+    uint32_t tagLen = readLengthBE();
+    uint32_t cipherLen = readLengthBE();
+
+    // Validate lengths
+    if (pos + saltLen + ivLen + tagLen + cipherLen != data.size()) {
+        return Result<EncryptedData>::error("Invalid encrypted data lengths");
+    }
+
+    EncryptedData result;
+    result.method = method;
+    result.keyIterations = static_cast<int>(iterations);
+
+    // Read data sections
+    result.salt.assign(data.begin() + pos, data.begin() + pos + saltLen);
+    pos += saltLen;
+
+    result.iv.assign(data.begin() + pos, data.begin() + pos + ivLen);
+    pos += ivLen;
+
+    result.tag.assign(data.begin() + pos, data.begin() + pos + tagLen);
+    pos += tagLen;
+
+    result.ciphertext.assign(data.begin() + pos,
+                             data.begin() + pos + cipherLen);
+
+    return Result<EncryptedData>(std::move(result));
 }
 
-Result<std::string> Encryption::decryptChaCha20Poly1305(
-    const std::vector<unsigned char>& ciphertext_with_tag,
-    const std::vector<unsigned char>& key,
-    const std::vector<unsigned char>& iv,
-    const std::vector<unsigned char>& aad) {
-    // For now, fall back to AES-GCM
-    return decryptAESGCM(ciphertext_with_tag, key, iv, aad);
+// ============================================================================
+// Encryption Implementation
+// ============================================================================
+
+Result<EncryptedData> Encryption::encrypt(std::string_view plaintext,
+                                          std::string_view password,
+                                          const EncryptionOptions& options) {
+    if (plaintext.empty()) {
+        return Result<EncryptedData>::error("Plaintext cannot be empty");
+    }
+
+    if (password.empty()) {
+        return Result<EncryptedData>::error("Password cannot be empty");
+    }
+
+    // Generate salt
+    auto saltResult = KeyDerivation::generateSalt(32);
+    if (saltResult.isError()) {
+        return Result<EncryptedData>::error("Failed to generate salt: " +
+                                            saltResult.error());
+    }
+
+    // Derive key
+    size_t keySize = getKeySize(options.encryptionMethod);
+    auto keyResult = KeyDerivation::deriveKey(password, saltResult.value(),
+                                              options.keyIterations, keySize);
+    if (keyResult.isError()) {
+        return Result<EncryptedData>::error("Failed to derive key: " +
+                                            keyResult.error());
+    }
+
+    // Encrypt with derived key
+    auto encryptResult = encryptWithKey(plaintext, keyResult.value(), options);
+    if (encryptResult.isError()) {
+        return encryptResult;
+    }
+
+    // Update salt in result
+    EncryptedData result = encryptResult.value();
+    result.salt = std::move(saltResult.value());
+    result.keyIterations = options.keyIterations;
+
+    // Clear sensitive data
+    SecureMemory::secureClear(
+        const_cast<std::vector<uint8_t>&>(keyResult.value()));
+
+    return Result<EncryptedData>(std::move(result));
 }
 
-const EVP_CIPHER* Encryption::getCipher(EncryptionOptions::Method method, int keySize) {
-    switch (method) {
-        case EncryptionOptions::Method::AES_128_GCM:
-            return EVP_aes_128_gcm();
+Result<std::string> Encryption::decrypt(const EncryptedData& encryptedData,
+                                        std::string_view password) {
+    if (password.empty()) {
+        return Result<std::string>::error("Password cannot be empty");
+    }
+
+    if (encryptedData.salt.empty()) {
+        return Result<std::string>::error("Missing salt in encrypted data");
+    }
+
+    // Derive key
+    size_t keySize = getKeySize(encryptedData.method);
+    auto keyResult = KeyDerivation::deriveKey(
+        password, encryptedData.salt, encryptedData.keyIterations, keySize);
+    if (keyResult.isError()) {
+        return Result<std::string>::error("Failed to derive key: " +
+                                          keyResult.error());
+    }
+
+    // Decrypt with derived key
+    auto decryptResult = decryptWithKey(encryptedData, keyResult.value());
+
+    // Clear sensitive data
+    SecureMemory::secureClear(
+        const_cast<std::vector<uint8_t>&>(keyResult.value()));
+
+    return decryptResult;
+}
+
+Result<EncryptedData> Encryption::encryptWithKey(
+    std::string_view plaintext, const std::vector<uint8_t>& key,
+    const EncryptionOptions& options) {
+    if (plaintext.empty()) {
+        return Result<EncryptedData>::error("Plaintext cannot be empty");
+    }
+
+    if (key.empty()) {
+        return Result<EncryptedData>::error("Key cannot be empty");
+    }
+
+    // Generate IV
+    size_t ivSize = getIvSize(options.encryptionMethod);
+    auto ivResult = KeyDerivation::generateKey(ivSize);
+    if (ivResult.isError()) {
+        return Result<EncryptedData>::error("Failed to generate IV: " +
+                                            ivResult.error());
+    }
+
+    EncryptedData result{};
+    result.method = options.encryptionMethod;
+    result.iv = std::move(ivResult.value());
+    result.keyIterations = options.keyIterations;
+
+    // Encrypt based on method
+    switch (options.encryptionMethod) {
+        case EncryptionOptions::Method::AES_GCM: {
+            auto encryptResult = encryptAesGcm(plaintext, key, result.iv);
+            if (encryptResult.isError()) {
+                return Result<EncryptedData>::error(
+                    "AES-GCM encryption failed: " + encryptResult.error());
+            }
+            result.ciphertext = std::move(encryptResult.value().first);
+            result.tag = std::move(encryptResult.value().second);
+            break;
+        }
+        case EncryptionOptions::Method::AES_CBC: {
+            auto encryptResult = encryptAesCbc(plaintext, key, result.iv);
+            if (encryptResult.isError()) {
+                return Result<EncryptedData>::error(
+                    "AES-CBC encryption failed: " + encryptResult.error());
+            }
+            result.ciphertext = std::move(encryptResult.value());
+            break;
+        }
+        case EncryptionOptions::Method::CHACHA20_POLY1305: {
+            return Result<EncryptedData>::error(
+                "ChaCha20-Poly1305 not yet implemented");
+        }
+        default:
+            return Result<EncryptedData>::error("Unknown encryption method");
+    }
+
+    return Result<EncryptedData>(std::move(result));
+}
+
+Result<std::string> Encryption::decryptWithKey(
+    const EncryptedData& encryptedData, const std::vector<uint8_t>& key) {
+    if (key.empty()) {
+        return Result<std::string>::error("Key cannot be empty");
+    }
+
+    if (encryptedData.ciphertext.empty()) {
+        return Result<std::string>::error("Ciphertext cannot be empty");
+    }
+
+    // Decrypt based on method
+    switch (encryptedData.method) {
         case EncryptionOptions::Method::AES_GCM:
-        case EncryptionOptions::Method::AES_256_GCM:
+            return decryptAesGcm(encryptedData.ciphertext, key,
+                                 encryptedData.iv, encryptedData.tag);
+        case EncryptionOptions::Method::AES_CBC:
+            return decryptAesCbc(encryptedData.ciphertext, key,
+                                 encryptedData.iv);
+        case EncryptionOptions::Method::CHACHA20_POLY1305:
+            return Result<std::string>::error(
+                "ChaCha20-Poly1305 not yet implemented");
+        default:
+            return Result<std::string>::error("Unknown encryption method");
+    }
+}
+
+// ============================================================================
+// Private AES Implementation Methods
+// ============================================================================
+
+Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>
+Encryption::encryptAesGcm(std::string_view plaintext,
+                          const std::vector<uint8_t>& key,
+                          const std::vector<uint8_t>& iv) {
+    try {
+        SslCipherContext ctx;
+
+        // Initialize encryption
+        if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr,
+                               nullptr) != 1) {
+            return Result<
+                std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>::
+                error("Failed to initialize AES-GCM encryption");
+        }
+
+        // Set IV length
+        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN,
+                                static_cast<int>(iv.size()), nullptr) != 1) {
+            return Result<
+                std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>::
+                error("Failed to set IV length");
+        }
+
+        // Set key and IV
+        if (EVP_EncryptInit_ex(ctx, nullptr, nullptr, key.data(), iv.data()) !=
+            1) {
+            return Result<
+                std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>::
+                error("Failed to set key and IV");
+        }
+
+        // Encrypt
+        std::vector<uint8_t> ciphertext(plaintext.length() +
+                                        16);  // Extra space for padding
+        int len = 0;
+        int ciphertext_len = 0;
+
+        if (EVP_EncryptUpdate(
+                ctx, ciphertext.data(), &len,
+                reinterpret_cast<const unsigned char*>(plaintext.data()),
+                static_cast<int>(plaintext.length())) != 1) {
+            return Result<
+                std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>::
+                error("Failed to encrypt data");
+        }
+        ciphertext_len = len;
+
+        // Finalize encryption
+        if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
+            return Result<
+                std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>::
+                error("Failed to finalize encryption");
+        }
+        ciphertext_len += len;
+        ciphertext.resize(ciphertext_len);
+
+        // Get authentication tag
+        std::vector<uint8_t> tag(16);
+        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag.data()) !=
+            1) {
+            return Result<
+                std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>::
+                error("Failed to get authentication tag");
+        }
+
+        return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>(
+            std::make_pair(std::move(ciphertext), std::move(tag)));
+
+    } catch (const std::exception& e) {
+        return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>::
+            error(std::string("AES-GCM encryption error: ") + e.what());
+    }
+}
+
+Result<std::string> Encryption::decryptAesGcm(
+    const std::vector<uint8_t>& ciphertext, const std::vector<uint8_t>& key,
+    const std::vector<uint8_t>& iv, const std::vector<uint8_t>& tag) {
+    try {
+        SslCipherContext ctx;
+
+        // Initialize decryption
+        if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr,
+                               nullptr) != 1) {
+            return Result<std::string>::error(
+                "Failed to initialize AES-GCM decryption");
+        }
+
+        // Set IV length
+        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN,
+                                static_cast<int>(iv.size()), nullptr) != 1) {
+            return Result<std::string>::error("Failed to set IV length");
+        }
+
+        // Set key and IV
+        if (EVP_DecryptInit_ex(ctx, nullptr, nullptr, key.data(), iv.data()) !=
+            1) {
+            return Result<std::string>::error("Failed to set key and IV");
+        }
+
+        // Decrypt
+        std::vector<uint8_t> plaintext(ciphertext.size());
+        int len = 0;
+        int plaintext_len = 0;
+
+        if (EVP_DecryptUpdate(ctx, plaintext.data(), &len, ciphertext.data(),
+                              static_cast<int>(ciphertext.size())) != 1) {
+            return Result<std::string>::error("Failed to decrypt data");
+        }
+        plaintext_len = len;
+
+        // Set authentication tag
+        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG,
+                                static_cast<int>(tag.size()),
+                                const_cast<unsigned char*>(tag.data())) != 1) {
+            return Result<std::string>::error(
+                "Failed to set authentication tag");
+        }
+
+        // Finalize decryption (this verifies the tag)
+        if (EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len) != 1) {
+            return Result<std::string>::error(
+                "Authentication verification failed");
+        }
+        plaintext_len += len;
+
+        return Result<std::string>(
+            std::string(plaintext.begin(), plaintext.begin() + plaintext_len));
+
+    } catch (const std::exception& e) {
+        return Result<std::string>::error(
+            std::string("AES-GCM decryption error: ") + e.what());
+    }
+}
+
+Result<std::vector<uint8_t>> Encryption::encryptAesCbc(
+    std::string_view plaintext, const std::vector<uint8_t>& key,
+    const std::vector<uint8_t>& iv) {
+    try {
+        SslCipherContext ctx;
+
+        // Initialize encryption
+        if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key.data(),
+                               iv.data()) != 1) {
+            return Result<std::vector<uint8_t>>::error(
+                "Failed to initialize AES-CBC encryption");
+        }
+
+        // Encrypt
+        std::vector<uint8_t> ciphertext(plaintext.length() + AES_BLOCK_SIZE);
+        int len = 0;
+        int ciphertext_len = 0;
+
+        if (EVP_EncryptUpdate(
+                ctx, ciphertext.data(), &len,
+                reinterpret_cast<const unsigned char*>(plaintext.data()),
+                static_cast<int>(plaintext.length())) != 1) {
+            return Result<std::vector<uint8_t>>::error(
+                "Failed to encrypt data");
+        }
+        ciphertext_len = len;
+
+        // Finalize encryption (adds padding)
+        if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
+            return Result<std::vector<uint8_t>>::error(
+                "Failed to finalize encryption");
+        }
+        ciphertext_len += len;
+        ciphertext.resize(ciphertext_len);
+
+        return Result<std::vector<uint8_t>>(std::move(ciphertext));
+
+    } catch (const std::exception& e) {
+        return Result<std::vector<uint8_t>>::error(
+            std::string("AES-CBC encryption error: ") + e.what());
+    }
+}
+
+Result<std::string> Encryption::decryptAesCbc(
+    const std::vector<uint8_t>& ciphertext, const std::vector<uint8_t>& key,
+    const std::vector<uint8_t>& iv) {
+    try {
+        SslCipherContext ctx;
+
+        // Initialize decryption
+        if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key.data(),
+                               iv.data()) != 1) {
+            return Result<std::string>::error(
+                "Failed to initialize AES-CBC decryption");
+        }
+
+        // Decrypt
+        std::vector<uint8_t> plaintext(ciphertext.size() + AES_BLOCK_SIZE);
+        int len = 0;
+        int plaintext_len = 0;
+
+        if (EVP_DecryptUpdate(ctx, plaintext.data(), &len, ciphertext.data(),
+                              static_cast<int>(ciphertext.size())) != 1) {
+            return Result<std::string>::error("Failed to decrypt data");
+        }
+        plaintext_len = len;
+
+        // Finalize decryption (removes padding)
+        if (EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len) != 1) {
+            return Result<std::string>::error(
+                "Decryption failed or invalid padding");
+        }
+        plaintext_len += len;
+
+        return Result<std::string>(
+            std::string(plaintext.begin(), plaintext.begin() + plaintext_len));
+
+    } catch (const std::exception& e) {
+        return Result<std::string>::error(
+            std::string("AES-CBC decryption error: ") + e.what());
+    }
+}
+
+const EVP_CIPHER* Encryption::getCipher(EncryptionOptions::Method method) {
+    switch (method) {
+        case EncryptionOptions::Method::AES_GCM:
             return EVP_aes_256_gcm();
         case EncryptionOptions::Method::AES_CBC:
-            return keySize == 16 ? EVP_aes_128_cbc() : EVP_aes_256_cbc();
+            return EVP_aes_256_cbc();
+        case EncryptionOptions::Method::CHACHA20_POLY1305:
+            return EVP_chacha20_poly1305();
         default:
-            return EVP_aes_256_gcm();
+            return nullptr;
+    }
+}
+
+size_t Encryption::getKeySize(EncryptionOptions::Method method) {
+    switch (method) {
+        case EncryptionOptions::Method::AES_GCM:
+        case EncryptionOptions::Method::AES_CBC:
+            return 32;  // 256 bits
+        case EncryptionOptions::Method::CHACHA20_POLY1305:
+            return 32;  // 256 bits
+        default:
+            return 0;
+    }
+}
+
+size_t Encryption::getIvSize(EncryptionOptions::Method method) {
+    switch (method) {
+        case EncryptionOptions::Method::AES_GCM:
+            return 12;  // 96 bits for GCM
+        case EncryptionOptions::Method::AES_CBC:
+            return 16;  // 128 bits for CBC
+        case EncryptionOptions::Method::CHACHA20_POLY1305:
+            return 12;  // 96 bits
+        default:
+            return 0;
     }
 }
 

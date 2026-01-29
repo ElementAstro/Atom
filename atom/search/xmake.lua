@@ -16,14 +16,18 @@ set_license("GPL3")
 target("atom-search-object")
     set_kind("object")
 
-    -- Add source files
-    add_files("*.cpp")
+    -- Add source files from new structure
+    add_files("core/*.cpp")
+    add_files("database/*.cpp")
 
-    -- Add header files
-    add_headerfiles("*.hpp")
+    -- Add header files from new structure
+    add_headerfiles("*.hpp")  -- Backwards compatibility headers
+    add_headerfiles("core/*.hpp")
+    add_headerfiles("database/*.hpp")
+    add_headerfiles("cache/*.hpp")
 
     -- Add dependencies
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Add include directories
     add_includedirs(".", {public = true})
@@ -45,7 +49,7 @@ target("atom-search")
 
     -- Add dependencies
     add_deps("atom-search-object")
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Platform-specific settings
     if is_plat("linux") then

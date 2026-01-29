@@ -7,7 +7,6 @@
 #include <thread>
 #include "archiver.h"
 
-
 using modern_log::LogArchiver;
 namespace fs = std::filesystem;
 

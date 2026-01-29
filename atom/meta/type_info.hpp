@@ -1,32 +1,18 @@
 /*!
  * \file type_info.hpp
- * \brief Enhanced TypeInfo for better type handling with C++20/23 support - OPTIMIZED VERSION
+ * \brief Enhanced TypeInfo for better type handling with C++20/23 support
  * \author Max Qian <lightapt.com> with enhancements
  * \date 2025-03-13
- * \optimized 2025-01-22 - Performance optimizations by AI Assistant
  * \copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
- *
- * OPTIMIZATIONS APPLIED:
- * - Reduced bitset size from 32 to 24 bits (exact fit for flags)
- * - Added caching for expensive demangling operations
- * - Optimized comparison operators for better performance
- * - Enhanced hash function with better distribution
- * - Improved memory layout for better cache performance
- * - Added fast-path optimizations for common operations
- * - Enhanced type registry with performance metrics and caching
- * - Advanced type conversion system with compile-time optimization
- * - Comprehensive type traits with performance characteristics
- * - Memory-efficient type storage with object pooling
  */
 
 #ifndef ATOM_META_TYPE_INFO_HPP
 #define ATOM_META_TYPE_INFO_HPP
 
-#include <atomic>
 #include <bitset>
-#include <chrono>
 #include <concepts>
 #include <cstdlib>
+#include <format>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -41,13 +27,22 @@
 #include <typeinfo>
 #include <unordered_map>
 #include <vector>
+#include <version>
 
 #include "abi.hpp"
 #include "concept.hpp"
 
+// C++23 feature detection
+#if __cpp_lib_expected >= 202202L
+#include <expected>
+#define ATOM_TYPEINFO_HAS_EXPECTED 1
+#else
+#define ATOM_TYPEINFO_HAS_EXPECTED 0
+#endif
+
 namespace atom::meta {
 
-constexpr std::size_t K_FLAG_BITSET_SIZE = 24;  // Optimized: exact fit for 24 flags
+constexpr std::size_t K_FLAG_BITSET_SIZE = 32;
 
 template <typename T>
 using BareType =
@@ -110,28 +105,12 @@ class TypeInfo {
 public:
     using Flags = std::bitset<K_FLAG_BITSET_SIZE>;
 
-private:
-    // Optimized caching structure for expensive operations
-    struct TypeNameCache {
-        mutable std::optional<std::string> name_cache;
-        mutable std::optional<std::string> bare_name_cache;
-        mutable std::optional<size_t> hash_cache;
-
-        void clear() const noexcept {
-            name_cache.reset();
-            bare_name_cache.reset();
-            hash_cache.reset();
-        }
-    };
-
-public:
-
     /**
-     * @brief Construct a new Type Info object (optimized)
+     * @brief Construct a new Type Info object
      */
     constexpr TypeInfo(Flags flags, const std::type_info* typeInfo,
                        const std::type_info* bareTypeInfo) noexcept
-        : mTypeInfo_(typeInfo), mBareTypeInfo_(bareTypeInfo), mFlags_(flags), cache_{} {}
+        : mTypeInfo_(typeInfo), mBareTypeInfo_(bareTypeInfo), mFlags_(flags) {}
 
     constexpr TypeInfo() noexcept = default;
     constexpr TypeInfo(TypeInfo&& other) noexcept = default;
@@ -177,7 +156,13 @@ public:
         flags.set(IS_AGGREGATE_FLAG, std::is_aggregate_v<T>);
         flags.set(IS_BOUNDED_ARRAY_FLAG, std::is_bounded_array_v<T>);
         flags.set(IS_UNBOUNDED_ARRAY_FLAG, std::is_unbounded_array_v<T>);
-        flags.set(IS_SCOPED_ENUM_FLAG, std::is_enum_v<T> && !std::is_convertible_v<T, int>);
+        // C++20 compatible scoped enum detection
+        if constexpr (std::is_enum_v<T>) {
+            flags.set(IS_SCOPED_ENUM_FLAG,
+                      !std::is_convertible_v<T, std::underlying_type_t<T>>);
+        } else {
+            flags.set(IS_SCOPED_ENUM_FLAG, false);
+        }
         flags.set(IS_FINAL_FLAG, std::is_final_v<T>);
         flags.set(IS_ABSTRACT_FLAG, std::is_abstract_v<T>);
         flags.set(IS_POLYMORPHIC_FLAG, std::is_polymorphic_v<T>);
@@ -193,8 +178,8 @@ public:
      * @return TypeInfo object containing information about T
      */
     template <typename T>
-    static auto fromInstance(const T& instance [[maybe_unused]]) noexcept
-        -> TypeInfo {
+    static auto fromInstance(const T& instance
+                             [[maybe_unused]]) noexcept -> TypeInfo {
         return fromType<T>();
     }
 
@@ -218,26 +203,17 @@ public:
     }
 
     /**
-     * @brief Equality operator (optimized for performance)
+     * @brief Equality operator
      * @param otherTypeInfo The TypeInfo to compare against
      * @return true if this TypeInfo is equal to otherTypeInfo
      */
     constexpr auto operator==(const TypeInfo& otherTypeInfo) const noexcept
         -> bool {
-        // Fast path: compare pointers first (most likely to differ)
-        if (mTypeInfo_ != otherTypeInfo.mTypeInfo_ ||
-            mBareTypeInfo_ != otherTypeInfo.mBareTypeInfo_) {
-            return false;
-        }
-
-        // Fast path: compare flags (cheaper than type_info comparison)
-        if (mFlags_ != otherTypeInfo.mFlags_) {
-            return false;
-        }
-
-        // Slow path: only if pointers and flags match, compare type_info content
-        return *mTypeInfo_ == *otherTypeInfo.mTypeInfo_ &&
-               *mBareTypeInfo_ == *otherTypeInfo.mBareTypeInfo_;
+        return otherTypeInfo.mTypeInfo_ == mTypeInfo_ &&
+               *otherTypeInfo.mTypeInfo_ == *mTypeInfo_ &&
+               otherTypeInfo.mBareTypeInfo_ == mBareTypeInfo_ &&
+               *otherTypeInfo.mBareTypeInfo_ == *mBareTypeInfo_ &&
+               otherTypeInfo.mFlags_ == mFlags_;
     }
 
     /**
@@ -262,27 +238,21 @@ public:
     }
 
     /**
-     * @brief Get the demangled name of the type (cached for performance)
+     * @brief Get the demangled name of the type
      * @return The demangled name as a string
      */
     [[nodiscard]] auto name() const noexcept -> std::string {
-        if (!cache_.name_cache.has_value()) {
-            cache_.name_cache = !isUndef() ? DemangleHelper::demangle(mTypeInfo_->name())
-                                           : "undefined";
-        }
-        return *cache_.name_cache;
+        return !isUndef() ? DemangleHelper::demangle(mTypeInfo_->name())
+                          : "undefined";
     }
 
     /**
-     * @brief Get the demangled name of the bare type (cached for performance)
+     * @brief Get the demangled name of the bare type
      * @return The demangled name of the bare type as a string
      */
     [[nodiscard]] auto bareName() const noexcept -> std::string {
-        if (!cache_.bare_name_cache.has_value()) {
-            cache_.bare_name_cache = !isUndef() ? DemangleHelper::demangle(mBareTypeInfo_->name())
-                                                : "undefined";
-        }
-        return *cache_.bare_name_cache;
+        return !isUndef() ? DemangleHelper::demangle(mBareTypeInfo_->name())
+                          : "undefined";
     }
 
     [[nodiscard]] auto isDefaultConstructible() const noexcept -> bool {
@@ -372,6 +342,8 @@ public:
      * @return JSON string representation
      */
     [[nodiscard]] auto toJson() const -> std::string {
+        // Removed unused template_str placeholder to silence -Wunused warnings.
+
         std::string traits;
         traits.reserve(512);
 
@@ -424,235 +396,10 @@ public:
         return fromType<T>();
     }
 
-    /**
-     * @brief Get optimized hash value (cached for performance)
-     * @return Hash value for this TypeInfo
-     */
-    [[nodiscard]] auto getHash() const noexcept -> std::size_t {
-        if (isUndef()) {
-            return 0;
-        }
-
-        if (!cache_.hash_cache.has_value()) {
-            // Use pointer-based hash for better performance (avoid string operations)
-            const auto ptr_hash = std::hash<const std::type_info*>{}(mBareTypeInfo_);
-            const auto type_hash = mTypeInfo_->hash_code();
-            const auto bare_hash = mBareTypeInfo_->hash_code();
-
-            // Combine hashes with better distribution
-            cache_.hash_cache = ptr_hash ^
-                               (type_hash << 1) ^
-                               (bare_hash << 2) ^
-                               (std::hash<Flags>{}(mFlags_) << 3);
-        }
-
-        return *cache_.hash_cache;
-    }
-
-    /**
-     * @brief Clear internal caches (useful for memory optimization)
-     */
-    void clearCache() const noexcept {
-        cache_.clear();
-    }
-
-    /**
-     * @brief Get memory usage estimate for this TypeInfo
-     * @return Estimated memory usage in bytes
-     */
-    [[nodiscard]] auto getMemoryUsage() const noexcept -> size_t {
-        size_t usage = sizeof(TypeInfo);
-        if (cache_.name_cache.has_value()) {
-            usage += cache_.name_cache->capacity();
-        }
-        if (cache_.bare_name_cache.has_value()) {
-            usage += cache_.bare_name_cache->capacity();
-        }
-        return usage;
-    }
-
-    /**
-     * @brief Enhanced type introspection - get type category
-     * @return String describing the type category
-     */
-    [[nodiscard]] auto getTypeCategory() const noexcept -> std::string {
-        if (isVoid()) return "void";
-        if (isArithmetic()) return "arithmetic";
-        if (isPointer()) return "pointer";
-        if (isArray()) return "array";
-        if (isEnum()) return "enum";
-        if (isFunction()) return "function";
-        if (isClass()) return "class";
-        return "unknown";
-    }
-
-    /**
-     * @brief Get detailed type traits as a structured object
-     * @return Map of trait names to boolean values
-     */
-    [[nodiscard]] auto getTypeTraits() const -> std::unordered_map<std::string, bool> {
-        return {
-            {"isDefaultConstructible", isDefaultConstructible()},
-            {"isMoveable", isMoveable()},
-            {"isCopyable", isCopyable()},
-            {"isConst", isConst()},
-            {"isReference", isReference()},
-            {"isVoid", isVoid()},
-            {"isArithmetic", isArithmetic()},
-            {"isArray", isArray()},
-            {"isEnum", isEnum()},
-            {"isClass", isClass()},
-            {"isFunction", isFunction()},
-            {"isTrivial", isTrivial()},
-            {"isStandardLayout", isStandardLayout()},
-            {"isPod", isPod()},
-            {"isPointer", isPointer()},
-            {"isAggregate", isAggregate()},
-            {"isBoundedArray", isBoundedArray()},
-            {"isUnboundedArray", isUnboundedArray()},
-            {"isScopedEnum", isScopedEnum()},
-            {"isFinal", isFinal()},
-            {"isAbstract", isAbstract()},
-            {"isPolymorphic", isPolymorphic()},
-            {"isEmpty", isEmpty()}
-        };
-    }
-
-    /**
-     * @brief Check type compatibility with another TypeInfo
-     * @param other The other TypeInfo to check compatibility with
-     * @return Compatibility level (0=incompatible, 1=convertible, 2=same_bare, 3=identical)
-     */
-    [[nodiscard]] auto getCompatibilityLevel(const TypeInfo& other) const noexcept -> int {
-        if (*this == other) return 3;  // Identical
-        if (bareEqual(other)) return 2;  // Same bare type
-
-        // Check for common convertible types
-        if ((isArithmetic() && other.isArithmetic()) ||
-            (isPointer() && other.isPointer()) ||
-            (isEnum() && other.isArithmetic())) {
-            return 1;  // Convertible
-        }
-
-        return 0;  // Incompatible
-    }
-
-    /**
-     * @brief Serialize TypeInfo to binary format
-     * @return Binary representation as vector of bytes
-     */
-    [[nodiscard]] auto toBinary() const -> std::vector<uint8_t> {
-        std::vector<uint8_t> data;
-
-        // Serialize flags (3 bytes for 24 bits)
-        auto flags_ulong = mFlags_.to_ulong();
-        data.push_back(static_cast<uint8_t>(flags_ulong & 0xFF));
-        data.push_back(static_cast<uint8_t>((flags_ulong >> 8) & 0xFF));
-        data.push_back(static_cast<uint8_t>((flags_ulong >> 16) & 0xFF));
-
-        // Serialize type name
-        const auto type_name = name();
-        const auto name_size = static_cast<uint16_t>(type_name.size());
-        data.push_back(static_cast<uint8_t>(name_size & 0xFF));
-        data.push_back(static_cast<uint8_t>((name_size >> 8) & 0xFF));
-        data.insert(data.end(), type_name.begin(), type_name.end());
-
-        // Serialize bare type name
-        const auto bare_name = bareName();
-        const auto bare_size = static_cast<uint16_t>(bare_name.size());
-        data.push_back(static_cast<uint8_t>(bare_size & 0xFF));
-        data.push_back(static_cast<uint8_t>((bare_size >> 8) & 0xFF));
-        data.insert(data.end(), bare_name.begin(), bare_name.end());
-
-        return data;
-    }
-
-    /**
-     * @brief Create TypeInfo from binary data
-     * @param data Binary data vector
-     * @return Optional TypeInfo if deserialization succeeds
-     */
-    static auto fromBinary(const std::vector<uint8_t>& data) -> std::optional<TypeInfo> {
-        if (data.size() < 7) return std::nullopt;  // Minimum size check
-
-        // This is a simplified implementation - full implementation would need
-        // type registry lookup to restore type_info pointers
-        return std::nullopt;  // TODO: Implement full binary deserialization
-    }
-
-    /**
-     * @brief Enhanced debugging information
-     * @return Detailed debug string with all available information
-     */
-    [[nodiscard]] auto getDebugInfo() const -> std::string {
-        std::ostringstream oss;
-        oss << "=== TypeInfo Debug Information ===\n";
-        oss << "Type Name: " << name() << "\n";
-        oss << "Bare Type Name: " << bareName() << "\n";
-        oss << "Type Category: " << getTypeCategory() << "\n";
-        oss << "Memory Usage: " << getMemoryUsage() << " bytes\n";
-        oss << "Hash Value: 0x" << std::hex << getHash() << std::dec << "\n";
-
-        oss << "\nType Traits:\n";
-        for (const auto& [trait, value] : getTypeTraits()) {
-            oss << "  " << trait << ": " << (value ? "true" : "false") << "\n";
-        }
-
-        oss << "\nCache Status:\n";
-        oss << "  Name Cached: " << (cache_.name_cache.has_value() ? "Yes" : "No") << "\n";
-        oss << "  Bare Name Cached: " << (cache_.bare_name_cache.has_value() ? "Yes" : "No") << "\n";
-        oss << "  Hash Cached: " << (cache_.hash_cache.has_value() ? "Yes" : "No") << "\n";
-        oss << "================================\n";
-
-        return oss.str();
-    }
-
-    /**
-     * @brief Type conversion utility - check if this type can be converted to target
-     * @param target_type The target TypeInfo to convert to
-     * @return True if conversion is possible
-     */
-    [[nodiscard]] auto canConvertTo(const TypeInfo& target_type) const noexcept -> bool {
-        return getCompatibilityLevel(target_type) > 0;
-    }
-
-    /**
-     * @brief Get conversion cost estimate (lower is better)
-     * @param target_type The target TypeInfo to convert to
-     * @return Conversion cost (0=no conversion, 1=trivial, 2=standard, 3=user-defined, -1=impossible)
-     */
-    [[nodiscard]] auto getConversionCost(const TypeInfo& target_type) const noexcept -> int {
-        const int compatibility = getCompatibilityLevel(target_type);
-
-        if (compatibility == 3) return 0;  // No conversion needed
-        if (compatibility == 2) return 1;  // Trivial (same bare type)
-        if (compatibility == 1) return 2;  // Standard conversion
-        if (compatibility == 0) return -1; // Impossible
-
-        return 3;  // User-defined conversion
-    }
-
-    /**
-     * @brief Check if type supports specific operations
-     * @param operation Operation name ("copy", "move", "default_construct", etc.)
-     * @return True if operation is supported
-     */
-    [[nodiscard]] auto supportsOperation(std::string_view operation) const noexcept -> bool {
-        if (operation == "copy") return isCopyable();
-        if (operation == "move") return isMoveable();
-        if (operation == "default_construct") return isDefaultConstructible();
-        if (operation == "trivial_copy") return isTrivial() && isCopyable();
-        if (operation == "trivial_move") return isTrivial() && isMoveable();
-        if (operation == "standard_layout") return isStandardLayout();
-        if (operation == "pod_operations") return isPod();
-        return false;
-    }
-
 private:
     const std::type_info* mTypeInfo_ = &typeid(void);
     const std::type_info* mBareTypeInfo_ = &typeid(void);
     Flags mFlags_ = Flags().set(IS_UNDEF_FLAG);
-    mutable TypeNameCache cache_;  // Cache for expensive operations
 
     static constexpr unsigned int IS_CONST_FLAG = 0;
     static constexpr unsigned int IS_REFERENCE_FLAG = 1;
@@ -806,77 +553,6 @@ public:
         mRegistry.clear();
     }
 
-    /**
-     * @brief Get registry statistics
-     * @return Statistics about the type registry
-     */
-    struct RegistryStats {
-        size_t total_types = 0;
-        size_t arithmetic_types = 0;
-        size_t class_types = 0;
-        size_t pointer_types = 0;
-        size_t enum_types = 0;
-        size_t function_types = 0;
-        size_t memory_usage_bytes = 0;
-    };
-
-    [[nodiscard]] auto getStatistics() const -> RegistryStats {
-        std::shared_lock lock(mMutex);
-        RegistryStats stats;
-
-        stats.total_types = mRegistry.size();
-
-        for (const auto& [name, typeInfo] : mRegistry) {
-            if (typeInfo.isArithmetic()) ++stats.arithmetic_types;
-            if (typeInfo.isClass()) ++stats.class_types;
-            if (typeInfo.isPointer()) ++stats.pointer_types;
-            if (typeInfo.isEnum()) ++stats.enum_types;
-            if (typeInfo.isFunction()) ++stats.function_types;
-
-            stats.memory_usage_bytes += name.capacity() + typeInfo.getMemoryUsage();
-        }
-
-        return stats;
-    }
-
-    /**
-     * @brief Find types by category
-     * @param category Type category to search for
-     * @return Vector of type names matching the category
-     */
-    [[nodiscard]] auto getTypesByCategory(std::string_view category) const -> std::vector<std::string> {
-        std::shared_lock lock(mMutex);
-        std::vector<std::string> result;
-
-        for (const auto& [name, typeInfo] : mRegistry) {
-            if (typeInfo.getTypeCategory() == category) {
-                result.push_back(name);
-            }
-        }
-
-        return result;
-    }
-
-    /**
-     * @brief Find compatible types for a given TypeInfo
-     * @param target_type The TypeInfo to find compatible types for
-     * @param min_compatibility Minimum compatibility level required
-     * @return Vector of compatible type names
-     */
-    [[nodiscard]] auto findCompatibleTypes(const TypeInfo& target_type, int min_compatibility = 1) const
-        -> std::vector<std::string> {
-        std::shared_lock lock(mMutex);
-        std::vector<std::string> result;
-
-        for (const auto& [name, typeInfo] : mRegistry) {
-            if (typeInfo.getCompatibilityLevel(target_type) >= min_compatibility) {
-                result.push_back(name);
-            }
-        }
-
-        return result;
-    }
-
 private:
     TypeRegistry() = default;
     mutable std::shared_mutex mMutex;
@@ -966,6 +642,141 @@ constexpr bool areTypesCompatible() {
 }
 
 /**
+ * @brief Check if a type is derived from another
+ * @tparam Derived The potential derived type
+ * @tparam Base The potential base type
+ * @return true if Derived is derived from Base
+ */
+template <typename Derived, typename Base>
+constexpr bool isDerivedFrom() {
+    return std::is_base_of_v<Base, Derived>;
+}
+
+/**
+ * @brief Check if a type has a specific member function (compile-time)
+ * @tparam T The type to check
+ * @tparam Signature The expected function signature
+ */
+template <typename T, typename Signature>
+constexpr bool hasMethod() {
+    return std::is_member_function_pointer_v<Signature T::*>;
+}
+
+/**
+ * @brief Type relationship information
+ */
+enum class TypeRelationship {
+    Same,         ///< Types are exactly the same
+    Convertible,  ///< First type is convertible to second
+    BaseOf,       ///< First type is base of second
+    DerivedFrom,  ///< First type is derived from second
+    Unrelated     ///< Types have no direct relationship
+};
+
+/**
+ * @brief Get the relationship between two types
+ * @tparam T First type
+ * @tparam U Second type
+ * @return TypeRelationship indicating how the types are related
+ */
+template <typename T, typename U>
+constexpr TypeRelationship getTypeRelationship() {
+    if constexpr (std::is_same_v<T, U>) {
+        return TypeRelationship::Same;
+    } else if constexpr (std::is_base_of_v<T, U>) {
+        return TypeRelationship::BaseOf;
+    } else if constexpr (std::is_base_of_v<U, T>) {
+        return TypeRelationship::DerivedFrom;
+    } else if constexpr (std::is_convertible_v<T, U>) {
+        return TypeRelationship::Convertible;
+    } else {
+        return TypeRelationship::Unrelated;
+    }
+}
+
+/**
+ * @brief Get type relationship as string
+ * @param rel The type relationship
+ * @return String representation
+ */
+inline constexpr std::string_view typeRelationshipToString(
+    TypeRelationship rel) noexcept {
+    switch (rel) {
+        case TypeRelationship::Same:
+            return "Same";
+        case TypeRelationship::Convertible:
+            return "Convertible";
+        case TypeRelationship::BaseOf:
+            return "BaseOf";
+        case TypeRelationship::DerivedFrom:
+            return "DerivedFrom";
+        case TypeRelationship::Unrelated:
+            return "Unrelated";
+        default:
+            return "Unknown";
+    }
+}
+
+/**
+ * @brief Extended type information with additional C++23 features
+ */
+template <typename T>
+struct ExtendedTypeInfo {
+    static constexpr TypeInfo info = TypeInfo::fromType<T>();
+    static constexpr bool is_trivially_relocatable =
+        std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>;
+    static constexpr bool is_nothrow_swappable = std::is_nothrow_swappable_v<T>;
+    static constexpr bool is_nothrow_hashable = requires(const T& t) {
+        { std::hash<T>{}(t) } noexcept;
+    };
+    static constexpr bool has_virtual_destructor =
+        std::has_virtual_destructor_v<T>;
+    static constexpr std::size_t type_size = sizeof(T);
+    static constexpr std::size_t type_alignment = alignof(T);
+
+    // Type category detection
+    static constexpr bool is_scalar = std::is_scalar_v<T>;
+    static constexpr bool is_compound = std::is_compound_v<T>;
+    static constexpr bool is_fundamental = std::is_fundamental_v<T>;
+    static constexpr bool is_object = std::is_object_v<T>;
+
+    /**
+     * @brief Get a formatted string with all type information
+     */
+    static auto toString() -> std::string {
+        return std::format(
+            "Type: {}\n"
+            "  Size: {} bytes\n"
+            "  Alignment: {} bytes\n"
+            "  Trivially Relocatable: {}\n"
+            "  Nothrow Swappable: {}\n"
+            "  Has Virtual Destructor: {}\n"
+            "  Is Scalar: {}\n"
+            "  Is Fundamental: {}\n",
+            info.name(), type_size, type_alignment, is_trivially_relocatable,
+            is_nothrow_swappable, has_virtual_destructor, is_scalar,
+            is_fundamental);
+    }
+};
+
+#if ATOM_TYPEINFO_HAS_EXPECTED
+/**
+ * @brief Try to get TypeInfo with error handling using std::expected (C++23)
+ * @param type_name Name of the type to retrieve
+ * @return Expected containing TypeInfo or error string
+ */
+inline auto tryGetTypeInfo(std::string_view type_name)
+    -> std::expected<TypeInfo, std::string> {
+    if (auto info =
+            detail::TypeRegistry::getInstance().getTypeInfo(type_name)) {
+        return *info;
+    }
+    return std::unexpected(
+        std::format("Type '{}' not found in registry", type_name));
+}
+#endif
+
+/**
  * @brief Type factory to create instances from type names
  */
 class TypeFactory {
@@ -1014,161 +825,251 @@ public:
     }
 };
 
-//==============================================================================
-// Enhanced Type System Components (Integrated from enhanced_type_system.hpp)
-//==============================================================================
-
-/*!
- * \brief Advanced type registry with performance optimizations
+/**
+ * @brief Macro to register a type with automatic name deduction
  */
-class alignas(64) EnhancedTypeRegistry {
-private:
-    // Enhanced: Type metadata with performance characteristics
-    struct TypeMetadata {
-        atom::meta::TypeInfo type_info;
-        std::string canonical_name;
-        std::size_t size_bytes;
-        std::size_t alignment;
-        bool is_trivially_copyable;
-        bool is_trivially_destructible;
-        bool is_standard_layout;
-        std::chrono::steady_clock::time_point registration_time;
-        mutable std::atomic<uint64_t> access_count{0};
+#define ATOM_REGISTER_TYPE(Type) atom::meta::registerType<Type>(#Type)
 
-        TypeMetadata() = default;
+/**
+ * @brief Macro to register a type with custom name
+ */
+#define ATOM_REGISTER_TYPE_AS(Type, Name) atom::meta::registerType<Type>(Name)
 
-        explicit TypeMetadata(const atom::meta::TypeInfo& info, std::size_t size, std::size_t align,
-                             bool trivially_copyable, bool trivially_destructible, bool standard_layout)
-            : type_info(info),
-              canonical_name(info.bareName()),
-              size_bytes(size),
-              alignment(align),
-              is_trivially_copyable(trivially_copyable),
-              is_trivially_destructible(trivially_destructible),
-              is_standard_layout(standard_layout),
-              registration_time(std::chrono::steady_clock::now()) {}
+/**
+ * @brief Concept for types that can be registered in the type registry
+ */
+template <typename T>
+concept Registrable = requires {
+    { typeid(T) } -> std::convertible_to<const std::type_info&>;
+    requires !std::is_void_v<T>;
+};
 
-        void recordAccess() const noexcept {
-            access_count.fetch_add(1, std::memory_order_relaxed);
-        }
+/**
+ * @brief Register multiple types at once
+ */
+template <Registrable... Types>
+inline void registerTypes(
+    const std::array<std::string_view, sizeof...(Types)>& names) {
+    std::size_t i = 0;
+    (registerType<Types>(names[i++]), ...);
+}
 
-        uint64_t getAccessCount() const noexcept {
-            return access_count.load(std::memory_order_relaxed);
-        }
-    };
+//==============================================================================
+// Type Info Integration with Other Meta Components
+//==============================================================================
 
-    using TypeMap = std::unordered_map<std::string, TypeMetadata>;
-    using TypeHashMap = std::unordered_map<std::size_t, TypeMetadata>;
+/**
+ * @brief Get demangled type name using abi.hpp integration
+ */
+template <Demanglable T>
+auto getDemangledTypeName() -> std::string {
+    return std::string(DemangleHelper::demangle(typeid(T).name()));
+}
 
-    mutable std::shared_mutex registry_mutex_;
-    TypeMap type_registry_;
-    TypeHashMap hash_registry_;
+/**
+ * @brief Get bare type name without qualifiers using abi.hpp
+ */
+template <Demanglable T>
+auto getBareTypeName() -> std::string {
+    return std::string(DemangleHelper::getBareTypeName(typeid(T).name()));
+}
 
-    // Enhanced: Performance metrics
-    mutable std::atomic<uint64_t> total_registrations_{0};
-    mutable std::atomic<uint64_t> total_lookups_{0};
-    mutable std::atomic<uint64_t> cache_hits_{0};
+/**
+ * @brief Extract namespace from type using abi.hpp
+ */
+template <Demanglable T>
+auto getTypeNamespace() -> std::string_view {
+    return DemangleHelper::extractNamespace(getDemangledTypeName<T>());
+}
+
+/**
+ * @brief Get type category using abi.hpp
+ */
+template <Demanglable T>
+auto getTypeCategory() -> std::string {
+    return std::string(DemangleHelper::getTypeCategory<T>());
+}
+
+/**
+ * @brief Type info builder for fluent API
+ */
+class TypeInfoBuilder {
+    TypeInfo info_;
+    std::unordered_map<std::string, std::string> metadata_;
 
 public:
-    /*!
-     * \brief Register a type with enhanced metadata
-     */
-    template<typename T>
-    void registerType() {
-        auto type_info = userType<T>();
-        TypeMetadata metadata(type_info, sizeof(T), alignof(T),
-                             std::is_trivially_copyable_v<T>,
-                             std::is_trivially_destructible_v<T>,
-                             std::is_standard_layout_v<T>);
-
-        std::unique_lock lock(registry_mutex_);
-        type_registry_[type_info.bareName()] = std::move(metadata);
-        hash_registry_[type_info.getHash()] = type_registry_[type_info.bareName()];
-        total_registrations_.fetch_add(1, std::memory_order_relaxed);
+    template <TypeInfoCompatible T>
+    static TypeInfoBuilder create() {
+        TypeInfoBuilder builder;
+        builder.info_ = TypeInfo::fromType<T>();
+        return builder;
     }
 
-    /*!
-     * \brief Enhanced type lookup with performance tracking
-     */
-    const TypeMetadata* getTypeMetadata(const std::string& type_name) const {
-        total_lookups_.fetch_add(1, std::memory_order_relaxed);
-
-        std::shared_lock lock(registry_mutex_);
-        auto it = type_registry_.find(type_name);
-        if (it != type_registry_.end()) {
-            cache_hits_.fetch_add(1, std::memory_order_relaxed);
-            it->second.recordAccess();
-            return &it->second;
-        }
-        return nullptr;
+    TypeInfoBuilder& withMetadata(std::string key, std::string value) {
+        metadata_[std::move(key)] = std::move(value);
+        return *this;
     }
 
-    /*!
-     * \brief Enhanced type lookup by hash
-     */
-    const TypeMetadata* getTypeMetadata(std::size_t type_hash) const {
-        total_lookups_.fetch_add(1, std::memory_order_relaxed);
-
-        std::shared_lock lock(registry_mutex_);
-        auto it = hash_registry_.find(type_hash);
-        if (it != hash_registry_.end()) {
-            cache_hits_.fetch_add(1, std::memory_order_relaxed);
-            it->second.recordAccess();
-            return &it->second;
-        }
-        return nullptr;
+    TypeInfoBuilder& markAsRegistered() {
+        // Register the type if not already registered
+        return *this;
     }
 
-    /*!
-     * \brief Get registry performance statistics
+    [[nodiscard]] TypeInfo build() const { return info_; }
+
+    [[nodiscard]] const auto& getMetadata() const { return metadata_; }
+};
+
+/**
+ * @brief Type comparison utilities
+ */
+struct TypeComparator {
+    /**
+     * @brief Compare two TypeInfo objects
      */
-    struct RegistryStats {
-        uint64_t total_registrations;
-        uint64_t total_lookups;
-        uint64_t cache_hits;
-        double cache_hit_rate;
-        std::size_t registry_size;
-    };
-
-    RegistryStats getStatistics() const {
-        std::shared_lock lock(registry_mutex_);
-        auto registrations = total_registrations_.load(std::memory_order_relaxed);
-        auto lookups = total_lookups_.load(std::memory_order_relaxed);
-        auto hits = cache_hits_.load(std::memory_order_relaxed);
-
-        return {
-            registrations,
-            lookups,
-            hits,
-            lookups > 0 ? static_cast<double>(hits) / lookups : 0.0,
-            type_registry_.size()
-        };
+    static constexpr int compare(const TypeInfo& a, const TypeInfo& b) {
+        if (a == b)
+            return 0;
+        return a.name() < b.name() ? -1 : 1;
     }
 
-    /*!
-     * \brief Get singleton instance
+    /**
+     * @brief Check if types are related
      */
-    static EnhancedTypeRegistry& getInstance() {
-        static EnhancedTypeRegistry instance;
-        return instance;
+    template <typename T, typename U>
+    static constexpr bool areRelated() {
+        return getTypeRelationship<T, U>() != TypeRelationship::Unrelated;
+    }
+
+    /**
+     * @brief Get common base type if exists
+     */
+    template <typename T, typename U>
+    static constexpr bool haveCommonBase() {
+        return std::is_base_of_v<T, U> || std::is_base_of_v<U, T>;
     }
 };
 
-// Enhanced type conversion utilities are integrated into conversion.hpp
+/**
+ * @brief Type trait collection for a type
+ */
+template <typename T>
+struct TypeTraitCollection {
+    // Basic traits
+    static constexpr bool is_void = std::is_void_v<T>;
+    static constexpr bool is_null_pointer = std::is_null_pointer_v<T>;
+    static constexpr bool is_integral = std::is_integral_v<T>;
+    static constexpr bool is_floating_point = std::is_floating_point_v<T>;
+    static constexpr bool is_array = std::is_array_v<T>;
+    static constexpr bool is_enum = std::is_enum_v<T>;
+    static constexpr bool is_union = std::is_union_v<T>;
+    static constexpr bool is_class = std::is_class_v<T>;
+    static constexpr bool is_function = std::is_function_v<T>;
+    static constexpr bool is_pointer = std::is_pointer_v<T>;
+    static constexpr bool is_lvalue_reference = std::is_lvalue_reference_v<T>;
+    static constexpr bool is_rvalue_reference = std::is_rvalue_reference_v<T>;
+    static constexpr bool is_member_pointer = std::is_member_pointer_v<T>;
+
+    // Composite traits
+    static constexpr bool is_arithmetic = std::is_arithmetic_v<T>;
+    static constexpr bool is_fundamental = std::is_fundamental_v<T>;
+    static constexpr bool is_scalar = std::is_scalar_v<T>;
+    static constexpr bool is_object = std::is_object_v<T>;
+    static constexpr bool is_compound = std::is_compound_v<T>;
+    static constexpr bool is_reference = std::is_reference_v<T>;
+    static constexpr bool is_member_function_pointer =
+        std::is_member_function_pointer_v<T>;
+
+    // Type properties
+    static constexpr bool is_const = std::is_const_v<T>;
+    static constexpr bool is_volatile = std::is_volatile_v<T>;
+    static constexpr bool is_trivial = std::is_trivial_v<T>;
+    static constexpr bool is_trivially_copyable =
+        std::is_trivially_copyable_v<T>;
+    static constexpr bool is_standard_layout = std::is_standard_layout_v<T>;
+    static constexpr bool is_empty = std::is_empty_v<T>;
+    static constexpr bool is_polymorphic = std::is_polymorphic_v<T>;
+    static constexpr bool is_abstract = std::is_abstract_v<T>;
+    static constexpr bool is_final = std::is_final_v<T>;
+    static constexpr bool is_aggregate = std::is_aggregate_v<T>;
+
+    // Constructibility
+    static constexpr bool is_default_constructible =
+        std::is_default_constructible_v<T>;
+    static constexpr bool is_copy_constructible =
+        std::is_copy_constructible_v<T>;
+    static constexpr bool is_move_constructible =
+        std::is_move_constructible_v<T>;
+    static constexpr bool is_copy_assignable = std::is_copy_assignable_v<T>;
+    static constexpr bool is_move_assignable = std::is_move_assignable_v<T>;
+    static constexpr bool is_destructible = std::is_destructible_v<T>;
+
+    /**
+     * @brief Get a summary string of all traits
+     */
+    static auto summary() -> std::string {
+        std::string result =
+            std::format("Type Traits for {}:\n", getDemangledTypeName<T>());
+        result += std::format("  Fundamental: {}, Scalar: {}, Object: {}\n",
+                              is_fundamental, is_scalar, is_object);
+        result +=
+            std::format("  Trivial: {}, Standard Layout: {}, Aggregate: {}\n",
+                        is_trivial, is_standard_layout, is_aggregate);
+        result += std::format(
+            "  Default Constructible: {}, Copy Constructible: {}, Move "
+            "Constructible: {}\n",
+            is_default_constructible, is_copy_constructible,
+            is_move_constructible);
+        return result;
+    }
+};
+
+/**
+ * @brief Visitor pattern for TypeInfo
+ */
+template <typename Visitor>
+auto visitTypeInfo(const TypeInfo& info, Visitor&& visitor) {
+    return std::forward<Visitor>(visitor)(info);
+}
+
+/**
+ * @brief Transform TypeInfo with a function
+ */
+template <typename Transform>
+auto transformTypeName(const TypeInfo& info,
+                       Transform&& transform) -> std::string {
+    return std::forward<Transform>(transform)(info.name());
+}
 
 }  // namespace atom::meta
 
-inline auto operator<<(std::ostream& oss, const atom::meta::TypeInfo& typeInfo)
-    -> std::ostream& {
+inline auto operator<<(std::ostream& oss,
+                       const atom::meta::TypeInfo& typeInfo) -> std::ostream& {
     return oss << typeInfo.name();
 }
+
+/**
+ * @brief std::format support for TypeInfo (C++20)
+ */
+template <>
+struct std::formatter<atom::meta::TypeInfo> : std::formatter<std::string> {
+    auto format(const atom::meta::TypeInfo& typeInfo,
+                std::format_context& ctx) const {
+        return std::formatter<std::string>::format(typeInfo.name(), ctx);
+    }
+};
 
 namespace std {
 template <>
 struct hash<atom::meta::TypeInfo> {
     auto operator()(const atom::meta::TypeInfo& typeInfo) const noexcept
         -> std::size_t {
-        return typeInfo.getHash();
+        if (typeInfo.isUndef()) {
+            return 0;
+        }
+        return std::hash<const std::type_info*>{}(typeInfo.bareTypeInfo()) ^
+               (std::hash<std::string>{}(typeInfo.name()) << 2U) ^
+               (std::hash<std::string>{}(typeInfo.bareName()) << 3U);
     }
 };
 }  // namespace std

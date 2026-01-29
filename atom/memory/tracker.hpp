@@ -1,6 +1,7 @@
 #ifndef ATOM_MEMORY_TRACKER_HPP
 #define ATOM_MEMORY_TRACKER_HPP
 
+#include <immintrin.h>  // For memory prefetching
 #include <atomic>
 #include <chrono>
 #include <cstddef>
@@ -20,7 +21,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <immintrin.h>  // For memory prefetching
 
 // Cache line size for alignment optimizations
 #ifndef CACHE_LINE_SIZE
@@ -43,36 +43,40 @@ struct MemoryTrackerConfig {
     std::string logFilePath;       // Log file path (empty means no file output)
     size_t maxStackFrames = 16;    // Maximum number of stack frames
     size_t minAllocationSize = 0;  // Minimum allocation size to track
-    bool trackAllocationCount = true; // Track allocation and deallocation counts
-    bool trackPeakMemory = true;   // Track peak memory usage
+    bool trackAllocationCount =
+        true;                     // Track allocation and deallocation counts
+    bool trackPeakMemory = true;  // Track peak memory usage
 
     // Advanced tracking features
     bool enableLeakPatternDetection = true;  // Enable leak pattern analysis
     bool enablePerformanceProfiling = true;  // Enable performance profiling
     bool enableMemoryHotspots = true;        // Track memory allocation hotspots
-    bool enableFragmentationAnalysis = true; // Analyze memory fragmentation
-    bool enableLifetimeAnalysis = true;      // Track allocation lifetimes
-    bool enableThreadAnalysis = true;        // Per-thread memory analysis
-    bool enableRealTimeMonitoring = false;   // Real-time memory monitoring
-    bool enableMemoryPressureDetection = true; // Detect memory pressure
+    bool enableFragmentationAnalysis = true;    // Analyze memory fragmentation
+    bool enableLifetimeAnalysis = true;         // Track allocation lifetimes
+    bool enableThreadAnalysis = true;           // Per-thread memory analysis
+    bool enableRealTimeMonitoring = false;      // Real-time memory monitoring
+    bool enableMemoryPressureDetection = true;  // Detect memory pressure
 
     // Performance and optimization
-    bool enableCaching = true;               // Cache allocation info for performance
-    bool enableBatchReporting = true;        // Batch leak reports for performance
-    size_t reportingBatchSize = 100;         // Number of leaks to batch
-    std::chrono::milliseconds samplingInterval{1000}; // Sampling interval for monitoring
-    size_t maxCachedAllocations = 10000;     // Maximum cached allocations
+    bool enableCaching = true;         // Cache allocation info for performance
+    bool enableBatchReporting = true;  // Batch leak reports for performance
+    size_t reportingBatchSize = 100;   // Number of leaks to batch
+    std::chrono::milliseconds samplingInterval{
+        1000};                            // Sampling interval for monitoring
+    size_t maxCachedAllocations = 10000;  // Maximum cached allocations
 
     // Pattern detection settings
-    size_t leakPatternThreshold = 5;         // Minimum occurrences for pattern
-    size_t hotspotsTopN = 10;               // Number of top hotspots to track
-    std::chrono::seconds maxAllocationAge{3600}; // Maximum age for active tracking
+    size_t leakPatternThreshold = 5;  // Minimum occurrences for pattern
+    size_t hotspotsTopN = 10;         // Number of top hotspots to track
+    std::chrono::seconds maxAllocationAge{
+        3600};  // Maximum age for active tracking
 
     // Callbacks and customization
     std::function<void(const std::string&)> errorCallback = nullptr;
     std::function<void(const std::string&)> leakPatternCallback = nullptr;
     std::function<void(const std::string&)> performanceCallback = nullptr;
-    std::function<bool(const std::string&)> fileFilter = nullptr; // Filter files to track
+    std::function<bool(const std::string&)> fileFilter =
+        nullptr;  // Filter files to track
 };
 
 /**
@@ -89,20 +93,20 @@ struct alignas(CACHE_LINE_SIZE) AllocationInfo {
     std::vector<std::string> stackTrace;              // Call stack
 
     // Enhanced tracking data
-    size_t allocationId;                              // Unique allocation ID
+    size_t allocationId;                             // Unique allocation ID
     std::chrono::nanoseconds allocationDuration{0};  // Time taken to allocate
-    size_t alignmentRequirement;                      // Memory alignment used
-    std::string allocationCategory;                   // Category/tag for allocation
-    uint32_t accessCount{0};                         // Number of times accessed
-    std::chrono::steady_clock::time_point lastAccess; // Last access time
-    bool isHotspot{false};                           // Whether this is a hotspot
-    size_t fragmentationScore{0};                    // Fragmentation contribution
-    std::string allocatorType;                       // Type of allocator used
+    size_t alignmentRequirement;                     // Memory alignment used
+    std::string allocationCategory;  // Category/tag for allocation
+    uint32_t accessCount{0};         // Number of times accessed
+    std::chrono::steady_clock::time_point lastAccess;  // Last access time
+    bool isHotspot{false};         // Whether this is a hotspot
+    size_t fragmentationScore{0};  // Fragmentation contribution
+    std::string allocatorType;     // Type of allocator used
 
     // Pattern detection data
-    std::string patternSignature;                    // Signature for pattern matching
-    size_t sequenceNumber{0};                       // Sequence in allocation pattern
-    bool isLeakCandidate{false};                    // Whether this might be a leak
+    std::string patternSignature;  // Signature for pattern matching
+    size_t sequenceNumber{0};      // Sequence in allocation pattern
+    bool isLeakCandidate{false};   // Whether this might be a leak
 
     AllocationInfo(void* addr, size_t sz, const std::string& file = "",
                    int line = 0, const std::string& func = "")
@@ -116,15 +120,16 @@ struct alignas(CACHE_LINE_SIZE) AllocationInfo {
           allocationId(0),
           alignmentRequirement(sizeof(void*)),
           lastAccess(timestamp) {
-
         // Generate pattern signature
         patternSignature = generatePatternSignature();
     }
 
 private:
     std::string generatePatternSignature() const {
-        // Create a signature based on file, line, and function for pattern detection
-        return sourceFile + ":" + std::to_string(sourceLine) + ":" + sourceFunction;
+        // Create a signature based on file, line, and function for pattern
+        // detection
+        return sourceFile + ":" + std::to_string(sourceLine) + ":" +
+               sourceFunction;
     }
 };
 
@@ -133,31 +138,35 @@ private:
  */
 struct alignas(CACHE_LINE_SIZE) MemoryStatistics {
     // Basic statistics
-    std::atomic<size_t> currentAllocations{0};    // Current number of allocations
-    std::atomic<size_t> currentMemoryUsage{0};    // Current memory usage
-    std::atomic<size_t> totalAllocations{0};      // Total allocation count
-    std::atomic<size_t> totalDeallocations{0};    // Total deallocation count
+    std::atomic<size_t> currentAllocations{0};  // Current number of allocations
+    std::atomic<size_t> currentMemoryUsage{0};  // Current memory usage
+    std::atomic<size_t> totalAllocations{0};    // Total allocation count
+    std::atomic<size_t> totalDeallocations{0};  // Total deallocation count
     std::atomic<size_t> totalMemoryAllocated{0};  // Total memory allocated
     std::atomic<size_t> peakMemoryUsage{0};       // Peak memory usage
-    std::atomic<size_t> largestSingleAllocation{0}; // Largest single allocation
+    std::atomic<size_t> largestSingleAllocation{
+        0};  // Largest single allocation
 
     // Advanced performance metrics
-    std::atomic<uint64_t> totalAllocationTime{0}; // Total allocation time (ns)
-    std::atomic<uint64_t> totalDeallocationTime{0}; // Total deallocation time (ns)
-    std::atomic<uint64_t> maxAllocationTime{0};   // Maximum allocation time (ns)
-    std::atomic<uint64_t> maxDeallocationTime{0}; // Maximum deallocation time (ns)
-    std::atomic<size_t> allocationHotspots{0};    // Number of allocation hotspots
-    std::atomic<size_t> memoryFragmentationEvents{0}; // Fragmentation events
+    std::atomic<uint64_t> totalAllocationTime{0};  // Total allocation time (ns)
+    std::atomic<uint64_t> totalDeallocationTime{
+        0};                                      // Total deallocation time (ns)
+    std::atomic<uint64_t> maxAllocationTime{0};  // Maximum allocation time (ns)
+    std::atomic<uint64_t> maxDeallocationTime{
+        0};  // Maximum deallocation time (ns)
+    std::atomic<size_t> allocationHotspots{0};  // Number of allocation hotspots
+    std::atomic<size_t> memoryFragmentationEvents{0};  // Fragmentation events
 
     // Leak detection metrics
-    std::atomic<size_t> potentialLeaks{0};        // Potential memory leaks detected
-    std::atomic<size_t> leakPatterns{0};          // Leak patterns identified
-    std::atomic<size_t> longLivedAllocations{0};  // Long-lived allocations
-    std::atomic<size_t> shortLivedAllocations{0}; // Short-lived allocations
+    std::atomic<size_t> potentialLeaks{0};  // Potential memory leaks detected
+    std::atomic<size_t> leakPatterns{0};    // Leak patterns identified
+    std::atomic<size_t> longLivedAllocations{0};   // Long-lived allocations
+    std::atomic<size_t> shortLivedAllocations{0};  // Short-lived allocations
 
     // Thread-specific metrics
-    std::atomic<size_t> threadContentions{0};     // Thread contention events
-    std::atomic<size_t> crossThreadDeallocations{0}; // Cross-thread deallocations
+    std::atomic<size_t> threadContentions{0};  // Thread contention events
+    std::atomic<size_t> crossThreadDeallocations{
+        0};  // Cross-thread deallocations
 
     // Memory pressure metrics
     std::atomic<size_t> memoryPressureEvents{0};  // Memory pressure events
@@ -203,12 +212,16 @@ struct alignas(CACHE_LINE_SIZE) MemoryStatistics {
     // Performance calculation helpers
     double getAverageAllocationTime() const noexcept {
         size_t count = totalAllocations.load();
-        return count > 0 ? static_cast<double>(totalAllocationTime.load()) / count : 0.0;
+        return count > 0
+                   ? static_cast<double>(totalAllocationTime.load()) / count
+                   : 0.0;
     }
 
     double getAverageDeallocationTime() const noexcept {
         size_t count = totalDeallocations.load();
-        return count > 0 ? static_cast<double>(totalDeallocationTime.load()) / count : 0.0;
+        return count > 0
+                   ? static_cast<double>(totalDeallocationTime.load()) / count
+                   : 0.0;
     }
 
     double getMemoryEfficiency() const noexcept {
@@ -228,29 +241,31 @@ struct alignas(CACHE_LINE_SIZE) MemoryStatistics {
  * @brief Leak pattern information for pattern detection
  */
 struct LeakPattern {
-    std::string signature;                    // Pattern signature
-    size_t occurrences{0};                   // Number of occurrences
-    size_t totalSize{0};                     // Total memory leaked by this pattern
-    std::vector<std::string> stackTraces;    // Representative stack traces
-    std::chrono::steady_clock::time_point firstSeen; // First occurrence
-    std::chrono::steady_clock::time_point lastSeen;  // Last occurrence
-    double confidence{0.0};                  // Confidence score (0.0-1.0)
+    std::string signature;  // Pattern signature
+    size_t occurrences{0};  // Number of occurrences
+    size_t totalSize{0};    // Total memory leaked by this pattern
+    std::vector<std::string> stackTraces;  // Representative stack traces
+    std::chrono::steady_clock::time_point firstSeen;  // First occurrence
+    std::chrono::steady_clock::time_point lastSeen;   // Last occurrence
+    double confidence{0.0};  // Confidence score (0.0-1.0)
 
     LeakPattern(const std::string& sig)
-        : signature(sig), firstSeen(std::chrono::steady_clock::now()), lastSeen(firstSeen) {}
+        : signature(sig),
+          firstSeen(std::chrono::steady_clock::now()),
+          lastSeen(firstSeen) {}
 };
 
 /**
  * @brief Memory hotspot information for performance analysis
  */
 struct MemoryHotspot {
-    std::string location;                    // Source location (file:line:function)
-    size_t allocationCount{0};              // Number of allocations
-    size_t totalSize{0};                    // Total memory allocated
-    size_t averageSize{0};                  // Average allocation size
-    std::chrono::nanoseconds totalTime{0};  // Total time spent allocating
-    std::chrono::nanoseconds averageTime{0}; // Average allocation time
-    double hotspotScore{0.0};               // Hotspot score (0.0-1.0)
+    std::string location;       // Source location (file:line:function)
+    size_t allocationCount{0};  // Number of allocations
+    size_t totalSize{0};        // Total memory allocated
+    size_t averageSize{0};      // Average allocation size
+    std::chrono::nanoseconds totalTime{0};    // Total time spent allocating
+    std::chrono::nanoseconds averageTime{0};  // Average allocation time
+    double hotspotScore{0.0};                 // Hotspot score (0.0-1.0)
 
     void updateMetrics() {
         if (allocationCount > 0) {
@@ -276,7 +291,9 @@ struct ThreadMemoryStats {
     std::chrono::steady_clock::time_point lastActivity;
 
     ThreadMemoryStats(std::thread::id id)
-        : threadId(id), firstActivity(std::chrono::steady_clock::now()), lastActivity(firstActivity) {}
+        : threadId(id),
+          firstActivity(std::chrono::steady_clock::now()),
+          lastActivity(firstActivity) {}
 
     // Copy constructor
     ThreadMemoryStats(const ThreadMemoryStats& other)
@@ -332,7 +349,8 @@ struct ThreadMemoryStats {
 };
 
 /**
- * @brief Enhanced memory tracking system with advanced leak detection and performance profiling
+ * @brief Enhanced memory tracking system with advanced leak detection and
+ * performance profiling
  */
 class MemoryTracker {
 public:
@@ -601,16 +619,16 @@ public:
     /**
      * @brief Get comprehensive performance metrics
      *
-     * @return Tuple of (avg_alloc_time, avg_dealloc_time, efficiency, leak_ratio)
+     * @return Tuple of (avg_alloc_time, avg_dealloc_time, efficiency,
+     * leak_ratio)
      */
-    [[nodiscard]] auto getPerformanceMetrics() const -> std::tuple<double, double, double, double> {
+    [[nodiscard]] auto getPerformanceMetrics() const
+        -> std::tuple<double, double, double, double> {
         std::shared_lock<std::shared_mutex> lock(mutex_);
-        return std::make_tuple(
-            stats_.getAverageAllocationTime(),
-            stats_.getAverageDeallocationTime(),
-            stats_.getMemoryEfficiency(),
-            stats_.getLeakRatio()
-        );
+        return std::make_tuple(stats_.getAverageAllocationTime(),
+                               stats_.getAverageDeallocationTime(),
+                               stats_.getMemoryEfficiency(),
+                               stats_.getLeakRatio());
     }
 
     /**
@@ -631,9 +649,9 @@ public:
 
         // Sort by confidence score
         std::sort(patterns.begin(), patterns.end(),
-                 [](const LeakPattern& a, const LeakPattern& b) {
-                     return a.confidence > b.confidence;
-                 });
+                  [](const LeakPattern& a, const LeakPattern& b) {
+                      return a.confidence > b.confidence;
+                  });
 
         return patterns;
     }
@@ -646,7 +664,8 @@ public:
     [[nodiscard]] std::vector<MemoryHotspot> getMemoryHotspots() const {
         std::shared_lock<std::shared_mutex> lock(mutex_);
         std::vector<MemoryHotspot> hotspots;
-        hotspots.reserve(std::min(memoryHotspots_.size(), config_.hotspotsTopN));
+        hotspots.reserve(
+            std::min(memoryHotspots_.size(), config_.hotspotsTopN));
 
         for (const auto& [location, hotspot] : memoryHotspots_) {
             hotspots.push_back(hotspot);
@@ -654,9 +673,9 @@ public:
 
         // Sort by hotspot score
         std::sort(hotspots.begin(), hotspots.end(),
-                 [](const MemoryHotspot& a, const MemoryHotspot& b) {
-                     return a.hotspotScore > b.hotspotScore;
-                 });
+                  [](const MemoryHotspot& a, const MemoryHotspot& b) {
+                      return a.hotspotScore > b.hotspotScore;
+                  });
 
         // Return top N hotspots
         if (hotspots.size() > config_.hotspotsTopN) {
@@ -671,7 +690,8 @@ public:
      *
      * @return Map of thread statistics
      */
-    [[nodiscard]] std::unordered_map<std::thread::id, ThreadMemoryStats> getThreadStats() const {
+    [[nodiscard]] std::unordered_map<std::thread::id, ThreadMemoryStats>
+    getThreadStats() const {
         std::shared_lock<std::shared_mutex> lock(mutex_);
         return threadStats_;
     }
@@ -697,17 +717,25 @@ public:
 
         // Basic statistics
         report << "\n--- Basic Statistics ---\n";
-        report << "Current Allocations: " << stats_.currentAllocations.load() << "\n";
-        report << "Current Memory Usage: " << stats_.currentMemoryUsage.load() << " bytes\n";
-        report << "Peak Memory Usage: " << stats_.peakMemoryUsage.load() << " bytes\n";
-        report << "Total Allocations: " << stats_.totalAllocations.load() << "\n";
-        report << "Total Deallocations: " << stats_.totalDeallocations.load() << "\n";
+        report << "Current Allocations: " << stats_.currentAllocations.load()
+               << "\n";
+        report << "Current Memory Usage: " << stats_.currentMemoryUsage.load()
+               << " bytes\n";
+        report << "Peak Memory Usage: " << stats_.peakMemoryUsage.load()
+               << " bytes\n";
+        report << "Total Allocations: " << stats_.totalAllocations.load()
+               << "\n";
+        report << "Total Deallocations: " << stats_.totalDeallocations.load()
+               << "\n";
 
         // Performance metrics
         report << "\n--- Performance Metrics ---\n";
-        report << "Average Allocation Time: " << stats_.getAverageAllocationTime() << " ns\n";
-        report << "Average Deallocation Time: " << stats_.getAverageDeallocationTime() << " ns\n";
-        report << "Memory Efficiency: " << (stats_.getMemoryEfficiency() * 100) << "%\n";
+        report << "Average Allocation Time: "
+               << stats_.getAverageAllocationTime() << " ns\n";
+        report << "Average Deallocation Time: "
+               << stats_.getAverageDeallocationTime() << " ns\n";
+        report << "Memory Efficiency: " << (stats_.getMemoryEfficiency() * 100)
+               << "%\n";
         report << "Leak Ratio: " << (stats_.getLeakRatio() * 100) << "%\n";
 
         // Leak patterns
@@ -717,14 +745,16 @@ public:
                 report << "Pattern: " << signature << "\n";
                 report << "  Occurrences: " << pattern.occurrences << "\n";
                 report << "  Total Size: " << pattern.totalSize << " bytes\n";
-                report << "  Confidence: " << (pattern.confidence * 100) << "%\n";
+                report << "  Confidence: " << (pattern.confidence * 100)
+                       << "%\n";
             }
         }
 
         // Memory hotspots
         report << "\n--- Memory Hotspots ---\n";
         auto hotspots = getMemoryHotspots();
-        for (size_t i = 0; i < std::min(hotspots.size(), static_cast<size_t>(5)); ++i) {
+        for (size_t i = 0;
+             i < std::min(hotspots.size(), static_cast<size_t>(5)); ++i) {
             const auto& hotspot = hotspots[i];
             report << "Hotspot " << (i + 1) << ": " << hotspot.location << "\n";
             report << "  Allocations: " << hotspot.allocationCount << "\n";
@@ -852,8 +882,10 @@ private:
 
     // Enhanced helper methods
     void analyzeLeakPatterns();
-    void updateHotspots(const AllocationInfo& info, std::chrono::nanoseconds duration);
-    void updateThreadStats(std::thread::id threadId, size_t size, bool isAllocation);
+    void updateHotspots(const AllocationInfo& info,
+                        std::chrono::nanoseconds duration);
+    void updateThreadStats(std::thread::id threadId, size_t size,
+                           bool isAllocation);
     void detectMemoryPressure();
     void performPeriodicCleanup();
     void generatePerformanceReport();
@@ -882,65 +914,32 @@ private:
 #endif
 
 /**
- * @brief Overload global new and delete operators to automatically track memory
+ * @brief Global operator new/delete overloads for memory tracking
+ *
+ * These operators are declared here and defined in tracker.cpp to avoid
+ * ODR (One Definition Rule) violations when the header is included in
+ * multiple translation units.
+ *
+ * The implementations are only compiled when ATOM_MEMORY_TRACKING_ENABLED
+ * is defined.
  */
 #ifdef ATOM_MEMORY_TRACKING_ENABLED
 
 // Basic new/delete
-void* operator new(size_t size) {
-    void* ptr = std::malloc(size);
-    if (!ptr)
-        throw std::bad_alloc();
-    ATOM_TRACK_ALLOC(ptr, size);
-    return ptr;
-}
-
-void operator delete(void* ptr) noexcept {
-    ATOM_TRACK_FREE(ptr);
-    std::free(ptr);
-}
+void* operator new(size_t size);
+void operator delete(void* ptr) noexcept;
 
 // Array versions
-void* operator new[](size_t size) {
-    void* ptr = std::malloc(size);
-    if (!ptr)
-        throw std::bad_alloc();
-    ATOM_TRACK_ALLOC(ptr, size);
-    return ptr;
-}
-
-void operator delete[](void* ptr) noexcept {
-    ATOM_TRACK_FREE(ptr);
-    std::free(ptr);
-}
+void* operator new[](size_t size);
+void operator delete[](void* ptr) noexcept;
 
 // nothrow versions
-void* operator new(size_t size, const std::nothrow_t&) noexcept {
-    void* ptr = std::malloc(size);
-    if (ptr) {
-        ATOM_TRACK_ALLOC(ptr, size);
-    }
-    return ptr;
-}
-
-void operator delete(void* ptr, const std::nothrow_t&) noexcept {
-    ATOM_TRACK_FREE(ptr);
-    std::free(ptr);
-}
+void* operator new(size_t size, const std::nothrow_t&) noexcept;
+void operator delete(void* ptr, const std::nothrow_t&) noexcept;
 
 // Array nothrow versions
-void* operator new[](size_t size, const std::nothrow_t&) noexcept {
-    void* ptr = std::malloc(size);
-    if (ptr) {
-        ATOM_TRACK_ALLOC(ptr, size);
-    }
-    return ptr;
-}
-
-void operator delete[](void* ptr, const std::nothrow_t&) noexcept {
-    ATOM_TRACK_FREE(ptr);
-    std::free(ptr);
-}
+void* operator new[](size_t size, const std::nothrow_t&) noexcept;
+void operator delete[](void* ptr, const std::nothrow_t&) noexcept;
 
 #endif  // ATOM_MEMORY_TRACKING_ENABLED
 

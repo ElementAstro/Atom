@@ -1,64 +1,169 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom-algorithm
   VERSION 1.0.0
   LANGUAGES C CXX)
 
-# Find OpenSSL package
-find_package(OpenSSL REQUIRED)
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
-# Find TBB package
-find_package(TBB REQUIRED)
-
-# Get dependencies from module_dependencies.cmake
-if(NOT DEFINED ATOM_ALGORITHM_DEPENDS)
-  set(ATOM_ALGORITHM_DEPENDS atom-error)
+# Find OpenSSL package (optional for all builds) First check if targets already
+# exist from parent scope
+if(TARGET OpenSSL::SSL AND TARGET OpenSSL::Crypto)
+  set(OpenSSL_FOUND TRUE)
+  message(STATUS "OpenSSL targets found from parent scope")
+else()
+  find_package(OpenSSL QUIET)
+  if(NOT OpenSSL_FOUND)
+    message(
+      STATUS "OpenSSL not found - some cryptographic features will be disabled")
+  endif()
 endif()
 
-# Verify if dependency modules are built
-foreach(dep ${ATOM_ALGORITHM_DEPENDS})
-  string(REPLACE "atom-" "ATOM_BUILD_" dep_var_name ${dep})
-  string(TOUPPER ${dep_var_name} dep_var_name)
-  if(NOT DEFINED ${dep_var_name} OR NOT ${dep_var_name})
-    message(
-      WARNING
-        "Module ${PROJECT_NAME} depends on ${dep}, but that module is not enabled for building"
-    )
-    # Auto dependency building can be added here if needed
-  endif()
-endforeach()
+# Find TBB package (optional for now due to vcpkg network issues)
+find_package(TBB QUIET)
 
-# Automatically collect source files and headers
-file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
-file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp)
+# Sources and Headers
+set(SOURCES
+    # Core files
+    core/algorithm.cpp
+    core/opencl_utils.cpp
+    # Crypto files
+    crypto/md5.cpp
+    crypto/sha1.cpp
+    crypto/blowfish.cpp
+    crypto/tea.cpp
+    # Hash files
+    hash/mhash.cpp
+    # Math files
+    math/math.cpp
+    math/fraction.cpp
+    math/bignumber.cpp
+    math/gpu_math.cpp
+    # Compression files
+    compression/huffman.cpp
+    compression/matrix_compress.cpp
+    # Signal processing files
+    signal/convolve.cpp
+    # Optimization files
+    optimization/pathfinding.cpp
+    # Encoding files
+    encoding/base.cpp
+    # Graphics files
+    graphics/flood.cpp
+    # Utils files
+    utils/fnmatch.cpp)
+
+set(HEADERS
+    # Backwards compatibility headers (in root)
+    algorithm.hpp
+    annealing.hpp
+    base.hpp
+    bignumber.hpp
+    blowfish.hpp
+    convolve.hpp
+    error_calibration.hpp
+    flood.hpp
+    fnmatch.hpp
+    fraction.hpp
+    hash.hpp
+    huffman.hpp
+    math.hpp
+    matrix.hpp
+    matrix_compress.hpp
+    md5.hpp
+    mhash.hpp
+    pathfinding.hpp
+    perlin.hpp
+    rust_numeric.hpp
+    sha1.hpp
+    snowflake.hpp
+    tea.hpp
+    weight.hpp
+    # Actual implementation headers (in subdirectories)
+    core/algorithm.hpp
+    core/rust_numeric.hpp
+    core/simd_utils.hpp
+    core/opencl_utils.hpp
+    crypto/md5.hpp
+    crypto/sha1.hpp
+    crypto/blowfish.hpp
+    crypto/tea.hpp
+    hash/hash.hpp
+    hash/mhash.hpp
+    math/math.hpp
+    math/matrix.hpp
+    math/fraction.hpp
+    math/bignumber.hpp
+    math/statistics.hpp
+    math/numerical.hpp
+    math/gpu_math.hpp
+    compression/huffman.hpp
+    compression/matrix_compress.hpp
+    signal/convolve.hpp
+    optimization/annealing.hpp
+    optimization/pathfinding.hpp
+    encoding/base.hpp
+    graphics/flood.hpp
+    graphics/perlin.hpp
+    graphics/simplex.hpp
+    graphics/image_ops.hpp
+    utils/error_calibration.hpp
+    utils/fnmatch.hpp
+    utils/snowflake.hpp
+    utils/weight.hpp
+    utils/uuid.hpp)
 
 set(LIBS ${ATOM_ALGORITHM_DEPENDS})
 
-# Add OpenSSL to the list of libraries
-list(APPEND LIBS OpenSSL::SSL OpenSSL::Crypto TBB::tbb loguru)
+# Add OpenSSL to the list of libraries (if available)
+if(OpenSSL_FOUND)
+  list(APPEND LIBS OpenSSL::SSL OpenSSL::Crypto)
+endif()
 
-# Build object library
-add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
+# Add spdlog for logging
+find_package(spdlog QUIET)
+if(spdlog_FOUND)
+  list(APPEND LIBS spdlog::spdlog)
+endif()
 
-target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
+if(TBB_FOUND)
+  list(APPEND LIBS TBB::tbb)
+endif()
 
-# Build static library
-add_library(${PROJECT_NAME} STATIC)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_object ${LIBS}
-                                              ${CMAKE_THREAD_LIBS_INIT})
-target_include_directories(${PROJECT_NAME} PUBLIC .)
+# Create library target
+add_library(atom-algorithm STATIC ${SOURCES} ${HEADERS})
+add_library(atom::algorithm ALIAS atom-algorithm)
 
-# Add OpenSSL include directories
-target_include_directories(${PROJECT_NAME} PRIVATE ${OPENSSL_INCLUDE_DIR})
+# Configure module using standardized function
+atom_configure_module(atom-algorithm)
 
-set_target_properties(
-  ${PROJECT_NAME}
-  PROPERTIES VERSION ${PROJECT_VERSION}
-             SOVERSION ${PROJECT_VERSION_MAJOR}
-             OUTPUT_NAME ${PROJECT_NAME})
+# Link module-specific dependencies Use PUBLIC for static library so consumers
+# get transitive dependencies
+target_link_libraries(atom-algorithm PUBLIC ${LIBS} ${CMAKE_THREAD_LIBS_INIT})
 
-install(TARGETS ${PROJECT_NAME} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+# Define OpenSSL availability for conditional compilation
+if(OpenSSL_FOUND)
+  target_compile_definitions(atom-algorithm PRIVATE ATOM_HAS_OPENSSL=1)
+else()
+  target_compile_definitions(atom-algorithm PRIVATE ATOM_HAS_OPENSSL=0)
+endif()
 
-# Register this module as an Atom module
-set_property(GLOBAL APPEND PROPERTY ATOM_MODULE_TARGETS ${PROJECT_NAME})
+# Install library target
+install(
+  TARGETS atom-algorithm
+  EXPORT atom-algorithm-targets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT runtime)
+
+# Install export targets
+install(
+  EXPORT atom-algorithm-targets
+  FILE atom-algorithmTargets.cmake
+  NAMESPACE atom::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/atom
+  COMPONENT development)
+
+# Install headers
+install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/algorithm)

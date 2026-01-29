@@ -8,15 +8,16 @@ add_rules("mode.debug", "mode.release")
 
 -- Project configuration
 set_project("atom-secret")
-set_version("2.0.0") -- Version bump for new API
+set_version("1.0.0")
 set_license("GPL3")
 
 -- Define source files
 local source_files = {
-    "common.cpp",
     "encryption.cpp",
-    "storage.cpp",
-    "password_manager.cpp"
+    "password_manager.cpp",
+    "password_utils.cpp",
+    "serialization.cpp",
+    "storage.cpp"
 }
 
 -- Define header files
@@ -24,9 +25,11 @@ local header_files = {
     "common.hpp",
     "encryption.hpp",
     "password_entry.hpp",
+    "password_manager.hpp",
+    "password_utils.hpp",
     "result.hpp",
-    "storage.hpp",
-    "password_manager.hpp"
+    "serialization.hpp",
+    "storage.hpp"
 }
 
 -- Object Library
@@ -34,11 +37,11 @@ target("atom-secret-object")
     set_kind("object")
 
     -- Add files
-    add_files(source_files)
-    add_headerfiles(header_files)
+    add_files(table.unpack(source_files))
+    add_headerfiles(table.unpack(header_files))
 
     -- Add dependencies
-    add_packages("spdlog", "nlohmann_json")
+    add_packages("spdlog", "fmt", "openssl")
     add_deps("atom-utils")
 
     -- Add include directories
@@ -46,7 +49,7 @@ target("atom-secret-object")
     add_includedirs("..", {public = true})
 
     -- Platform-specific settings
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("crypt32", "advapi32")
     elseif is_plat("linux") then
         add_syslinks("pthread")
@@ -65,10 +68,10 @@ target("atom-secret")
 
     -- Add dependencies
     add_deps("atom-secret-object", "atom-utils")
-    add_packages("spdlog", "nlohmann_json")
+    add_packages("spdlog", "fmt", "openssl")
 
     -- Platform-specific settings
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("crypt32", "advapi32")
     elseif is_plat("linux") then
         add_syslinks("pthread")
@@ -83,6 +86,6 @@ target("atom-secret")
     -- Install configuration
     on_install(function (target)
         os.cp(target:targetfile(), path.join(target:installdir(), "lib"))
-        os.cp(header_files, path.join(target:installdir(), "include/atom/secret"))
+        os.cp("*.hpp", path.join(target:installdir(), "include/atom/secret"))
     end)
 target_end()

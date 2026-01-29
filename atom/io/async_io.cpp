@@ -1,9 +1,9 @@
 #include "async_io.hpp"
 
 #include <algorithm>
-#include <string_view>
-#include <optional>
 #include <fstream>
+#include <optional>
+#include <string_view>
 #include <thread>
 
 #include <spdlog/spdlog.h>
@@ -11,8 +11,7 @@
 namespace atom::async::io {
 
 #ifdef ATOM_USE_ASIO
-AsyncFile::AsyncFile(asio::io_context& io_context,
-                     const AsyncIOConfig& config,
+AsyncFile::AsyncFile(asio::io_context& io_context, const AsyncIOConfig& config,
                      std::shared_ptr<AsyncContext> context) noexcept
     : io_context_(io_context),
       timer_(std::make_shared<asio::steady_timer>(io_context)),
@@ -21,7 +20,7 @@ AsyncFile::AsyncFile(asio::io_context& io_context,
       logger_(spdlog::get("async_io") ? spdlog::get("async_io")
                                       : spdlog::default_logger()) {
     stats_.start_time = std::chrono::steady_clock::now();
-    buffer_pool_.reserve(10); // Pre-allocate some buffer slots
+    buffer_pool_.reserve(10);  // Pre-allocate some buffer slots
 }
 #else
 AsyncFile::AsyncFile(const AsyncIOConfig& config,
@@ -33,7 +32,7 @@ AsyncFile::AsyncFile(const AsyncIOConfig& config,
       logger_(spdlog::get("async_io") ? spdlog::get("async_io")
                                       : spdlog::default_logger()) {
     stats_.start_time = std::chrono::steady_clock::now();
-    buffer_pool_.reserve(10); // Pre-allocate some buffer slots
+    buffer_pool_.reserve(10);  // Pre-allocate some buffer slots
 }
 #endif
 
@@ -101,9 +100,9 @@ void AsyncFile::asyncBatchRead(
         return;
     }
 
-    bool all_valid = std::all_of(
-        files.begin(), files.end(),
-        [](const std::string& file) { return validatePath(file); });
+    bool all_valid =
+        std::all_of(files.begin(), files.end(),
+                    [](const std::string& file) { return validatePath(file); });
 
     if (!all_valid) {
         if (callback) {
@@ -165,13 +164,9 @@ void AsyncFile::asyncBatchRead(
     }
 }
 
-const AsyncIOStats& AsyncFile::getStats() const noexcept {
-    return stats_;
-}
+const AsyncIOStats& AsyncFile::getStats() const noexcept { return stats_; }
 
-void AsyncFile::resetStats() noexcept {
-    stats_.reset();
-}
+void AsyncFile::resetStats() noexcept { stats_.reset(); }
 
 void AsyncFile::updateConfig(const AsyncIOConfig& config) noexcept {
     config_ = config;
@@ -182,7 +177,8 @@ void AsyncFile::updateConfig(const AsyncIOConfig& config) noexcept {
     }
 }
 
-std::optional<FileMetadata> AsyncFile::getFileMetadata(const std::string& path) const {
+std::optional<FileMetadata> AsyncFile::getFileMetadata(
+    const std::string& path) const {
     if (!config_.enable_caching) {
         // Direct filesystem query without caching
         try {
@@ -195,14 +191,17 @@ std::optional<FileMetadata> AsyncFile::getFileMetadata(const std::string& path) 
             FileMetadata metadata;
             metadata.status = status;
             metadata.size = std::filesystem::file_size(path, ec);
-            if (ec) metadata.size = 0;
-            metadata.last_write_time = std::filesystem::last_write_time(path, ec);
+            if (ec)
+                metadata.size = 0;
+            metadata.last_write_time =
+                std::filesystem::last_write_time(path, ec);
             metadata.cache_time = std::chrono::steady_clock::now();
 
             stats_.cache_misses++;
             return metadata;
         } catch (const std::exception& e) {
-            logger_->error("Error getting file metadata for {}: {}", path, e.what());
+            logger_->error("Error getting file metadata for {}: {}", path,
+                           e.what());
             return std::nullopt;
         }
     }
@@ -226,7 +225,8 @@ std::optional<FileMetadata> AsyncFile::getFileMetadata(const std::string& path) 
         FileMetadata metadata;
         metadata.status = status;
         metadata.size = std::filesystem::file_size(path, ec);
-        if (ec) metadata.size = 0;
+        if (ec)
+            metadata.size = 0;
         metadata.last_write_time = std::filesystem::last_write_time(path, ec);
         metadata.cache_time = std::chrono::steady_clock::now();
 
@@ -241,7 +241,8 @@ std::optional<FileMetadata> AsyncFile::getFileMetadata(const std::string& path) 
 
         return metadata;
     } catch (const std::exception& e) {
-        logger_->error("Error getting file metadata for {}: {}", path, e.what());
+        logger_->error("Error getting file metadata for {}: {}", path,
+                       e.what());
         return std::nullopt;
     }
 }
@@ -264,7 +265,8 @@ std::vector<char> AsyncFile::getBuffer(std::size_t size) {
 }
 
 void AsyncFile::returnBuffer(std::vector<char>&& buffer) {
-    if (buffer.empty()) return;
+    if (buffer.empty())
+        return;
 
     std::lock_guard<std::mutex> lock(buffer_pool_mutex_);
 
@@ -280,7 +282,8 @@ void AsyncFile::returnBuffer(std::vector<char>&& buffer) {
 void AsyncFile::cleanupCache() const {
     // Remove expired entries (called with cache_mutex_ already locked)
     auto now = std::chrono::steady_clock::now();
-    auto cutoff = now - std::chrono::minutes(5); // Remove entries older than 5 minutes
+    auto cutoff =
+        now - std::chrono::minutes(5);  // Remove entries older than 5 minutes
 
     for (auto it = metadata_cache_.begin(); it != metadata_cache_.end();) {
         if (it->second.cache_time < cutoff) {
@@ -292,12 +295,14 @@ void AsyncFile::cleanupCache() const {
 }
 
 template <typename F>
-void AsyncFile::executeFileOperation(F&& operation, const std::string& operation_name) {
+void AsyncFile::executeFileOperation(F&& operation,
+                                     const std::string& operation_name) {
     if (context_ && context_->is_cancelled()) {
         return;
     }
 
-    executeAsync([this, operation = std::forward<F>(operation), operation_name]() mutable {
+    executeAsync([this, operation = std::forward<F>(operation),
+                  operation_name]() mutable {
         try {
             operation();
             stats_.operations_completed++;

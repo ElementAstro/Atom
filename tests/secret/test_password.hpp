@@ -23,12 +23,14 @@ using ::testing::StartsWith;
 class PasswordManagerTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Create a test password manager with app name and simple settings to avoid deadlocks
+        // Create a test password manager with app name and simple settings to
+        // avoid deadlocks
         PasswordManagerSettings settings;
-        settings.autoLockTimeoutSeconds = 0; // Disable auto-lock
+        settings.autoLockTimeoutSeconds = 0;  // Disable auto-lock
         settings.minPasswordLength = 8;
         settings.requireSpecialChars = false;
-        settings.encryptionOptions.keyIterations = 1000; // Reduce iterations for faster tests
+        settings.encryptionOptions.keyIterations =
+            1000;  // Reduce iterations for faster tests
 
         manager = std::make_unique<PasswordManager>("TestApp", settings);
 
@@ -44,7 +46,8 @@ protected:
         testEntry.category = PasswordCategory::Personal;
         testEntry.created = std::chrono::system_clock::now();
         testEntry.modified = std::chrono::system_clock::now();
-        testEntry.expires = std::chrono::system_clock::now() + std::chrono::hours(24 * 90); // 90 days from now
+        testEntry.expires = std::chrono::system_clock::now() +
+                            std::chrono::hours(24 * 90);  // 90 days from now
         testEntry.previousPasswords = {"OldPassword1!", "OldPassword2@"};
 
         // Define test export file path
@@ -60,7 +63,8 @@ protected:
     }
 
     // Helper function to create a test entry with a given password
-    PasswordEntry createTestEntry(const std::string& password, const std::string& title) {
+    PasswordEntry createTestEntry(const std::string& password,
+                                  const std::string& title) {
         PasswordEntry entry = testEntry;
         entry.password = password;
         entry.title = title;
@@ -96,14 +100,16 @@ TEST_F(PasswordManagerTest, AddAndRetrieveEntry) {
     // Add an entry
     auto result = manager->addEntry(testEntry, masterPassword);
     if (!result.isSuccess()) {
-        std::cout << "Add entry failed with error: " << static_cast<int>(result.errorCode()) << std::endl;
+        std::cout << "Add entry failed with error: "
+                  << static_cast<int>(result.errorCode()) << std::endl;
     }
     EXPECT_TRUE(result.isSuccess());
 
     // Retrieve the entry
     auto retrieveResult = manager->getEntry(testTitle, masterPassword);
     if (!retrieveResult.isSuccess()) {
-        std::cout << "Get entry failed with error: " << static_cast<int>(retrieveResult.errorCode()) << std::endl;
+        std::cout << "Get entry failed with error: "
+                  << static_cast<int>(retrieveResult.errorCode()) << std::endl;
     }
     EXPECT_TRUE(retrieveResult.isSuccess());
 
@@ -169,7 +175,7 @@ TEST_F(PasswordManagerTest, PasswordGeneration) {
     if (result.isSuccess()) {
         const auto& password = result.value();
         EXPECT_FALSE(password.empty());
-        EXPECT_GE(password.length(), 16); // Default length
+        EXPECT_GE(password.length(), 16);  // Default length
     }
 
     // Generate a password with custom options
@@ -198,11 +204,16 @@ TEST_F(PasswordManagerTest, PasswordGeneration) {
 // Test password strength analysis
 TEST_F(PasswordManagerTest, PasswordStrengthAnalysis) {
     // Test various password strengths
-    EXPECT_EQ(manager->analyzePasswordStrength("abc"), PasswordStrength::VeryWeak);
-    EXPECT_EQ(manager->analyzePasswordStrength("abcdefgh123456"), PasswordStrength::Weak);
-    EXPECT_EQ(manager->analyzePasswordStrength("Abcdefgh123456"), PasswordStrength::Medium);
-    EXPECT_EQ(manager->analyzePasswordStrength("Abcdefgh123456!"), PasswordStrength::Strong);
-    EXPECT_EQ(manager->analyzePasswordStrength("Abcdefgh123456!@#$%^&*()"), PasswordStrength::VeryStrong);
+    EXPECT_EQ(manager->analyzePasswordStrength("abc"),
+              PasswordStrength::VeryWeak);
+    EXPECT_EQ(manager->analyzePasswordStrength("abcdefgh123456"),
+              PasswordStrength::Weak);
+    EXPECT_EQ(manager->analyzePasswordStrength("Abcdefgh123456"),
+              PasswordStrength::Medium);
+    EXPECT_EQ(manager->analyzePasswordStrength("Abcdefgh123456!"),
+              PasswordStrength::Strong);
+    EXPECT_EQ(manager->analyzePasswordStrength("Abcdefgh123456!@#$%^&*()"),
+              PasswordStrength::VeryStrong);
 }
 
 // Test settings management
@@ -277,13 +288,6 @@ TEST_F(PasswordManagerTest, SearchEntries) {
         EXPECT_EQ(entries[0].title, "Gmail");
     }
 }
-
-
-
-
-
-
-
 
 // Test password strength evaluation
 TEST_F(PasswordManagerTest, AnalyzePasswordStrength) {

@@ -1,0 +1,283 @@
+{
+    // ===== Editor Settings =====
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": false,
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.detectIndentation": false,
+    "editor.rulers": [80, 120],
+    "editor.wordWrap": "off",
+    "editor.renderWhitespace": "selection",
+    "editor.trimAutoWhitespace": true,
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": true,
+    "editor.inlayHints.enabled": "onUnlessPressed",
+    "editor.minimap.enabled": true,
+    "editor.minimap.maxColumn": 80,
+    "editor.stickyScroll.enabled": true,
+
+    // ===== Files Settings =====
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "files.trimFinalNewlines": true,
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 1000,
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        "build": true,
+        "build-*": true,
+        "**/__pycache__": true,
+        "**/*.pyc": true,
+        "**/.pytest_cache": true,
+        "**/.mypy_cache": true,
+        "**/.ruff_cache": true,
+        "**/*.egg-info": true
+    },
+    "files.associations": {
+        "*.hpp": "cpp",
+        "*.h": "cpp",
+        "*.cpp": "cpp",
+        "*.tpp": "cpp",
+        "*.ipp": "cpp",
+        "CMakeLists.txt": "cmake",
+        "*.cmake": "cmake",
+        "Doxyfile": "ini",
+        "*.in": "cmake"
+    },
+    "files.watcherExclude": {
+        "**/build/**": true,
+        "**/build-*/**": true,
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/**": true
+    },
+
+    // ===== Search Settings =====
+    "search.exclude": {
+        "**/build": true,
+        "**/build-*": true,
+        "**/.git": true,
+        "**/node_modules": true,
+        "**/__pycache__": true,
+        "**/*.pyc": true
+    },
+
+    // ===== C/C++ Settings =====
+    "C_Cpp.default.cppStandard": "c++20",
+    "C_Cpp.default.cStandard": "c17",
+    "C_Cpp.clang_format_style": "file",
+    "C_Cpp.clang_format_fallbackStyle": "Google",
+    "C_Cpp.codeAnalysis.runAutomatically": true,
+    "C_Cpp.codeAnalysis.clangTidy.enabled": true,
+    "C_Cpp.intelliSenseEngine": "default",
+    "C_Cpp.intelliSenseEngineFallback": "enabled",
+    "C_Cpp.autocompleteAddParentheses": true,
+    "C_Cpp.formatting": "clangFormat",
+    "C_Cpp.errorSquiggles": "enabled",
+    "C_Cpp.enhancedColorization": "enabled",
+    "C_Cpp.hover": "enabled",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json",
+
+    // ===== CMake Settings =====
+    "cmake.configureOnOpen": true,
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.generator": "Ninja",
+    "cmake.configureSettings": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+    },
+    "cmake.copyCompileCommands": "${workspaceFolder}/compile_commands.json",
+    "cmake.parallelJobs": 8,
+    "cmake.ctestArgs": ["--output-on-failure"],
+    "cmake.defaultVariants": {
+        "buildType": {
+            "default": "debug",
+            "description": "Build type",
+            "choices": {
+                "debug": {
+                    "short": "Debug",
+                    "long": "Debug build with full debug info",
+                    "buildType": "Debug"
+                },
+                "release": {
+                    "short": "Release",
+                    "long": "Optimized release build",
+                    "buildType": "Release"
+                },
+                "relwithdebinfo": {
+                    "short": "RelWithDebInfo",
+                    "long": "Release with debug info",
+                    "buildType": "RelWithDebInfo"
+                }
+            }
+        }
+    },
+
+    // ===== Python Settings =====
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.inlayHints.functionReturnTypes": true,
+    "python.analysis.inlayHints.variableTypes": true,
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        },
+        "editor.tabSize": 4
+    },
+    "black-formatter.args": ["--line-length", "88"],
+    "isort.args": ["--profile", "black"],
+    "ruff.lint.run": "onSave",
+
+    // ===== Git Settings =====
+    "git.autofetch": true,
+    "git.confirmSync": false,
+    "git.enableSmartCommit": true,
+    "git.pruneOnFetch": true,
+
+    // ===== Terminal Settings =====
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
+    "terminal.integrated.profiles.windows": {
+        "PowerShell": {
+            "source": "PowerShell",
+            "icon": "terminal-powershell"
+        },
+        "MSYS2 MinGW64": {
+            "path": "D:/msys64/msys2_shell.cmd",
+            "args": ["-defterm", "-here", "-no-start", "-mingw64"],
+            "icon": "terminal-bash"
+        },
+        "Command Prompt": {
+            "path": "cmd.exe",
+            "icon": "terminal-cmd"
+        }
+    },
+    "terminal.integrated.env.windows": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+    },
+
+    // ===== Spell Checker =====
+    "cSpell.words": [
+        "Astro",
+        "asio",
+        "pybind",
+        "spdlog",
+        "nlohmann",
+        "vcpkg",
+        "gtest",
+        "gmock",
+        "ctest",
+        "cmake",
+        "clangd",
+        "clangformat",
+        "mingw",
+        "msys",
+        "msvc",
+        "doxygen",
+        "doxyfile"
+    ],
+    "cSpell.ignorePaths": [
+        "build",
+        "build-*",
+        ".git",
+        "*.json",
+        "compile_commands.json"
+    ],
+
+    // ===== TODO Tree =====
+    "todo-tree.general.tags": [
+        "BUG",
+        "HACK",
+        "FIXME",
+        "TODO",
+        "XXX",
+        "NOTE",
+        "WARN",
+        "PERF"
+    ],
+    "todo-tree.highlights.defaultHighlight": {
+        "icon": "alert",
+        "type": "text-and-comment",
+        "foreground": "#fff",
+        "background": "#ffbd2a",
+        "opacity": 50,
+        "iconColour": "#ffbd2a"
+    },
+    "todo-tree.highlights.customHighlight": {
+        "BUG": {
+            "icon": "bug",
+            "background": "#ff2d00",
+            "iconColour": "#ff2d00"
+        },
+        "FIXME": {
+            "icon": "flame",
+            "background": "#ff8c00",
+            "iconColour": "#ff8c00"
+        },
+        "NOTE": {
+            "icon": "note",
+            "background": "#00bfff",
+            "iconColour": "#00bfff"
+        }
+    },
+
+    // ===== Doxygen =====
+    "doxdocgen.generic.authorEmail": "",
+    "doxdocgen.generic.authorName": "",
+    "doxdocgen.generic.briefTemplate": "@brief {text}",
+    "doxdocgen.generic.paramTemplate": "@param {param} ",
+    "doxdocgen.generic.returnTemplate": "@return ",
+    "doxdocgen.file.copyrightTag": [],
+    "doxdocgen.file.fileOrder": [
+        "file",
+        "brief",
+        "author",
+        "date"
+    ],
+
+    // ===== Error Lens =====
+    "errorLens.enabledDiagnosticLevels": ["error", "warning"],
+    "errorLens.excludeBySource": ["cSpell"],
+
+    // ===== Markdown =====
+    "[markdown]": {
+        "editor.defaultFormatter": "DavidAnson.vscode-markdownlint",
+        "editor.wordWrap": "on",
+        "editor.quickSuggestions": {
+            "other": true,
+            "comments": true,
+            "strings": true
+        }
+    },
+    "markdownlint.config": {
+        "MD033": false,
+        "MD041": false
+    },
+
+    // ===== JSON =====
+    "[json]": {
+        "editor.defaultFormatter": "vscode.json-language-features",
+        "editor.tabSize": 4
+    },
+    "[jsonc]": {
+        "editor.defaultFormatter": "vscode.json-language-features",
+        "editor.tabSize": 4
+    },
+
+    // ===== YAML =====
+    "[yaml]": {
+        "editor.defaultFormatter": "redhat.vscode-yaml",
+        "editor.tabSize": 2
+    },
+
+    // ===== CMake Language =====
+    "[cmake]": {
+        "editor.tabSize": 4
+    }
+}

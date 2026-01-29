@@ -1,173 +1,359 @@
 #ifndef ATOM_SECRET_ENCRYPTION_HPP
 #define ATOM_SECRET_ENCRYPTION_HPP
 
+#include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/kdf.h>
+#include <openssl/rand.h>
+
+#include <array>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <memory>
 
-#include "result.hpp"
 #include "common.hpp"
+#include "result.hpp"
 
 namespace atom::secret {
 
-/**
- * @brief Hardware acceleration detection result.
- */
-struct HardwareCapabilities {
-    bool aesni_available = false;      ///< AES-NI instruction set available
-    bool avx2_available = false;       ///< AVX2 instruction set available
-    bool sha_available = false;        ///< SHA instruction set available
-    bool rdrand_available = false;     ///< RDRAND instruction available
-};
+// Forward declaration for OpenSSL context
+typedef struct evp_cipher_ctx_st EVP_CIPHER_CTX;
 
 /**
- * @brief Memory pool for frequent cryptographic operations.
+ * @brief RAII wrapper for OpenSSL EVP_CIPHER_CTX.
+ * Ensures the context is properly freed.
  */
-class SecureMemoryPool {
-public:
-    static SecureMemoryPool& getInstance();
-
-    /**
-     * @brief Get a buffer from the pool.
-     * @param size Required buffer size.
-     * @return Unique pointer to the buffer.
-     */
-    std::unique_ptr<std::vector<unsigned char>> getBuffer(size_t size);
-
-    /**
-     * @brief Return a buffer to the pool.
-     * @param buffer Buffer to return.
-     */
-    void returnBuffer(std::unique_ptr<std::vector<unsigned char>> buffer);
-
+class SslCipherContext {
 private:
-    SecureMemoryPool() = default;
-    class Impl;
-    std::unique_ptr<Impl> pImpl;
+    EVP_CIPHER_CTX* ctx;  ///< Pointer to the OpenSSL cipher context.
+
+public:
+    /**
+     * @brief Constructs an SslCipherContext, creating a new EVP_CIPHER_CTX.
+     * @throws std::runtime_error if context creation fails.
+     */
+    SslCipherContext();
+
+    /**
+     * @brief Destroys the SslCipherContext, freeing the EVP_CIPHER_CTX.
+     */
+    ~SslCipherContext();
+
+    // Disable copy construction and assignment
+    SslCipherContext(const SslCipherContext&) = delete;
+    SslCipherContext& operator=(const SslCipherContext&) = delete;
+
+    // Enable move construction and assignment
+    SslCipherContext(SslCipherContext&& other) noexcept;
+    SslCipherContext& operator=(SslCipherContext&& other) noexcept;
+
+    /**
+     * @brief Gets the raw pointer to the EVP_CIPHER_CTX.
+     * @return The raw EVP_CIPHER_CTX pointer.
+     */
+    EVP_CIPHER_CTX* get() const noexcept { return ctx; }
+
+    /**
+     * @brief Implicit conversion to the raw EVP_CIPHER_CTX pointer.
+     * @return The raw EVP_CIPHER_CTX pointer.
+     */
+    operator EVP_CIPHER_CTX*() const noexcept { return ctx; }
 };
 
 /**
- * @brief Provides high-level cryptographic operations with multiple algorithms and optimizations.
+ * @brief Secure memory management utilities for sensitive data.
+ */
+class SecureMemory {
+public:
+    /**
+     * @brief Securely clears memory by overwriting with random data.
+     * @param ptr Pointer to memory to clear.
+     * @param size Size of memory to clear.
+     */
+    static void secureClear(void* ptr, size_t size) noexcept;
+
+    /**
+     * @brief Securely clears a string's contents.
+     * @param str String to clear.
+     */
+    static void secureClear(std::string& str) noexcept;
+
+    /**
+     * @brief Securely clears a vector's contents.
+     * @tparam T Type of vector elements.
+     * @param vec Vector to clear.
+     */
+    template <typename T>
+    static void secureClear(std::vector<T>& vec) noexcept;
+
+    /**
+     * @brief Locks memory pages to prevent swapping to disk.
+     * @param ptr Pointer to memory to lock.
+     * @param size Size of memory to lock.
+     * @return True if successful, false otherwise.
+     */
+    static bool lockMemory(void* ptr, size_t size) noexcept;
+
+    /**
+     * @brief Unlocks previously locked memory pages.
+     * @param ptr Pointer to memory to unlock.
+     * @param size Size of memory to unlock.
+     * @return True if successful, false otherwise.
+     */
+    static bool unlockMemory(void* ptr, size_t size) noexcept;
+
+    /**
+     * @brief Allocates secure memory that won't be swapped to disk.
+     * @param size Size of memory to allocate.
+     * @return Pointer to allocated memory or nullptr on failure.
+     */
+    static void* allocateSecure(size_t size) noexcept;
+
+    /**
+     * @brief Frees secure memory allocated with allocateSecure.
+     * @param ptr Pointer to memory to free.
+     * @param size Size of memory to free.
+     */
+    static void freeSecure(void* ptr, size_t size) noexcept;
+};
+
+/**
+ * @brief RAII wrapper for secure memory allocation.
+ */
+template <typename T>
+class SecureBuffer {
+private:
+    T* data_;
+    size_t size_;
+
+public:
+    /**
+     * @brief Constructs a secure buffer of the specified size.
+     * @param size Number of elements to allocate.
+     */
+    explicit SecureBuffer(size_t size);
+
+    /**
+     * @brief Destructor that securely clears and frees memory.
+     */
+    ~SecureBuffer();
+
+    // Disable copy construction and assignment
+    SecureBuffer(const SecureBuffer&) = delete;
+    SecureBuffer& operator=(const SecureBuffer&) = delete;
+
+    // Enable move construction and assignment
+    SecureBuffer(SecureBuffer&& other) noexcept;
+    SecureBuffer& operator=(SecureBuffer&& other) noexcept;
+
+    /**
+     * @brief Gets pointer to the buffer data.
+     * @return Pointer to buffer data.
+     */
+    T* data() noexcept { return data_; }
+
+    /**
+     * @brief Gets const pointer to the buffer data.
+     * @return Const pointer to buffer data.
+     */
+    const T* data() const noexcept { return data_; }
+
+    /**
+     * @brief Gets the buffer size.
+     * @return Number of elements in the buffer.
+     */
+    size_t size() const noexcept { return size_; }
+
+    /**
+     * @brief Array access operator.
+     * @param index Index of element to access.
+     * @return Reference to element at index.
+     */
+    T& operator[](size_t index) noexcept { return data_[index]; }
+
+    /**
+     * @brief Const array access operator.
+     * @param index Index of element to access.
+     * @return Const reference to element at index.
+     */
+    const T& operator[](size_t index) const noexcept { return data_[index]; }
+
+    /**
+     * @brief Checks if the buffer is valid.
+     * @return True if buffer is allocated, false otherwise.
+     */
+    bool isValid() const noexcept { return data_ != nullptr; }
+};
+
+/**
+ * @brief Cryptographic key derivation and management.
+ */
+class KeyDerivation {
+public:
+    /**
+     * @brief Derives a key from a password using PBKDF2.
+     * @param password The password to derive from.
+     * @param salt The salt for key derivation.
+     * @param iterations Number of PBKDF2 iterations.
+     * @param keyLength Desired key length in bytes.
+     * @return Result containing the derived key or error message.
+     */
+    static Result<std::vector<uint8_t>> deriveKey(
+        std::string_view password, const std::vector<uint8_t>& salt,
+        int iterations, size_t keyLength);
+
+    /**
+     * @brief Generates a cryptographically secure random salt.
+     * @param length Length of salt in bytes.
+     * @return Result containing the salt or error message.
+     */
+    static Result<std::vector<uint8_t>> generateSalt(size_t length = 32);
+
+    /**
+     * @brief Generates a cryptographically secure random key.
+     * @param length Length of key in bytes.
+     * @return Result containing the key or error message.
+     */
+    static Result<std::vector<uint8_t>> generateKey(size_t length = 32);
+};
+
+/**
+ * @brief Encrypted data container with metadata.
+ */
+struct EncryptedData {
+    std::vector<uint8_t> ciphertext;   ///< The encrypted data.
+    std::vector<uint8_t> iv;           ///< Initialization vector.
+    std::vector<uint8_t> salt;         ///< Salt used for key derivation.
+    std::vector<uint8_t> tag;          ///< Authentication tag (for AEAD modes).
+    EncryptionOptions::Method method;  ///< Encryption method used.
+    int keyIterations;                 ///< PBKDF2 iterations used.
+
+    /**
+     * @brief Serializes the encrypted data to a binary format.
+     * @return Serialized data.
+     */
+    std::vector<uint8_t> serialize() const;
+
+    /**
+     * @brief Deserializes encrypted data from binary format.
+     * @param data Serialized data.
+     * @return Result containing EncryptedData or error message.
+     */
+    static Result<EncryptedData> deserialize(const std::vector<uint8_t>& data);
+};
+
+/**
+ * @brief High-level encryption and decryption utilities.
  */
 class Encryption {
 public:
     /**
-     * @brief Initialize the encryption system and detect hardware capabilities.
+     * @brief Encrypts data using the specified options.
+     * @param plaintext The data to encrypt.
+     * @param password The password for encryption.
+     * @param options Encryption options.
+     * @return Result containing encrypted data or error message.
      */
-    static void initialize();
+    static Result<EncryptedData> encrypt(std::string_view plaintext,
+                                         std::string_view password,
+                                         const EncryptionOptions& options = {});
 
     /**
-     * @brief Get detected hardware capabilities.
-     * @return HardwareCapabilities structure.
+     * @brief Decrypts data using the provided password.
+     * @param encryptedData The encrypted data to decrypt.
+     * @param password The password for decryption.
+     * @return Result containing decrypted plaintext or error message.
      */
-    static const HardwareCapabilities& getHardwareCapabilities();
+    static Result<std::string> decrypt(const EncryptedData& encryptedData,
+                                       std::string_view password);
 
     /**
-     * @brief Derives a key from a password using PBKDF2.
-     * @param password The password.
-     * @param salt The salt.
-     * @param iterations Number of PBKDF2 iterations.
-     * @param key_len The desired key length.
-     * @return Result containing the derived key or error.
+     * @brief Encrypts data with a pre-derived key.
+     * @param plaintext The data to encrypt.
+     * @param key The encryption key.
+     * @param options Encryption options.
+     * @return Result containing encrypted data or error message.
      */
-    static Result<std::vector<unsigned char>> deriveKey(
-        std::string_view password,
-        std::string_view salt,
-        int iterations = 100000,
-        int key_len = 32);
+    static Result<EncryptedData> encryptWithKey(
+        std::string_view plaintext, const std::vector<uint8_t>& key,
+        const EncryptionOptions& options = {});
 
     /**
-     * @brief Encrypts data using the specified encryption method.
+     * @brief Decrypts data with a pre-derived key.
+     * @param encryptedData The encrypted data to decrypt.
+     * @param key The decryption key.
+     * @return Result containing decrypted plaintext or error message.
+     */
+    static Result<std::string> decryptWithKey(
+        const EncryptedData& encryptedData, const std::vector<uint8_t>& key);
+
+private:
+    /**
+     * @brief Encrypts using AES-GCM.
      * @param plaintext The data to encrypt.
      * @param key The encryption key.
      * @param iv The initialization vector.
-     * @param aad Additional authenticated data.
-     * @param options Encryption options.
-     * @return A Result containing the ciphertext (with appended tag for AEAD),
-     * or an error.
+     * @return Result containing encrypted data and tag or error message.
      */
-    static Result<std::vector<unsigned char>> encrypt(
-        std::string_view plaintext,
-        const std::vector<unsigned char>& key,
-        const std::vector<unsigned char>& iv,
-        const std::vector<unsigned char>& aad,
-        const EncryptionOptions& options = EncryptionOptions{});
+    static Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>
+    encryptAesGcm(std::string_view plaintext, const std::vector<uint8_t>& key,
+                  const std::vector<uint8_t>& iv);
 
     /**
-     * @brief Decrypts data using the specified encryption method.
-     * @param ciphertext_with_tag The data to decrypt (with appended tag for AEAD).
+     * @brief Decrypts using AES-GCM.
+     * @param ciphertext The encrypted data.
+     * @param key The decryption key.
+     * @param iv The initialization vector.
+     * @param tag The authentication tag.
+     * @return Result containing decrypted plaintext or error message.
+     */
+    static Result<std::string> decryptAesGcm(
+        const std::vector<uint8_t>& ciphertext, const std::vector<uint8_t>& key,
+        const std::vector<uint8_t>& iv, const std::vector<uint8_t>& tag);
+
+    /**
+     * @brief Encrypts using AES-CBC.
+     * @param plaintext The data to encrypt.
      * @param key The encryption key.
      * @param iv The initialization vector.
-     * @param aad Additional authenticated data.
-     * @param options Encryption options.
-     * @return A Result containing the plaintext, or an error.
+     * @return Result containing encrypted data or error message.
      */
-    static Result<std::string> decrypt(
-        const std::vector<unsigned char>& ciphertext_with_tag,
-        const std::vector<unsigned char>& key,
-        const std::vector<unsigned char>& iv,
-        const std::vector<unsigned char>& aad,
-        const EncryptionOptions& options = EncryptionOptions{});
+    static Result<std::vector<uint8_t>> encryptAesCbc(
+        std::string_view plaintext, const std::vector<uint8_t>& key,
+        const std::vector<uint8_t>& iv);
 
     /**
-     * @brief Generates a cryptographically secure random byte sequence.
-     * @param len The number of bytes to generate.
-     * @param use_hardware_rng Use hardware RNG if available.
-     * @return Result containing random bytes or error.
+     * @brief Decrypts using AES-CBC.
+     * @param ciphertext The encrypted data.
+     * @param key The decryption key.
+     * @param iv The initialization vector.
+     * @return Result containing decrypted plaintext or error message.
      */
-    static Result<std::vector<unsigned char>> randomBytes(
-        int len,
-        bool use_hardware_rng = true);
+    static Result<std::string> decryptAesCbc(
+        const std::vector<uint8_t>& ciphertext, const std::vector<uint8_t>& key,
+        const std::vector<uint8_t>& iv);
 
     /**
-     * @brief Legacy method for backward compatibility.
+     * @brief Gets the OpenSSL cipher for the specified method.
+     * @param method The encryption method.
+     * @return Pointer to the EVP_CIPHER or nullptr if unsupported.
      */
-    static std::vector<unsigned char> random_bytes(int len);
+    static const EVP_CIPHER* getCipher(EncryptionOptions::Method method);
 
     /**
-     * @brief Legacy method for backward compatibility.
+     * @brief Gets the required key size for the specified method.
+     * @param method The encryption method.
+     * @return Key size in bytes.
      */
-    static std::vector<unsigned char> derive_key(std::string_view password,
-                                                 std::string_view salt,
-                                                 int key_len = 32);
+    static size_t getKeySize(EncryptionOptions::Method method);
 
-private:
-    static HardwareCapabilities detectHardwareCapabilities();
-    static const EVP_CIPHER* getCipher(EncryptionOptions::Method method, int keySize);
-    static Result<std::vector<unsigned char>> encryptAESGCM(
-        std::string_view plaintext,
-        const std::vector<unsigned char>& key,
-        const std::vector<unsigned char>& iv,
-        const std::vector<unsigned char>& aad);
-    static Result<std::vector<unsigned char>> encryptAESCBC(
-        std::string_view plaintext,
-        const std::vector<unsigned char>& key,
-        const std::vector<unsigned char>& iv);
-    static Result<std::vector<unsigned char>> encryptChaCha20Poly1305(
-        std::string_view plaintext,
-        const std::vector<unsigned char>& key,
-        const std::vector<unsigned char>& iv,
-        const std::vector<unsigned char>& aad);
-
-    static Result<std::string> decryptAESGCM(
-        const std::vector<unsigned char>& ciphertext_with_tag,
-        const std::vector<unsigned char>& key,
-        const std::vector<unsigned char>& iv,
-        const std::vector<unsigned char>& aad);
-    static Result<std::string> decryptAESCBC(
-        const std::vector<unsigned char>& ciphertext,
-        const std::vector<unsigned char>& key,
-        const std::vector<unsigned char>& iv);
-    static Result<std::string> decryptChaCha20Poly1305(
-        const std::vector<unsigned char>& ciphertext_with_tag,
-        const std::vector<unsigned char>& key,
-        const std::vector<unsigned char>& iv,
-        const std::vector<unsigned char>& aad);
-
-    static HardwareCapabilities s_hwCapabilities;
-    static bool s_initialized;
+    /**
+     * @brief Gets the required IV size for the specified method.
+     * @param method The encryption method.
+     * @return IV size in bytes.
+     */
+    static size_t getIvSize(EncryptionOptions::Method method);
 };
 
 }  // namespace atom::secret

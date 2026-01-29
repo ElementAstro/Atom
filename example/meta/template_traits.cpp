@@ -17,15 +17,14 @@
 
 #include "atom/meta/template_traits.hpp"
 
-// For thread safety example
-struct ThreadSafeType {
-    struct is_thread_safe : std::true_type {};
-};
+// For thread safety examplestruct ThreadSafeType {
+struct is_thread_safe : std::true_type {};
+}
+;
 
 struct NonThreadSafeType {};
 
-// For template base class detection
-template <typename T>
+// For template base class detectiontemplate <typename T>
 struct TemplateBase {
     using some_param_type = T;
 };
@@ -33,34 +32,30 @@ struct TemplateBase {
 class DerivedFromTemplate : public TemplateBase<int> {};
 class NotDerived {};
 
-// For variant examples
-using VariantType = std::variant<int, double, std::string>;
+// For variant examplesusing VariantType = std::variant<int, double,
+// std::string>;
 
-// Simple utility to print section headers
-void printSection(const std::string& title) {
-    std::cout << "\n=== " << title << " ===\n";
+// Simple utility to print section headersvoid printSection(const std::string&
+// title) {
+std::cout << "\n=== " << title << " ===\n";
 }
 
-// Utility to print type names
-template <typename T>
+// Utility to print type namestemplate <typename T>
 void printTypeName() {
     std::cout << "Type name: "
               << atom::meta::DemangleHelper::demangle(typeid(T).name())
               << std::endl;
 }
 
-// Transform types
-template <typename T>
+// Transform typestemplate <typename T>
 struct AddPointer {
     using type = T*;
 };
 
-// Multiple template base checks
-template <typename T>
+// Multiple template base checkstemplate <typename T>
 struct AnotherBase {};
 
-// Filter types
-template <typename T>
+// Filter typestemplate <typename T>
 struct IsIntegral {
     static constexpr bool value = std::is_integral_v<T>;
 };

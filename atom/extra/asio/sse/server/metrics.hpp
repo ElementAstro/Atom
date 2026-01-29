@@ -9,7 +9,6 @@
 #include <chrono>
 #include "atom/type/json.hpp"
 
-
 namespace atom::extra::asio::sse {
 
 /**

@@ -313,7 +313,12 @@ void LogManager::flushAll() {
 
     // Flush memory-mapped loggers in this thread
     for (auto& logger : mmap_loggers_copy) {
-        logger->flush();
+        auto result = logger->flush();
+        if (!result) {
+            // Log the error but continue with other loggers
+            // Note: We can't use the logger itself here as it might be the one
+            // failing
+        }
     }
 
     // Wait for all async loggers to complete flushing

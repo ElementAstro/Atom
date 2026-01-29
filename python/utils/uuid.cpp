@@ -87,7 +87,9 @@ Examples:
             [](std::string_view str) {
                 auto result = atom::utils::UUID::fromString(str);
                 if (!result.has_value()) {
-                    switch (result.error().error()) { // Changed: Access the UuidError enum
+                    switch (
+                        result.error()
+                            .error()) {  // Changed: Access the UuidError enum
                         case atom::utils::UuidError::InvalidFormat:
                             throw py::value_error("Invalid UUID format");
                         case atom::utils::UuidError::InvalidLength:

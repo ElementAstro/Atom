@@ -1,6 +1,7 @@
 /**
  * @file sqlite.cpp
- * @brief Implementation of the high-performance, thread-safe SQLite database wrapper.
+ * @brief Implementation of the high-performance, thread-safe SQLite database
+ * wrapper.
  * @date 2025-07-16
  */
 
@@ -40,11 +41,13 @@ void bind_parameters(sqlite3_stmt* stmt, int index, T&& value, Args&&... args) {
         rc = sqlite3_bind_text(stmt, index, value, -1, SQLITE_STATIC);
     } else if constexpr (std::is_same_v<DecayedT, String> ||
                          std::is_same_v<DecayedT, std::string>) {
-        rc = sqlite3_bind_text(stmt, index, value.c_str(),
-                               static_cast<int>(value.size()), SQLITE_TRANSIENT);
+        rc =
+            sqlite3_bind_text(stmt, index, value.c_str(),
+                              static_cast<int>(value.size()), SQLITE_TRANSIENT);
     } else if constexpr (std::is_same_v<DecayedT, std::string_view>) {
-        rc = sqlite3_bind_text(stmt, index, value.data(),
-                               static_cast<int>(value.size()), SQLITE_TRANSIENT);
+        rc =
+            sqlite3_bind_text(stmt, index, value.data(),
+                              static_cast<int>(value.size()), SQLITE_TRANSIENT);
     } else if constexpr (std::is_null_pointer_v<DecayedT>) {
         rc = sqlite3_bind_null(stmt, index);
     } else {
@@ -52,9 +55,10 @@ void bind_parameters(sqlite3_stmt* stmt, int index, T&& value, Args&&... args) {
     }
 
     if (rc != SQLITE_OK) {
-        throw SQLiteException(std::string("Failed to bind parameter at index ") +
-                              std::to_string(index) + ": " +
-                              sqlite3_errmsg(sqlite3_db_handle(stmt)));
+        throw SQLiteException(
+            std::string("Failed to bind parameter at index ") +
+            std::to_string(index) + ": " +
+            sqlite3_errmsg(sqlite3_db_handle(stmt)));
     }
 
     bind_parameters(stmt, index + 1, std::forward<Args>(args)...);
@@ -84,7 +88,8 @@ public:
                                       sqlite3_errmsg(db));
             }
             // Enable WAL mode for better concurrency
-            sqlite3_exec(db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db, "PRAGMA journal_mode=WAL;", nullptr, nullptr,
+                         nullptr);
             pool_.push_back(db);
         }
     }
@@ -107,8 +112,7 @@ public:
         cv_.wait(lock, [this] { return !pool_.empty(); });
         sqlite3* db = pool_.front();
         pool_.pop_front();
-        return {
-            db, [this](sqlite3* db_to_release) { release(db_to_release); }};
+        return {db, [this](sqlite3* db_to_release) { release(db_to_release); }};
     }
 
 private:
@@ -142,8 +146,8 @@ public:
 
 SqliteDB::SqliteDB(std::string_view db_path, unsigned int pool_size)
     : p_impl_(std::make_unique<Impl>(
-          db_path, pool_size > 0 ? pool_size
-                                 : std::thread::hardware_concurrency())) {}
+          db_path,
+          pool_size > 0 ? pool_size : std::thread::hardware_concurrency())) {}
 
 SqliteDB::~SqliteDB() = default;
 
@@ -267,9 +271,11 @@ void SqliteDB::with_transaction(
     try {
         TransactionContext ctx(conn);
         operations(ctx);
-        if (sqlite3_exec(conn, "COMMIT;", nullptr, nullptr, nullptr) != SQLITE_OK) {
-            throw SQLiteException(std::string("Failed to commit transaction: ") +
-                                  sqlite3_errmsg(conn));
+        if (sqlite3_exec(conn, "COMMIT;", nullptr, nullptr, nullptr) !=
+            SQLITE_OK) {
+            throw SQLiteException(
+                std::string("Failed to commit transaction: ") +
+                sqlite3_errmsg(conn));
         }
     } catch (...) {
         sqlite3_exec(conn, "ROLLBACK;", nullptr, nullptr, nullptr);
@@ -287,7 +293,8 @@ int64_t SqliteDB::get_last_insert_rowid() const {
 }
 
 bool SqliteDB::table_exists(std::string_view table_name) {
-    std::string query = "SELECT name FROM sqlite_master WHERE type='table' AND name=?;";
+    std::string query =
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?;";
     auto result = select_parameterized_data(query, table_name);
     return !result.empty();
 }
@@ -295,13 +302,14 @@ bool SqliteDB::table_exists(std::string_view table_name) {
 bool SqliteDB::vacuum() { return execute_query("VACUUM;"), true; }
 
 // Explicit template instantiations
-template void SqliteDB::execute_parameterized_query<int>(std::string_view, int&&);
+template void SqliteDB::execute_parameterized_query<int>(std::string_view,
+                                                         int&&);
 template void SqliteDB::execute_parameterized_query<double>(std::string_view,
-                                                         double&&);
+                                                            double&&);
 template void SqliteDB::execute_parameterized_query<const char*>(
     std::string_view, const char*&&);
 template void SqliteDB::execute_parameterized_query<String>(std::string_view,
-                                                         String&&);
+                                                            String&&);
 
 template SqliteDB::ResultSet SqliteDB::select_parameterized_data<int>(
     std::string_view, int&&);

@@ -1,3 +1,12 @@
+# =============================================================================
+# Atom Project .gitignore
+# C++/Python hybrid project with CMake, vcpkg, and Python packaging
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# C++ Build Artifacts
+# -----------------------------------------------------------------------------
+
 # Prerequisites
 *.d
 
@@ -13,8 +22,10 @@
 
 # Compiled Dynamic libraries
 *.so
+*.so.*
 *.dylib
 *.dll
+*.dll.a
 
 # Fortran module files
 *.mod
@@ -30,41 +41,484 @@
 *.exe
 *.out
 *.app
+*.run
 
-# Build artifacts
-build/
-cmake-build-debug/
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# -----------------------------------------------------------------------------
+# CMake Build System
+# -----------------------------------------------------------------------------
+
+# Build directories
+/build/
+/build-*/
+/build-msvc/
+/build_error/
+/build_serial/
+/cmake-build-*/
+/out/
+/_build/
+/python/build-python/
+
+# CMake cache and generated files
+/CMakeCache.txt
+/CMakeFiles/
+/CMakeScripts/
+/cmake_install.cmake
+/install_manifest.txt
+/compile_commands.json
+/CPackConfig.cmake
+/CPackSourceConfig.cmake
+/CMakeUserPresets.json
+
+# CMake temporary files
+.cmake/
+cmake_config*.log
+
+# -----------------------------------------------------------------------------
+# Package Managers
+# -----------------------------------------------------------------------------
+
+# vcpkg
+vcpkg_installed/
+vcpkg/
+.vcpkg-root
+
+# Conan
+conandata.yml
+conaninfo.txt
+conanbuildinfo.*
+conan.lock
+
+# -----------------------------------------------------------------------------
+# Python Environment & Packages
+# -----------------------------------------------------------------------------
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+/.venv/
+/build/
+/build-*/
+/develop-eggs/
+/dist/
+/downloads/
+/eggs/
+/.eggs/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
+/share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Virtual environments
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# pdm
+.pdm.toml
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# -----------------------------------------------------------------------------
+# Development Tools & Linters
+# -----------------------------------------------------------------------------
+
+# Black
+.black/
+
+# isort
+.isort.cfg
+
+# Ruff
+.ruff_cache/
+
+# pre-commit
+.pre-commit-config.yaml.bak
+
+# Bandit
+.bandit
+
+# -----------------------------------------------------------------------------
+# IDEs and Editors
+# -----------------------------------------------------------------------------
+
+# Visual Studio Code
+# Track shared configuration, exclude user-specific files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/c_cpp_properties.json
+!.vscode/cmake-kits.json
+!.vscode/cmake-variants.yaml
+!.vscode/keybindings.json
+*.code-workspace
+
+# Visual Studio
+.vs/
+*.vcxproj.user
+*.vcxproj.filters
+*.VC.db
+*.VC.VC.opendb
+*.ipch
+*.opendb
+*.tlog
+
+# IntelliJ IDEA / CLion / PyCharm
+.idea/
+*.iws
+*.iml
+*.ipr
+cmake-build-*/
+/.fleet/
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+
+# Qt Creator
+CMakeLists.txt.user*
+*.pro.user*
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# -----------------------------------------------------------------------------
+# Documentation
+# -----------------------------------------------------------------------------
+
+# Sphinx documentation
+docs/_build/
+docs/build/
+docs/doctrees/
+
+# Doxygen
+doc/html/
+doc/latex/
+doc/xml/
+doxygen_warnings.txt
+
+# -----------------------------------------------------------------------------
+# Build Tools & Generators
+# -----------------------------------------------------------------------------
+
+# Ninja
+.ninja_deps
+.ninja_log
+
+# Make
+*.make
+
+# Xmake
 .xmake/
+
+# Bazel
+bazel-*
+
+# -----------------------------------------------------------------------------
+# Operating System
+# -----------------------------------------------------------------------------
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# -----------------------------------------------------------------------------
+# Logs and Runtime Files
+# -----------------------------------------------------------------------------
+
+# Log files
+*.log
+logs/
+*.log.*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# nyc test coverage
+.nyc_output
+
+# -----------------------------------------------------------------------------
+# Temporary and Cache Files
+# -----------------------------------------------------------------------------
+
+# General temporary files
+*.tmp
+*.temp
+*.cache
 .cache/
 
-# IDE and editor specific
-.idea/ # Added for IntelliJ based IDEs
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
 
-# Language specific
-node_modules/
-src/pyutils/__pycache__/
-.venv/
-.mypy_cache/
+# Patch files
+*.patch
+*.diff
 
-# Test files and outputs
-src/pyutils/test.jpg
-test.cpp
-module_test/
-test/
+# Archive files (when not part of the project)
+*.zip
+*.tar.gz
+*.rar
+*.7z
 
-# Configuration files
-libexample.json
+# -----------------------------------------------------------------------------
+# Project Specific
+# -----------------------------------------------------------------------------
 
-# Log and report files
-*.log
-*.xml
+# Test artifacts and temporary test files
+test_*.dat
+# Note: test_*.cpp in tests/ directory is NOT ignored (actual test files)
+# Only ignore test_*.cpp in root and non-test directories
+/test_*.cpp
+/test_*.c
+*.test
+test_output/
+test_results/
 
-# Temporary or cache files
-.roo/
-.vscode/
+# Generated bindings/tests scratch
+/build_error/
+/build_serial/
 
-# Python bytecode
-*.pyc
-*.pyd
-__pycache__/
-atom.egg-info/
+# Configuration files with sensitive data
+config.local.*
+.env.local
+.env.*.local
+
+# Generated version files
+*_version.h
+*_version_info.h
+
+# Benchmark results
+benchmark_results/
+*.benchmark
+
+# Performance profiling
+*.prof
+*.perf
+
+# Memory debugging
+*.memcheck
+*.valgrind
+
+# -----------------------------------------------------------------------------
+# Security and Secrets
+# -----------------------------------------------------------------------------
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# API keys and secrets
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+
+# -----------------------------------------------------------------------------
+# Vendored Dependencies (managed via package manager)
+# -----------------------------------------------------------------------------
+
+# nlohmann JSON library (use system package or vcpkg)
+nlohmann/
+
+# Temporary documentation files
+*SUMMARY.md
+*_SUMMARY.md
+
+# Build output and logs
+build_output.txt
+build-log.txt
+test_results.txt
+preset_list.txt
+vcpkg_location.txt
+
+# Generated distribution files
+dist/
+
+# LLM documentation (generated)
+llmdoc/
+
+# Temporary test/packaging directories
+test_downstream/
+test_package2/
+test_package/
+
+# xmake build artifacts
+.xmake/
+
+# Python Release builds (generated)
+python/Release/
+python/build-python/
+
+# Editor caches
+/.clangd/
+/.ccls-cache/
+/.cache/
+
+# Node tooling
+/node_modules/
+/.pnpm-store/
+
+# -----------------------------------------------------------------------------
+# End of .gitignore
+# -----------------------------------------------------------------------------
+.ace-tool/

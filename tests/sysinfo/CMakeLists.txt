@@ -1,156 +1,308 @@
-cmake_minimum_required(VERSION 3.20)
+# CMakeLists.txt for Atom SysInfo Tests This project is licensed under the terms
+# of the GPL3 license.
+#
+# Project Name: Atom-SysInfo-Tests Description: Comprehensive Test Suite for
+# Atom System Information Library Author: Max Qian License: GPL3
 
-project(atom_sysinfo.test)
+cmake_minimum_required(VERSION 3.21)
+project(
+  atom-sysinfo-tests
+  VERSION 1.0.0
+  LANGUAGES C CXX)
 
-# Set C++ standard
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-find_package(GTest QUIET)
-
-if(NOT GTEST_FOUND)
-  include(FetchContent)
-  FetchContent_Declare(
-    googletest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG release-1.11.0
-  )
-  FetchContent_MakeAvailable(googletest)
-  include(GoogleTest)
-else()
-  include(GoogleTest)
-endif()
-
-# Find additional dependencies that might be needed
+# =============================================================================
+# Find Required Packages
+# =============================================================================
+find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 
-file(GLOB_RECURSE TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
+# Backward-compatible aliases for legacy GTest target names
+if(TARGET GTest::gtest AND NOT TARGET GTest::GTest)
+  add_library(GTest::GTest ALIAS GTest::gtest)
+endif()
+if(TARGET GTest::gtest_main AND NOT TARGET GTest::Main)
+  add_library(GTest::Main ALIAS GTest::gtest_main)
+endif()
 
-# Only create executable if there are source files
-if(TEST_SOURCES)
-    add_executable(${PROJECT_NAME} ${TEST_SOURCES})
+# =============================================================================
+# Include Test Infrastructure
+# =============================================================================
+# Include the standardized test infrastructure
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/tests/CMakeLists.txt")
+  add_subdirectory("${CMAKE_SOURCE_DIR}/tests/tests"
+                   "${CMAKE_CURRENT_BINARY_DIR}/test_infrastructure")
+endif()
 
-    # Set C++ standard for the target
-    target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
+# =============================================================================
+# Custom Dependency Management (Preserved)
+# =============================================================================
 
-    # Link libraries including thread support
-    target_link_libraries(${PROJECT_NAME}
-        gtest
-        gtest_main
-        gmock
-        gmock_main
-        atom-sysinfo
-        atom-error
-        loguru
-        Threads::Threads
-    )
+# Include parent directory for sysinfo headers
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
-    # Compiler-specific options
-    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        target_compile_options(${PROJECT_NAME}
-            PRIVATE
-                -Wall
-                -Wextra
-                -Wpedantic
-                -Wno-unused-parameter
-        )
-    elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-        target_compile_options(${PROJECT_NAME}
-            PRIVATE
-                /W4
-                /wd4100  # unreferenced formal parameter
-        )
-    endif()
+# Bring in required Atom modules as subdirectories so targets are available
+# locally Avoid duplicate target definitions if building from the repository
+# top-level
+if(NOT TARGET atom-error)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/error
+                   ${CMAKE_CURRENT_BINARY_DIR}/atom-error)
+endif()
+if(NOT TARGET atom-sysinfo)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/sysinfo
+                   ${CMAKE_CURRENT_BINARY_DIR}/atom-sysinfo)
+endif()
 
-    # Register tests with CTest and enable test discovery
-    include(GoogleTest)
-    gtest_discover_tests(${PROJECT_NAME})
+# =============================================================================
+# Test Source Configuration
+# =============================================================================
+# Test source files
+set(TEST_SOURCES
+    test_sysinfo.cpp
+    battery.cpp
+    bios.cpp
+    cpu.cpp
+    disk.cpp
+    gpu.cpp
+    locale.cpp
+    memory.cpp
+    os.cpp
+    sn.cpp
+    sysinfo_printer.cpp
+    virtual.cpp
+    wifi.cpp
+    wm.cpp)
 
-    # Also add the traditional test registration for compatibility
-    add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+# =============================================================================
+# Create Test Executable
+# =============================================================================
+add_executable(atom_sysinfo_tests ${TEST_SOURCES})
 
-    # Add individual test targets for easier debugging
-    set(INDIVIDUAL_TESTS
-        battery
-        bios
-        cpu
-        disk
-        gpu
-        locale
-        memory
-        os
-        sn
-        sysinfo_printer
-        virtual
-        wifi
-        wm
-        test_enhanced_features
-    )
+# =============================================================================
+# Link Libraries
+# =============================================================================
+target_link_libraries(
+  atom_sysinfo_tests
+  PRIVATE # Test infrastructure (if available)
+          $<TARGET_NAME_IF_EXISTS:atom-test-common>
+          # Module under test
+          atom-sysinfo
+          # GoogleTest
+          GTest::GTest
+          GTest::Main
+          # System libraries
+          Threads::Threads)
 
-    foreach(test_name ${INDIVIDUAL_TESTS})
-        if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${test_name}.cpp)
-            add_executable(${test_name}_test ${test_name}.cpp)
-            target_compile_features(${test_name}_test PRIVATE cxx_std_20)
-            target_link_libraries(${test_name}_test
-                gtest
-                gtest_main
-                gmock
-                gmock_main
-                atom-sysinfo
-                atom-error
-                loguru
-                Threads::Threads
-            )
+# =============================================================================
+# Target Configuration
+# =============================================================================
+# Set C++ standard
+target_compile_features(atom_sysinfo_tests PRIVATE cxx_std_20)
 
-            # Apply same compiler options
-            if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-                target_compile_options(${test_name}_test
-                    PRIVATE
-                        -Wall
-                        -Wextra
-                        -Wpedantic
-                        -Wno-unused-parameter
-                )
-            elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-                target_compile_options(${test_name}_test
-                    PRIVATE
-                        /W4
-                        /wd4100
-                )
-            endif()
+# Test configuration
+set_target_properties(atom_sysinfo_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                                    ${CMAKE_BINARY_DIR}/bin)
 
-            # Register individual test
-            gtest_discover_tests(${test_name}_test)
-            add_test(NAME ${test_name}_individual COMMAND ${test_name}_test)
-        endif()
-    endforeach()
-
-    # Create a custom target to run all tests
-    add_custom_target(run_all_sysinfo_tests
-        COMMAND ${PROJECT_NAME}
-        DEPENDS ${PROJECT_NAME}
-        COMMENT "Running all sysinfo tests"
-    )
-
-    # Create custom targets for test categories
-    add_custom_target(run_basic_tests
-        COMMAND ${PROJECT_NAME} --gtest_filter="*Basic*:*GetCpu*:*GetMemory*:*GetDisk*"
-        DEPENDS ${PROJECT_NAME}
-        COMMENT "Running basic sysinfo tests"
-    )
-
-    add_custom_target(run_advanced_tests
-        COMMAND ${PROJECT_NAME} --gtest_filter="*Advanced*:*Enhanced*:*Performance*"
-        DEPENDS ${PROJECT_NAME}
-        COMMENT "Running advanced sysinfo tests"
-    )
-
-    add_custom_target(run_stress_tests
-        COMMAND ${PROJECT_NAME} --gtest_filter="*Concurrent*:*Stress*:*Performance*"
-        DEPENDS ${PROJECT_NAME}
-        COMMENT "Running stress tests"
-    )
-
+# Compiler-specific options
+if(MSVC)
+  target_compile_options(atom_sysinfo_tests PRIVATE /W4)
 else()
-    message(STATUS "No test sources found for ${PROJECT_NAME}, skipping target creation")
+  target_compile_options(atom_sysinfo_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# =============================================================================
+# Test Registration
+# =============================================================================
+enable_testing()
+
+# Use simple test registration instead of discovery to avoid DLL issues
+add_test(
+  NAME atom_sysinfo_tests
+  COMMAND atom_sysinfo_tests
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+set_tests_properties(atom_sysinfo_tests PROPERTIES LABELS "sysinfo;unit"
+                                                   TIMEOUT 300)
+
+# =============================================================================
+# Custom Test Cases (Preserved)
+# =============================================================================
+# Add test cases
+add_test(NAME CPUInfoTests COMMAND atom_sysinfo_tests
+                                   --gtest_filter="CPUInfoTest.*:CpuTest.*")
+add_test(NAME MemoryInfoTests
+         COMMAND atom_sysinfo_tests
+                 --gtest_filter="MemoryInfoTest.*:MemoryTest.*")
+add_test(NAME DiskInfoTests COMMAND atom_sysinfo_tests
+                                    --gtest_filter="DiskInfoTest.*:DiskTest.*")
+add_test(NAME GPUInfoTests COMMAND atom_sysinfo_tests
+                                   --gtest_filter="GPUInfoTest.*:GpuTest.*")
+add_test(NAME BatteryInfoTests
+         COMMAND atom_sysinfo_tests
+                 --gtest_filter="BatteryInfoTest.*:BatteryTest.*")
+add_test(NAME OSInfoTests COMMAND atom_sysinfo_tests
+                                  --gtest_filter="OSInfoTest.*:OsTest.*")
+add_test(NAME BIOSInfoTests COMMAND atom_sysinfo_tests
+                                    --gtest_filter="BiosTest.*")
+add_test(NAME LocaleInfoTests COMMAND atom_sysinfo_tests
+                                      --gtest_filter="LocaleTest.*")
+add_test(NAME SerialNumberTests COMMAND atom_sysinfo_tests
+                                        --gtest_filter="SnTest.*")
+add_test(NAME VirtualEnvTests COMMAND atom_sysinfo_tests
+                                      --gtest_filter="VirtualTest.*")
+add_test(NAME WindowManagerTests COMMAND atom_sysinfo_tests
+                                         --gtest_filter="WmTest.*")
+add_test(NAME NetworkInfoTests
+         COMMAND atom_sysinfo_tests
+                 --gtest_filter="NetworkInfoTest.*:WifiTest.*")
+add_test(NAME SysInfoPrinterTests
+         COMMAND atom_sysinfo_tests
+                 --gtest_filter="SysInfoPrinterTest.*:SysInfoPrinterTest.*")
+add_test(NAME IntegrationTests
+         COMMAND atom_sysinfo_tests --gtest_filter="SysInfoIntegrationTest.*")
+
+# Set test properties for better organization and timeout handling
+set_tests_properties(CPUInfoTests PROPERTIES LABELS "hardware;cpu;unit" TIMEOUT
+                                             30)
+
+set_tests_properties(MemoryInfoTests PROPERTIES LABELS "hardware;memory;unit"
+                                                TIMEOUT 30)
+
+set_tests_properties(DiskInfoTests PROPERTIES LABELS "hardware;disk;unit"
+                                              TIMEOUT 60)
+
+set_tests_properties(GPUInfoTests PROPERTIES LABELS "hardware;gpu;unit" TIMEOUT
+                                             30)
+
+set_tests_properties(BatteryInfoTests PROPERTIES LABELS "hardware;battery;unit"
+                                                 TIMEOUT 30)
+
+set_tests_properties(OSInfoTests PROPERTIES LABELS "system;os;unit" TIMEOUT 30)
+
+set_tests_properties(BIOSInfoTests
+                     PROPERTIES LABELS "hardware;bios;security;unit" TIMEOUT 30)
+
+set_tests_properties(LocaleInfoTests PROPERTIES LABELS "system;locale;unit"
+                                                TIMEOUT 15)
+
+set_tests_properties(SerialNumberTests PROPERTIES LABELS "hardware;serial;unit"
+                                                  TIMEOUT 30)
+
+set_tests_properties(VirtualEnvTests PROPERTIES LABELS "system;virtual;unit"
+                                                TIMEOUT 30)
+
+set_tests_properties(WindowManagerTests PROPERTIES LABELS "system;wm;unit"
+                                                   TIMEOUT 30)
+
+set_tests_properties(NetworkInfoTests PROPERTIES LABELS "network;wifi;unit"
+                                                 TIMEOUT 60)
+
+set_tests_properties(SysInfoPrinterTests
+                     PROPERTIES LABELS "utility;printer;unit" TIMEOUT 30)
+
+set_tests_properties(IntegrationTests PROPERTIES LABELS "integration;full"
+                                                 TIMEOUT 120)
+
+# Custom test targets for better organization
+add_custom_target(
+  run_sysinfo_tests
+  COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "sysinfo"
+  DEPENDS atom_sysinfo_tests
+  COMMENT "Running all system information tests")
+
+add_custom_target(
+  run_hardware_tests
+  COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "hardware"
+  DEPENDS atom_sysinfo_tests
+  COMMENT "Running hardware information tests")
+
+add_custom_target(
+  run_system_tests
+  COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "system"
+  DEPENDS atom_sysinfo_tests
+  COMMENT "Running system information tests")
+
+add_custom_target(
+  run_network_tests
+  COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "network"
+  DEPENDS atom_sysinfo_tests
+  COMMENT "Running network information tests")
+
+add_custom_target(
+  run_utility_tests
+  COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "utility"
+  DEPENDS atom_sysinfo_tests
+  COMMENT "Running utility tests")
+
+# Test category targets for better organization
+add_custom_target(
+  run_unit_tests
+  COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "unit"
+  DEPENDS atom_sysinfo_tests
+  COMMENT "Running unit tests only")
+
+add_custom_target(
+  run_integration_tests_only
+  COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "integration"
+  DEPENDS atom_sysinfo_tests
+  COMMENT "Running integration tests only")
+
+add_custom_target(
+  run_sysinfo_performance_tests
+  COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "performance"
+  DEPENDS atom_sysinfo_tests
+  COMMENT "Running sysinfo performance-related tests")
+
+add_custom_target(
+  run_sysinfo_security_tests
+  COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "security"
+  DEPENDS atom_sysinfo_tests
+  COMMENT "Running sysinfo security-related tests")
+
+add_custom_target(
+  run_quick_tests
+  COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "unit" -E
+          "performance|load|stress"
+  DEPENDS atom_sysinfo_tests
+  COMMENT "Running quick tests (excluding performance tests)")
+
+# =============================================================================
+# Code Coverage Support
+# =============================================================================
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_COMPILER_IS_GNUCXX)
+  target_compile_options(atom_sysinfo_tests PRIVATE --coverage)
+  target_link_options(atom_sysinfo_tests PRIVATE --coverage)
+
+  add_custom_target(
+    sysinfo_coverage
+    COMMAND lcov --directory . --capture --output-file coverage.info
+    COMMAND lcov --remove coverage.info '/usr/*' --output-file coverage.info
+    COMMAND lcov --list coverage.info
+    COMMAND genhtml -o coverage_html coverage.info
+    DEPENDS run_sysinfo_tests
+    COMMENT "Generating code coverage report for system information")
+endif()
+
+# Set IDE folder organization
+set_property(TARGET atom_sysinfo_tests PROPERTY FOLDER "Tests/SysInfo")
+set_property(TARGET run_sysinfo_tests PROPERTY FOLDER "Tests/SysInfo/Custom")
+set_property(TARGET run_hardware_tests PROPERTY FOLDER "Tests/SysInfo/Custom")
+set_property(TARGET run_system_tests PROPERTY FOLDER "Tests/SysInfo/Custom")
+set_property(TARGET run_network_tests PROPERTY FOLDER "Tests/SysInfo/Custom")
+set_property(TARGET run_utility_tests PROPERTY FOLDER "Tests/SysInfo/Custom")
+
+# Copy all dependent runtime DLLs next to the test executable on Windows
+if(WIN32)
+  # Use copy_test_dlls function if available for comprehensive coverage
+  if(COMMAND copy_test_dlls)
+    copy_test_dlls(atom_sysinfo_tests)
+  endif()
+
+  # Also use CMake's built-in runtime DLL copying
+  add_custom_command(
+    TARGET atom_sysinfo_tests
+    POST_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_RUNTIME_DLLS:atom_sysinfo_tests>
+      $<TARGET_FILE_DIR:atom_sysinfo_tests>
+    COMMAND_EXPAND_LISTS)
 endif()

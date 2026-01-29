@@ -21,31 +21,30 @@
 #include <thread>
 #include <vector>
 
-// Example enum types for testing enum utilities
-enum class Color : uint8_t { Red = 0, Green = 1, Blue = 2 };
+// Example enum types for testing enum utilitiesenum class Color : uint8_t { Red
+// = 0, Green = 1, Blue = 2 };
 
 enum class ColorCode : uint16_t { Red = 0, Green = 1, Blue = 2, Alpha = 3 };
 
-// Example classes for testing type traits
-class Base {
+// Example classes for testing type traitsclass Base {
 public:
-    virtual ~Base() = default;
-    virtual void foo() { std::cout << "Base::foo()" << std::endl; }
-};
+virtual ~Base() = default;
+virtual void foo() { std::cout << "Base::foo()" << std::endl; }
+}
+;
 
 class Derived : public Base {
 public:
     void foo() override { std::cout << "Derived::foo()" << std::endl; }
 };
 
-// Simple POD struct for alignment tests
-struct alignas(16) AlignedStruct {
-    double value;
-    int counter;
-};
+// Simple POD struct for alignment testsstruct alignas(16) AlignedStruct {
+double value;
+int counter;
+}
+;
 
-// Forward declarations
-void demonstrateBasicUtilities();
+// Forward declarationsvoid demonstrateBasicUtilities();
 void demonstrateAlignmentFunctions();
 void demonstrateMathFunctions();
 void demonstrateMemoryFunctions();
@@ -53,13 +52,12 @@ void demonstrateAtomicOperations();
 void demonstrateTypeTraits();
 void demonstrateResourceManagement();
 
-// Print separator for examples
-void printSeparator(const std::string& title) {
-    std::cout << "\n=================================================="
-              << std::endl;
-    std::cout << "  " << title << std::endl;
-    std::cout << "==================================================\n"
-              << std::endl;
+// Print separator for examplesvoid printSeparator(const std::string& title) {
+std::cout << "\n=================================================="
+          << std::endl;
+std::cout << "  " << title << std::endl;
+std::cout << "==================================================\n"
+          << std::endl;
 }
 
 int main() {
@@ -716,32 +714,32 @@ void demonstrateTypeTraits() {
 // 7. Resource Management
 //==============================================================================
 
-// Example singleton class
-class ConfigManager {
+// Example singleton classclass ConfigManager {
 public:
-    ConfigManager() {
-        std::cout << "  ConfigManager singleton created" << std::endl;
-    }
+ConfigManager() {
+    std::cout << "  ConfigManager singleton created" << std::endl;
+}
 
-    ~ConfigManager() {
-        std::cout << "  ConfigManager singleton destroyed" << std::endl;
-    }
+~ConfigManager() {
+    std::cout << "  ConfigManager singleton destroyed" << std::endl;
+}
 
-    void setConfig(const std::string& key, const std::string& value) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        config_[key] = value;
-    }
+void setConfig(const std::string& key, const std::string& value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    config_[key] = value;
+}
 
-    std::string getConfig(const std::string& key) const {
-        std::lock_guard<std::mutex> lock(mutex_);
-        auto it = config_.find(key);
-        return (it != config_.end()) ? it->second : "";
-    }
+std::string getConfig(const std::string& key) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = config_.find(key);
+    return (it != config_.end()) ? it->second : "";
+}
 
 private:
-    std::unordered_map<std::string, std::string> config_;
-    mutable std::mutex mutex_;
-};
+std::unordered_map<std::string, std::string> config_;
+mutable std::mutex mutex_;
+}
+;
 
 void demonstrateResourceManagement() {
     printSeparator("7. Resource Management");

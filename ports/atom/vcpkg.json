@@ -1,0 +1,299 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+  "name": "atom",
+  "version": "0.1.0",
+  "description": "Foundational library for astronomical software development",
+  "homepage": "https://github.com/ElementAstro/Atom",
+  "documentation": "https://github.com/ElementAstro/Atom#readme",
+  "license": "GPL-3.0",
+  "supports": "!uwp",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    },
+    "openssl",
+    "zlib",
+    "sqlite3",
+    "fmt"
+  ],
+  "default-features": [
+    "core"
+  ],
+  "features": {
+    "core": {
+      "description": "Core Atom library functionality",
+      "dependencies": [
+        "openssl",
+        "zlib",
+        "sqlite3",
+        "fmt"
+      ]
+    },
+    "python": {
+      "description": "Python bindings using pybind11",
+      "dependencies": [
+        "pybind11",
+        {
+          "name": "python3",
+          "host": true
+        }
+      ]
+    },
+    "examples": {
+      "description": "Build example applications"
+    },
+    "tests": {
+      "description": "Build test suite",
+      "dependencies": [
+        "gtest"
+      ]
+    },
+    "docs": {
+      "description": "Generate documentation",
+      "dependencies": [
+        {
+          "name": "doxygen",
+          "host": true
+        }
+      ]
+    },
+    "boost-lockfree": {
+      "description": "Enable Boost lockfree data structures",
+      "dependencies": [
+        {
+          "name": "boost-atomic"
+        },
+        {
+          "name": "boost-thread"
+        }
+      ]
+    },
+    "boost-graph": {
+      "description": "Enable Boost graph library",
+      "dependencies": [
+        {
+          "name": "boost-graph"
+        }
+      ]
+    },
+    "boost-intrusive": {
+      "description": "Enable Boost intrusive containers",
+      "dependencies": [
+        {
+          "name": "boost-intrusive"
+        }
+      ]
+    },
+    "cfitsio": {
+      "description": "Enable CFITSIO support for astronomical data",
+      "dependencies": [
+        "cfitsio"
+      ]
+    },
+    "ssh": {
+      "description": "Enable SSH support for remote connections",
+      "dependencies": [
+        "libssh"
+      ]
+    },
+    "readline": {
+      "description": "Enable readline support for interactive features",
+      "dependencies": [
+        "readline"
+      ]
+    },
+    "algorithm": {
+      "description": "Algorithm utilities and data structures",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "async": {
+      "description": "Asynchronous programming utilities",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "components": {
+      "description": "Component system framework",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "connection": {
+      "description": "Network and IPC connection utilities",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core", "async"]
+        }
+      ]
+    },
+    "containers": {
+      "description": "Advanced container data structures",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "image": {
+      "description": "Image processing and FITS support",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core", "io"]
+        }
+      ]
+    },
+    "io": {
+      "description": "Input/output utilities and file handling",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "memory": {
+      "description": "Memory management utilities",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "meta": {
+      "description": "Metaprogramming and reflection utilities",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "search": {
+      "description": "Search algorithms and indexing",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core", "algorithm"]
+        }
+      ]
+    },
+    "secret": {
+      "description": "Cryptographic and security utilities",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "serial": {
+      "description": "Serial communication utilities",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core", "io"]
+        }
+      ]
+    },
+    "sysinfo": {
+      "description": "System information and monitoring",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "system": {
+      "description": "System utilities and process management",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core", "sysinfo"]
+        }
+      ]
+    },
+    "web": {
+      "description": "Web server and HTTP utilities",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core", "async", "connection"]
+        },
+        "cpp-httplib"
+      ]
+    },
+    "networking": {
+      "description": "Meta-package for networking components",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["connection", "web", "async"]
+        }
+      ]
+    },
+    "imaging": {
+      "description": "Meta-package for image processing components",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["image", "io", "algorithm"]
+        }
+      ]
+    },
+    "full": {
+      "description": "All components",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": [
+            "algorithm", "async", "components", "connection",
+            "containers", "image", "io", "memory", "meta",
+            "search", "secret", "serial", "sysinfo", "system", "web"
+          ]
+        }
+      ]
+    },
+    "all": {
+      "description": "Enable all optional features",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": [
+            "full",
+            "python",
+            "examples",
+            "tests",
+            "docs",
+            "boost-lockfree",
+            "boost-graph",
+            "boost-intrusive",
+            "cfitsio",
+            "ssh",
+            "readline"
+          ]
+        }
+      ]
+    }
+  }
+}

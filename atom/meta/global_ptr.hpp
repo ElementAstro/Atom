@@ -103,7 +103,7 @@
  * @brief Optimized structure to hold pointer metadata
  */
 struct PointerMetadata {
-    uint64_t creation_time_micros;  // Compact time representation
+    uint64_t creation_time_micros;          // Compact time representation
     std::atomic<uint32_t> access_count{0};  // Lock-free access counting
     std::atomic<uint32_t> ref_count{0};     // Lock-free ref counting
     std::string type_name;
@@ -118,7 +118,8 @@ struct PointerMetadata {
 
     PointerMetadata() = default;
 
-    explicit PointerMetadata(std::string_view type_name_view, bool is_weak = false, bool has_deleter = false)
+    explicit PointerMetadata(std::string_view type_name_view,
+                             bool is_weak = false, bool has_deleter = false)
         : creation_time_micros(getCurrentTimeMicros()),
           type_name(type_name_view) {
         flags.is_weak = is_weak;
@@ -138,8 +139,11 @@ struct PointerMetadata {
     PointerMetadata& operator=(const PointerMetadata& other) {
         if (this != &other) {
             creation_time_micros = other.creation_time_micros;
-            access_count.store(other.access_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
-            ref_count.store(other.ref_count.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            access_count.store(
+                other.access_count.load(std::memory_order_relaxed),
+                std::memory_order_relaxed);
+            ref_count.store(other.ref_count.load(std::memory_order_relaxed),
+                            std::memory_order_relaxed);
             type_name = other.type_name;
             flags = other.flags;
         }
@@ -149,7 +153,8 @@ struct PointerMetadata {
 private:
     static auto getCurrentTimeMicros() noexcept -> uint64_t {
         return std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
+                   std::chrono::system_clock::now().time_since_epoch())
+            .count();
     }
 };
 
@@ -160,11 +165,12 @@ struct PointerEntry {
     std::any ptr_data;
     PointerMetadata metadata;
 
-    template<typename T>
-    PointerEntry(std::shared_ptr<T> ptr, std::string_view type_name, bool is_weak = false, bool has_deleter = false)
+    template <typename T>
+    PointerEntry(std::shared_ptr<T> ptr, std::string_view type_name,
+                 bool is_weak = false, bool has_deleter = false)
         : ptr_data(std::move(ptr)), metadata(type_name, is_weak, has_deleter) {}
 
-    template<typename T>
+    template <typename T>
     PointerEntry(std::weak_ptr<T> ptr, std::string_view type_name)
         : ptr_data(std::move(ptr)), metadata(type_name, true, false) {}
 };
@@ -183,7 +189,7 @@ public:
      */
     struct CleanupPolicy {
         std::chrono::seconds max_age{3600};  // 1 hour default
-        size_t max_unused_count = 1000;     // Max unused pointers
+        size_t max_unused_count = 1000;      // Max unused pointers
         bool auto_cleanup_enabled = false;
         std::chrono::seconds cleanup_interval{300};  // 5 minutes
     };
@@ -213,8 +219,8 @@ public:
      * @return Created or retrieved shared pointer
      */
     template <typename T, typename CreatorFunc>
-    auto getOrCreateSharedPtr(std::string_view key, CreatorFunc creator)
-        -> std::shared_ptr<T>;
+    auto getOrCreateSharedPtr(std::string_view key,
+                              CreatorFunc creator) -> std::shared_ptr<T>;
 
     /**
      * @brief Get weak pointer by key
@@ -290,7 +296,8 @@ public:
 private:
     GlobalSharedPtrManager() = default;
 
-    // Optimized storage: single map with combined data for better cache locality
+    // Optimized storage: single map with combined data for better cache
+    // locality
 #if ENABLE_FASTHASH
     emhash8::HashMap<std::string, PointerEntry> pointer_map_;
 #else
@@ -360,21 +367,24 @@ private:
      * @param dependent_key Key of dependent pointer
      * @param dependency_key Key of dependency pointer
      */
-    void addDependency(std::string_view dependent_key, std::string_view dependency_key);
+    void addDependency(std::string_view dependent_key,
+                       std::string_view dependency_key);
 
     /**
      * @brief Remove dependency tracking
      * @param dependent_key Key of dependent pointer
      * @param dependency_key Key of dependency pointer
      */
-    void removeDependency(std::string_view dependent_key, std::string_view dependency_key);
+    void removeDependency(std::string_view dependent_key,
+                          std::string_view dependency_key);
 
     /**
      * @brief Get all dependencies for a pointer
      * @param key Pointer key
      * @return Vector of dependency keys
      */
-    [[nodiscard]] auto getDependencies(std::string_view key) const -> std::vector<std::string>;
+    [[nodiscard]] auto getDependencies(std::string_view key) const
+        -> std::vector<std::string>;
 
     /**
      * @brief Check if cleanup is safe (no dependencies)
@@ -395,8 +405,10 @@ auto GlobalSharedPtrManager::getSharedPtr(std::string_view key)
             auto ptr = std::any_cast<std::shared_ptr<T>>(iter->second.ptr_data);
 
             // Lock-free metadata updates
-            iter->second.metadata.access_count.fetch_add(1, std::memory_order_relaxed);
-            iter->second.metadata.ref_count.store(ptr.use_count(), std::memory_order_relaxed);
+            iter->second.metadata.access_count.fetch_add(
+                1, std::memory_order_relaxed);
+            iter->second.metadata.ref_count.store(ptr.use_count(),
+                                                  std::memory_order_relaxed);
             total_access_count_.fetch_add(1, std::memory_order_relaxed);
 
             return ptr;
@@ -408,25 +420,27 @@ auto GlobalSharedPtrManager::getSharedPtr(std::string_view key)
 }
 
 template <typename T, typename CreatorFunc>
-auto GlobalSharedPtrManager::getOrCreateSharedPtr(std::string_view key,
-                                                  CreatorFunc creator)
-    -> std::shared_ptr<T> {
+auto GlobalSharedPtrManager::getOrCreateSharedPtr(
+    std::string_view key, CreatorFunc creator) -> std::shared_ptr<T> {
     const std::string str_key{key};
     std::unique_lock lock(mutex_);
 
-    if (auto iter = pointer_map_.find(str_key);
-        iter != pointer_map_.end()) {
+    if (auto iter = pointer_map_.find(str_key); iter != pointer_map_.end()) {
         try {
             auto ptr = std::any_cast<std::shared_ptr<T>>(iter->second.ptr_data);
             // Update metadata atomically
-            iter->second.metadata.access_count.fetch_add(1, std::memory_order_relaxed);
-            iter->second.metadata.ref_count.store(ptr.use_count(), std::memory_order_relaxed);
+            iter->second.metadata.access_count.fetch_add(
+                1, std::memory_order_relaxed);
+            iter->second.metadata.ref_count.store(ptr.use_count(),
+                                                  std::memory_order_relaxed);
             return ptr;
         } catch (const std::bad_any_cast&) {
             auto ptr = creator();
             iter->second.ptr_data = ptr;
-            iter->second.metadata.access_count.fetch_add(1, std::memory_order_relaxed);
-            iter->second.metadata.ref_count.store(ptr.use_count(), std::memory_order_relaxed);
+            iter->second.metadata.access_count.fetch_add(
+                1, std::memory_order_relaxed);
+            iter->second.metadata.ref_count.store(ptr.use_count(),
+                                                  std::memory_order_relaxed);
             return ptr;
         }
     } else {
@@ -447,12 +461,15 @@ auto GlobalSharedPtrManager::getWeakPtr(std::string_view key)
         try {
             if (auto shared_ptr =
                     std::any_cast<std::shared_ptr<T>>(iter->second.ptr_data)) {
-                iter->second.metadata.access_count.fetch_add(1, std::memory_order_relaxed);
+                iter->second.metadata.access_count.fetch_add(
+                    1, std::memory_order_relaxed);
                 total_access_count_.fetch_add(1, std::memory_order_relaxed);
                 return std::weak_ptr<T>(shared_ptr);
             }
-            auto weak_ptr = std::any_cast<std::weak_ptr<T>>(iter->second.ptr_data);
-            iter->second.metadata.access_count.fetch_add(1, std::memory_order_relaxed);
+            auto weak_ptr =
+                std::any_cast<std::weak_ptr<T>>(iter->second.ptr_data);
+            iter->second.metadata.access_count.fetch_add(
+                1, std::memory_order_relaxed);
             total_access_count_.fetch_add(1, std::memory_order_relaxed);
             return weak_ptr;
         } catch (const std::bad_any_cast&) {
@@ -487,5 +504,197 @@ void GlobalSharedPtrManager::addDeleter(
         }
     }
 }
+
+//==============================================================================
+// C++23 Enhanced Global Pointer Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for pointer-like types
+ */
+template <typename T>
+concept PointerLike = requires(T t) {
+    { *t };
+    { t.get() };
+    { static_cast<bool>(t) };
+};
+
+/**
+ * @brief Concept for shared pointer types
+ */
+template <typename T>
+concept SharedPointerLike = PointerLike<T> && requires(T t) {
+    { t.use_count() } -> std::convertible_to<long>;
+};
+
+/**
+ * @brief Safe global pointer access with optional result
+ */
+template <typename T>
+auto safeGetPtr(std::string_view key) -> std::optional<std::shared_ptr<T>> {
+    auto ptr = GlobalSharedPtrManager::getInstance().getSharedPtr<T>(key);
+    if (ptr) {
+        return ptr;
+    }
+    return std::nullopt;
+}
+
+/**
+ * @brief Get or create with factory function
+ */
+template <typename T, typename Factory>
+    requires std::invocable<Factory> &&
+                 std::same_as<std::invoke_result_t<Factory>, std::shared_ptr<T>>
+auto getOrCreate(std::string_view key,
+                 Factory&& factory) -> std::shared_ptr<T> {
+    return GlobalSharedPtrManager::getInstance().getOrCreateSharedPtr<T>(
+        key, std::forward<Factory>(factory));
+}
+
+/**
+ * @brief Scoped pointer registration (RAII)
+ */
+template <typename T>
+class ScopedGlobalPtr {
+    std::string key_;
+
+public:
+    ScopedGlobalPtr(std::string_view key, std::shared_ptr<T> ptr) : key_(key) {
+        GlobalSharedPtrManager::getInstance().addSharedPtr<T>(key,
+                                                              std::move(ptr));
+    }
+
+    ~ScopedGlobalPtr() {
+        GlobalSharedPtrManager::getInstance().removeSharedPtr(key_);
+    }
+
+    ScopedGlobalPtr(const ScopedGlobalPtr&) = delete;
+    ScopedGlobalPtr& operator=(const ScopedGlobalPtr&) = delete;
+    ScopedGlobalPtr(ScopedGlobalPtr&&) = default;
+    ScopedGlobalPtr& operator=(ScopedGlobalPtr&&) = default;
+
+    [[nodiscard]] std::shared_ptr<T> get() const {
+        return GlobalSharedPtrManager::getInstance().getSharedPtr<T>(key_);
+    }
+
+    [[nodiscard]] const std::string& key() const { return key_; }
+};
+
+/**
+ * @brief Create a scoped global pointer
+ */
+template <typename T>
+auto makeScopedGlobalPtr(std::string_view key, std::shared_ptr<T> ptr) {
+    return ScopedGlobalPtr<T>(key, std::move(ptr));
+}
+
+/**
+ * @brief Global pointer guard for temporary pointer usage
+ */
+template <typename T>
+class GlobalPtrGuard {
+    std::weak_ptr<T> weak_ptr_;
+    std::string key_;
+
+public:
+    explicit GlobalPtrGuard(std::string_view key)
+        : weak_ptr_(GlobalSharedPtrManager::getInstance().getWeakPtr<T>(key)),
+          key_(key) {}
+
+    [[nodiscard]] std::shared_ptr<T> lock() const { return weak_ptr_.lock(); }
+
+    [[nodiscard]] bool expired() const { return weak_ptr_.expired(); }
+
+    [[nodiscard]] explicit operator bool() const { return !expired(); }
+};
+
+/**
+ * @brief Typed pointer registry for specific type families
+ */
+template <typename Base>
+class TypedPtrRegistry {
+    std::unordered_map<std::string, std::shared_ptr<Base>> ptrs_;
+    mutable std::shared_mutex mutex_;
+
+public:
+    template <typename Derived>
+        requires std::is_base_of_v<Base, Derived>
+    void add(std::string_view key, std::shared_ptr<Derived> ptr) {
+        std::unique_lock lock(mutex_);
+        ptrs_[std::string(key)] = std::move(ptr);
+    }
+
+    template <typename Derived = Base>
+        requires std::is_base_of_v<Base, Derived>
+    auto get(std::string_view key) -> std::shared_ptr<Derived> {
+        std::shared_lock lock(mutex_);
+        auto it = ptrs_.find(std::string(key));
+        if (it != ptrs_.end()) {
+            return std::dynamic_pointer_cast<Derived>(it->second);
+        }
+        return nullptr;
+    }
+
+    void remove(std::string_view key) {
+        std::unique_lock lock(mutex_);
+        ptrs_.erase(std::string(key));
+    }
+
+    [[nodiscard]] std::vector<std::string> keys() const {
+        std::shared_lock lock(mutex_);
+        std::vector<std::string> result;
+        result.reserve(ptrs_.size());
+        for (const auto& [k, _] : ptrs_) {
+            result.push_back(k);
+        }
+        return result;
+    }
+
+    [[nodiscard]] std::size_t size() const {
+        std::shared_lock lock(mutex_);
+        return ptrs_.size();
+    }
+};
+
+/**
+ * @brief Pointer lifecycle observer
+ */
+template <typename T>
+class PtrLifecycleObserver {
+public:
+    using CreateCallback =
+        std::function<void(const std::string&, std::shared_ptr<T>)>;
+    using DestroyCallback = std::function<void(const std::string&)>;
+
+private:
+    std::vector<CreateCallback> on_create_;
+    std::vector<DestroyCallback> on_destroy_;
+    mutable std::mutex mutex_;
+
+public:
+    void onCreated(CreateCallback callback) {
+        std::lock_guard lock(mutex_);
+        on_create_.push_back(std::move(callback));
+    }
+
+    void onDestroyed(DestroyCallback callback) {
+        std::lock_guard lock(mutex_);
+        on_destroy_.push_back(std::move(callback));
+    }
+
+    void notifyCreated(const std::string& key, std::shared_ptr<T> ptr) {
+        std::lock_guard lock(mutex_);
+        for (const auto& cb : on_create_) {
+            cb(key, ptr);
+        }
+    }
+
+    void notifyDestroyed(const std::string& key) {
+        std::lock_guard lock(mutex_);
+        for (const auto& cb : on_destroy_) {
+            cb(key);
+        }
+    }
+};
 
 #endif  // ATOM_META_GLOBAL_PTR_HPP

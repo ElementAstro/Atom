@@ -1,15 +1,15 @@
 #pragma once
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <filesystem>
-#include <fstream>
-#include <sstream>
-#include <thread>
-#include <future>
-#include <vector>
+#include <gtest/gtest.h>
 #include <chrono>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <future>
+#include <sstream>
+#include <thread>
+#include <vector>
 #include "iconv_cpp.hpp"
 
 namespace fs = std::filesystem;
@@ -36,7 +36,8 @@ protected:
 
     void TearDown() override {
         // Clean up temp files
-        for (const auto& file : {temp_input, temp_output, temp_output2, temp_ascii}) {
+        for (const auto& file :
+             {temp_input, temp_output, temp_output2, temp_ascii}) {
             if (fs::exists(file)) {
                 fs::remove(file);
             }
@@ -160,8 +161,9 @@ TEST_F(IconvCppTest, IconvConversionErrorDetails) {
         FAIL() << "Expected IconvConversionError";
     } catch (const IconvConversionError& e) {
         EXPECT_GT(e.processed_bytes(), 0);
-        EXPECT_TRUE(std::string(e.what()).find("Invalid") != std::string::npos ||
-                   std::string(e.what()).find("Incomplete") != std::string::npos);
+        EXPECT_TRUE(
+            std::string(e.what()).find("Invalid") != std::string::npos ||
+            std::string(e.what()).find("Incomplete") != std::string::npos);
     }
 }
 
@@ -184,7 +186,7 @@ TEST_F(IconvCppTest, FileConversionWithProgress) {
     };
 
     EXPECT_TRUE(convert_file("UTF-8", "UTF-8", temp_input, temp_output,
-                           ConversionOptions(), progress_cb));
+                             ConversionOptions(), progress_cb));
     EXPECT_TRUE(progress_called);
 }
 
@@ -196,12 +198,14 @@ TEST_F(IconvCppTest, AsyncFileConversion) {
 
 TEST_F(IconvCppTest, FileConversionErrors) {
     fs::path nonexistent = "/nonexistent/path/file.txt";
-    EXPECT_THROW(convert_file("UTF-8", "UTF-8", nonexistent, temp_output), IconvError);
+    EXPECT_THROW(convert_file("UTF-8", "UTF-8", nonexistent, temp_output),
+                 IconvError);
 }
 
 // BOM Handling Tests
 TEST_F(IconvCppTest, BomDetectionUTF8) {
-    std::vector<char> utf8_bom = {'\xEF', '\xBB', '\xBF', 'H', 'e', 'l', 'l', 'o'};
+    std::vector<char> utf8_bom = {'\xEF', '\xBB', '\xBF', 'H',
+                                  'e',    'l',    'l',    'o'};
     auto [encoding, size] = BomHandler::detect_bom(utf8_bom);
     EXPECT_EQ(encoding, "UTF-8");
     EXPECT_EQ(size, 3);
@@ -222,14 +226,16 @@ TEST_F(IconvCppTest, BomDetectionUTF16BE) {
 }
 
 TEST_F(IconvCppTest, BomDetectionUTF32LE) {
-    std::vector<char> utf32le_bom = {'\xFF', '\xFE', '\x00', '\x00', 'H', '\x00', '\x00', '\x00'};
+    std::vector<char> utf32le_bom = {'\xFF', '\xFE', '\x00', '\x00',
+                                     'H',    '\x00', '\x00', '\x00'};
     auto [encoding, size] = BomHandler::detect_bom(utf32le_bom);
     EXPECT_EQ(encoding, "UTF-32LE");
     EXPECT_EQ(size, 4);
 }
 
 TEST_F(IconvCppTest, BomDetectionUTF32BE) {
-    std::vector<char> utf32be_bom = {'\x00', '\x00', '\xFE', '\xFF', '\x00', '\x00', '\x00', 'H'};
+    std::vector<char> utf32be_bom = {'\x00', '\x00', '\xFE', '\xFF',
+                                     '\x00', '\x00', '\x00', 'H'};
     auto [encoding, size] = BomHandler::detect_bom(utf32be_bom);
     EXPECT_EQ(encoding, "UTF-32BE");
     EXPECT_EQ(size, 4);
@@ -253,7 +259,8 @@ TEST_F(IconvCppTest, BomAddition) {
 }
 
 TEST_F(IconvCppTest, BomRemoval) {
-    std::vector<char> utf8_with_bom = {'\xEF', '\xBB', '\xBF', 'H', 'e', 'l', 'l', 'o'};
+    std::vector<char> utf8_with_bom = {'\xEF', '\xBB', '\xBF', 'H',
+                                       'e',    'l',    'l',    'o'};
     auto without_bom = BomHandler::remove_bom(utf8_with_bom);
     EXPECT_EQ(without_bom.size(), 5);
     EXPECT_EQ(without_bom[0], 'H');
@@ -262,7 +269,8 @@ TEST_F(IconvCppTest, BomRemoval) {
 // Encoding Detection Tests
 TEST_F(IconvCppTest, EncodingDetectionASCII) {
     std::string ascii_text = "Pure ASCII text 123";
-    auto results = EncodingDetector::detect_encoding({ascii_text.data(), ascii_text.size()});
+    auto results = EncodingDetector::detect_encoding(
+        {ascii_text.data(), ascii_text.size()});
     EXPECT_FALSE(results.empty());
     EXPECT_EQ(results[0].encoding, "ASCII");
     EXPECT_GT(results[0].confidence, 0.7f);
@@ -270,14 +278,16 @@ TEST_F(IconvCppTest, EncodingDetectionASCII) {
 
 TEST_F(IconvCppTest, EncodingDetectionUTF8) {
     std::string utf8_text = "UTF-8 text with 中文 characters";
-    auto results = EncodingDetector::detect_encoding({utf8_text.data(), utf8_text.size()});
+    auto results =
+        EncodingDetector::detect_encoding({utf8_text.data(), utf8_text.size()});
     EXPECT_FALSE(results.empty());
     EXPECT_EQ(results[0].encoding, "UTF-8");
     EXPECT_GT(results[0].confidence, 0.8f);
 }
 
 TEST_F(IconvCppTest, EncodingDetectionWithBom) {
-    std::vector<char> utf8_with_bom = {'\xEF', '\xBB', '\xBF', 'H', 'e', 'l', 'l', 'o'};
+    std::vector<char> utf8_with_bom = {'\xEF', '\xBB', '\xBF', 'H',
+                                       'e',    'l',    'l',    'o'};
     auto results = EncodingDetector::detect_encoding(utf8_with_bom);
     EXPECT_FALSE(results.empty());
     EXPECT_EQ(results[0].encoding, "UTF-8");
@@ -286,13 +296,15 @@ TEST_F(IconvCppTest, EncodingDetectionWithBom) {
 
 TEST_F(IconvCppTest, EncodingDetectionMostLikely) {
     std::string text = "Simple text";
-    auto encoding = EncodingDetector::detect_most_likely_encoding({text.data(), text.size()});
+    auto encoding = EncodingDetector::detect_most_likely_encoding(
+        {text.data(), text.size()});
     EXPECT_FALSE(encoding.empty());
 }
 
 TEST_F(IconvCppTest, EncodingDetectionMaxResults) {
     std::string text = "Test text";
-    auto results = EncodingDetector::detect_encoding({text.data(), text.size()}, 2);
+    auto results =
+        EncodingDetector::detect_encoding({text.data(), text.size()}, 2);
     EXPECT_LE(results.size(), 2);
 }
 
@@ -324,8 +336,10 @@ TEST_F(IconvCppTest, EncodingRegistryListEncodings) {
     // Check for common encodings
     bool found_utf8 = false, found_ascii = false;
     for (const auto& enc : encodings) {
-        if (enc.name == "UTF-8") found_utf8 = true;
-        if (enc.name == "ASCII") found_ascii = true;
+        if (enc.name == "UTF-8")
+            found_utf8 = true;
+        if (enc.name == "ASCII")
+            found_ascii = true;
     }
     EXPECT_TRUE(found_utf8);
     EXPECT_TRUE(found_ascii);
@@ -369,11 +383,13 @@ TEST_F(IconvCppTest, BufferManagerEnsureCapacity) {
 }
 
 TEST_F(IconvCppTest, BufferManagerEstimateSize) {
-    size_t estimate = BufferManager::estimate_output_size(100, "UTF-8", "UTF-16LE");
+    size_t estimate =
+        BufferManager::estimate_output_size(100, "UTF-8", "UTF-16LE");
     EXPECT_GT(estimate, 100);
 
-    size_t unknown_estimate = BufferManager::estimate_output_size(100, "UNKNOWN", "UNKNOWN");
-    EXPECT_EQ(unknown_estimate, 400); // 4x fallback
+    size_t unknown_estimate =
+        BufferManager::estimate_output_size(100, "UNKNOWN", "UNKNOWN");
+    EXPECT_EQ(unknown_estimate, 400);  // 4x fallback
 }
 
 // Progress Callback Tests
@@ -389,7 +405,8 @@ TEST_F(IconvCppTest, ProgressCallbackCalled) {
     };
 
     Converter conv("UTF-8", "UTF-8");
-    auto result = conv.convert_with_progress({large_input.data(), large_input.size()}, progress_cb);
+    auto result = conv.convert_with_progress(
+        {large_input.data(), large_input.size()}, progress_cb);
 
     EXPECT_TRUE(callback_called);
     EXPECT_EQ(max_processed, large_input.size());
@@ -504,7 +521,7 @@ TEST_F(IconvCppTest, BatchConverterFiles) {
 TEST_F(IconvCppTest, BatchConverterFilesMismatch) {
     BatchConverter batch("UTF-8", "UTF-8");
     std::vector<fs::path> input_paths = {temp_input, temp_ascii};
-    std::vector<fs::path> output_paths = {temp_output}; // Size mismatch
+    std::vector<fs::path> output_paths = {temp_output};  // Size mismatch
 
     EXPECT_THROW(batch.convert_files(input_paths, output_paths), IconvError);
 }
@@ -634,14 +651,14 @@ TEST_F(IconvCppTest, ConverterReset) {
     std::string test = "Reset test";
     auto result1 = conv.convert_string(test);
 
-    conv.reset(); // Should not affect subsequent conversions
+    conv.reset();  // Should not affect subsequent conversions
     auto result2 = conv.convert_string(test);
     EXPECT_EQ(result1, result2);
 }
 
 // Performance Tests
 TEST_F(IconvCppTest, LargeInputPerformance) {
-    const size_t large_size = 1024 * 1024; // 1MB
+    const size_t large_size = 1024 * 1024;  // 1MB
     std::string large_input(large_size, 'A');
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -650,11 +667,12 @@ TEST_F(IconvCppTest, LargeInputPerformance) {
     auto result = conv.convert_string(large_input);
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_EQ(result.size(), large_size);
     // Performance assertion - should complete within reasonable time
-    EXPECT_LT(duration.count(), 1000); // Less than 1 second
+    EXPECT_LT(duration.count(), 1000);  // Less than 1 second
 }
 
 // Encoding Constants Tests

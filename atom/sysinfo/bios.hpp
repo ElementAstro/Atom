@@ -1,18 +1,20 @@
 /**
  * @file bios.hpp
- * @brief BIOS Information Module - Compatibility Header
+ * @brief System BIOS information functionality (compatibility header)
  *
- * This file provides backward compatibility by including the new modular
- * BIOS implementation. All functionality has been moved to the bios/ subdirectory
- * while maintaining the same public API with enhanced features.
+ * This file serves as a compatibility header that includes the reorganized BIOS
+ * system. It maintains backward compatibility with existing code that includes
+ * this header.
  *
+ * @deprecated This header location is deprecated. Please use
+ * "atom/sysinfo/interfaces/bios.hpp" instead.
  * @copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-#ifndef ATOM_SYSINFO_BIOS_HPP
-#define ATOM_SYSINFO_BIOS_HPP
+#ifndef ATOM_SYSINFO_BIOS_COMPAT_HPP
+#define ATOM_SYSINFO_BIOS_COMPAT_HPP
 
-// Include the new modular BIOS implementation
-#include "src/bios/bios.hpp"
+// Forward to the new location
+#include "hardware/bios.hpp"
 
-#endif  // ATOM_SYSINFO_BIOS_HPP
+#endif  // ATOM_SYSINFO_BIOS_COMPAT_HPP

@@ -1,12 +1,11 @@
-# Module Dependency Configuration
-# This file defines the dependencies between modules in the Atom project.
-# When a module is enabled, its dependencies are automatically enabled too.
+# Module Dependency Configuration This file defines the dependencies between
+# modules in the Atom project. When a module is enabled, its dependencies are
+# automatically enabled too.
 #
-# Format:
-# set(ATOM_<MODULE>_DEPENDS <list of dependent modules>)
+# Format: set(ATOM_<MODULE>_DEPENDS <list of dependent modules>)
 #
-# The dependency system ensures that modules are built in the correct order
-# and that all required dependencies are satisfied.
+# The dependency system ensures that modules are built in the correct order and
+# that all required dependencies are satisfied.
 
 # Error handling module has no dependencies
 set(ATOM_ERROR_DEPENDS "")
@@ -53,7 +52,6 @@ set(ATOM_WEB_DEPENDS atom-error atom-utils atom-io)
 # Set module priority order (build sequence)
 set(ATOM_MODULE_BUILD_ORDER
     atom-error
-
     atom-meta
     atom-utils
     atom-algorithm
@@ -65,5 +63,4 @@ set(ATOM_MODULE_BUILD_ORDER
     atom-connection
     atom-search
     atom-secret
-    atom-web
-)
+    atom-web)

@@ -21,17 +21,19 @@ struct TestEvent {
 
 }  // namespace atom::async
 
-// Provide both to_string and from_string for TestEvent in the global namespace for ADL
+// Provide both to_string and from_string for TestEvent in the global namespace
+// for ADL
 namespace std {
 inline std::string to_string(const atom::async::TestEvent& event) {
     return std::to_string(event.id) + ":" + event.name;
 }
-}
+}  // namespace std
 
 // Custom deserialization for TestEvent
 inline atom::async::TestEvent from_string(const std::string& s) {
     auto pos = s.find(":");
-    if (pos == std::string::npos) return {0, s};
+    if (pos == std::string::npos)
+        return {0, s};
     int id = std::stoi(s.substr(0, pos));
     std::string name = s.substr(pos + 1);
     return {id, name};
@@ -390,9 +392,10 @@ TEST_F(EventStackTest, SerializeDeserializeString) {
 
 // Test serialization and deserialization for custom TestEvent
 // Note: Serialization test for TestEvent is disabled because TestEvent doesn't
-// satisfy the Serializable concept requirements. The concept requires std::to_string
-// to work, but the ADL lookup might not find our std::to_string overload.
-// This is a limitation of the current EventStack serialization design.
+// satisfy the Serializable concept requirements. The concept requires
+// std::to_string to work, but the ADL lookup might not find our std::to_string
+// overload. This is a limitation of the current EventStack serialization
+// design.
 /*
 TEST_F(EventStackTest, SerializeDeserializeTestEvent) {
     EventStack<TestEvent> stack;
@@ -586,9 +589,8 @@ TEST_F(EventStackTest, CustomComparableType) {
     EXPECT_EQ(stack.size(), 3);  // Should have unique elements
 
     // Test sortEvents with custom type
-    stack.sortEvents([](const TestEvent& a, const TestEvent& b) {
-        return a.id < b.id;
-    });
+    stack.sortEvents(
+        [](const TestEvent& a, const TestEvent& b) { return a.id < b.id; });
 
     // Pop and verify order
     auto event = stack.popEvent();
@@ -706,7 +708,8 @@ TEST_F(EventStackTest, AnyAllEventsEdgeCases) {
 
     // Test with empty stack
     EXPECT_FALSE(stack.anyEvent([](const int&) { return true; }));
-    EXPECT_TRUE(stack.allEvents([](const int&) { return false; }));  // Vacuous truth
+    EXPECT_TRUE(
+        stack.allEvents([](const int&) { return false; }));  // Vacuous truth
 
     // Test with single element
     stack.pushEvent(42);
@@ -734,7 +737,8 @@ TEST_F(EventStackTest, ForEachEdgeCases) {
     stack.forEach([&visited](const int& n) { visited.push_back(n); });
 
     EXPECT_EQ(visited.size(), 3);
-    // Order depends on internal implementation, but all elements should be visited
+    // Order depends on internal implementation, but all elements should be
+    // visited
     std::sort(visited.begin(), visited.end());
     EXPECT_EQ(visited[0], 1);
     EXPECT_EQ(visited[1], 2);
@@ -798,24 +802,25 @@ TEST_F(EventStackTest, ConcurrentMixedOperations) {
 
     // Mixed operations: push, pop, peek
     for (int i = 0; i < num_threads; ++i) {
-        threads.emplace_back([&stack, &total_pushed, &total_popped, i, operations_per_thread]() {
-            for (int j = 0; j < operations_per_thread; ++j) {
-                int operation = (i * operations_per_thread + j) % 3;
+        threads.emplace_back(
+            [&stack, &total_pushed, &total_popped, i, operations_per_thread]() {
+                for (int j = 0; j < operations_per_thread; ++j) {
+                    int operation = (i * operations_per_thread + j) % 3;
 
-                if (operation == 0) {  // Push
-                    stack.pushEvent(i * operations_per_thread + j);
-                    total_pushed.fetch_add(1);
-                } else if (operation == 1) {  // Pop
-                    if (stack.popEvent().has_value()) {
-                        total_popped.fetch_add(1);
+                    if (operation == 0) {  // Push
+                        stack.pushEvent(i * operations_per_thread + j);
+                        total_pushed.fetch_add(1);
+                    } else if (operation == 1) {  // Pop
+                        if (stack.popEvent().has_value()) {
+                            total_popped.fetch_add(1);
+                        }
+                    } else {  // Peek
+                        [[maybe_unused]] auto val = stack.peekTopEvent();
                     }
-                } else {  // Peek
-                    [[maybe_unused]] auto val = stack.peekTopEvent();
-                }
 
-                std::this_thread::yield();
-            }
-        });
+                    std::this_thread::yield();
+                }
+            });
     }
 
     for (auto& t : threads) {

@@ -1,7 +1,7 @@
 /*!
  * \file vany.hpp
- * \brief Optimized type-safe container for values of any type - OPTIMIZED VERSION
- * \optimized 2025-01-22 - Performance optimizations by AI Assistant
+ * \brief Optimized type-safe container for values of any type - OPTIMIZED
+ * VERSION \optimized 2025-01-22 - Performance optimizations by AI Assistant
  *
  * OPTIMIZATIONS APPLIED:
  * - Enhanced VTable layout with better cache performance
@@ -31,13 +31,15 @@
 namespace atom::meta {
 
 /**
- * @brief Optimized type-safe container for values of any type with enhanced performance
+ * @brief Optimized type-safe container for values of any type with enhanced
+ * performance
  */
 class Any {
 #ifdef TEST_F
 public:
 #endif
-    // Optimized: Enhanced VTable with better cache layout and additional metadata
+    // Optimized: Enhanced VTable with better cache layout and additional
+    // metadata
     struct ATOM_ALIGNAS(64) VTable {
         // Core operations (most frequently used)
         void (*destroy)(void*) noexcept;
@@ -66,12 +68,17 @@ public:
     struct TypeTraits {
         static constexpr bool is_string = std::is_same_v<T, std::string>;
         static constexpr bool is_arithmetic = std::is_arithmetic_v<T>;
-        static constexpr bool is_streamable = requires(const T& t, std::ostream& os) { os << t; };
+        static constexpr bool is_streamable =
+            requires(const T& t, std::ostream& os) { os << t; };
         static constexpr bool is_iterable = Iterable<T>;
-        static constexpr bool is_equality_comparable = std::equality_comparable<T>;
-        static constexpr bool is_hashable = requires(const T& t) { std::hash<T>{}(t); };
-        static constexpr bool is_trivially_copyable = std::is_trivially_copyable_v<T>;
-        static constexpr bool is_trivially_destructible = std::is_trivially_destructible_v<T>;
+        static constexpr bool is_equality_comparable =
+            std::equality_comparable<T>;
+        static constexpr bool is_hashable =
+            requires(const T& t) { std::hash<T>{}(t); };
+        static constexpr bool is_trivially_copyable =
+            std::is_trivially_copyable_v<T>;
+        static constexpr bool is_trivially_destructible =
+            std::is_trivially_destructible_v<T>;
     };
 
     // Optimized: Enhanced toString with cached traits and better performance
@@ -90,7 +97,8 @@ public:
             return oss.str();
         } else {
             // Optimized: Cache type name for repeated calls
-            static const std::string type_name = "Object of type " + std::string(typeid(T).name());
+            static const std::string type_name =
+                "Object of type " + std::string(typeid(T).name());
             return type_name;
         }
     }
@@ -158,8 +166,13 @@ public:
                 static_cast<T*>(ptr)->~T();
         },
         [](const void* src, void* dst) {
-            if (src && dst)
-                new (dst) T(*static_cast<const T*>(src));
+            if (src && dst) {
+                if constexpr (std::is_copy_constructible_v<T>) {
+                    new (dst) T(*static_cast<const T*>(src));
+                } else {
+                    throw std::runtime_error("Type is not copy constructible");
+                }
+            }
         },
         [](void* src, void* dst) noexcept {
             if (src && dst)
@@ -280,12 +293,21 @@ public:
     }
 
     /**
+     * @brief Constructor for C-style string literals.
+     * @param str The string literal to store as std::string.
+     * @throws std::bad_alloc If memory allocation fails.
+     */
+    template <size_t N>
+    explicit Any(const char (&str)[N]) : Any(std::string(str)) {}
+
+    /**
      * @brief Constructor from any value.
      * @param value The value to store.
      * @throws std::bad_alloc If memory allocation fails.
      */
     template <typename T, typename = std::enable_if_t<
-                              !std::is_same_v<std::decay_t<T>, Any>>>
+                              !std::is_same_v<std::decay_t<T>, Any> &&
+                              !std::is_array_v<std::remove_reference_t<T>>>>
     explicit Any(T&& value) {
         using ValueType = std::remove_cvref_t<T>;
 
@@ -537,6 +559,161 @@ public:
             vptr_ = nullptr;
             is_small_ = true;
         }
+    }
+};
+
+//==============================================================================
+// C++23 Enhanced Any Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for types that can be stored in Any
+ */
+template <typename T>
+concept AnyStorable = std::copy_constructible<T> || std::move_constructible<T>;
+
+/**
+ * @brief Try to cast Any to a specific type safely
+ */
+template <typename T>
+auto tryAnyCast(const Any& any) -> std::optional<T> {
+    try {
+        return any.template cast<T>();
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+/**
+ * @brief Visit an Any value with a visitor
+ */
+template <typename Visitor>
+auto visitAny(const Any& any, Visitor&& visitor) {
+    any.invoke([&visitor](const void* ptr) { visitor(ptr); });
+}
+
+/**
+ * @brief Array of Any values with type-safe operations
+ */
+class AnyArray {
+    std::vector<Any> values_;
+
+public:
+    AnyArray() = default;
+
+    template <typename... Args>
+    explicit AnyArray(Args&&... args) {
+        values_.reserve(sizeof...(Args));
+        (values_.emplace_back(std::forward<Args>(args)), ...);
+    }
+
+    void push_back(Any value) { values_.push_back(std::move(value)); }
+
+    template <typename T>
+    void emplace_back(T&& value) {
+        values_.emplace_back(std::forward<T>(value));
+    }
+
+    [[nodiscard]] size_t size() const noexcept { return values_.size(); }
+    [[nodiscard]] bool empty() const noexcept { return values_.empty(); }
+
+    Any& operator[](size_t index) { return values_[index]; }
+    const Any& operator[](size_t index) const { return values_[index]; }
+
+    auto begin() { return values_.begin(); }
+    auto end() { return values_.end(); }
+    [[nodiscard]] auto begin() const { return values_.begin(); }
+    [[nodiscard]] auto end() const { return values_.end(); }
+
+    /**
+     * @brief Filter values by type
+     */
+    template <typename T>
+    [[nodiscard]] AnyArray filterByType() const {
+        AnyArray result;
+        for (const auto& val : values_) {
+            if (val.is<T>()) {
+                result.push_back(val);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @brief Extract all values of a specific type
+     */
+    template <typename T>
+    [[nodiscard]] std::vector<T> extractAll() const {
+        std::vector<T> result;
+        for (const auto& val : values_) {
+            if (val.is<T>()) {
+                result.push_back(val.template cast<T>());
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @brief Convert all values to strings
+     */
+    [[nodiscard]] std::vector<std::string> toStrings() const {
+        std::vector<std::string> result;
+        result.reserve(values_.size());
+        for (const auto& val : values_) {
+            result.push_back(val.toString());
+        }
+        return result;
+    }
+};
+
+/**
+ * @brief Map with Any values
+ */
+class AnyMap {
+    std::unordered_map<std::string, Any> values_;
+
+public:
+    AnyMap() = default;
+
+    template <typename T>
+    void set(const std::string& key, T&& value) {
+        values_[key] = Any(std::forward<T>(value));
+    }
+
+    [[nodiscard]] std::optional<std::reference_wrapper<Any>> get(
+        const std::string& key) {
+        auto it = values_.find(key);
+        if (it != values_.end()) {
+            return std::ref(it->second);
+        }
+        return std::nullopt;
+    }
+
+    template <typename T>
+    [[nodiscard]] std::optional<T> getAs(const std::string& key) const {
+        auto it = values_.find(key);
+        if (it != values_.end() && it->second.template is<T>()) {
+            return it->second.template cast<T>();
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] bool contains(const std::string& key) const {
+        return values_.contains(key);
+    }
+
+    void remove(const std::string& key) { values_.erase(key); }
+
+    [[nodiscard]] size_t size() const noexcept { return values_.size(); }
+    [[nodiscard]] bool empty() const noexcept { return values_.empty(); }
+
+    [[nodiscard]] std::vector<std::string> keys() const {
+        std::vector<std::string> result;
+        result.reserve(values_.size());
+        for (const auto& [k, _] : values_) {
+            result.push_back(k);
+        }
+        return result;
     }
 };
 

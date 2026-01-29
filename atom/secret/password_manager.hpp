@@ -1,289 +1,273 @@
+/**
+ * @file password_manager.hpp
+ * @brief Main password manager interface for the Atom Secret module.
+ *
+ * This file contains the primary PasswordManager class that provides a complete
+ * password management solution with secure storage, encryption, and various
+ * password management features.
+ *
+ * Key Features:
+ * - Secure password storage with encryption
+ * - Master password protection with PBKDF2 key derivation
+ * - Cross-platform secure storage backends
+ * - Password generation and strength analysis
+ * - Search and filtering capabilities
+ * - Import/export functionality
+ * - Auto-lock and session management
+ * - Password expiration tracking
+ *
+ * @author Atom Development Team
+ * @version 1.0.0
+ * @date 2024
+ * @copyright GPL3 License
+ */
+
 #ifndef ATOM_SECRET_PASSWORD_MANAGER_HPP
 #define ATOM_SECRET_PASSWORD_MANAGER_HPP
 
-#include <memory>
-#include <shared_mutex>
-#include <string>
-#include <vector>
-#include <string_view>
-#include <functional>
-#include <regex>
-#include <unordered_map>
 #include <chrono>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include "common.hpp"
+#include "encryption.hpp"
 #include "password_entry.hpp"
+#include "password_utils.hpp"
 #include "result.hpp"
+#include "storage.hpp"
 
 namespace atom::secret {
 
-class SecureStorage;
-
 /**
- * @brief Bulk operation for multiple password entries.
- */
-struct BulkPasswordOperation {
-    enum class Type { Add, Update, Remove };
-
-    Type operation;
-    PasswordEntry entry;  // Used for Add and Update operations
-    std::string title;    // Used for Remove operations
-
-    BulkPasswordOperation(Type op, PasswordEntry e)
-        : operation(op), entry(std::move(e)) {}
-
-    BulkPasswordOperation(Type op, std::string t)
-        : operation(op), title(std::move(t)) {}
-};
-
-/**
- * @brief Password manager performance metrics.
- */
-struct PasswordManagerMetrics {
-    size_t totalEntries = 0;
-    size_t totalOperations = 0;
-    size_t successfulOperations = 0;
-    size_t searchOperations = 0;
-    std::chrono::milliseconds totalLatency{0};
-    std::chrono::system_clock::time_point lastOperation;
-    std::unordered_map<PasswordCategory, size_t> entriesByCategory;
-
-    double getSuccessRate() const {
-        return totalOperations > 0 ?
-            static_cast<double>(successfulOperations) / totalOperations : 0.0;
-    }
-
-    double getAverageLatency() const {
-        return totalOperations > 0 ?
-            static_cast<double>(totalLatency.count()) / totalOperations : 0.0;
-    }
-};
-
-/**
- * @brief Enhanced password manager with search, utilities, and bulk operations.
- * Provides a thread-safe interface for storing and retrieving secrets.
+ * @brief Main password manager class providing secure password storage and
+ * management.
  */
 class PasswordManager {
 public:
     /**
-     * @brief Constructs a PasswordManager.
-     * @param appName The name of the application, used for namespacing secrets.
+     * @brief Constructs a new PasswordManager instance.
+     */
+    PasswordManager();
+
+    /**
+     * @brief Destructor that ensures secure cleanup.
+     */
+    ~PasswordManager();
+
+    // Disable copy construction and assignment
+    PasswordManager(const PasswordManager&) = delete;
+    PasswordManager& operator=(const PasswordManager&) = delete;
+
+    // Enable move construction and assignment
+    PasswordManager(PasswordManager&&) noexcept;
+    PasswordManager& operator=(PasswordManager&&) noexcept;
+
+    /**
+     * @brief Initializes the password manager with a master password.
+     * @param masterPassword The master password for encryption.
      * @param settings Optional password manager settings.
+     * @return True if initialization succeeded, false otherwise.
      */
-    explicit PasswordManager(std::string_view appName,
-                           const PasswordManagerSettings& settings = PasswordManagerSettings{});
+    bool initialize(std::string_view masterPassword,
+                    const PasswordManagerSettings& settings = {});
 
     /**
-     * @brief Adds a new password entry.
-     * @param entry The PasswordEntry to add.
-     * @param masterPassword The master password for encryption.
-     * @return A Result indicating success or failure.
+     * @brief Locks the password manager, clearing sensitive data from memory.
      */
-    Result<void> addEntry(const PasswordEntry& entry,
-                          std::string_view masterPassword);
+    void lock();
 
     /**
-     * @brief Retrieves a password entry by its title.
-     * @param title The title of the entry to retrieve.
-     * @param masterPassword The master password for decryption.
-     * @return A Result containing the PasswordEntry or an error.
+     * @brief Unlocks the password manager with the master password.
+     * @param masterPassword The master password.
+     * @return True if unlock succeeded, false otherwise.
      */
-    Result<PasswordEntry> getEntry(std::string_view title,
-                                   std::string_view masterPassword) const;
+    bool unlock(std::string_view masterPassword);
 
     /**
-     * @brief Updates an existing password entry.
-     * @param entry The PasswordEntry to update.
-     * @param masterPassword The master password for encryption.
-     * @return A Result indicating success or failure.
+     * @brief Checks if the password manager is currently locked.
+     * @return True if locked, false if unlocked.
      */
-    Result<void> updateEntry(const PasswordEntry& entry,
-                             std::string_view masterPassword);
+    bool isLocked() const noexcept;
 
     /**
-     * @brief Removes a password entry by its title.
-     * @param title The title of the entry to remove.
-     * @return A Result indicating success or failure.
+     * @brief Changes the master password.
+     * @param currentPassword Current master password.
+     * @param newPassword New master password.
+     * @return True if change succeeded, false otherwise.
      */
-    Result<void> removeEntry(std::string_view title);
+    bool changeMasterPassword(std::string_view currentPassword,
+                              std::string_view newPassword);
 
     /**
-     * @brief Retrieves all password entries.
-     * @param masterPassword The master password for decryption.
-     * @return A Result containing a vector of PasswordEntries or an error.
+     * @brief Stores a password entry.
+     * @param key Unique key for the entry.
+     * @param entry Password entry to store.
+     * @return True if storage succeeded, false otherwise.
      */
-    Result<std::vector<PasswordEntry>> getAllEntries(
-        std::string_view masterPassword) const;
-
-    // Enhanced search and filtering methods
-    /**
-     * @brief Searches for password entries based on search options.
-     * @param options Search and filter criteria.
-     * @param masterPassword The master password for decryption.
-     * @return A Result containing matching PasswordEntries or an error.
-     */
-    Result<std::vector<PasswordEntry>> searchEntries(
-        const SearchOptions& options,
-        std::string_view masterPassword) const;
+    bool storePassword(std::string_view key, const PasswordEntry& entry);
 
     /**
-     * @brief Finds entries by category.
-     * @param category The category to filter by.
-     * @param masterPassword The master password for decryption.
-     * @return A Result containing matching PasswordEntries or an error.
+     * @brief Retrieves a password entry.
+     * @param key Key of the entry to retrieve.
+     * @return Retrieved password entry or empty entry if not found.
      */
-    Result<std::vector<PasswordEntry>> getEntriesByCategory(
-        PasswordCategory category,
-        std::string_view masterPassword) const;
+    PasswordEntry retrievePassword(std::string_view key);
 
     /**
-     * @brief Finds entries by tags.
-     * @param tags Vector of tags to search for.
-     * @param matchAll If true, entry must have all tags; if false, any tag matches.
-     * @param masterPassword The master password for decryption.
-     * @return A Result containing matching PasswordEntries or an error.
+     * @brief Removes a password entry.
+     * @param key Key of the entry to remove.
+     * @return True if removal succeeded, false otherwise.
      */
-    Result<std::vector<PasswordEntry>> getEntriesByTags(
-        const std::vector<std::string>& tags,
-        bool matchAll,
-        std::string_view masterPassword) const;
+    bool removePassword(std::string_view key);
 
     /**
-     * @brief Gets entries that are expiring soon.
-     * @param daysAhead Number of days ahead to check for expiration.
-     * @param masterPassword The master password for decryption.
-     * @return A Result containing expiring PasswordEntries or an error.
+     * @brief Gets all stored password keys.
+     * @return Vector of all password keys.
      */
-    Result<std::vector<PasswordEntry>> getExpiringEntries(
-        int daysAhead,
-        std::string_view masterPassword) const;
-
-    // Bulk operations
-    /**
-     * @brief Performs multiple operations in a batch.
-     * @param operations Vector of bulk operations to perform.
-     * @param masterPassword The master password for encryption/decryption.
-     * @return A Result containing a vector of individual operation results.
-     */
-    Result<std::vector<Result<void>>> bulkOperation(
-        const std::vector<BulkPasswordOperation>& operations,
-        std::string_view masterPassword);
+    std::vector<std::string> getAllKeys();
 
     /**
-     * @brief Adds multiple entries in a batch.
-     * @param entries Vector of entries to add.
-     * @param masterPassword The master password for encryption.
-     * @return A Result containing a vector of individual operation results.
+     * @brief Searches for password entries by various criteria.
+     * @param query Search query.
+     * @param searchInTitle Search in entry titles.
+     * @param searchInUsername Search in usernames.
+     * @param searchInUrl Search in URLs.
+     * @param searchInNotes Search in notes.
+     * @param searchInTags Search in tags.
+     * @return Vector of matching password entries with their keys.
      */
-    Result<std::vector<Result<void>>> bulkAddEntries(
-        const std::vector<PasswordEntry>& entries,
-        std::string_view masterPassword);
+    std::vector<std::pair<std::string, PasswordEntry>> searchPasswords(
+        std::string_view query, bool searchInTitle = true,
+        bool searchInUsername = true, bool searchInUrl = true,
+        bool searchInNotes = false, bool searchInTags = true);
 
     /**
-     * @brief Removes multiple entries in a batch.
-     * @param titles Vector of entry titles to remove.
-     * @return A Result containing a vector of individual operation results.
+     * @brief Filters password entries by category.
+     * @param category Category to filter by.
+     * @return Vector of matching password entries with their keys.
      */
-    Result<std::vector<Result<void>>> bulkRemoveEntries(
-        const std::vector<std::string>& titles);
+    std::vector<std::pair<std::string, PasswordEntry>> filterByCategory(
+        PasswordCategory category);
 
-    // Password utilities
     /**
-     * @brief Generates a secure password based on settings.
-     * @param options Optional custom generation options.
-     * @return A Result containing the generated password or an error.
+     * @brief Gets password entries that are expiring soon.
+     * @param daysAhead Number of days ahead to check (default: 30).
+     * @return Vector of expiring password entries with their keys.
      */
-    Result<std::string> generatePassword(
-        const PasswordGenerationOptions& options = PasswordGenerationOptions{}) const;
+    std::vector<std::pair<std::string, PasswordEntry>> getExpiringPasswords(
+        int daysAhead = 30);
+
+    /**
+     * @brief Generates a secure password.
+     * @param length Password length (0 uses settings default).
+     * @param includeUppercase Include uppercase letters.
+     * @param includeNumbers Include numbers.
+     * @param includeSpecial Include special characters.
+     * @return Generated password or empty string on failure.
+     */
+    std::string generatePassword(int length = 0, bool includeUppercase = true,
+                                 bool includeNumbers = true,
+                                 bool includeSpecial = true);
 
     /**
      * @brief Analyzes password strength.
-     * @param password The password to analyze.
-     * @return PasswordStrength enum value.
+     * @param password Password to analyze.
+     * @return Password analysis results.
      */
-    PasswordStrength analyzePasswordStrength(std::string_view password) const;
+    PasswordValidator::AnalysisResult analyzePassword(
+        std::string_view password);
 
     /**
-     * @brief Validates a password against current settings.
-     * @param password The password to validate.
-     * @return A Result indicating if the password is valid or error details.
+     * @brief Exports all password entries to JSON.
+     * @return Result containing JSON string or error message.
      */
-    Result<void> validatePassword(std::string_view password) const;
+    Result<std::string> exportToJson();
 
     /**
-     * @brief Checks for duplicate passwords across entries.
-     * @param masterPassword The master password for decryption.
-     * @return A Result containing a map of passwords to entry titles that use them.
+     * @brief Imports password entries from JSON.
+     * @param json JSON string containing password entries.
+     * @param overwriteExisting Whether to overwrite existing entries.
+     * @return Result containing number of imported entries or error message.
      */
-    Result<std::unordered_map<std::string, std::vector<std::string>>>
-        findDuplicatePasswords(std::string_view masterPassword) const;
+    Result<int> importFromJson(const std::string& json,
+                               bool overwriteExisting = false);
 
     /**
-     * @brief Finds weak passwords based on current settings.
-     * @param masterPassword The master password for decryption.
-     * @return A Result containing entries with weak passwords.
+     * @brief Gets the current password manager settings.
+     * @return Current settings.
      */
-    Result<std::vector<PasswordEntry>> findWeakPasswords(
-        std::string_view masterPassword) const;
+    const PasswordManagerSettings& getSettings() const noexcept;
 
-    // Import/Export functionality
-    /**
-     * @brief Exports all entries to a JSON string.
-     * @param masterPassword The master password for decryption.
-     * @param includePasswords Whether to include actual passwords in export.
-     * @return A Result containing the JSON export string or an error.
-     */
-    Result<std::string> exportToJson(
-        std::string_view masterPassword,
-        bool includePasswords = false) const;
-
-    /**
-     * @brief Imports entries from a JSON string.
-     * @param jsonData The JSON data to import.
-     * @param masterPassword The master password for encryption.
-     * @param overwriteExisting Whether to overwrite existing entries with same titles.
-     * @return A Result indicating success or failure with import statistics.
-     */
-    Result<std::string> importFromJson(
-        std::string_view jsonData,
-        std::string_view masterPassword,
-        bool overwriteExisting = false);
-
-    // Settings and metrics
     /**
      * @brief Updates password manager settings.
-     * @param newSettings The new settings to apply.
+     * @param settings New settings to apply.
+     * @return True if update succeeded, false otherwise.
      */
-    void updateSettings(const PasswordManagerSettings& newSettings);
+    bool updateSettings(const PasswordManagerSettings& settings);
 
     /**
-     * @brief Gets current password manager settings.
-     * @return Current PasswordManagerSettings.
+     * @brief Gets statistics about stored passwords.
+     * @return Statistics structure.
      */
-    PasswordManagerSettings getSettings() const;
-
-    /**
-     * @brief Gets performance metrics.
-     * @return PasswordManagerMetrics structure with performance data.
-     */
-    PasswordManagerMetrics getMetrics() const;
-
-    /**
-     * @brief Clears all cached data and resets metrics.
-     */
-    void clearCache();
+    struct Statistics {
+        int totalEntries = 0;
+        int expiredEntries = 0;
+        int weakPasswords = 0;
+        int duplicatePasswords = 0;
+        std::chrono::system_clock::time_point lastModified;
+    };
+    Statistics getStatistics();
 
 private:
-    Result<PasswordEntry> getEntry_nolock(std::string_view title, std::string_view masterPassword) const;
-    bool matchesSearchCriteria(const PasswordEntry& entry, const SearchOptions& options) const;
-    void updateMetrics(bool success, std::chrono::milliseconds latency);
-    std::string sanitizeForExport(const PasswordEntry& entry, bool includePasswords) const;
+    /**
+     * @brief Derives the master key from the master password.
+     * @param masterPassword Master password.
+     * @return Result containing derived key or error message.
+     */
+    Result<std::vector<uint8_t>> deriveMasterKey(
+        std::string_view masterPassword);
 
+    /**
+     * @brief Encrypts data using the master key.
+     * @param data Data to encrypt.
+     * @return Result containing encrypted data or error message.
+     */
+    Result<EncryptedData> encryptData(const std::string& data);
+
+    /**
+     * @brief Decrypts data using the master key.
+     * @param encryptedData Encrypted data to decrypt.
+     * @return Result containing decrypted data or error message.
+     */
+    Result<std::string> decryptData(const EncryptedData& encryptedData);
+
+    /**
+     * @brief Checks if auto-lock timeout has been reached.
+     */
+    void checkAutoLock();
+
+    /**
+     * @brief Updates the last activity timestamp.
+     */
+    void updateLastActivity();
+
+    /**
+     * @brief Validates that the manager is unlocked.
+     * @return True if unlocked, false if locked.
+     */
+    bool ensureUnlocked();
+
+    // Private member variables
     std::unique_ptr<SecureStorage> storage_;
-    mutable std::shared_mutex mutex_;
     PasswordManagerSettings settings_;
-    std::string appName_;
-    mutable PasswordManagerMetrics metrics_;
+    std::vector<uint8_t> masterKey_;
+    std::vector<uint8_t> masterSalt_;
+    bool isLocked_;
+    std::chrono::system_clock::time_point lastActivity_;
+    mutable std::mutex mutex_;
 };
 
 }  // namespace atom::secret

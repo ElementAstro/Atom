@@ -1,28 +1,74 @@
-#ifndef ATOM_MEMORY_MEMORY_POOL_HPP
-#define ATOM_MEMORY_MEMORY_POOL_HPP
+/**
+ * @file memory.hpp
+ * @brief Variable-size memory pool implementation with PMR support
+ *
+ * This file provides the MemoryPool class, which is a VARIABLE-SIZE memory pool
+ * that implements std::pmr::memory_resource. It can allocate different sizes of
+ * memory blocks efficiently.
+ *
+ * MEMORY POOL TYPES IN ATOM::MEMORY:
+ *
+ * 1. MemoryPool (this file - memory.hpp):
+ *    - Variable-size allocations
+ *    - Implements std::pmr::memory_resource
+ *    - Supports different allocation strategies (FirstFit, BestFit, WorstFit)
+ *    - Tagged allocations for debugging
+ *    - Detailed statistics and fragmentation management
+ *    - Use when: You need different-sized allocations with PMR compatibility
+ *
+ * 2. FixedBlockPool (memory_pool.hpp):
+ *    - Fixed-size block allocations only
+ *    - Simpler and faster than MemoryPool for uniform sizes
+ *    - Thread-safe with mutex
+ *    - Use when: All allocations are the same size
+ *
+ * 3. SimpleObjectPool (memory_pool.hpp):
+ *    - Wrapper around FixedBlockPool for object-oriented usage
+ *    - Provides PoolPtr smart pointer for automatic cleanup
+ *    - Use when: You want simple object pooling with RAII
+ *
+ * 4. ObjectPool (object.hpp):
+ *    - Advanced object pool with extensive features
+ *    - Priority-based allocation, batch operations, validation
+ *    - Statistics, timeouts, auto-cleanup
+ *    - Optional Boost integration
+ *    - Use when: You need advanced object pooling features
+ *
+ * 5. Arena (short_alloc.hpp):
+ *    - Stack-based arena allocator
+ *    - Multiple allocation strategies
+ *    - Very fast for temporary allocations
+ *    - Use when: You need stack-based temporary allocations
+ *
+ * @author Max Qian
+ * @copyright Copyright (C) 2023-2024 Max Qian
+ */
+
+#ifndef ATOM_MEMORY_MEMORY_HPP
+#define ATOM_MEMORY_MEMORY_HPP
 
 #include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <memory_resource>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <vector>
-#include <chrono>
-#include <immintrin.h>  // For memory prefetching
+
+#ifdef _WIN32
+#include <malloc.h>
+#endif
 
 #ifdef ATOM_USE_BOOST
 #include <boost/pool/pool.hpp>
-#endif
-
-// Cache line size for alignment optimizations
-#ifndef CACHE_LINE_SIZE
-#define CACHE_LINE_SIZE 64
 #endif
 
 namespace atom::memory {
@@ -64,69 +110,58 @@ private:
 };
 
 /**
- * @brief Snapshot of memory pool statistics (non-atomic for copying)
- */
-struct MemoryPoolStatsSnapshot {
-    // Basic allocation statistics
-    size_t total_allocated{0};   ///< Total allocated bytes
-    size_t total_available{0};   ///< Total available bytes
-    size_t allocation_count{0};  ///< Allocation operation count
-    size_t deallocation_count{0}; ///< Deallocation operation count
-    size_t chunk_count{0};       ///< Number of memory chunks
-
-    // Performance metrics
-    size_t cache_hits{0};        ///< Free list cache hits
-    size_t cache_misses{0};      ///< Free list cache misses
-    size_t coalesce_operations{0}; ///< Number of coalesce operations
-    size_t split_operations{0};  ///< Number of block split operations
-    size_t peak_allocated{0};    ///< Peak allocated memory
-    size_t fragmentation_events{0}; ///< Fragmentation events
-
-    // Timing statistics (in nanoseconds)
-    uint64_t total_alloc_time{0}; ///< Total allocation time
-    uint64_t total_dealloc_time{0}; ///< Total deallocation time
-    uint64_t max_alloc_time{0};   ///< Maximum allocation time
-    uint64_t max_dealloc_time{0}; ///< Maximum deallocation time
-
-    // Calculate performance metrics
-    double getCacheHitRatio() const noexcept {
-        size_t total_requests = cache_hits + cache_misses;
-        return total_requests > 0 ? static_cast<double>(cache_hits) / total_requests : 0.0;
-    }
-
-    double getAverageAllocTime() const noexcept {
-        return allocation_count > 0 ? static_cast<double>(total_alloc_time) / allocation_count : 0.0;
-    }
-
-    double getAverageDeallocTime() const noexcept {
-        return deallocation_count > 0 ? static_cast<double>(total_dealloc_time) / deallocation_count : 0.0;
-    }
-};
-
-/**
- * @brief Enhanced memory pool statistics with performance metrics (atomic for thread safety)
+ * @brief Memory pool statistics
  */
 struct MemoryPoolStats {
-    // Basic allocation statistics
     std::atomic<size_t> total_allocated{0};   ///< Total allocated bytes
     std::atomic<size_t> total_available{0};   ///< Total available bytes
     std::atomic<size_t> allocation_count{0};  ///< Allocation operation count
-    std::atomic<size_t> deallocation_count{0}; ///< Deallocation operation count
-    std::atomic<size_t> chunk_count{0};       ///< Number of memory chunks
+    std::atomic<size_t> deallocation_count{
+        0};                              ///< Deallocation operation count
+    std::atomic<size_t> chunk_count{0};  ///< Number of memory chunks
 
-    // Performance metrics
-    std::atomic<size_t> cache_hits{0};        ///< Free list cache hits
-    std::atomic<size_t> cache_misses{0};      ///< Free list cache misses
-    std::atomic<size_t> coalesce_operations{0}; ///< Number of coalesce operations
-    std::atomic<size_t> split_operations{0};  ///< Number of block split operations
-    std::atomic<size_t> peak_allocated{0};    ///< Peak allocated memory
-    std::atomic<size_t> fragmentation_events{0}; ///< Fragmentation events
+    // Default constructor
+    MemoryPoolStats() = default;
 
-    // Timing statistics (in nanoseconds)
-    std::atomic<uint64_t> total_alloc_time{0}; ///< Total allocation time
-    std::atomic<uint64_t> total_dealloc_time{0}; ///< Total deallocation time
-    std::atomic<uint64_t> max_alloc_time{0};   ///< Maximum allocation time
-    std::atomic<uint64_t> max_dealloc_time{0}; ///< Maximum deallocation time
+    // Copy constructor
+    MemoryPoolStats(const MemoryPoolStats& other) noexcept
+        : total_allocated(other.total_allocated.load()),
+          total_available(other.total_available.load()),
+          allocation_count(other.allocation_count.load()),
+          deallocation_count(other.deallocation_count.load()),
+          chunk_count(other.chunk_count.load()) {}
+
+    // Move constructor
+    MemoryPoolStats(MemoryPoolStats&& other) noexcept
+        : total_allocated(other.total_allocated.load()),
+          total_available(other.total_available.load()),
+          allocation_count(other.allocation_count.load()),
+          deallocation_count(other.deallocation_count.load()),
+          chunk_count(other.chunk_count.load()) {}
+
+    // Copy assignment operator
+    MemoryPoolStats& operator=(const MemoryPoolStats& other) noexcept {
+        if (this != &other) {
+            total_allocated = other.total_allocated.load();
+            total_available = other.total_available.load();
+            allocation_count = other.allocation_count.load();
+            deallocation_count = other.deallocation_count.load();
+            chunk_count = other.chunk_count.load();
+        }
+        return *this;
+    }
+
+    // Move assignment operator
+    MemoryPoolStats& operator=(MemoryPoolStats&& other) noexcept {
+        if (this != &other) {
+            total_allocated = other.total_allocated.load();
+            total_available = other.total_available.load();
+            allocation_count = other.allocation_count.load();
+            deallocation_count = other.deallocation_count.load();
+            chunk_count = other.chunk_count.load();
+        }
+        return *this;
+    }
 
     void reset() noexcept {
         total_allocated = 0;
@@ -134,53 +169,6 @@ struct MemoryPoolStats {
         allocation_count = 0;
         deallocation_count = 0;
         chunk_count = 0;
-        cache_hits = 0;
-        cache_misses = 0;
-        coalesce_operations = 0;
-        split_operations = 0;
-        peak_allocated = 0;
-        fragmentation_events = 0;
-        total_alloc_time = 0;
-        total_dealloc_time = 0;
-        max_alloc_time = 0;
-        max_dealloc_time = 0;
-    }
-
-    // Calculate performance metrics
-    double getCacheHitRatio() const noexcept {
-        size_t total_requests = cache_hits.load() + cache_misses.load();
-        return total_requests > 0 ? static_cast<double>(cache_hits.load()) / total_requests : 0.0;
-    }
-
-    double getAverageAllocTime() const noexcept {
-        size_t count = allocation_count.load();
-        return count > 0 ? static_cast<double>(total_alloc_time.load()) / count : 0.0;
-    }
-
-    double getAverageDeallocTime() const noexcept {
-        size_t count = deallocation_count.load();
-        return count > 0 ? static_cast<double>(total_dealloc_time.load()) / count : 0.0;
-    }
-
-    // Create a copyable snapshot of the statistics
-    MemoryPoolStatsSnapshot snapshot() const noexcept {
-        MemoryPoolStatsSnapshot copy;
-        copy.total_allocated = total_allocated.load();
-        copy.total_available = total_available.load();
-        copy.allocation_count = allocation_count.load();
-        copy.deallocation_count = deallocation_count.load();
-        copy.chunk_count = chunk_count.load();
-        copy.cache_hits = cache_hits.load();
-        copy.cache_misses = cache_misses.load();
-        copy.coalesce_operations = coalesce_operations.load();
-        copy.split_operations = split_operations.load();
-        copy.peak_allocated = peak_allocated.load();
-        copy.fragmentation_events = fragmentation_events.load();
-        copy.total_alloc_time = total_alloc_time.load();
-        copy.total_dealloc_time = total_dealloc_time.load();
-        copy.max_alloc_time = max_alloc_time.load();
-        copy.max_dealloc_time = max_dealloc_time.load();
-        return copy;
     }
 };
 
@@ -193,69 +181,13 @@ struct MemoryTag {
     int line;
 
     // Default constructor
-    MemoryTag() : name("unknown"), file("unknown"), line(0) {}
+    MemoryTag() : name(""), file(""), line(0) {}
 
     MemoryTag(std::string tag_name, std::string file_name, int line_num)
         : name(std::move(tag_name)),
           file(std::move(file_name)),
           line(line_num) {}
 };
-
-/**
- * @brief Lock-free free block node for high-performance allocation
- */
-struct alignas(CACHE_LINE_SIZE) LockFreeFreeBlock {
-    std::atomic<void*> ptr{nullptr};
-    std::atomic<size_t> size{0};
-    std::atomic<LockFreeFreeBlock*> next{nullptr};
-
-    LockFreeFreeBlock() = default;
-    LockFreeFreeBlock(void* p, size_t s) : ptr(p), size(s) {}
-};
-
-/**
- * @brief Cache-optimized free list for fast allocation
- */
-class alignas(CACHE_LINE_SIZE) OptimizedFreeList {
-private:
-    std::atomic<LockFreeFreeBlock*> head_{nullptr};
-    alignas(CACHE_LINE_SIZE) std::atomic<size_t> size_{0};
-
-public:
-    void push(LockFreeFreeBlock* node) noexcept {
-        LockFreeFreeBlock* old_head = head_.load(std::memory_order_relaxed);
-        do {
-            node->next.store(old_head, std::memory_order_relaxed);
-        } while (!head_.compare_exchange_weak(old_head, node,
-                                            std::memory_order_release,
-                                            std::memory_order_relaxed));
-        size_.fetch_add(1, std::memory_order_relaxed);
-    }
-
-    LockFreeFreeBlock* pop() noexcept {
-        LockFreeFreeBlock* head = head_.load(std::memory_order_acquire);
-        while (head != nullptr) {
-            LockFreeFreeBlock* next = head->next.load(std::memory_order_relaxed);
-            if (head_.compare_exchange_weak(head, next,
-                                          std::memory_order_release,
-                                          std::memory_order_relaxed)) {
-                size_.fetch_sub(1, std::memory_order_relaxed);
-                return head;
-            }
-        }
-        return nullptr;
-    }
-
-    size_t size() const noexcept {
-        return size_.load(std::memory_order_relaxed);
-    }
-
-    bool empty() const noexcept {
-        return head_.load(std::memory_order_relaxed) == nullptr;
-    }
-};
-
-}  // namespace atom::memory
 
 /**
  * @brief High-performance memory pool for efficient memory allocation and
@@ -265,6 +197,10 @@ public:
  * the overhead of frequent allocations and deallocations. It includes various
  * optimization strategies, supports thread-safe operations, and provides
  * detailed memory usage statistics.
+ *
+ * This is a VARIABLE-SIZE memory pool that can allocate different sizes of
+ * memory blocks and implements std::pmr::memory_resource. For fixed-size
+ * block allocations, see FixedBlockPool in memory_pool.hpp.
  *
  * @tparam T The type of objects to allocate
  * @tparam BlockSize The size of each memory block in bytes
@@ -278,14 +214,10 @@ public:
      * @brief Constructs a MemoryPool object
      *
      * @param block_size_strategy Memory block growth strategy
-     * @param enable_lock_free Enable lock-free optimizations for single-threaded scenarios
      */
-    explicit MemoryPool(
-        std::unique_ptr<atom::memory::BlockSizeStrategy> block_size_strategy =
-            std::make_unique<atom::memory::ExponentialBlockSizeStrategy>(),
-        bool enable_lock_free = false)
-        : block_size_strategy_(std::move(block_size_strategy)),
-          lock_free_enabled_(enable_lock_free) {
+    explicit MemoryPool(std::unique_ptr<BlockSizeStrategy> block_size_strategy =
+                            std::make_unique<ExponentialBlockSizeStrategy>())
+        : block_size_strategy_(std::move(block_size_strategy)) {
         static_assert(BlockSize >= sizeof(T),
                       "BlockSize must be at least as large as sizeof(T)");
         static_assert(BlockSize % Alignment == 0,
@@ -293,11 +225,6 @@ public:
 
         // Initialize first memory chunk
         addNewChunk(BlockSize);
-
-        // Initialize free block pool for lock-free operations
-        if (lock_free_enabled_) {
-            initializeFreeBlockPool();
-        }
     }
 
     /**
@@ -305,17 +232,11 @@ public:
      */
     MemoryPool(MemoryPool&& other) noexcept
         : block_size_strategy_(std::move(other.block_size_strategy_)),
-          free_list_(std::move(other.free_list_)) {
+          free_list_(std::move(other.free_list_)),
+          stats_(other.stats_) {
         std::unique_lock lock(other.mutex_);
         pool_ = std::move(other.pool_);
         tagged_allocations_ = std::move(other.tagged_allocations_);
-
-        // Manually copy atomic values
-        stats_.total_allocated = other.stats_.total_allocated.load();
-        stats_.total_available = other.stats_.total_available.load();
-        stats_.allocation_count = other.stats_.allocation_count.load();
-        stats_.deallocation_count = other.stats_.deallocation_count.load();
-        stats_.chunk_count = other.stats_.chunk_count.load();
     }
 
     /**
@@ -330,14 +251,8 @@ public:
             block_size_strategy_ = std::move(other.block_size_strategy_);
             pool_ = std::move(other.pool_);
             free_list_ = std::move(other.free_list_);
+            stats_ = other.stats_;
             tagged_allocations_ = std::move(other.tagged_allocations_);
-
-            // Manually copy atomic values
-            stats_.total_allocated = other.stats_.total_allocated.load();
-            stats_.total_available = other.stats_.total_available.load();
-            stats_.allocation_count = other.stats_.allocation_count.load();
-            stats_.deallocation_count = other.stats_.deallocation_count.load();
-            stats_.chunk_count = other.stats_.chunk_count.load();
         }
         return *this;
     }
@@ -356,72 +271,41 @@ public:
      *
      * @param n The number of objects to allocate
      * @return T* A pointer to the allocated memory
-     * @throws atom::memory::MemoryPoolException if allocation fails
+     * @throws MemoryPoolException if allocation fails
      */
     [[nodiscard]] T* allocate(size_t n) {
         const size_t numBytes = n * sizeof(T);
         if (numBytes > maxSize()) {
-            throw atom::memory::MemoryPoolException(
+            throw MemoryPoolException(
                 "Requested size exceeds maximum block size");
-        }
-
-        // Try optimized allocation first for better performance
-        if (lock_free_enabled_) {
-            T* result = allocateOptimized(numBytes);
-            if (result) {
-                updateStats(numBytes, true);
-                return result;
-            }
         }
 
         std::unique_lock lock(mutex_);
         T* result = nullptr;
 
-        // First try to allocate from free list with improved search
-        if (!free_list_.empty()) {
-            // Use allocation hint for better cache locality
-            size_t hint = allocation_hint_.load(std::memory_order_relaxed);
-            auto it = free_list_.end();
-
-            // If we have a size hint, try to find a block close to that size first
-            if (hint > 0 && hint <= numBytes * 2) {
-                it = std::find_if(free_list_.begin(), free_list_.end(),
-                                 [numBytes, hint](const auto& block) {
-                                     return block.size >= numBytes && block.size <= hint * 2;
-                                 });
-            }
-
-            // Fall back to first-fit if hint-based search fails
-            if (it == free_list_.end()) {
-                it = std::find_if(free_list_.begin(), free_list_.end(),
-                                 [numBytes](const auto& block) {
-                                     return block.size >= numBytes;
-                                 });
-            }
+        // First try to allocate from free list
+        if (!free_list_.empty() && free_list_.front().size >= numBytes) {
+            auto it = std::find_if(free_list_.begin(), free_list_.end(),
+                                   [numBytes](const auto& block) {
+                                       return block.size >= numBytes;
+                                   });
 
             if (it != free_list_.end()) {
                 result = static_cast<T*>(it->ptr);
-                stats_.cache_hits.fetch_add(1, std::memory_order_relaxed);
 
-                // Improved block splitting with better size thresholds
-                if (it->size >= numBytes + sizeof(void*) + Alignment &&
-                    it->size > numBytes * 1.5) {  // Only split if significantly larger
+                // If free block is much larger than requested size, consider
+                // splitting
+                if (it->size >= numBytes + sizeof(void*) + Alignment) {
                     void* new_free = static_cast<char*>(it->ptr) + numBytes;
                     size_t new_size = it->size - numBytes;
 
                     free_list_.push_back({new_free, new_size});
                     it->size = numBytes;
-                    stats_.split_operations.fetch_add(1, std::memory_order_relaxed);
                 }
 
                 free_list_.erase(it);
                 updateStats(numBytes, true);
-
-                // Prefetch allocated memory for better performance
-                prefetchMemory(result, numBytes);
                 return result;
-            } else {
-                stats_.cache_misses.fetch_add(1, std::memory_order_relaxed);
             }
         }
 
@@ -429,14 +313,12 @@ public:
         result = allocateFromExistingChunks(numBytes);
         if (result) {
             updateStats(numBytes, true);
-            prefetchMemory(result, numBytes);
             return result;
         }
 
         // Need a new chunk
         result = allocateFromNewChunk(numBytes);
         updateStats(numBytes, true);
-        prefetchMemory(result, numBytes);
         return result;
     }
 
@@ -454,7 +336,7 @@ public:
                                     int line = 0) {
         T* ptr = allocate(n);
         std::unique_lock lock(mutex_);
-        tagged_allocations_[ptr] = atom::memory::MemoryTag(tag, file, line);
+        tagged_allocations_[ptr] = MemoryTag(tag, file, line);
         return ptr;
     }
 
@@ -469,32 +351,6 @@ public:
             return;
 
         const size_t numBytes = n * sizeof(T);
-        auto start_time = std::chrono::high_resolution_clock::now();
-
-        // Try lock-free deallocation first if enabled
-        if (lock_free_enabled_) {
-            auto* node = getFreeBlockNode();
-            if (node) {
-                node->ptr.store(p, std::memory_order_relaxed);
-                node->size.store(numBytes, std::memory_order_relaxed);
-                lock_free_list_.push(node);
-
-                // Update timing statistics
-                auto end_time = std::chrono::high_resolution_clock::now();
-                auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-                stats_.total_dealloc_time.fetch_add(duration, std::memory_order_relaxed);
-
-                uint64_t current_max = stats_.max_dealloc_time.load();
-                while (duration > current_max &&
-                       !stats_.max_dealloc_time.compare_exchange_weak(current_max, duration)) {
-                    // Keep trying until we successfully update or find a larger value
-                }
-
-                updateStats(numBytes, false);
-                return;
-            }
-        }
-
         std::unique_lock lock(mutex_);
 
         // Remove any tags
@@ -503,22 +359,8 @@ public:
         // Add to free list
         free_list_.push_back({p, numBytes});
 
-        // Try to merge adjacent free blocks with improved coalescing
-        size_t coalesced_bytes = coalesceFreelist();
-        if (coalesced_bytes > 0) {
-            stats_.coalesce_operations.fetch_add(1, std::memory_order_relaxed);
-        }
-
-        // Update timing statistics
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-        stats_.total_dealloc_time.fetch_add(duration, std::memory_order_relaxed);
-
-        uint64_t current_max = stats_.max_dealloc_time.load();
-        while (duration > current_max &&
-               !stats_.max_dealloc_time.compare_exchange_weak(current_max, duration)) {
-            // Keep trying until we successfully update or find a larger value
-        }
+        // Try to merge adjacent free blocks
+        coalesceFreelist();
 
         updateStats(numBytes, false);
     }
@@ -633,8 +475,7 @@ public:
      * @param ptr Pointer to look up
      * @return The tag associated with the pointer, if any
      */
-    [[nodiscard]] std::optional<atom::memory::MemoryTag> findTag(
-        void* ptr) const {
+    [[nodiscard]] std::optional<MemoryTag> findTag(void* ptr) const {
         std::shared_lock lock(mutex_);
         auto it = tagged_allocations_.find(ptr);
         if (it != tagged_allocations_.end()) {
@@ -648,8 +489,8 @@ public:
      *
      * @return A copy of the pointer-to-tag mapping
      */
-    [[nodiscard]] std::unordered_map<void*, atom::memory::MemoryTag>
-    getTaggedAllocations() const {
+    [[nodiscard]] std::unordered_map<void*, MemoryTag> getTaggedAllocations()
+        const {
         std::shared_lock lock(mutex_);
         return tagged_allocations_;
     }
@@ -670,56 +511,6 @@ public:
         }
     }
 
-    /**
-     * @brief Get detailed performance statistics
-     *
-     * @return Enhanced statistics including performance metrics
-     */
-    [[nodiscard]] auto getDetailedStats() const -> atom::memory::MemoryPoolStatsSnapshot {
-        std::shared_lock lock(mutex_);
-        return stats_.snapshot();
-    }
-
-    /**
-     * @brief Get cache performance metrics
-     *
-     * @return Cache hit ratio and related metrics
-     */
-    [[nodiscard]] auto getCachePerformance() const -> std::tuple<double, size_t, size_t> {
-        std::shared_lock lock(mutex_);
-        size_t hits = stats_.cache_hits.load();
-        size_t misses = stats_.cache_misses.load();
-        double hit_ratio = stats_.getCacheHitRatio();
-        return std::make_tuple(hit_ratio, hits, misses);
-    }
-
-    /**
-     * @brief Get timing performance metrics
-     *
-     * @return Average and maximum allocation/deallocation times
-     */
-    [[nodiscard]] auto getTimingPerformance() const -> std::tuple<double, double, uint64_t, uint64_t> {
-        std::shared_lock lock(mutex_);
-        double avg_alloc = stats_.getAverageAllocTime();
-        double avg_dealloc = stats_.getAverageDeallocTime();
-        uint64_t max_alloc = stats_.max_alloc_time.load();
-        uint64_t max_dealloc = stats_.max_dealloc_time.load();
-        return std::make_tuple(avg_alloc, avg_dealloc, max_alloc, max_dealloc);
-    }
-
-    /**
-     * @brief Enable or disable lock-free optimizations
-     *
-     * @param enable Whether to enable lock-free optimizations
-     */
-    void setLockFreeMode(bool enable) {
-        std::unique_lock lock(mutex_);
-        if (enable && !lock_free_enabled_) {
-            initializeFreeBlockPool();
-        }
-        lock_free_enabled_ = enable;
-    }
-
 protected:
     /**
      * @brief Allocates memory with a specified alignment
@@ -727,7 +518,7 @@ protected:
      * @param bytes Number of bytes to allocate
      * @param alignment Memory alignment
      * @return Pointer to allocated memory
-     * @throws atom::memory::MemoryPoolException if allocation fails
+     * @throws MemoryPoolException if allocation fails
      */
     void* do_allocate(size_t bytes, size_t alignment) override {
         if (alignment <= Alignment && bytes <= maxSize()) {
@@ -735,10 +526,13 @@ protected:
         }
 
         // Fall back to aligned allocation
+#ifdef _WIN32
+        void* ptr = _aligned_malloc(bytes, alignment);
+#else
         void* ptr = aligned_alloc(alignment, bytes);
+#endif
         if (!ptr) {
-            throw atom::memory::MemoryPoolException(
-                "Aligned allocation failed");
+            throw MemoryPoolException("Aligned allocation failed");
         }
 
         std::unique_lock lock(mutex_);
@@ -760,7 +554,11 @@ protected:
         } else {
             std::unique_lock lock(mutex_);
             updateStats(bytes, false);
-            free(p);  // Use free for aligned-allocated memory
+#ifdef _WIN32
+            _aligned_free(p);  // Use _aligned_free for _aligned_malloc memory
+#else
+            free(p);  // Use free for aligned_alloc memory
+#endif
         }
     }
 
@@ -864,7 +662,7 @@ private:
     }
 
     /**
-     * @brief Enhanced coalescing algorithm with better performance
+     * @brief Coalesces adjacent blocks in the free list
      *
      * @return Number of bytes coalesced
      */
@@ -873,44 +671,26 @@ private:
             return 0;
 
         size_t bytes_coalesced = 0;
-        size_t original_size = free_list_.size();
 
-        // Sort by address for efficient merging
+        // Sort by address
         std::sort(free_list_.begin(), free_list_.end(),
                   [](const auto& a, const auto& b) { return a.ptr < b.ptr; });
 
-        // Use two-pointer technique for efficient merging
-        size_t write_idx = 0;
-        for (size_t read_idx = 0; read_idx < free_list_.size(); ++read_idx) {
-            if (write_idx != read_idx) {
-                free_list_[write_idx] = free_list_[read_idx];
+        // Merge adjacent blocks
+        for (auto it = free_list_.begin(); it != free_list_.end() - 1;) {
+            auto next_it = it + 1;
+
+            char* end_of_current = static_cast<char*>(it->ptr) + it->size;
+
+            if (end_of_current == static_cast<char*>(next_it->ptr)) {
+                // Blocks are adjacent, merge them
+                it->size += next_it->size;
+                bytes_coalesced += next_it->size;
+                free_list_.erase(next_it);
+                // Don't increment it, since we removed next_it
+            } else {
+                ++it;
             }
-
-            // Try to merge with subsequent blocks
-            while (read_idx + 1 < free_list_.size()) {
-                char* end_of_current = static_cast<char*>(free_list_[write_idx].ptr) +
-                                      free_list_[write_idx].size;
-                char* start_of_next = static_cast<char*>(free_list_[read_idx + 1].ptr);
-
-                if (end_of_current == start_of_next) {
-                    // Blocks are adjacent, merge them
-                    free_list_[write_idx].size += free_list_[read_idx + 1].size;
-                    bytes_coalesced += free_list_[read_idx + 1].size;
-                    ++read_idx;  // Skip the merged block
-                } else {
-                    break;  // No more adjacent blocks
-                }
-            }
-            ++write_idx;
-        }
-
-        // Resize the vector to remove merged blocks
-        free_list_.resize(write_idx);
-
-        // Update fragmentation statistics
-        if (original_size > write_idx) {
-            stats_.fragmentation_events.fetch_add(original_size - write_idx,
-                                                 std::memory_order_relaxed);
         }
 
         return bytes_coalesced;
@@ -934,137 +714,38 @@ private:
     }
 
     /**
-     * @brief Updates statistics with enhanced tracking
+     * @brief Updates statistics
      *
      * @param num_bytes Number of bytes to update
      * @param is_allocation true for allocation, false for deallocation
      */
     void updateStats(size_t num_bytes, bool is_allocation) noexcept {
         if (is_allocation) {
-            stats_.total_allocated.fetch_add(num_bytes, std::memory_order_relaxed);
-            stats_.total_available.fetch_sub(num_bytes, std::memory_order_relaxed);
+            stats_.total_allocated.fetch_add(num_bytes,
+                                             std::memory_order_relaxed);
+            stats_.total_available.fetch_sub(num_bytes,
+                                             std::memory_order_relaxed);
             stats_.allocation_count.fetch_add(1, std::memory_order_relaxed);
-
-            // Update peak allocated memory
-            size_t current_allocated = stats_.total_allocated.load();
-            size_t current_peak = stats_.peak_allocated.load();
-            while (current_allocated > current_peak &&
-                   !stats_.peak_allocated.compare_exchange_weak(current_peak, current_allocated)) {
-                // Keep trying until we successfully update or find a larger value
-            }
         } else {
-            stats_.total_allocated.fetch_sub(num_bytes, std::memory_order_relaxed);
-            stats_.total_available.fetch_add(num_bytes, std::memory_order_relaxed);
+            stats_.total_allocated.fetch_sub(num_bytes,
+                                             std::memory_order_relaxed);
+            stats_.total_available.fetch_add(num_bytes,
+                                             std::memory_order_relaxed);
             stats_.deallocation_count.fetch_add(1, std::memory_order_relaxed);
         }
     }
 
 private:
-    std::unique_ptr<atom::memory::BlockSizeStrategy>
+    std::unique_ptr<BlockSizeStrategy>
         block_size_strategy_;           ///< Block size strategy
     std::vector<Chunk> pool_;           ///< Pool of memory chunks
     std::vector<FreeBlock> free_list_;  ///< List of free blocks
     mutable std::shared_mutex mutex_;   ///< Mutex to protect shared resources
-    atom::memory::MemoryPoolStats stats_;  ///< Memory pool statistics
-    std::unordered_map<void*, atom::memory::MemoryTag>
+    MemoryPoolStats stats_;             ///< Memory pool statistics
+    std::unordered_map<void*, MemoryTag>
         tagged_allocations_;  ///< Tagged allocations
-
-    // Lock-free optimization members
-    bool lock_free_enabled_{false};    ///< Enable lock-free optimizations
-    atom::memory::OptimizedFreeList lock_free_list_; ///< Lock-free free list
-    std::vector<std::unique_ptr<atom::memory::LockFreeFreeBlock>> free_block_pool_; ///< Pool of free block nodes
-    std::atomic<size_t> free_block_pool_index_{0}; ///< Index for free block pool
-
-    // Performance optimization members
-    alignas(CACHE_LINE_SIZE) std::atomic<void*> last_allocated_{nullptr}; ///< Last allocated pointer for locality
-    alignas(CACHE_LINE_SIZE) std::atomic<size_t> allocation_hint_{0}; ///< Hint for next allocation size
-
-    /**
-     * @brief Initialize the free block pool for lock-free operations
-     */
-    void initializeFreeBlockPool() {
-        constexpr size_t INITIAL_POOL_SIZE = 1024;
-        free_block_pool_.reserve(INITIAL_POOL_SIZE);
-        for (size_t i = 0; i < INITIAL_POOL_SIZE; ++i) {
-            free_block_pool_.emplace_back(std::make_unique<atom::memory::LockFreeFreeBlock>());
-        }
-    }
-
-    /**
-     * @brief Get a free block node from the pool
-     */
-    atom::memory::LockFreeFreeBlock* getFreeBlockNode() {
-        if (lock_free_enabled_) {
-            size_t index = free_block_pool_index_.fetch_add(1, std::memory_order_relaxed);
-            if (index < free_block_pool_.size()) {
-                return free_block_pool_[index].get();
-            }
-        }
-        return new atom::memory::LockFreeFreeBlock();
-    }
-
-    /**
-     * @brief Prefetch memory for better cache performance
-     */
-    void prefetchMemory(void* ptr, size_t size) const noexcept {
-        if (ptr && size > 0) {
-            // Prefetch the memory region
-            char* mem = static_cast<char*>(ptr);
-            for (size_t offset = 0; offset < size; offset += CACHE_LINE_SIZE) {
-                _mm_prefetch(mem + offset, _MM_HINT_T0);
-            }
-        }
-    }
-
-    /**
-     * @brief Optimized allocation with timing and cache optimization
-     */
-    T* allocateOptimized(size_t numBytes) {
-        auto start_time = std::chrono::high_resolution_clock::now();
-
-        T* result = nullptr;
-
-        // Try lock-free allocation first if enabled
-        if (lock_free_enabled_ && !lock_free_list_.empty()) {
-            auto* node = lock_free_list_.pop();
-            if (node && node->size.load() >= numBytes) {
-                result = static_cast<T*>(node->ptr.load());
-                stats_.cache_hits.fetch_add(1, std::memory_order_relaxed);
-            } else if (node) {
-                // Put it back if size doesn't match
-                lock_free_list_.push(node);
-            }
-        }
-
-        if (!result) {
-            stats_.cache_misses.fetch_add(1, std::memory_order_relaxed);
-            // Fall back to regular allocation
-            result = allocateFromExistingChunks(numBytes);
-            if (!result) {
-                result = allocateFromNewChunk(numBytes);
-            }
-        }
-
-        // Update timing statistics
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
-        stats_.total_alloc_time.fetch_add(duration, std::memory_order_relaxed);
-
-        uint64_t current_max = stats_.max_alloc_time.load();
-        while (duration > current_max &&
-               !stats_.max_alloc_time.compare_exchange_weak(current_max, duration)) {
-            // Keep trying until we successfully update or find a larger value
-        }
-
-        // Prefetch allocated memory
-        if (result) {
-            prefetchMemory(result, numBytes);
-            last_allocated_.store(result, std::memory_order_relaxed);
-            allocation_hint_.store(numBytes, std::memory_order_relaxed);
-        }
-
-        return result;
-    }
 };
 
-#endif  // ATOM_MEMORY_MEMORY_POOL_HPP
+}  // namespace atom::memory
+
+#endif  // ATOM_MEMORY_MEMORY_HPP

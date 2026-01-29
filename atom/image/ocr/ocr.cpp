@@ -19,7 +19,6 @@
 #include <variant>
 #include <vector>
 
-
 #include <opencv2/dnn.hpp>
 #include <opencv2/dnn_superres.hpp>
 #include <opencv2/highgui.hpp>
@@ -27,10 +26,8 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/text.hpp>
 
-
 #include <leptonica/allheaders.h>
 #include <tesseract/baseapi.h>
-
 
 namespace fs = std::filesystem;
 namespace views = std::ranges::views;

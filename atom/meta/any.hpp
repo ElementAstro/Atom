@@ -1,27 +1,18 @@
 /*!
  * \file any.hpp
- * \brief Enhanced BoxedValue using C++20 features - OPTIMIZED VERSION
+ * \brief Enhanced BoxedValue using C++20 features
  * \author Max Qian <lightapt.com>
  * \date 2023-12-28
- * \updated 2025-01-22 - Performance optimizations by AI Assistant
  * \copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
- *
- * OPTIMIZATIONS APPLIED:
- * - Reduced memory alignment from 128 to 64 bytes for better cache usage
- * - Packed boolean flags into single byte structure
- * - Converted time storage to compact uint64_t microseconds format
- * - Added atomic access count for lock-free performance monitoring
- * - Added helper methods for time conversion and access tracking
- * - Optimized copy/move operations and reduced unnecessary allocations
  */
 
 #ifndef ATOM_META_ANY_HPP
 #define ATOM_META_ANY_HPP
 
 #include <any>
-#include <atomic>
 #include <chrono>
 #include <concepts>
+#include <format>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -30,72 +21,31 @@
 #include <shared_mutex>
 #include <sstream>
 #include <string>
-#include <string_view>
 #include <type_traits>
 #include <typeinfo>
 #include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
-#include <format>
+#include <version>
 
+#include "atom/macro.hpp"
 #include "type_info.hpp"
+
+// C++23 feature detection
+#if __cpp_lib_expected >= 202202L
+#include <expected>
+#define ATOM_ANY_HAS_EXPECTED 1
+#else
+#define ATOM_ANY_HAS_EXPECTED 0
+#endif
 
 namespace atom::meta {
 
 /*!
- * \brief Serialization format enumeration
- */
-enum class SerializationFormat {
-    JSON,
-    BINARY,
-    XML,
-    YAML
-};
-
-/*!
- * \brief Serialization result structure
- */
-struct SerializationResult {
-    bool success = false;
-    std::string data;
-    std::string error_message;
-
-    explicit operator bool() const noexcept { return success; }
-};
-
-/*!
- * \brief Performance statistics for BoxedValue
- */
-struct PerformanceStats {
-    uint32_t access_count = 0;
-    uint32_t copy_count = 0;
-    uint32_t move_count = 0;
-    uint64_t creation_time_micros = 0;
-    uint64_t last_access_time_micros = 0;
-    uint64_t total_access_time_micros = 0;
-
-    [[nodiscard]] auto averageAccessTime() const noexcept -> double {
-        return access_count > 0 ? static_cast<double>(total_access_time_micros) / access_count : 0.0;
-    }
-};
-
-/*!
- * \brief Attribute metadata for enhanced attribute system
- */
-struct AttributeMetadata {
-    std::string description;
-    std::string category;
-    bool is_readonly = false;
-    bool is_system = false;  // System attributes cannot be removed by user
-    uint64_t creation_time = 0;
-    uint64_t modification_time = 0;
-};
-
-/*!
  * \class BoxedValue
  * \brief A class that encapsulates a value of any type with additional
- * metadata. Enhanced with serialization, debugging, and performance features.
+ * metadata.
  */
 class BoxedValue {
 public:
@@ -109,30 +59,19 @@ private:
     /*!
      * \struct Data
      * \brief Internal data structure to hold the value and its metadata.
-     * Optimized for better memory layout and cache performance.
      */
-    struct alignas(64) Data {  // Reduced from 128 to 64 bytes for better cache usage
+    struct ATOM_ALIGNAS(128) Data {
         std::any obj;
         TypeInfo typeInfo;
-
-        // Simplified attribute storage - keep existing interface but optimize later
-        std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<Data>>> attrs;
-
-        // Pack boolean flags into a single byte for better memory efficiency
-        struct Flags {
-            bool isRef : 1;
-            bool returnValue : 1;
-            bool readonly : 1;
-            bool isConst : 1;
-            uint8_t reserved : 4;    // Reserved for future use
-        } flags = {};
-
+        std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<Data>>>
+            attrs;
+        bool isRef = false;
+        bool returnValue = false;
+        bool readonly = false;
         const void* constDataPtr = nullptr;
-
-        // Use more compact time representation
-        uint64_t creationTime;      // Microseconds since epoch
-        uint64_t modificationTime;  // Microseconds since epoch
-        mutable std::atomic<uint32_t> accessCount{0};  // Atomic for lock-free access
+        std::chrono::time_point<std::chrono::system_clock> creationTime;
+        std::chrono::time_point<std::chrono::system_clock> modificationTime;
+        mutable int accessCount = 0;
 
         /*!
          * \brief Constructor for non-void types.
@@ -147,17 +86,14 @@ private:
         Data(T&& object, bool is_ref, bool return_value, bool is_readonly)
             : obj(std::forward<T>(object)),
               typeInfo(userType<std::decay_t<T>>()),
-              attrs{},
+              isRef(is_ref),
+              returnValue(return_value),
+              readonly(is_readonly),
               constDataPtr(std::is_const_v<std::remove_reference_t<T>>
                                ? &object
                                : nullptr),
-              creationTime(getCurrentTimeMicros()),
-              modificationTime(getCurrentTimeMicros()) {
-            flags.isRef = is_ref;
-            flags.returnValue = return_value;
-            flags.readonly = is_readonly;
-            flags.isConst = std::is_const_v<std::remove_reference_t<T>>;
-        }
+              creationTime(std::chrono::system_clock::now()),
+              modificationTime(std::chrono::system_clock::now()) {}
 
         /*!
          * \brief Constructor for void type.
@@ -172,88 +108,15 @@ private:
         Data([[maybe_unused]] T&& object, bool is_ref, bool return_value,
              bool is_readonly)
             : typeInfo(userType<std::decay_t<T>>()),
-              attrs{},
-              creationTime(getCurrentTimeMicros()),
-              modificationTime(getCurrentTimeMicros()) {
-            flags.isRef = is_ref;
-            flags.returnValue = return_value;
-            flags.readonly = is_readonly;
-            flags.isConst = false;
-        }
-
-        /*!
-         * \brief Copy constructor for Data struct
-         * \param other The other Data to copy from
-         */
-        Data(const Data& other)
-            : obj(other.obj),
-              typeInfo(other.typeInfo),
-              attrs(other.attrs),
-              flags(other.flags),
-              constDataPtr(other.constDataPtr),
-              creationTime(getCurrentTimeMicros()),
-              modificationTime(getCurrentTimeMicros()),
-              accessCount(other.accessCount.load()) {
-        }
-
-        /*!
-         * \brief Copy assignment operator for Data struct
-         * \param other The other Data to copy from
-         * \return Reference to this Data
-         */
-        Data& operator=(const Data& other) {
-            if (this != &other) {
-                obj = other.obj;
-                typeInfo = other.typeInfo;
-                attrs = other.attrs;
-                flags = other.flags;
-                constDataPtr = other.constDataPtr;
-                creationTime = getCurrentTimeMicros();
-                modificationTime = getCurrentTimeMicros();
-                accessCount.store(other.accessCount.load());
-            }
-            return *this;
-        }
+              isRef(is_ref),
+              returnValue(return_value),
+              readonly(is_readonly),
+              creationTime(std::chrono::system_clock::now()),
+              modificationTime(std::chrono::system_clock::now()) {}
     };
 
     std::shared_ptr<Data> data_;
     mutable std::shared_mutex mutex_;
-
-private:
-    /*!
-     * \brief Helper method to get current time in microseconds
-     * \return Current time as microseconds since epoch
-     */
-    static auto getCurrentTimeMicros() noexcept -> uint64_t {
-        return std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
-    }
-
-    /*!
-     * \brief Increment access count atomically (lock-free)
-     */
-    void incrementAccessCount() const noexcept {
-        data_->accessCount.fetch_add(1, std::memory_order_relaxed);
-    }
-
-    /*!
-     * \brief Get current access count (lock-free)
-     * \return Current access count
-     */
-    [[nodiscard]] auto getAccessCount() const noexcept -> uint32_t {
-        return data_->accessCount.load(std::memory_order_relaxed);
-    }
-
-    /*!
-     * \brief Convert microseconds since epoch to time_point
-     * \param micros Microseconds since epoch
-     * \return time_point representation
-     */
-    static auto microsToTimePoint(uint64_t micros) noexcept
-        -> std::chrono::system_clock::time_point {
-        return std::chrono::system_clock::time_point(
-            std::chrono::microseconds(micros));
-    }
 
 public:
     /*!
@@ -277,7 +140,7 @@ public:
         if constexpr (std::is_same_v<
                           std::decay_t<T>,
                           std::reference_wrapper<std::remove_reference_t<T>>>) {
-            data_->flags.isRef = true;
+            data_->isRef = true;
         }
     }
 
@@ -353,7 +216,7 @@ public:
         std::unique_lock lock(mutex_);
         data_->obj = std::forward<T>(value);
         data_->typeInfo = userType<std::decay_t<T>>();
-        data_->modificationTime = getCurrentTimeMicros();
+        data_->modificationTime = std::chrono::system_clock::now();
         return *this;
     }
 
@@ -368,8 +231,8 @@ public:
         std::unique_lock lock(mutex_);
         data_->obj = value;
         data_->typeInfo = userType<T>();
-        data_->flags.readonly = true;
-        data_->modificationTime = getCurrentTimeMicros();
+        data_->readonly = true;
+        data_->modificationTime = std::chrono::system_clock::now();
         return *this;
     }
 
@@ -420,7 +283,7 @@ public:
      */
     [[nodiscard]] auto isConst() const noexcept -> bool {
         std::shared_lock lock(mutex_);
-        return data_->flags.isConst || data_->typeInfo.isConst();
+        return data_->typeInfo.isConst();
     }
 
     /*!
@@ -440,7 +303,7 @@ public:
      */
     [[nodiscard]] auto isRef() const noexcept -> bool {
         std::shared_lock lock(mutex_);
-        return data_->flags.isRef;
+        return data_->isRef;
     }
 
     /*!
@@ -449,7 +312,7 @@ public:
      */
     [[nodiscard]] auto isReturnValue() const noexcept -> bool {
         std::shared_lock lock(mutex_);
-        return data_->flags.returnValue;
+        return data_->returnValue;
     }
 
     /*!
@@ -457,7 +320,7 @@ public:
      */
     void resetReturnValue() noexcept {
         std::unique_lock lock(mutex_);
-        data_->flags.returnValue = false;
+        data_->returnValue = false;
     }
 
     /*!
@@ -466,7 +329,7 @@ public:
      */
     [[nodiscard]] auto isReadonly() const noexcept -> bool {
         std::shared_lock lock(mutex_);
-        return data_->flags.readonly;
+        return data_->readonly;
     }
 
     /*!
@@ -512,15 +375,15 @@ public:
      * \param value The value of the attribute.
      * \return Reference to this BoxedValue.
      */
-    auto setAttr(const std::string& name, const BoxedValue& value)
-        -> BoxedValue& {
+    auto setAttr(const std::string& name,
+                 const BoxedValue& value) -> BoxedValue& {
         std::unique_lock lock(mutex_);
         if (!data_->attrs) {
             data_->attrs = std::make_shared<
                 std::unordered_map<std::string, std::shared_ptr<Data>>>();
         }
         (*data_->attrs)[name] = value.data_;
-        data_->modificationTime = getCurrentTimeMicros();
+        data_->modificationTime = std::chrono::system_clock::now();
         return *this;
     }
 
@@ -574,7 +437,7 @@ public:
         std::unique_lock lock(mutex_);
         if (data_->attrs) {
             data_->attrs->erase(name);
-            data_->modificationTime = getCurrentTimeMicros();
+            data_->modificationTime = std::chrono::system_clock::now();
         }
     }
 
@@ -605,7 +468,6 @@ public:
     template <typename T>
     [[nodiscard]] auto tryCast() const noexcept -> std::optional<T> {
         std::shared_lock lock(mutex_);
-        incrementAccessCount();  // Track access for performance monitoring
         try {
             if constexpr (std::is_reference_v<T>) {
                 if (data_->obj.type() ==
@@ -628,6 +490,21 @@ public:
         } catch (const std::bad_any_cast&) {
             return std::nullopt;
         }
+    }
+
+    /*!
+     * \brief Cast the internal value to a specified type.
+     * \tparam T The type to cast to.
+     * \return The casted value.
+     * \throws std::bad_any_cast if the cast fails.
+     */
+    template <typename T>
+    [[nodiscard]] auto cast() const -> T {
+        auto result = tryCast<T>();
+        if (!result) {
+            throw std::bad_any_cast();
+        }
+        return *result;
     }
 
     /*!
@@ -654,129 +531,6 @@ public:
     }
 
     /*!
-     * \brief Get creation time
-     * \return Creation time as time_point
-     */
-    [[nodiscard]] auto getCreationTime() const noexcept
-        -> std::chrono::system_clock::time_point {
-        std::shared_lock lock(mutex_);
-        return microsToTimePoint(data_->creationTime);
-    }
-
-    /*!
-     * \brief Get modification time
-     * \return Modification time as time_point
-     */
-    [[nodiscard]] auto getModificationTime() const noexcept
-        -> std::chrono::system_clock::time_point {
-        std::shared_lock lock(mutex_);
-        return microsToTimePoint(data_->modificationTime);
-    }
-
-    /*!
-     * \brief Get performance statistics
-     * \return Performance statistics structure
-     */
-    [[nodiscard]] auto getPerformanceStats() const noexcept -> PerformanceStats {
-        std::shared_lock lock(mutex_);
-        PerformanceStats stats;
-        stats.access_count = getAccessCount();
-        stats.creation_time_micros = data_->creationTime;
-        stats.last_access_time_micros = data_->modificationTime;
-        // Note: copy_count, move_count, and total_access_time would need additional tracking
-        return stats;
-    }
-
-    /*!
-     * \brief Set attribute with metadata
-     * \param name Attribute name
-     * \param value Attribute value
-     * \param metadata Attribute metadata
-     * \return Reference to this BoxedValue
-     */
-    auto setAttrWithMetadata(const std::string& name, const BoxedValue& value,
-                           const AttributeMetadata& metadata = {}) -> BoxedValue& {
-        std::unique_lock lock(mutex_);
-        if (!data_->attrs) {
-            data_->attrs = std::make_shared<
-                std::unordered_map<std::string, std::shared_ptr<Data>>>();
-        }
-        (*data_->attrs)[name] = value.data_;
-
-        // Store metadata in a special attribute
-        auto meta_copy = metadata;
-        meta_copy.creation_time = getCurrentTimeMicros();
-        meta_copy.modification_time = meta_copy.creation_time;
-
-        // Create a BoxedValue for the metadata and store it
-        auto metadata_key = "__meta_" + name;
-        (*data_->attrs)[metadata_key] = std::make_shared<Data>(
-            meta_copy, false, false, true);
-
-        data_->modificationTime = getCurrentTimeMicros();
-        return *this;
-    }
-
-    /*!
-     * \brief Get attribute metadata
-     * \param name Attribute name
-     * \return Optional containing metadata if found
-     */
-    [[nodiscard]] auto getAttrMetadata(const std::string& name) const
-        -> std::optional<AttributeMetadata> {
-        std::shared_lock lock(mutex_);
-        if (!data_->attrs) {
-            return std::nullopt;
-        }
-
-        auto metadata_key = "__meta_" + name;
-        auto it = data_->attrs->find(metadata_key);
-        if (it != data_->attrs->end()) {
-            try {
-                return std::any_cast<AttributeMetadata>(it->second->obj);
-            } catch (const std::bad_any_cast&) {
-                return std::nullopt;
-            }
-        }
-        return std::nullopt;
-    }
-
-    /*!
-     * \brief Create a deep clone of this BoxedValue
-     * \param copy_attributes Whether to copy attributes as well
-     * \return New BoxedValue instance
-     */
-    [[nodiscard]] auto clone(bool copy_attributes = true) const -> BoxedValue {
-        std::shared_lock lock(mutex_);
-
-        // Create new BoxedValue with same data
-        BoxedValue result;
-        result.data_ = std::make_shared<Data>(*data_);
-
-        // Reset timing information for the clone
-        result.data_->creationTime = getCurrentTimeMicros();
-        result.data_->modificationTime = result.data_->creationTime;
-        result.data_->accessCount.store(0, std::memory_order_relaxed);
-
-        // Optionally copy attributes
-        if (!copy_attributes && result.data_->attrs) {
-            result.data_->attrs.reset();
-        }
-
-        return result;
-    }
-
-    /*!
-     * \brief Reset performance counters
-     */
-    void resetPerformanceCounters() noexcept {
-        std::unique_lock lock(mutex_);
-        data_->accessCount.store(0, std::memory_order_relaxed);
-        data_->creationTime = getCurrentTimeMicros();
-        data_->modificationTime = data_->creationTime;
-    }
-
-    /*!
      * \brief Get a debug string representation of the BoxedValue.
      * \return A string representing the BoxedValue.
      */
@@ -794,90 +548,6 @@ public:
             oss << "unknown type";
         }
         return oss.str();
-    }
-
-    /*!
-     * \brief Enhanced debug string with detailed metadata
-     * \return Comprehensive debug information
-     */
-    [[nodiscard]] auto detailedDebugString() const -> std::string {
-        std::ostringstream oss;
-        std::shared_lock lock(mutex_);
-
-        oss << "=== BoxedValue Debug Info ===\n";
-        oss << "Type: " << data_->typeInfo.name() << "\n";
-        oss << "Bare Type: " << data_->typeInfo.bareName() << "\n";
-        oss << "Type Traits: ";
-        oss << (data_->typeInfo.isArithmetic() ? "ARITHMETIC " : "");
-        oss << (data_->typeInfo.isClass() ? "CLASS " : "");
-        oss << (data_->typeInfo.isPointer() ? "POINTER " : "");
-        oss << (data_->typeInfo.isEnum() ? "ENUM " : "");
-        oss << "\n";
-        oss << "Flags: ";
-        oss << (data_->flags.isRef ? "REF " : "");
-        oss << (data_->flags.returnValue ? "RETURN " : "");
-        oss << (data_->flags.readonly ? "READONLY " : "");
-        oss << (data_->flags.isConst ? "CONST " : "");
-        oss << "\n";
-        oss << "Access Count: " << getAccessCount() << "\n";
-        oss << "Creation Time: " << std::format("{:%Y-%m-%d %H:%M:%S}", getCreationTime()) << "\n";
-        oss << "Modification Time: " << std::format("{:%Y-%m-%d %H:%M:%S}", getModificationTime()) << "\n";
-        oss << "Has Attributes: " << (data_->attrs ? "Yes" : "No") << "\n";
-        if (data_->attrs) {
-            oss << "Attribute Count: " << data_->attrs->size() << "\n";
-        }
-        oss << "Value: ";
-
-        // Try to display the value
-        if (auto* intPtr = std::any_cast<int>(&data_->obj)) {
-            oss << *intPtr;
-        } else if (auto* doublePtr = std::any_cast<double>(&data_->obj)) {
-            oss << *doublePtr;
-        } else if (auto* strPtr = std::any_cast<std::string>(&data_->obj)) {
-            oss << "\"" << *strPtr << "\"";
-        } else if (auto* boolPtr = std::any_cast<bool>(&data_->obj)) {
-            oss << (*boolPtr ? "true" : "false");
-        } else {
-            oss << "[" << data_->typeInfo.name() << " object]";
-        }
-        oss << "\n========================\n";
-
-        return oss.str();
-    }
-
-    /*!
-     * \brief Serialize the BoxedValue to specified format
-     * \param format The serialization format
-     * \return Serialization result
-     */
-    [[nodiscard]] auto serialize(SerializationFormat format = SerializationFormat::JSON) const
-        -> SerializationResult {
-        std::shared_lock lock(mutex_);
-        SerializationResult result;
-
-        try {
-            switch (format) {
-                case SerializationFormat::JSON:
-                    result = serializeToJson();
-                    break;
-                case SerializationFormat::BINARY:
-                    result = serializeToBinary();
-                    break;
-                case SerializationFormat::XML:
-                    result = serializeToXml();
-                    break;
-                case SerializationFormat::YAML:
-                    result = serializeToYaml();
-                    break;
-                default:
-                    result.error_message = "Unsupported serialization format";
-                    return result;
-            }
-        } catch (const std::exception& e) {
-            result.error_message = std::string("Serialization error: ") + e.what();
-        }
-
-        return result;
     }
 
     /*!
@@ -926,7 +596,7 @@ public:
         }
 
         auto result = visitImpl(std::forward<Visitor>(visitor));
-        data_->modificationTime = getCurrentTimeMicros();
+        data_->modificationTime = std::chrono::system_clock::now();
         return result;
     }
 
@@ -1098,84 +768,6 @@ private:
             throw std::bad_any_cast();
         }
     }
-
-    /*!
-     * \brief Serialize to JSON format
-     * \return JSON serialization result
-     */
-    [[nodiscard]] auto serializeToJson() const -> SerializationResult {
-        SerializationResult result;
-        std::ostringstream oss;
-
-        try {
-            oss << "{\n";
-            oss << "  \"type\": \"" << data_->typeInfo.name() << "\",\n";
-            oss << "  \"flags\": {\n";
-            oss << "    \"isRef\": " << (data_->flags.isRef ? "true" : "false") << ",\n";
-            oss << "    \"returnValue\": " << (data_->flags.returnValue ? "true" : "false") << ",\n";
-            oss << "    \"readonly\": " << (data_->flags.readonly ? "true" : "false") << ",\n";
-            oss << "    \"isConst\": " << (data_->flags.isConst ? "true" : "false") << "\n";
-            oss << "  },\n";
-            oss << "  \"metadata\": {\n";
-            oss << "    \"creationTime\": " << data_->creationTime << ",\n";
-            oss << "    \"modificationTime\": " << data_->modificationTime << ",\n";
-            oss << "    \"accessCount\": " << getAccessCount() << "\n";
-            oss << "  },\n";
-            oss << "  \"value\": ";
-
-            // Serialize the actual value based on type
-            if (auto* intPtr = std::any_cast<int>(&data_->obj)) {
-                oss << *intPtr;
-            } else if (auto* doublePtr = std::any_cast<double>(&data_->obj)) {
-                oss << *doublePtr;
-            } else if (auto* strPtr = std::any_cast<std::string>(&data_->obj)) {
-                oss << "\"" << *strPtr << "\"";
-            } else if (auto* boolPtr = std::any_cast<bool>(&data_->obj)) {
-                oss << (*boolPtr ? "true" : "false");
-            } else {
-                oss << "\"[" << data_->typeInfo.name() << " object]\"";
-            }
-
-            oss << "\n}";
-
-            result.success = true;
-            result.data = oss.str();
-        } catch (const std::exception& e) {
-            result.error_message = std::string("JSON serialization failed: ") + e.what();
-        }
-
-        return result;
-    }
-
-    /*!
-     * \brief Serialize to binary format (simplified)
-     * \return Binary serialization result
-     */
-    [[nodiscard]] auto serializeToBinary() const -> SerializationResult {
-        SerializationResult result;
-        result.error_message = "Binary serialization not yet implemented";
-        return result;
-    }
-
-    /*!
-     * \brief Serialize to XML format
-     * \return XML serialization result
-     */
-    [[nodiscard]] auto serializeToXml() const -> SerializationResult {
-        SerializationResult result;
-        result.error_message = "XML serialization not yet implemented";
-        return result;
-    }
-
-    /*!
-     * \brief Serialize to YAML format
-     * \return YAML serialization result
-     */
-    [[nodiscard]] auto serializeToYaml() const -> SerializationResult {
-        SerializationResult result;
-        result.error_message = "YAML serialization not yet implemented";
-        return result;
-    }
 };
 
 /*!
@@ -1247,6 +839,731 @@ auto makeBoxedValue(T&& value, bool is_return_value = false,
     }
 }
 
+//==============================================================================
+// C++23 Enhanced BoxedValue Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for types that can be boxed
+ */
+template <typename T>
+concept Boxable = std::copy_constructible<std::decay_t<T>> ||
+                  std::move_constructible<std::decay_t<T>>;
+
+/**
+ * @brief Concept for types that can be unboxed to a specific type
+ */
+template <typename T, typename U>
+concept UnboxableTo = requires(const BoxedValue& bv) {
+    {
+        bv.tryCast<U>()
+    } -> std::same_as<std::optional<std::reference_wrapper<U>>>;
+};
+
+#if ATOM_ANY_HAS_EXPECTED
+/**
+ * @brief Try to cast BoxedValue using std::expected (C++23)
+ */
+template <typename T>
+auto tryCastExpected(const BoxedValue& bv)
+    -> std::expected<std::reference_wrapper<T>, std::string> {
+    if (auto result = bv.tryCast<T>()) {
+        return *result;
+    }
+    return std::unexpected(std::format("Failed to cast from {} to {}",
+                                       bv.getTypeInfo().name(),
+                                       typeid(T).name()));
+}
+#endif
+
+/**
+ * @brief Create a BoxedValue from a variant
+ */
+template <typename... Types>
+auto boxVariant(const std::variant<Types...>& var) -> BoxedValue {
+    return std::visit(
+        [](const auto& value) -> BoxedValue { return BoxedValue(value); }, var);
+}
+
+/**
+ * @brief Create multiple BoxedValues from a tuple
+ */
+template <typename... Types>
+auto boxTuple(const std::tuple<Types...>& tuple) -> std::vector<BoxedValue> {
+    std::vector<BoxedValue> result;
+    result.reserve(sizeof...(Types));
+    std::apply(
+        [&result](const auto&... args) {
+            (result.push_back(BoxedValue(args)), ...);
+        },
+        tuple);
+    return result;
+}
+
+/**
+ * @brief Unbox multiple BoxedValues to a tuple
+ */
+template <typename... Types>
+auto unboxToTuple(const std::vector<BoxedValue>& values)
+    -> std::optional<std::tuple<Types...>> {
+    if (values.size() != sizeof...(Types)) {
+        return std::nullopt;
+    }
+
+    try {
+        std::size_t index = 0;
+        return std::tuple<Types...>{values[index++].cast<Types>()...};
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+/**
+ * @brief BoxedValue array wrapper for batch operations
+ */
+class BoxedValueArray {
+    std::vector<BoxedValue> values_;
+
+public:
+    BoxedValueArray() = default;
+    explicit BoxedValueArray(std::vector<BoxedValue> values)
+        : values_(std::move(values)) {}
+
+    template <typename... Args>
+    explicit BoxedValueArray(Args&&... args)
+        : values_{BoxedValue(std::forward<Args>(args))...} {}
+
+    void push_back(BoxedValue value) { values_.push_back(std::move(value)); }
+
+    template <typename T>
+    void emplace_back(T&& value) {
+        values_.emplace_back(std::forward<T>(value));
+    }
+
+    [[nodiscard]] std::size_t size() const noexcept { return values_.size(); }
+    [[nodiscard]] bool empty() const noexcept { return values_.empty(); }
+
+    BoxedValue& operator[](std::size_t index) { return values_[index]; }
+    const BoxedValue& operator[](std::size_t index) const {
+        return values_[index];
+    }
+
+    auto begin() { return values_.begin(); }
+    auto end() { return values_.end(); }
+    [[nodiscard]] auto begin() const { return values_.begin(); }
+    [[nodiscard]] auto end() const { return values_.end(); }
+
+    /**
+     * @brief Apply a function to all values
+     */
+    template <typename Func>
+    void forEach(Func&& func) {
+        for (auto& value : values_) {
+            func(value);
+        }
+    }
+
+    /**
+     * @brief Transform all values
+     */
+    template <typename Func>
+    auto transform(Func&& func)
+        -> std::vector<std::invoke_result_t<Func, BoxedValue&>> {
+        std::vector<std::invoke_result_t<Func, BoxedValue&>> result;
+        result.reserve(values_.size());
+        for (auto& value : values_) {
+            result.push_back(func(value));
+        }
+        return result;
+    }
+
+    /**
+     * @brief Filter values by predicate
+     */
+    template <typename Pred>
+    auto filter(Pred&& pred) -> BoxedValueArray {
+        std::vector<BoxedValue> result;
+        for (const auto& value : values_) {
+            if (pred(value)) {
+                result.push_back(value);
+            }
+        }
+        return BoxedValueArray(std::move(result));
+    }
+
+    /**
+     * @brief Get all values of a specific type
+     */
+    template <typename T>
+    auto filterByType() -> BoxedValueArray {
+        return filter([](const BoxedValue& v) { return v.canCast<T>(); });
+    }
+};
+
+/**
+ * @brief BoxedValue map wrapper
+ */
+class BoxedValueMap {
+    std::unordered_map<std::string, BoxedValue> values_;
+
+public:
+    BoxedValueMap() = default;
+
+    void set(const std::string& key, BoxedValue value) {
+        values_[key] = std::move(value);
+    }
+
+    template <typename T>
+    void set(const std::string& key, T&& value) {
+        values_[key] = BoxedValue(std::forward<T>(value));
+    }
+
+    [[nodiscard]] std::optional<std::reference_wrapper<BoxedValue>> get(
+        const std::string& key) {
+        if (auto it = values_.find(key); it != values_.end()) {
+            return std::ref(it->second);
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] std::optional<std::reference_wrapper<const BoxedValue>> get(
+        const std::string& key) const {
+        if (auto it = values_.find(key); it != values_.end()) {
+            return std::cref(it->second);
+        }
+        return std::nullopt;
+    }
+
+    template <typename T>
+    [[nodiscard]] std::optional<T> getAs(const std::string& key) const {
+        if (auto it = values_.find(key); it != values_.end()) {
+            if (it->second.canCast<T>()) {
+                return it->second.cast<T>();
+            }
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] bool contains(const std::string& key) const {
+        return values_.contains(key);
+    }
+
+    void remove(const std::string& key) { values_.erase(key); }
+
+    [[nodiscard]] std::size_t size() const noexcept { return values_.size(); }
+    [[nodiscard]] bool empty() const noexcept { return values_.empty(); }
+
+    [[nodiscard]] std::vector<std::string> keys() const {
+        std::vector<std::string> result;
+        result.reserve(values_.size());
+        for (const auto& [key, _] : values_) {
+            result.push_back(key);
+        }
+        return result;
+    }
+};
+
+/**
+ * @brief Type-safe any cast with format error message
+ */
+template <typename T>
+auto safeCast(const BoxedValue& value,
+              std::string_view context = "") -> std::optional<T> {
+    if (value.canCast<T>()) {
+        return value.cast<T>();
+    }
+    return std::nullopt;
+}
+
+//==============================================================================
+// Integration with type_info.hpp
+//==============================================================================
+
+/**
+ * @brief Create BoxedValue with TypeInfo validation
+ */
+template <TypeInfoCompatible T>
+auto createValidatedBox(T&& value) -> BoxedValue {
+    // Validate type is registered or registrable
+    auto info = TypeInfo::fromType<std::decay_t<T>>();
+    return BoxedValue(std::forward<T>(value));
+}
+
+/**
+ * @brief Get extended type info from BoxedValue
+ */
+template <typename T>
+auto getExtendedInfo(const BoxedValue& value)
+    -> std::optional<ExtendedTypeInfo<T>> {
+    if (value.canCast<T>()) {
+        return ExtendedTypeInfo<T>{};
+    }
+    return std::nullopt;
+}
+
+/**
+ * @brief Check type compatibility between BoxedValue and target type
+ */
+template <typename Target>
+bool isCompatible(const BoxedValue& value) {
+    auto sourceInfo = value.getTypeInfo();
+    auto targetInfo = TypeInfo::fromType<Target>();
+    return sourceInfo == targetInfo ||
+           areTypesCompatible<decltype(value.cast<Target>()), Target>();
+}
+
+/**
+ * @brief BoxedValue with type registration
+ */
+class RegisteredBoxedValue : public BoxedValue {
+    bool registered_ = false;
+
+public:
+    using BoxedValue::BoxedValue;
+
+    template <typename T>
+    static RegisteredBoxedValue create(T&& value,
+                                       std::string_view typeName = "") {
+        RegisteredBoxedValue result(std::forward<T>(value));
+        if (!typeName.empty()) {
+            registerType<std::decay_t<T>>(typeName);
+            result.registered_ = true;
+        }
+        return result;
+    }
+
+    [[nodiscard]] bool isTypeRegistered() const noexcept { return registered_; }
+};
+
+/**
+ * @brief Type-safe BoxedValue cast using TypeInfo comparison
+ */
+template <typename T>
+auto typeInfoCast(const BoxedValue& value) -> std::optional<T> {
+    auto expected = TypeInfo::fromType<T>();
+    if (value.getTypeInfo() == expected) {
+        return value.cast<T>();
+    }
+    return std::nullopt;
+}
+
+/**
+ * @brief Get type relationship between BoxedValue and target type
+ */
+template <typename T>
+auto getRelationship(const BoxedValue& value) -> TypeRelationship {
+    // Note: This is a simplified version; full implementation would
+    // require runtime type relationship analysis
+    if (value.getTypeInfo() == TypeInfo::fromType<T>()) {
+        return TypeRelationship::Same;
+    }
+    if (value.canCast<T>()) {
+        return TypeRelationship::Convertible;
+    }
+    return TypeRelationship::Unrelated;
+}
+
+/**
+ * @brief Collect BoxedValues by type
+ */
+template <typename T>
+auto collectByType(const std::vector<BoxedValue>& values) -> std::vector<T> {
+    std::vector<T> result;
+    for (const auto& val : values) {
+        if (val.canCast<T>()) {
+            result.push_back(val.cast<T>());
+        }
+    }
+    return result;
+}
+
+/**
+ * @brief Group BoxedValues by their type name
+ */
+inline auto groupByType(const std::vector<BoxedValue>& values)
+    -> std::unordered_map<std::string, std::vector<BoxedValue>> {
+    std::unordered_map<std::string, std::vector<BoxedValue>> result;
+    for (const auto& val : values) {
+        result[val.getTypeInfo().name()].push_back(val);
+    }
+    return result;
+}
+
+/**
+ * @brief Apply visitor to BoxedValue based on type
+ */
+template <typename Visitor>
+auto visitBoxed(const BoxedValue& value, Visitor&& visitor) {
+    return std::forward<Visitor>(visitor)(value);
+}
+
+/**
+ * @brief Transform BoxedValue to another type
+ */
+template <typename TargetType, typename Transform>
+auto transformBoxed(const BoxedValue& value,
+                    Transform&& transform) -> std::optional<BoxedValue> {
+    // Attempt to get the value and transform it
+    try {
+        auto result = std::forward<Transform>(transform)(value);
+        return BoxedValue(std::move(result));
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+//==============================================================================
+// Advanced Type-Erased Utilities
+//==============================================================================
+
+/**
+ * @brief Type-erased variant with multiple types
+ */
+class TypeErasedVariant {
+    std::vector<BoxedValue> alternatives_;
+    std::size_t active_index_ = 0;
+
+public:
+    TypeErasedVariant() = default;
+
+    template <typename... Types>
+    explicit TypeErasedVariant(Types&&... values)
+        : alternatives_{BoxedValue(std::forward<Types>(values))...} {}
+
+    void setActive(std::size_t index) {
+        if (index < alternatives_.size()) {
+            active_index_ = index;
+        }
+    }
+
+    [[nodiscard]] BoxedValue& getActive() {
+        return alternatives_[active_index_];
+    }
+    [[nodiscard]] const BoxedValue& getActive() const {
+        return alternatives_[active_index_];
+    }
+
+    [[nodiscard]] std::size_t activeIndex() const { return active_index_; }
+    [[nodiscard]] std::size_t alternativeCount() const {
+        return alternatives_.size();
+    }
+
+    template <typename T>
+    std::optional<T> tryGetActive() const {
+        return getActive().tryCast<T>();
+    }
+};
+
+/**
+ * @brief Type-safe union with runtime type checking
+ */
+class SafeUnion {
+    BoxedValue value_;
+    std::set<std::string> allowed_types_;
+
+public:
+    template <typename... AllowedTypes>
+    static SafeUnion create() {
+        SafeUnion u;
+        (u.allowed_types_.insert(typeid(AllowedTypes).name()), ...);
+        return u;
+    }
+
+    template <typename T>
+    bool set(T&& value) {
+        if (allowed_types_.count(typeid(std::decay_t<T>).name())) {
+            value_ = BoxedValue(std::forward<T>(value));
+            return true;
+        }
+        return false;
+    }
+
+    template <typename T>
+    std::optional<T> get() const {
+        return value_.tryCast<T>();
+    }
+
+    [[nodiscard]] bool hasValue() const { return !value_.isNull(); }
+    [[nodiscard]] const BoxedValue& boxed() const { return value_; }
+};
+
+/**
+ * @brief Observable BoxedValue with change notifications
+ */
+class ObservableBoxed {
+    BoxedValue value_;
+    std::vector<std::function<void(const BoxedValue&, const BoxedValue&)>>
+        observers_;
+    mutable std::mutex mutex_;
+
+public:
+    ObservableBoxed() = default;
+
+    template <typename T>
+    explicit ObservableBoxed(T&& initial) : value_(std::forward<T>(initial)) {}
+
+    template <typename T>
+    void set(T&& new_value) {
+        std::lock_guard lock(mutex_);
+        BoxedValue old_value = value_;
+        value_ = BoxedValue(std::forward<T>(new_value));
+
+        for (const auto& observer : observers_) {
+            observer(old_value, value_);
+        }
+    }
+
+    [[nodiscard]] BoxedValue get() const {
+        std::lock_guard lock(mutex_);
+        return value_;
+    }
+
+    void addObserver(
+        std::function<void(const BoxedValue&, const BoxedValue&)> observer) {
+        std::lock_guard lock(mutex_);
+        observers_.push_back(std::move(observer));
+    }
+
+    void clearObservers() {
+        std::lock_guard lock(mutex_);
+        observers_.clear();
+    }
+};
+
+/**
+ * @brief Lazy-initialized BoxedValue
+ */
+class LazyBoxed {
+    mutable std::optional<BoxedValue> value_;
+    std::function<BoxedValue()> initializer_;
+    mutable std::once_flag flag_;
+
+public:
+    explicit LazyBoxed(std::function<BoxedValue()> init)
+        : initializer_(std::move(init)) {}
+
+    const BoxedValue& get() const {
+        std::call_once(flag_, [this]() { value_ = initializer_(); });
+        return *value_;
+    }
+
+    [[nodiscard]] bool isInitialized() const { return value_.has_value(); }
+
+    void reset() {
+        value_.reset();
+        // std::once_flag is not assignable, so we use placement new
+        flag_.~once_flag();
+        new (&flag_) std::once_flag();
+    }
+};
+
+/**
+ * @brief BoxedValue with expiration
+ */
+class ExpiringBoxed {
+    BoxedValue value_;
+    std::chrono::steady_clock::time_point expires_at_;
+
+public:
+    template <typename T>
+    ExpiringBoxed(T&& value, std::chrono::milliseconds ttl)
+        : value_(std::forward<T>(value)),
+          expires_at_(std::chrono::steady_clock::now() + ttl) {}
+
+    [[nodiscard]] bool isExpired() const {
+        return std::chrono::steady_clock::now() >= expires_at_;
+    }
+
+    std::optional<BoxedValue> get() const {
+        if (isExpired()) {
+            return std::nullopt;
+        }
+        return value_;
+    }
+
+    [[nodiscard]] std::chrono::milliseconds remainingTime() const {
+        auto now = std::chrono::steady_clock::now();
+        if (now >= expires_at_) {
+            return std::chrono::milliseconds{0};
+        }
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            expires_at_ - now);
+    }
+
+    template <typename T>
+    void refresh(T&& new_value, std::chrono::milliseconds ttl) {
+        value_ = BoxedValue(std::forward<T>(new_value));
+        expires_at_ = std::chrono::steady_clock::now() + ttl;
+    }
+};
+
+/**
+ * @brief Type-erased function wrapper
+ */
+class TypeErasedFunction {
+    BoxedValue callable_;
+    std::function<BoxedValue(const std::vector<BoxedValue>&)> invoker_;
+
+public:
+    template <typename Func>
+    explicit TypeErasedFunction(Func&& func)
+        : callable_(std::forward<Func>(func)) {
+        invoker_ = [f = std::forward<Func>(func)](
+                       const std::vector<BoxedValue>& args) -> BoxedValue {
+            // Simplified invoker - actual implementation would need type
+            // unpacking
+            if constexpr (std::is_invocable_v<Func>) {
+                return BoxedValue(f());
+            } else {
+                return BoxedValue();
+            }
+        };
+    }
+
+    BoxedValue operator()(const std::vector<BoxedValue>& args = {}) const {
+        return invoker_(args);
+    }
+
+    [[nodiscard]] const BoxedValue& getCallable() const { return callable_; }
+};
+
+/**
+ * @brief BoxedValue cache with LRU eviction
+ */
+class BoxedCache {
+    std::size_t max_size_;
+    std::list<std::pair<std::string, BoxedValue>> items_;
+    std::unordered_map<std::string, decltype(items_.begin())> lookup_;
+    mutable std::shared_mutex mutex_;
+
+public:
+    explicit BoxedCache(std::size_t max_size = 100) : max_size_(max_size) {}
+
+    void put(std::string_view key, BoxedValue value) {
+        std::unique_lock lock(mutex_);
+
+        auto it = lookup_.find(std::string(key));
+        if (it != lookup_.end()) {
+            items_.erase(it->second);
+            lookup_.erase(it);
+        }
+
+        if (items_.size() >= max_size_) {
+            lookup_.erase(items_.back().first);
+            items_.pop_back();
+        }
+
+        items_.emplace_front(std::string(key), std::move(value));
+        lookup_[std::string(key)] = items_.begin();
+    }
+
+    std::optional<BoxedValue> get(std::string_view key) {
+        std::unique_lock lock(mutex_);
+
+        auto it = lookup_.find(std::string(key));
+        if (it == lookup_.end()) {
+            return std::nullopt;
+        }
+
+        // Move to front (most recently used)
+        items_.splice(items_.begin(), items_, it->second);
+        return it->second->second;
+    }
+
+    void remove(std::string_view key) {
+        std::unique_lock lock(mutex_);
+
+        auto it = lookup_.find(std::string(key));
+        if (it != lookup_.end()) {
+            items_.erase(it->second);
+            lookup_.erase(it);
+        }
+    }
+
+    void clear() {
+        std::unique_lock lock(mutex_);
+        items_.clear();
+        lookup_.clear();
+    }
+
+    [[nodiscard]] std::size_t size() const {
+        std::shared_lock lock(mutex_);
+        return items_.size();
+    }
+};
+
+/**
+ * @brief Type-erased optional
+ */
+class BoxedOptional {
+    std::optional<BoxedValue> value_;
+
+public:
+    BoxedOptional() = default;
+
+    template <typename T>
+    explicit BoxedOptional(T&& value)
+        : value_(BoxedValue(std::forward<T>(value))) {}
+
+    [[nodiscard]] bool hasValue() const { return value_.has_value(); }
+    [[nodiscard]] explicit operator bool() const { return hasValue(); }
+
+    BoxedValue& value() { return *value_; }
+    const BoxedValue& value() const { return *value_; }
+
+    BoxedValue valueOr(BoxedValue default_value) const {
+        return hasValue() ? *value_ : std::move(default_value);
+    }
+
+    template <typename T>
+    std::optional<T> tryGet() const {
+        if (!hasValue())
+            return std::nullopt;
+        return value_->tryCast<T>();
+    }
+
+    void reset() { value_.reset(); }
+
+    template <typename T>
+    void emplace(T&& value) {
+        value_.emplace(std::forward<T>(value));
+    }
+};
+
+/**
+ * @brief Apply operation to BoxedValue chain
+ */
+template <typename... Ops>
+auto chainOperations(BoxedValue value, Ops&&... ops) -> BoxedValue {
+    ((value = std::forward<Ops>(ops)(value)), ...);
+    return value;
+}
+
+/**
+ * @brief Reduce BoxedValueArray to single value
+ */
+template <typename BinaryOp>
+auto reduceBoxed(const BoxedValueArray& arr, BoxedValue initial,
+                 BinaryOp&& op) -> BoxedValue {
+    BoxedValue result = std::move(initial);
+    for (const auto& val : arr) {
+        result = op(result, val);
+    }
+    return result;
+}
+
 }  // namespace atom::meta
+
+/**
+ * @brief std::format support for BoxedValue
+ */
+template <>
+struct std::formatter<atom::meta::BoxedValue> : std::formatter<std::string> {
+    auto format(const atom::meta::BoxedValue& value,
+                std::format_context& ctx) const {
+        return std::formatter<std::string>::format(
+            std::format("BoxedValue<{}>", value.getTypeInfo().name()), ctx);
+    }
+};
 
 #endif  // ATOM_META_ANY_HPP

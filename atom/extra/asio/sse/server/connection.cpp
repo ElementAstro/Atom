@@ -1,5 +1,10 @@
 #include "connection.hpp"
 
+// SSE server connection requires ASIO experimental as_tuple support for
+// structured bindings Skip compilation if not available
+#if defined(ASIO_HAS_EXPERIMENTAL_AS_TUPLE) || \
+    defined(BOOST_ASIO_HAS_EXPERIMENTAL_AS_TUPLE)
+
 #include <spdlog/spdlog.h>
 #include <chrono>
 #include <sstream>
@@ -11,8 +16,8 @@ namespace atom::extra::asio::sse {
 #ifdef USE_SSL
 SSEConnection::pointer SSEConnection::create(
     net::io_context& io_context, ssl_context& ssl_ctx, EventQueue& event_queue,
-    EventStore& event_store, AuthService& auth_service, ServerMetrics& metrics,
-    const ServerConfig& config) {
+    ServerEventStore& event_store, AuthService& auth_service,
+    ServerMetrics& metrics, const ServerConfig& config) {
     return pointer(new SSEConnection(io_context, ssl_ctx, event_queue,
                                      event_store, auth_service, metrics,
                                      config));
@@ -21,7 +26,8 @@ SSEConnection::pointer SSEConnection::create(
 ssl::stream<tcp::socket>& SSEConnection::socket() { return ssl_socket_; }
 
 SSEConnection::SSEConnection(net::io_context& io_context, ssl_context& ssl_ctx,
-                             EventQueue& event_queue, EventStore& event_store,
+                             EventQueue& event_queue,
+                             ServerEventStore& event_store,
                              AuthService& auth_service, ServerMetrics& metrics,
                              const ServerConfig& config)
     : ssl_socket_(io_context, ssl_ctx),
@@ -39,7 +45,7 @@ SSEConnection::SSEConnection(net::io_context& io_context, ssl_context& ssl_ctx,
 #else
 SSEConnection::pointer SSEConnection::create(net::io_context& io_context,
                                              EventQueue& event_queue,
-                                             EventStore& event_store,
+                                             ServerEventStore& event_store,
                                              AuthService& auth_service,
                                              ServerMetrics& metrics,
                                              const ServerConfig& config) {
@@ -50,7 +56,8 @@ SSEConnection::pointer SSEConnection::create(net::io_context& io_context,
 tcp::socket& SSEConnection::socket() { return socket_; }
 
 SSEConnection::SSEConnection(net::io_context& io_context,
-                             EventQueue& event_queue, EventStore& event_store,
+                             EventQueue& event_queue,
+                             ServerEventStore& event_store,
                              AuthService& auth_service, ServerMetrics& metrics,
                              const ServerConfig& config)
     : socket_(io_context),
@@ -397,7 +404,8 @@ net::awaitable<void> SSEConnection::send_headers() {
 
 net::awaitable<void> SSEConnection::send_missed_events(
     const std::string& last_event_id) {
-    auto events = event_store_.get_events(10, subscribed_channel_);
+    auto events = event_store_.get_events_after_id(last_event_id, 10,
+                                                   subscribed_channel_);
 
     if (events.empty()) {
         co_return;
@@ -405,8 +413,6 @@ net::awaitable<void> SSEConnection::send_missed_events(
 
     SPDLOG_DEBUG("Sending {} missed events to client {}", events.size(),
                  client_id_);
-
-    std::reverse(events.begin(), events.end());
 
     for (const auto& event : events) {
         co_await send_event(event);
@@ -471,3 +477,6 @@ net::awaitable<void> SSEConnection::send_event(const Event& event) {
 }
 
 }  // namespace atom::extra::asio::sse
+
+#endif  // defined(ASIO_HAS_EXPERIMENTAL_AS_TUPLE) ||
+        // defined(BOOST_ASIO_HAS_EXPERIMENTAL_AS_TUPLE)

@@ -1,79 +1,21 @@
 /**
  * @file os.hpp
- * @brief Operating System Information Module - Enhanced Compatibility Header
+ * @brief System operating system information functionality (compatibility
+ * header)
  *
- * This file provides backward compatibility by including the new enhanced
- * OS implementation from the BIOS folder. All functionality has been moved
- * to the bios/os/ subdirectory while maintaining the same public API and
- * adding comprehensive new features.
+ * This file serves as a compatibility header that includes the reorganized OS
+ * system. It maintains backward compatibility with existing code that includes
+ * this header.
  *
- * The enhanced implementation provides:
- * - Advanced system monitoring and performance metrics
- * - Comprehensive security analysis and management
- * - Real-time system health monitoring
- * - Cross-platform system optimization
- * - Enhanced hardware and software detection
- * - System backup and restore capabilities
- * - Network configuration management
- * - Event logging and analysis
- *
+ * @deprecated This header location is deprecated. Please use
+ * "atom/sysinfo/interfaces/os.hpp" instead.
  * @copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-#ifndef ATOM_SYSTEM_MODULE_OS_HPP
-#define ATOM_SYSTEM_MODULE_OS_HPP
+#ifndef ATOM_SYSINFO_OS_COMPAT_HPP
+#define ATOM_SYSINFO_OS_COMPAT_HPP
 
-// Include the new enhanced modular OS implementation
-#include "src/os/os.hpp"
+// Forward to the new location
+#include "info/os.hpp"
 
-// Legacy compatibility - ensure all original functions are available
-namespace atom::system {
-
-// Re-export the original OperatingSystemInfo structure for compatibility
-using OriginalOperatingSystemInfo = OperatingSystemInfo;
-
-// Provide legacy function aliases for backward compatibility
-inline auto getOSInfo() -> OperatingSystemInfo {
-    return getOperatingSystemInfo();
-}
-
-inline auto getOSName() -> std::string {
-    auto info = getOperatingSystemInfo();
-    return info.osName;
-}
-
-inline auto getOSVersion() -> std::string {
-    auto info = getOperatingSystemInfo();
-    return info.osVersion;
-}
-
-inline auto getKernelVersion() -> std::string {
-    auto info = getOperatingSystemInfo();
-    return info.kernelVersion;
-}
-
-inline auto getArchitecture() -> std::string {
-    auto info = getOperatingSystemInfo();
-    return info.architecture;
-}
-
-// Enhanced functionality access - commented out until BIOS OS module is properly integrated
-// inline auto getEnhancedOSManager() -> EnhancedOSManager& {
-//     return EnhancedOSManager::getInstance();
-// }
-
-// inline auto getSystemMetrics() -> SystemPerformanceMetrics {
-//     return EnhancedOSManager::getInstance().getPerformanceMetrics();
-// }
-
-// inline auto getSystemSecurity() -> SystemSecurityInfo {
-//     return EnhancedOSManager::getInstance().getSecurityInfo();
-// }
-
-// inline auto getNetworkInfo() -> NetworkConfiguration {
-//     return EnhancedOSManager::getInstance().getNetworkConfiguration();
-// }
-
-}  // namespace atom::system
-
-#endif  // ATOM_SYSTEM_MODULE_OS_HPP
+#endif  // ATOM_SYSINFO_OS_COMPAT_HPP

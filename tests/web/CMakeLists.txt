@@ -1,32 +1,165 @@
-cmake_minimum_required(VERSION 3.20)
+# CMakeLists.txt Template for Atom Test Modules This project is licensed under
+# the terms of the GPL3 license.
+#
+# Project Name: Atom-Web-Tests Description: Test Suite for Atom Web Module
+# Author: Max Qian License: GPL3
 
-project(atom_web.test)
+cmake_minimum_required(VERSION 3.21)
+project(
+  atom-web-tests
+  VERSION 1.0.0
+  LANGUAGES C CXX)
 
-find_package(GTest QUIET)
+# =============================================================================
+# Find Required Packages
+# =============================================================================
+find_package(GTest REQUIRED)
+find_package(Threads REQUIRED)
 
-if(NOT GTEST_FOUND)
-  include(FetchContent)
-  FetchContent_Declare(
-    googletest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG release-1.11.0
-  )
-  FetchContent_MakeAvailable(googletest)
-  include(GoogleTest)
-else()
-  include(GoogleTest)
+# =============================================================================
+# Include Test Infrastructure
+# =============================================================================
+# Include the standardized test infrastructure
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/tests/CMakeLists.txt")
+  add_subdirectory("${CMAKE_SOURCE_DIR}/tests/tests"
+                   "${CMAKE_CURRENT_BINARY_DIR}/test_infrastructure")
 endif()
 
+# =============================================================================
+# Verify Module Dependencies
+# =============================================================================
+# Ensure the target module is available
+if(NOT TARGET atom-web)
+  message(
+    FATAL_ERROR
+      "atom-web target not found. Make sure ATOM_BUILD_WEB is enabled.")
+endif()
+
+# =============================================================================
+# Test Source Configuration
+# =============================================================================
+# For modules with .cpp test files
 file(GLOB_RECURSE TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
 
-# Only create executable if there are source files
-if(TEST_SOURCES)
-    add_executable(${PROJECT_NAME} ${TEST_SOURCES})
+# Remove build directory files
+list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/build/.*")
 
-    target_link_libraries(${PROJECT_NAME} gtest gtest_main gmock gmock_main atom-web atom-error loguru)
+# =============================================================================
+# Create Test Executable
+# =============================================================================
+add_executable(atom_web_tests ${TEST_SOURCES})
 
-    # Register tests with CTest
-    add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+# =============================================================================
+# Link Libraries
+# =============================================================================
+target_link_libraries(
+  atom_web_tests
+  PRIVATE # Test infrastructure
+          atom-test-common
+          # Module under test and its dependencies
+          atom-web
+          atom-error
+          # Additional dependencies (web module specific)
+          atom-log
+          atom-utils
+          atom-io
+          atom-system # Add missing system dependency
+          # GoogleTest libraries
+          GTest::gtest
+          GTest::gtest_main
+          GTest::gmock # Add missing gmock for UnorderedElementsAre matcher
+          # System libraries
+          Threads::Threads)
+
+# Find and link CURL if available
+find_package(CURL QUIET)
+if(CURL_FOUND)
+  target_link_libraries(atom_web_tests PRIVATE CURL::libcurl)
+endif()
+
+# Platform-specific libraries
+if(WIN32)
+  target_link_libraries(
+    atom_web_tests
+    PRIVATE ws2_32
+            wsock32
+            wininet
+            wtsapi32 # For WTSEnumerateSessionsA, WTSQuerySessionInformationA,
+                     # WTSFreeMemory
+            netapi32 # For NetUserGetInfo, NetApiBufferFree
+  )
+endif()
+
+# =============================================================================
+# Target Configuration
+# =============================================================================
+# Set include directories for test headers
+target_include_directories(atom_web_tests PRIVATE ${PROJECT_SOURCE_DIR})
+
+# Set C++ standard
+target_compile_features(atom_web_tests PRIVATE cxx_std_20)
+
+# Add compiler flags
+if(MSVC)
+  target_compile_options(atom_web_tests PRIVATE /W4)
 else()
-    message(STATUS "No test sources found for ${PROJECT_NAME}, skipping target creation")
+  target_compile_options(atom_web_tests PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# =============================================================================
+# Test Registration
+# =============================================================================
+enable_testing()
+
+include(GoogleTest)
+# Temporarily disabled due to DLL dependency issues during test discovery
+# gtest_discover_tests(atom_web_tests WORKING_DIRECTORY
+# ${CMAKE_CURRENT_SOURCE_DIR} PROPERTIES LABELS "web" TIMEOUT 300 )
+
+# Manual test registration as workaround
+add_test(
+  NAME atom_web_tests
+  COMMAND atom_web_tests
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+set_tests_properties(atom_web_tests PROPERTIES LABELS "web" TIMEOUT 300)
+
+# =============================================================================
+# Custom Test Targets
+# =============================================================================
+# Add custom target for running only this module's tests
+add_custom_target(
+  test_web
+  COMMAND ${CMAKE_CTEST_COMMAND} -L web --output-on-failure
+  DEPENDS atom_web_tests
+  COMMENT "Running web module tests")
+
+# Add performance test target (if applicable)
+add_custom_target(
+  test_web_performance
+  COMMAND atom_web_tests --gtest_filter="*Performance*:*Benchmark*"
+  DEPENDS atom_web_tests
+  COMMENT "Running web performance tests")
+
+# =============================================================================
+# IDE Organization
+# =============================================================================
+set_property(TARGET atom_web_tests PROPERTY FOLDER "Tests/Web")
+set_property(TARGET test_web PROPERTY FOLDER "Tests/Web")
+set_property(TARGET test_web_performance PROPERTY FOLDER "Tests/Web")
+
+# =============================================================================
+# DLL Copying (Windows)
+# =============================================================================
+if(WIN32)
+  if(COMMAND copy_test_dlls)
+    copy_test_dlls(atom_web_tests)
+  endif()
+
+  add_custom_command(
+    TARGET atom_web_tests
+    POST_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_RUNTIME_DLLS:atom_web_tests> $<TARGET_FILE_DIR:atom_web_tests>
+    COMMAND_EXPAND_LISTS)
 endif()

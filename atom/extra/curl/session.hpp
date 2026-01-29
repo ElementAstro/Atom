@@ -21,6 +21,7 @@
 #include "websocket.hpp"
 
 namespace atom::extra::curl {
+void ensure_curl_global_init();
 class ConnectionPool;
 
 /**
@@ -286,6 +287,7 @@ private:
     std::map<std::string, std::string> response_headers_;
     /** @brief The error buffer. */
     char error_buffer_[CURL_ERROR_SIZE] = {0};
+    struct curl_slist* request_headers_ = nullptr;
 
     /**
      * @brief A struct to hold the progress callback.

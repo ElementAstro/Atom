@@ -64,9 +64,10 @@ TEST(CommonTest, StrToULong) {
 TEST(CommonTest, StringInsensitiveLess) {
     StringInsensitiveLess cmp;
 
-    EXPECT_TRUE(cmp("apple", "Banana"));   // "apple" < "banana" (case-insensitive)
-    EXPECT_FALSE(cmp("Banana", "apple"));  // "banana" > "apple" (case-insensitive)
-    EXPECT_FALSE(cmp("apple", "apple"));   // "apple" == "apple"
-    EXPECT_FALSE(cmp("apple", "APPLE"));   // "apple" == "APPLE" (case-insensitive)
-    EXPECT_FALSE(cmp("APPLE", "apple"));   // "APPLE" == "apple" (case-insensitive)
+    EXPECT_TRUE(cmp("apple", "Banana"));
+    EXPECT_FALSE(cmp("Banana", "apple"));
+    EXPECT_FALSE(cmp("apple", "apple"));
+    EXPECT_FALSE(cmp("apple", "APPLE"));  // Case-insensitive comparison:
+                                          // "apple" == "APPLE", so not less
+    EXPECT_FALSE(cmp("APPLE", "apple"));
 }

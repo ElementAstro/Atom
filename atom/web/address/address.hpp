@@ -1,6 +1,8 @@
 #ifndef ATOM_WEB_ADDRESS_ADDRESS_HPP
 #define ATOM_WEB_ADDRESS_ADDRESS_HPP
 
+#include <compare>    // For three-way comparison (C++20)
+#include <format>     // For std::format (C++20)
 #include <memory>     // For smart pointers
 #include <stdexcept>  // For custom exceptions
 #include <string>
@@ -13,18 +15,28 @@ class AddressException : public std::runtime_error {
 public:
     explicit AddressException(const std::string& message)
         : std::runtime_error(message) {}
+
+    explicit AddressException(std::string_view message)
+        : std::runtime_error(std::string(message)) {}
 };
 
 class InvalidAddressFormat : public AddressException {
 public:
     explicit InvalidAddressFormat(const std::string& message)
         : AddressException("Invalid address format: " + message) {}
+
+    explicit InvalidAddressFormat(std::string_view message)
+        : AddressException(std::format("Invalid address format: {}", message)) {
+    }
 };
 
 class AddressRangeError : public AddressException {
 public:
     explicit AddressRangeError(const std::string& message)
         : AddressException("Address range error: " + message) {}
+
+    explicit AddressRangeError(std::string_view message)
+        : AddressException(std::format("Address range error: {}", message)) {}
 };
 
 /**
@@ -63,8 +75,8 @@ public:
      * @return True if the address is within the range, false otherwise.
      * @throws AddressRangeError if the range is invalid.
      */
-    virtual auto isInRange(std::string_view start, std::string_view end)
-        -> bool = 0;
+    virtual auto isInRange(std::string_view start,
+                           std::string_view end) -> bool = 0;
 
     /**
      * @brief Converts the address to its binary representation.
@@ -86,6 +98,28 @@ public:
      * @return True if the addresses are equal, false otherwise.
      */
     [[nodiscard]] virtual auto isEqual(const Address& other) const -> bool = 0;
+
+    /**
+     * @brief Three-way comparison operator (C++20).
+     * @param other The other address to compare with.
+     * @return Comparison result.
+     */
+    [[nodiscard]] virtual auto operator<=>(const Address& other) const
+        -> std::partial_ordering {
+        if (getType() != other.getType()) {
+            return std::partial_ordering::unordered;
+        }
+        return addressStr <=> std::string(other.getAddress());
+    }
+
+    /**
+     * @brief Equality operator.
+     * @param other The other address to compare with.
+     * @return True if addresses are equal.
+     */
+    [[nodiscard]] virtual auto operator==(const Address& other) const -> bool {
+        return isEqual(other);
+    }
 
     /**
      * @brief Gets the address type.
@@ -118,15 +152,35 @@ public:
      * @return True if the addresses are in the same subnet, false otherwise.
      * @throws InvalidAddressFormat if the mask format is invalid.
      */
-    [[nodiscard]] virtual auto isSameSubnet(const Address& other,
-                                            std::string_view mask) const
-        -> bool = 0;
+    [[nodiscard]] virtual auto isSameSubnet(
+        const Address& other, std::string_view mask) const -> bool = 0;
 
     /**
      * @brief Converts the address to its hexadecimal representation.
      * @return The hexadecimal representation of the address as a string.
      */
     [[nodiscard]] virtual auto toHex() const -> std::string = 0;
+
+    /**
+     * @brief Formats the address for output.
+     * @return Formatted string representation.
+     */
+    [[nodiscard]] virtual auto toString() const -> std::string {
+        return std::format("{}({})", std::string(getType()), addressStr);
+    }
+
+    /**
+     * @brief Check if address is valid (non-empty).
+     * @return True if address is valid.
+     */
+    [[nodiscard]] auto isValid() const noexcept -> bool {
+        return !addressStr.empty();
+    }
+
+    /**
+     * @brief Explicit bool conversion for validity check.
+     */
+    [[nodiscard]] explicit operator bool() const noexcept { return isValid(); }
 
     /**
      * @brief Creates an address object from a string.

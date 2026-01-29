@@ -2,21 +2,21 @@
 #define ATOM_EXTRA_INICPP_COMMON_HPP
 
 #include <algorithm>
+#include <atomic>
 #include <charconv>
+#include <chrono>
 #include <concepts>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <atomic>
 #include <thread>
-#include <chrono>
 
 #include "atom/macro.hpp"
 
 #if ATOM_HAS_SPDLOG
-#include <spdlog/spdlog.h>
 #include <spdlog/async.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
 #endif
 
 // Configuration macro definitions
@@ -208,8 +208,8 @@ struct StringInsensitiveLess {
      * @param rhs The right-hand side string view.
      * @return True if lhs is less than rhs, false otherwise.
      */
-    auto operator()(std::string_view lhs, std::string_view rhs) const noexcept
-        -> bool {
+    auto operator()(std::string_view lhs,
+                    std::string_view rhs) const noexcept -> bool {
         return std::ranges::lexicographical_compare(
             lhs, rhs, [](unsigned char a, unsigned char b) noexcept {
                 return std::tolower(a) < std::tolower(b);

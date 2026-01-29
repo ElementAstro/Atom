@@ -8,7 +8,6 @@
 #include "../core/types.h"
 #include "event_system.h"
 
-
 using modern_log::LogEvent;
 using modern_log::LogEventSystem;
 

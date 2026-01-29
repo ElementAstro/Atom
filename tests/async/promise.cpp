@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 #include <stdexcept>
 
-#include "atom/async/promise.hpp"
 #include "atom/async/future.hpp"
+#include "atom/async/promise.hpp"
 
 namespace atom::async::test {
 

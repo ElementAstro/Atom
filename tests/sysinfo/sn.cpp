@@ -1,568 +1,249 @@
-#include "atom/sysinfo/sn.hpp"
+/*
+ * sn.cpp
+ *
+ * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ */
+
+/*************************************************
+
+Date: 2024-12-22
+
+Description: Unit Tests for Hardware Serial Number Module
+Tests hardware serial number retrieval for BIOS, motherboard, CPU, and disks.
+
+**************************************************/
+
 #include <gtest/gtest.h>
-#include <gmock/gmock.h>
-#include <chrono>
-#include <thread>
+#include <algorithm>
+#include <string>
+#include <vector>
 
-using namespace atom::system;
-using namespace testing;
+#include "atom/sysinfo/sn.hpp"
 
-class SerialNumberTest : public ::testing::Test {
+namespace atom::sysinfo::test {
+
+// ============================================================================
+// Hardware Serial Number Tests
+// ============================================================================
+
+class SnTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Setup code if necessary
+        // Setup hardware info tests
+        hardwareInfo = std::make_unique<HardwareInfo>();
     }
 
     void TearDown() override {
-        // Cleanup code if necessary
+        // Cleanup
+        hardwareInfo.reset();
     }
+
+    std::unique_ptr<HardwareInfo> hardwareInfo;
 };
 
-// Test SystemInfo factory function
-TEST_F(SerialNumberTest, SystemInfoFactory) {
-    EXPECT_NO_THROW({
-        auto sysInfo = createSystemInfo();
-        EXPECT_NE(sysInfo, nullptr);
-
-        // Test with configuration
-        SystemInfoConfig config;
-        config.includeMemoryModules = true;
-        config.includeNetworkInterfaces = true;
-        config.cacheResults = true;
-
-        auto configuredSysInfo = createSystemInfo(config);
-        EXPECT_NE(configuredSysInfo, nullptr);
-    });
-}
-
-// Test SystemInfo basic functionality
-TEST_F(SerialNumberTest, SystemInfoBasic) {
-    auto sysInfo = createSystemInfo();
-    ASSERT_NE(sysInfo, nullptr);
-
-    EXPECT_NO_THROW({
-        // Test platform support
-        bool isSupported = sysInfo->isSupported();
-        EXPECT_TRUE(isSupported == true || isSupported == false);
-
-        // Test cache age
-        auto cacheAge = sysInfo->getCacheAge();
-        EXPECT_GE(cacheAge.count(), 0);
-
-        // Test summary
-        std::string summary = sysInfo->getSummary();
-        EXPECT_TRUE(summary.empty() || !summary.empty());
-
-        // Test integrity validation
-        bool isValid = sysInfo->validateIntegrity();
-        EXPECT_TRUE(isValid == true || isValid == false);
-    });
-}
-
-// Test hardware serial retrieval
-TEST_F(SerialNumberTest, HardwareSerials) {
-    auto sysInfo = createSystemInfo();
-    ASSERT_NE(sysInfo, nullptr);
-
-    EXPECT_NO_THROW({
-        auto result = sysInfo->getHardwareSerials();
-
-        // Result should have valid structure
-        EXPECT_TRUE(result.success == true || result.success == false);
-
-        if (result.success) {
-            const auto& data = result.data;
-
-            // Serial numbers can be empty on some systems
-            EXPECT_TRUE(data.biosSerial.empty() || !data.biosSerial.empty());
-            EXPECT_TRUE(data.motherboardSerial.empty() || !data.motherboardSerial.empty());
-            EXPECT_TRUE(data.cpuSerial.empty() || !data.cpuSerial.empty());
-
-            // Disk serials should be a valid vector
-            for (const auto& diskSerial : data.diskSerials) {
-                EXPECT_FALSE(diskSerial.empty());
-            }
-
-            // Test isValid method
-            bool dataValid = data.isValid();
-            EXPECT_TRUE(dataValid == true || dataValid == false);
-
-            // Test toString method
-            std::string dataStr = data.toString();
-            EXPECT_TRUE(dataStr.empty() || !dataStr.empty());
-
-            // Test forced refresh
-            auto refreshResult = sysInfo->getHardwareSerials(true);
-            EXPECT_TRUE(refreshResult.success == true || refreshResult.success == false);
-
-            // Results should be consistent
-            if (result.success && refreshResult.success) {
-                EXPECT_EQ(data.biosSerial, refreshResult.data.biosSerial);
-                EXPECT_EQ(data.motherboardSerial, refreshResult.data.motherboardSerial);
-                EXPECT_EQ(data.cpuSerial, refreshResult.data.cpuSerial);
-            }
-        } else {
-            // If failed, should have error information
-            EXPECT_FALSE(result.errorMessage.empty());
-            EXPECT_NE(result.error, SystemInfoError::SUCCESS);
-        }
-    });
-}
-
-// Test system identification
-TEST_F(SerialNumberTest, SystemIdentification) {
-    auto sysInfo = createSystemInfo();
-    ASSERT_NE(sysInfo, nullptr);
-
-    EXPECT_NO_THROW({
-        auto result = sysInfo->getSystemIdentification();
-
-        EXPECT_TRUE(result.success == true || result.success == false);
-
-        if (result.success) {
-            const auto& data = result.data;
-
-            // System identification fields
-            EXPECT_TRUE(data.systemUuid.empty() || !data.systemUuid.empty());
-            EXPECT_TRUE(data.machineId.empty() || !data.machineId.empty());
-            EXPECT_TRUE(data.bootId.empty() || !data.bootId.empty());
-            EXPECT_TRUE(data.hostname.empty() || !data.hostname.empty());
-            EXPECT_TRUE(data.domainName.empty() || !data.domainName.empty());
-
-            // MAC addresses should be valid
-            for (const auto& macAddr : data.macAddresses) {
-                EXPECT_FALSE(macAddr.empty());
-                // Basic MAC address format check (should contain colons or dashes)
-                EXPECT_TRUE(macAddr.find(':') != std::string::npos ||
-                           macAddr.find('-') != std::string::npos);
-            }
-
-            // Test isValid method
-            bool dataValid = data.isValid();
-            EXPECT_TRUE(dataValid == true || dataValid == false);
-
-            // Test toString method
-            std::string dataStr = data.toString();
-            EXPECT_TRUE(dataStr.empty() || !dataStr.empty());
-        }
-    });
-}
-
-// Test memory modules information
-TEST_F(SerialNumberTest, MemoryModules) {
-    auto sysInfo = createSystemInfo();
-    ASSERT_NE(sysInfo, nullptr);
-
-    EXPECT_NO_THROW({
-        auto result = sysInfo->getMemoryModules();
-
-        EXPECT_TRUE(result.success == true || result.success == false);
-
-        if (result.success) {
-            const auto& modules = result.data;
-
-            // Memory modules can be empty on some systems
-            for (const auto& module : modules) {
-                // Serial number can be empty
-                EXPECT_TRUE(module.serialNumber.empty() || !module.serialNumber.empty());
-
-                // Manufacturer can be empty
-                EXPECT_TRUE(module.manufacturer.empty() || !module.manufacturer.empty());
-
-                // Size should be non-negative
-                EXPECT_GE(module.sizeBytes, 0ULL);
-
-                // Speed should be non-negative
-                EXPECT_GE(module.speedMHz, 0);
-
-                // Form factor should be valid
-                EXPECT_TRUE(module.formFactor.empty() || !module.formFactor.empty());
-
-                // Type should be valid
-                EXPECT_TRUE(module.type.empty() || !module.type.empty());
-
-                // Test isValid method
-                bool moduleValid = module.isValid();
-                EXPECT_TRUE(moduleValid == true || moduleValid == false);
-
-                // Test toString method
-                std::string moduleStr = module.toString();
-                EXPECT_TRUE(moduleStr.empty() || !moduleStr.empty());
-            }
-        }
-    });
-}
-
-// Test network interfaces information
-TEST_F(SerialNumberTest, NetworkInterfaces) {
-    auto sysInfo = createSystemInfo();
-    ASSERT_NE(sysInfo, nullptr);
-
-    EXPECT_NO_THROW({
-        auto result = sysInfo->getNetworkInterfaces();
-
-        EXPECT_TRUE(result.success == true || result.success == false);
-
-        if (result.success) {
-            const auto& interfaces = result.data;
-
-            // Network interfaces can be empty on some systems
-            for (const auto& interface : interfaces) {
-                // Name should not be empty
-                EXPECT_FALSE(interface.name.empty());
-
-                // MAC address can be empty for some interfaces
-                EXPECT_TRUE(interface.macAddress.empty() || !interface.macAddress.empty());
-
-                // IP addresses should be valid
-                for (const auto& ip : interface.ipAddresses) {
-                    EXPECT_FALSE(ip.empty());
-                }
-
-                // Driver info can be empty
-                EXPECT_TRUE(interface.driver.empty() || !interface.driver.empty());
-
-                // Type should be valid
-                EXPECT_TRUE(interface.type.empty() || !interface.type.empty());
-
-                // Manufacturer should be valid
-                EXPECT_TRUE(interface.manufacturer.empty() || !interface.manufacturer.empty());
-
-                // Active status should be valid
-                EXPECT_TRUE(interface.isActive == true || interface.isActive == false);
-
-                // Test isValid method
-                bool interfaceValid = interface.isValid();
-                EXPECT_TRUE(interfaceValid == true || interfaceValid == false);
-
-                // Test toString method
-                std::string interfaceStr = interface.toString();
-                EXPECT_TRUE(interfaceStr.empty() || !interfaceStr.empty());
-            }
-        }
-    });
-}
-
-// Test comprehensive system information
-TEST_F(SerialNumberTest, ComprehensiveInfo) {
-    auto sysInfo = createSystemInfo();
-    ASSERT_NE(sysInfo, nullptr);
-
-    EXPECT_NO_THROW({
-        auto result = sysInfo->getComprehensiveInfo();
-
-        EXPECT_TRUE(result.success == true || result.success == false);
-
-        if (result.success) {
-            const auto& info = result.data;
-
-            // Test isValid method
-            bool infoValid = info.isValid();
-            EXPECT_TRUE(infoValid == true || infoValid == false);
-
-            // Test toString method
-            std::string infoStr = info.toString();
-            EXPECT_TRUE(infoStr.empty() || !infoStr.empty());
-
-            // Test getSystemFingerprint method
-            std::string fingerprint = info.getSystemFingerprint();
-            EXPECT_TRUE(fingerprint.empty() || !fingerprint.empty());
-
-            // Hardware serials should be valid
-            EXPECT_TRUE(info.hardwareSerials.isValid() || !info.hardwareSerials.isValid());
-
-            // System ID should be valid
-            EXPECT_TRUE(info.systemId.isValid() || !info.systemId.isValid());
-
-            // Memory modules should be valid
-            for (const auto& module : info.memoryModules) {
-                EXPECT_TRUE(module.isValid() || !module.isValid());
-            }
-
-            // Network interfaces should be valid
-            for (const auto& interface : info.networkInterfaces) {
-                EXPECT_TRUE(interface.isValid() || !interface.isValid());
-            }
-
-            // Additional properties should be valid
-            for (const auto& [key, value] : info.additionalProperties) {
-                EXPECT_FALSE(key.empty());
-                EXPECT_TRUE(value.empty() || !value.empty());
-            }
-        }
-    });
-}
-
-// Test system ID queries
-TEST_F(SerialNumberTest, SystemIdQueries) {
-    auto sysInfo = createSystemInfo();
-    ASSERT_NE(sysInfo, nullptr);
-
-    std::vector<SystemIdType> idTypes = {
-        SystemIdType::BIOS_SERIAL,
-        SystemIdType::MOTHERBOARD_SERIAL,
-        SystemIdType::CPU_SERIAL,
-        SystemIdType::SYSTEM_UUID,
-        SystemIdType::MACHINE_ID,
-        SystemIdType::MAC_ADDRESS,
-        SystemIdType::DISK_SERIAL,
-        SystemIdType::MEMORY_SERIAL
-    };
-
-    for (auto idType : idTypes) {
-        EXPECT_NO_THROW({
-            auto result = sysInfo->querySystemId(idType);
-
-            EXPECT_TRUE(result.success == true || result.success == false);
-
-            if (result.success) {
-                const auto& query = result.data;
-
-                EXPECT_EQ(query.type, idType);
-                EXPECT_TRUE(query.isAvailable == true || query.isAvailable == false);
-
-                if (query.isAvailable) {
-                    EXPECT_FALSE(query.value.empty());
-                    EXPECT_TRUE(query.errorMessage.empty());
-                } else {
-                    EXPECT_TRUE(query.value.empty() || !query.value.empty());
-                    EXPECT_TRUE(query.errorMessage.empty() || !query.errorMessage.empty());
-                }
-            }
-        });
+TEST_F(SnTest, GetBiosSerialNumber) {
+    // Test BIOS serial number retrieval
+    std::string biosSerial = hardwareInfo->getBiosSerialNumber();
+
+    // BIOS serial might be empty on some systems, but should not throw
+    EXPECT_TRUE(biosSerial.empty() || !biosSerial.empty());
+
+    // If we have a BIOS serial, it should be a reasonable length
+    if (!biosSerial.empty()) {
+        EXPECT_GT(biosSerial.length(), 0);
+        EXPECT_LT(biosSerial.length(), 1000);  // Reasonable upper bound
+
+        // Should not contain only whitespace
+        EXPECT_FALSE(
+            std::all_of(biosSerial.begin(), biosSerial.end(), ::isspace));
     }
 }
 
-// Test system fingerprint
-TEST_F(SerialNumberTest, SystemFingerprint) {
-    auto sysInfo = createSystemInfo();
-    ASSERT_NE(sysInfo, nullptr);
+TEST_F(SnTest, GetMotherboardSerialNumber) {
+    // Test motherboard serial number retrieval
+    std::string motherboardSerial = hardwareInfo->getMotherboardSerialNumber();
 
-    EXPECT_NO_THROW({
-        std::string fingerprint1 = sysInfo->getSystemFingerprint();
-        std::string fingerprint2 = sysInfo->getSystemFingerprint();
+    // Motherboard serial might be empty on some systems
+    EXPECT_TRUE(motherboardSerial.empty() || !motherboardSerial.empty());
 
-        // Fingerprints should be consistent
-        EXPECT_EQ(fingerprint1, fingerprint2);
+    // If we have a motherboard serial, it should be valid
+    if (!motherboardSerial.empty()) {
+        EXPECT_GT(motherboardSerial.length(), 0);
+        EXPECT_LT(motherboardSerial.length(), 1000);  // Reasonable upper bound
 
-        // Fingerprint should not be empty (unless system doesn't support it)
-        EXPECT_TRUE(fingerprint1.empty() || !fingerprint1.empty());
-
-        // Test forced refresh
-        std::string fingerprint3 = sysInfo->getSystemFingerprint(true);
-        EXPECT_EQ(fingerprint1, fingerprint3);
-    });
-}
-
-// Test export functionality
-TEST_F(SerialNumberTest, ExportFunctionality) {
-    auto sysInfo = createSystemInfo();
-    ASSERT_NE(sysInfo, nullptr);
-
-    EXPECT_NO_THROW({
-        // Test JSON export
-        std::string jsonExport = sysInfo->exportToJson();
-        EXPECT_TRUE(jsonExport.empty() || !jsonExport.empty());
-
-        if (!jsonExport.empty()) {
-            // Should contain JSON-like structure
-            EXPECT_NE(jsonExport.find("{"), std::string::npos);
-            EXPECT_NE(jsonExport.find("}"), std::string::npos);
-        }
-
-        // Test XML export
-        std::string xmlExport = sysInfo->exportToXml();
-        EXPECT_TRUE(xmlExport.empty() || !xmlExport.empty());
-
-        if (!xmlExport.empty()) {
-            // Should contain XML-like structure
-            EXPECT_NE(xmlExport.find("<"), std::string::npos);
-            EXPECT_NE(xmlExport.find(">"), std::string::npos);
-        }
-
-        // Test partial export
-        std::string partialJson = sysInfo->exportToJson(false);
-        std::string partialXml = sysInfo->exportToXml(false);
-
-        EXPECT_TRUE(partialJson.empty() || !partialJson.empty());
-        EXPECT_TRUE(partialXml.empty() || !partialXml.empty());
-    });
-}
-
-// Test configuration options
-TEST_F(SerialNumberTest, ConfigurationOptions) {
-    SystemInfoConfig config;
-
-    // Test default configuration
-    EXPECT_TRUE(config.includeMemoryModules);
-    EXPECT_TRUE(config.includeNetworkInterfaces);
-    EXPECT_TRUE(config.cacheResults);
-
-    // Test custom configuration
-    config.includeMemoryModules = false;
-    config.includeNetworkInterfaces = false;
-    config.cacheResults = false;
-
-    auto sysInfo = createSystemInfo(config);
-    ASSERT_NE(sysInfo, nullptr);
-
-    // Test that configuration is respected
-    EXPECT_NO_THROW({
-        auto result = sysInfo->getComprehensiveInfo();
-        // Configuration effects may vary by platform
-    });
-}
-
-// Test error handling
-TEST_F(SerialNumberTest, ErrorHandling) {
-    auto sysInfo = createSystemInfo();
-    ASSERT_NE(sysInfo, nullptr);
-
-    // Test invalid system ID type
-    EXPECT_NO_THROW({
-        auto result = sysInfo->querySystemId(static_cast<SystemIdType>(999));
-        EXPECT_FALSE(result.success);
-        EXPECT_NE(result.error, SystemInfoError::SUCCESS);
-    });
-}
-
-// Test utility functions
-TEST_F(SerialNumberTest, UtilityFunctions) {
-    using namespace SystemInfoUtils;
-
-    // Test MAC address validation
-    EXPECT_TRUE(isValidMacAddress("00:11:22:33:44:55"));
-    EXPECT_TRUE(isValidMacAddress("AA:BB:CC:DD:EE:FF"));
-    EXPECT_TRUE(isValidMacAddress("00-11-22-33-44-55"));
-    EXPECT_FALSE(isValidMacAddress(""));
-    EXPECT_FALSE(isValidMacAddress("invalid"));
-    EXPECT_FALSE(isValidMacAddress("00:11:22:33:44"));
-
-    // Test UUID validation
-    EXPECT_TRUE(isValidUuid("550e8400-e29b-41d4-a716-446655440000"));
-    EXPECT_TRUE(isValidUuid("6ba7b810-9dad-11d1-80b4-00c04fd430c8"));
-    EXPECT_FALSE(isValidUuid(""));
-    EXPECT_FALSE(isValidUuid("invalid"));
-    EXPECT_FALSE(isValidUuid("550e8400-e29b-41d4-a716"));
-
-    // Test serial number validation
-    EXPECT_TRUE(isValidSerial("ABC123DEF456"));
-    EXPECT_TRUE(isValidSerial("1234567890"));
-    EXPECT_FALSE(isValidSerial(""));
-    EXPECT_FALSE(isValidSerial("   "));
-
-    // Test string sanitization (if available)
-    EXPECT_NO_THROW({
-        std::string testStr = "Test String";
-        EXPECT_FALSE(testStr.empty());
-    });
-
-    // Test basic string operations
-    std::string testHex = "0123456789ABCDEF";
-    EXPECT_FALSE(testHex.empty());
-    EXPECT_EQ(testHex.length(), 16);
-}
-
-// Test data structure validation
-TEST_F(SerialNumberTest, DataStructureValidation) {
-    // Test HardwareSerialData
-    HardwareSerialData hwSerial;
-    EXPECT_FALSE(hwSerial.isValid());
-
-    hwSerial.biosSerial = "BIOS123";
-    hwSerial.motherboardSerial = "MB456";
-    EXPECT_TRUE(hwSerial.isValid());
-
-    // Test SystemIdentificationData
-    SystemIdentificationData sysId;
-    EXPECT_FALSE(sysId.isValid());
-
-    sysId.systemUuid = "550e8400-e29b-41d4-a716-446655440000";
-    sysId.machineId = "machine123";
-    EXPECT_TRUE(sysId.isValid());
-
-    // Test MemoryModuleInfo
-    MemoryModuleInfo memInfo;
-    EXPECT_FALSE(memInfo.isValid());
-
-    memInfo.serialNumber = "MEM123";
-    memInfo.manufacturer = "TestMfg";
-    memInfo.sizeBytes = 8589934592ULL; // 8GB
-    EXPECT_TRUE(memInfo.isValid());
-
-    // Test NetworkInterfaceInfo
-    NetworkInterfaceInfo netInfo;
-    EXPECT_FALSE(netInfo.isValid());
-
-    netInfo.name = "eth0";
-    netInfo.macAddress = "00:11:22:33:44:55";
-    EXPECT_TRUE(netInfo.isValid());
-}
-
-// Test concurrent access
-TEST_F(SerialNumberTest, ConcurrentAccess) {
-    const int num_threads = 5;
-    std::vector<std::thread> threads;
-    std::vector<bool> results(num_threads, false);
-
-    auto sysInfo = createSystemInfo();
-    ASSERT_NE(sysInfo, nullptr);
-
-    // Launch multiple threads accessing system info concurrently
-    for (int i = 0; i < num_threads; ++i) {
-        threads.emplace_back([&, i]() {
-            try {
-                auto hwResult = sysInfo->getHardwareSerials();
-                auto sysIdResult = sysInfo->getSystemIdentification();
-                std::string fingerprint = sysInfo->getSystemFingerprint();
-
-                // Basic validation
-                EXPECT_TRUE(hwResult.success == true || hwResult.success == false);
-                EXPECT_TRUE(sysIdResult.success == true || sysIdResult.success == false);
-                EXPECT_TRUE(fingerprint.empty() || !fingerprint.empty());
-
-                results[i] = true;
-            } catch (...) {
-                results[i] = false;
-            }
-        });
-    }
-
-    // Wait for all threads to complete
-    for (auto& thread : threads) {
-        thread.join();
-    }
-
-    // All threads should have completed successfully
-    for (bool result : results) {
-        EXPECT_TRUE(result);
+        // Should not contain only whitespace
+        EXPECT_FALSE(std::all_of(motherboardSerial.begin(),
+                                 motherboardSerial.end(), ::isspace));
     }
 }
 
-// Test performance and caching
-TEST_F(SerialNumberTest, PerformanceAndCaching) {
-    auto sysInfo = createSystemInfo();
-    ASSERT_NE(sysInfo, nullptr);
+TEST_F(SnTest, GetCpuSerialNumber) {
+    // Test CPU serial number retrieval
+    std::string cpuSerial = hardwareInfo->getCpuSerialNumber();
 
-    // First call
-    auto start1 = std::chrono::high_resolution_clock::now();
-    auto result1 = sysInfo->getHardwareSerials();
-    auto end1 = std::chrono::high_resolution_clock::now();
+    // CPU serial might be empty on many modern systems (disabled for privacy)
+    EXPECT_TRUE(cpuSerial.empty() || !cpuSerial.empty());
 
-    // Second call (should use cache)
-    auto start2 = std::chrono::high_resolution_clock::now();
-    auto result2 = sysInfo->getHardwareSerials();
-    auto end2 = std::chrono::high_resolution_clock::now();
+    // If we have a CPU serial, it should be valid
+    if (!cpuSerial.empty()) {
+        EXPECT_GT(cpuSerial.length(), 0);
+        EXPECT_LT(cpuSerial.length(), 1000);  // Reasonable upper bound
 
-    // Results should be identical if both successful
-    if (result1.success && result2.success) {
-        EXPECT_EQ(result1.data.biosSerial, result2.data.biosSerial);
-        EXPECT_EQ(result1.data.motherboardSerial, result2.data.motherboardSerial);
-        EXPECT_EQ(result1.data.cpuSerial, result2.data.cpuSerial);
+        // Should not contain only whitespace
+        EXPECT_FALSE(
+            std::all_of(cpuSerial.begin(), cpuSerial.end(), ::isspace));
+    }
+}
+
+TEST_F(SnTest, GetDiskSerialNumbers) {
+    // Test disk serial numbers retrieval
+    std::vector<std::string> diskSerials = hardwareInfo->getDiskSerialNumbers();
+
+    // Should not throw, but might be empty on some systems
+    EXPECT_TRUE(diskSerials.empty() || !diskSerials.empty());
+
+    // If we have disk serials, they should be valid
+    for (const auto& serial : diskSerials) {
+        EXPECT_FALSE(serial.empty());
+        EXPECT_GT(serial.length(), 0);
+        EXPECT_LT(serial.length(), 1000);  // Reasonable upper bound
+
+        // Should not contain only whitespace
+        EXPECT_FALSE(std::all_of(serial.begin(), serial.end(), ::isspace));
     }
 
-    // Second call should be faster or at least not significantly slower
-    auto duration1 = std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1);
-    auto duration2 = std::chrono::duration_cast<std::chrono::microseconds>(end2 - start2);
-    EXPECT_LE(duration2.count(), duration1.count() * 2);
+    // Should not have duplicate serials (each disk should have unique serial)
+    std::vector<std::string> sortedSerials = diskSerials;
+    std::sort(sortedSerials.begin(), sortedSerials.end());
+    auto uniqueEnd = std::unique(sortedSerials.begin(), sortedSerials.end());
+    EXPECT_EQ(std::distance(sortedSerials.begin(), uniqueEnd),
+              diskSerials.size());
 }
+
+// ============================================================================
+// Copy and Move Semantics Tests
+// ============================================================================
+
+TEST_F(SnTest, CopyConstructor) {
+    // Test copy constructor
+    HardwareInfo original;
+    HardwareInfo copy(original);
+
+    // Both should work independently
+    std::string originalBios = original.getBiosSerialNumber();
+    std::string copyBios = copy.getBiosSerialNumber();
+
+    // Results should be the same
+    EXPECT_EQ(originalBios, copyBios);
+}
+
+TEST_F(SnTest, CopyAssignment) {
+    // Test copy assignment operator
+    HardwareInfo original;
+    HardwareInfo copy;
+    copy = original;
+
+    // Both should work independently
+    std::string originalMotherboard = original.getMotherboardSerialNumber();
+    std::string copyMotherboard = copy.getMotherboardSerialNumber();
+
+    // Results should be the same
+    EXPECT_EQ(originalMotherboard, copyMotherboard);
+}
+
+TEST_F(SnTest, MoveConstructor) {
+    // Test move constructor
+    HardwareInfo original;
+    std::string originalCpu = original.getCpuSerialNumber();
+
+    HardwareInfo moved(std::move(original));
+    std::string movedCpu = moved.getCpuSerialNumber();
+
+    // Moved object should have the same data
+    EXPECT_EQ(originalCpu, movedCpu);
+}
+
+TEST_F(SnTest, MoveAssignment) {
+    // Test move assignment operator
+    HardwareInfo original;
+    std::vector<std::string> originalDisks = original.getDiskSerialNumbers();
+
+    HardwareInfo moved;
+    moved = std::move(original);
+    std::vector<std::string> movedDisks = moved.getDiskSerialNumbers();
+
+    // Moved object should have the same data
+    EXPECT_EQ(originalDisks, movedDisks);
+}
+
+// ============================================================================
+// Multiple Instance Tests
+// ============================================================================
+
+TEST_F(SnTest, MultipleInstances) {
+    // Test that multiple instances work correctly
+    HardwareInfo info1;
+    HardwareInfo info2;
+    HardwareInfo info3;
+
+    // All should return the same results
+    std::string bios1 = info1.getBiosSerialNumber();
+    std::string bios2 = info2.getBiosSerialNumber();
+    std::string bios3 = info3.getBiosSerialNumber();
+
+    EXPECT_EQ(bios1, bios2);
+    EXPECT_EQ(bios2, bios3);
+}
+
+// ============================================================================
+// Consistency Tests
+// ============================================================================
+
+TEST_F(SnTest, ConsistentResults) {
+    // Test that multiple calls return consistent results
+    std::string bios1 = hardwareInfo->getBiosSerialNumber();
+    std::string bios2 = hardwareInfo->getBiosSerialNumber();
+    EXPECT_EQ(bios1, bios2);
+
+    std::string motherboard1 = hardwareInfo->getMotherboardSerialNumber();
+    std::string motherboard2 = hardwareInfo->getMotherboardSerialNumber();
+    EXPECT_EQ(motherboard1, motherboard2);
+
+    std::string cpu1 = hardwareInfo->getCpuSerialNumber();
+    std::string cpu2 = hardwareInfo->getCpuSerialNumber();
+    EXPECT_EQ(cpu1, cpu2);
+
+    std::vector<std::string> disks1 = hardwareInfo->getDiskSerialNumbers();
+    std::vector<std::string> disks2 = hardwareInfo->getDiskSerialNumbers();
+    EXPECT_EQ(disks1, disks2);
+}
+
+// ============================================================================
+// Edge Cases and Error Handling Tests
+// ============================================================================
+
+TEST_F(SnTest, NoThrowGuarantee) {
+    // Test that all methods provide no-throw guarantee
+    EXPECT_NO_THROW({ hardwareInfo->getBiosSerialNumber(); });
+
+    EXPECT_NO_THROW({ hardwareInfo->getMotherboardSerialNumber(); });
+
+    EXPECT_NO_THROW({ hardwareInfo->getCpuSerialNumber(); });
+
+    EXPECT_NO_THROW({ hardwareInfo->getDiskSerialNumbers(); });
+}
+
+TEST_F(SnTest, DestructorSafety) {
+    // Test that destructor is safe to call multiple times
+    {
+        HardwareInfo info;
+        std::string bios = info.getBiosSerialNumber();
+        // Destructor called automatically here
+    }
+
+    // Should be able to create new instances after destruction
+    HardwareInfo newInfo;
+    EXPECT_NO_THROW({ newInfo.getBiosSerialNumber(); });
+}
+
+}  // namespace atom::sysinfo::test

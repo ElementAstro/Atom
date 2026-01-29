@@ -4,37 +4,37 @@
 #include "common.hpp"
 #include "convert.hpp"
 #include "field.hpp"
-#include "section.hpp"
 #include "file.hpp"
+#include "section.hpp"
 
 // Additional headers needed for asynchronous functionality
-#include <atomic>
-#include <thread>
-#include <chrono>
+#include <algorithm>
 #include <array>
-#include <memory>
-#include <type_traits>
+#include <atomic>
+#include <bit>
+#include <chrono>
 #include <concepts>
 #include <cstdint>
-#include <algorithm>
+#include <execution>
+#include <fstream>
 #include <functional>
+#include <future>
+#include <memory>
 #include <mutex>
-#include <bit>
-#include <string>
-#include <string_view>
-#include <vector>
 #include <new>
 #include <numeric>
-#include <execution>
-#include <future>
-#include <fstream>
 #include <sstream>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <type_traits>
+#include <vector>
 
 #if ATOM_HAS_SPDLOG
-#include <spdlog/spdlog.h>
+#include <fmt/format.h>
 #include <spdlog/async.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
-#include <fmt/format.h>
+#include <spdlog/spdlog.h>
 #endif
 
 #if INICPP_CONFIG_PATH_QUERY
@@ -81,39 +81,43 @@ namespace sync {
  * @brief Hardware-specific optimizations for different architectures
  */
 namespace hardware {
-    inline void cpu_pause() noexcept {
+inline void cpu_pause() noexcept {
 #if defined(__x86_64__) || defined(__i386__)
-        __builtin_ia32_pause();
+    __builtin_ia32_pause();
 #elif defined(__aarch64__)
-        __asm__ __volatile__("yield" ::: "memory");
+    __asm__ __volatile__("yield" ::: "memory");
 #else
-        std::this_thread::yield();
+    std::this_thread::yield();
 #endif
-    }
-
-    inline void memory_fence() noexcept {
-        std::atomic_thread_fence(std::memory_order_seq_cst);
-    }
-
-    inline void compiler_barrier() noexcept {
-        std::atomic_signal_fence(std::memory_order_seq_cst);
-    }
 }
 
+inline void memory_fence() noexcept {
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+}
+
+inline void compiler_barrier() noexcept {
+    std::atomic_signal_fence(std::memory_order_seq_cst);
+}
+}  // namespace hardware
+
 /**
- * @brief Adaptive spinlock optimized for INI file operations with exponential backoff
+ * @brief Adaptive spinlock optimized for INI file operations with exponential
+ * backoff
  */
 class IniAdaptiveSpinLock {
 private:
     alignas(64) std::atomic<bool> locked_{false};
     alignas(64) std::atomic<uint32_t> spin_count_{0};
 
-    static constexpr uint32_t MAX_SPIN_COUNT = 2000;  // Optimized for INI operations
-    static constexpr uint32_t YIELD_THRESHOLD = 50;   // Lower threshold for file I/O
+    static constexpr uint32_t MAX_SPIN_COUNT =
+        2000;  // Optimized for INI operations
+    static constexpr uint32_t YIELD_THRESHOLD =
+        50;  // Lower threshold for file I/O
 
 public:
     /**
-     * @brief Acquires the lock with adaptive spinning strategy optimized for INI operations
+     * @brief Acquires the lock with adaptive spinning strategy optimized for
+     * INI operations
      */
     void lock() noexcept {
         uint32_t spin_count = 0;
@@ -127,14 +131,15 @@ public:
                 for (uint32_t i = 0; i < backoff; ++i) {
                     hardware::cpu_pause();
                 }
-                backoff = std::min(backoff * 2, 32u);  // Smaller max backoff for I/O
+                backoff =
+                    std::min(backoff * 2, 32u);  // Smaller max backoff for I/O
             } else if (spin_count < MAX_SPIN_COUNT) {
                 // Yield to other threads
                 std::this_thread::yield();
             } else {
                 // Sleep for a short duration - optimized for file operations
                 std::this_thread::sleep_for(std::chrono::microseconds(1));
-                backoff = 1; // Reset backoff
+                backoff = 1;  // Reset backoff
             }
         }
 
@@ -143,7 +148,9 @@ public:
 
 #if ATOM_HAS_SPDLOG
         if (spin_count > YIELD_THRESHOLD) {
-            spdlog::debug("IniAdaptiveSpinLock: High contention detected, spin_count: {}", spin_count);
+            spdlog::debug(
+                "IniAdaptiveSpinLock: High contention detected, spin_count: {}",
+                spin_count);
         }
 #endif
     }
@@ -154,15 +161,14 @@ public:
      */
     bool try_lock() noexcept {
         bool expected = false;
-        return locked_.compare_exchange_strong(expected, true, std::memory_order_acquire);
+        return locked_.compare_exchange_strong(expected, true,
+                                               std::memory_order_acquire);
     }
 
     /**
      * @brief Releases the lock
      */
-    void unlock() noexcept {
-        locked_.store(false, std::memory_order_release);
-    }
+    void unlock() noexcept { locked_.store(false, std::memory_order_release); }
 
     /**
      * @brief Gets the total spin count for performance analysis
@@ -181,7 +187,8 @@ public:
 };
 
 /**
- * @brief High-performance reader-writer lock optimized for INI file access patterns
+ * @brief High-performance reader-writer lock optimized for INI file access
+ * patterns
  */
 class IniReaderWriterLock {
 private:
@@ -206,10 +213,12 @@ public:
             }
 
             // Try to increment reader count
-            int32_t current_readers = reader_count_.load(std::memory_order_relaxed);
+            int32_t current_readers =
+                reader_count_.load(std::memory_order_relaxed);
             if (current_readers >= 0 &&
-                reader_count_.compare_exchange_weak(current_readers, current_readers + 1,
-                                                  std::memory_order_acquire)) {
+                reader_count_.compare_exchange_weak(
+                    current_readers, current_readers + 1,
+                    std::memory_order_acquire)) {
                 // Successfully acquired read lock
                 break;
             }
@@ -220,7 +229,7 @@ public:
 
 #if ATOM_HAS_SPDLOG
         spdlog::trace("IniReaderWriterLock: Read lock acquired, readers: {}",
-                     reader_count_.load(std::memory_order_relaxed));
+                      reader_count_.load(std::memory_order_relaxed));
 #endif
     }
 
@@ -232,7 +241,7 @@ public:
 
 #if ATOM_HAS_SPDLOG
         spdlog::trace("IniReaderWriterLock: Read lock released, readers: {}",
-                     reader_count_.load(std::memory_order_relaxed));
+                      reader_count_.load(std::memory_order_relaxed));
 #endif
     }
 
@@ -248,8 +257,8 @@ public:
         // Wait for exclusive access
         while (true) {
             bool expected_writer = false;
-            if (writer_active_.compare_exchange_weak(expected_writer, true,
-                                                   std::memory_order_acquire)) {
+            if (writer_active_.compare_exchange_weak(
+                    expected_writer, true, std::memory_order_acquire)) {
                 // Wait for all readers to finish
                 while (reader_count_.load(std::memory_order_acquire) > 0) {
                     hardware::cpu_pause();
@@ -295,7 +304,7 @@ public:
     }
 };
 
-} // namespace sync
+}  // namespace sync
 
 // ============================================================================
 // LOCK-FREE CONTAINERS
@@ -307,18 +316,19 @@ namespace lockfree {
  * @brief Memory ordering utilities for lock-free programming
  */
 namespace memory_order {
-    constexpr auto relaxed = std::memory_order_relaxed;
-    constexpr auto consume = std::memory_order_consume;
-    constexpr auto acquire = std::memory_order_acquire;
-    constexpr auto release = std::memory_order_release;
-    constexpr auto acq_rel = std::memory_order_acq_rel;
-    constexpr auto seq_cst = std::memory_order_seq_cst;
-}
+constexpr auto relaxed = std::memory_order_relaxed;
+constexpr auto consume = std::memory_order_consume;
+constexpr auto acquire = std::memory_order_acquire;
+constexpr auto release = std::memory_order_release;
+constexpr auto acq_rel = std::memory_order_acq_rel;
+constexpr auto seq_cst = std::memory_order_seq_cst;
+}  // namespace memory_order
 
 /**
- * @brief Hazard pointer implementation for safe memory reclamation in INI operations
+ * @brief Hazard pointer implementation for safe memory reclamation in INI
+ * operations
  */
-template<typename T>
+template <typename T>
 class HazardPointer {
 private:
     static constexpr size_t MAX_THREADS = 64;
@@ -329,10 +339,13 @@ private:
         alignas(64) std::atomic<std::thread::id> owner{std::thread::id{}};
     };
 
-    static inline std::array<HazardRecord, MAX_THREADS * HAZARD_POINTERS_PER_THREAD> hazard_pointers_;
+    static inline std::array<HazardRecord,
+                             MAX_THREADS * HAZARD_POINTERS_PER_THREAD>
+        hazard_pointers_;
     static inline std::atomic<size_t> hazard_pointer_count_{0};
 
-    thread_local static inline std::array<T*, HAZARD_POINTERS_PER_THREAD> local_hazards_{};
+    thread_local static inline std::array<T*, HAZARD_POINTERS_PER_THREAD>
+        local_hazards_{};
     thread_local static inline size_t local_hazard_count_ = 0;
 
 public:
@@ -351,15 +364,15 @@ public:
         // Find an available hazard pointer slot
         for (size_t i = 0; i < MAX_THREADS * HAZARD_POINTERS_PER_THREAD; ++i) {
             std::thread::id expected{};
-            if (hazard_pointers_[i].owner.compare_exchange_strong(expected, thread_id,
-                                                                memory_order::acquire)) {
+            if (hazard_pointers_[i].owner.compare_exchange_strong(
+                    expected, thread_id, memory_order::acquire)) {
                 hazard_pointers_[i].pointer.store(ptr, memory_order::release);
                 local_hazards_[local_hazard_count_] = ptr;
                 return static_cast<int>(local_hazard_count_++);
             }
         }
 
-        return -1; // No available slot
+        return -1;  // No available slot
     }
 
     /**
@@ -375,10 +388,14 @@ public:
 
         // Find and release the hazard pointer
         for (size_t i = 0; i < MAX_THREADS * HAZARD_POINTERS_PER_THREAD; ++i) {
-            if (hazard_pointers_[i].owner.load(memory_order::acquire) == thread_id &&
-                hazard_pointers_[i].pointer.load(memory_order::acquire) == local_hazards_[index]) {
-                hazard_pointers_[i].pointer.store(nullptr, memory_order::release);
-                hazard_pointers_[i].owner.store(std::thread::id{}, memory_order::release);
+            if (hazard_pointers_[i].owner.load(memory_order::acquire) ==
+                    thread_id &&
+                hazard_pointers_[i].pointer.load(memory_order::acquire) ==
+                    local_hazards_[index]) {
+                hazard_pointers_[i].pointer.store(nullptr,
+                                                  memory_order::release);
+                hazard_pointers_[i].owner.store(std::thread::id{},
+                                                memory_order::release);
 
                 // Remove from local array
                 for (size_t j = index; j < local_hazard_count_ - 1; ++j) {
@@ -397,7 +414,8 @@ public:
      */
     static bool is_protected(T* ptr) noexcept {
         for (size_t i = 0; i < MAX_THREADS * HAZARD_POINTERS_PER_THREAD; ++i) {
-            if (hazard_pointers_[i].pointer.load(memory_order::acquire) == ptr) {
+            if (hazard_pointers_[i].pointer.load(memory_order::acquire) ==
+                ptr) {
                 return true;
             }
         }
@@ -421,7 +439,7 @@ public:
 /**
  * @brief Lock-free hash map optimized for INI section and field storage
  */
-template<typename Key, typename Value, typename Hash = std::hash<Key>>
+template <typename Key, typename Value, typename Hash = std::hash<Key>>
 class LockFreeHashMap {
 private:
     struct Node {
@@ -451,7 +469,8 @@ private:
         Node* current = buckets_[bucket_idx].load(memory_order::acquire);
 
         while (current != nullptr) {
-            if (!current->deleted.load(memory_order::acquire) && current->key == key) {
+            if (!current->deleted.load(memory_order::acquire) &&
+                current->key == key) {
                 return current;
             }
             current = current->next.load(memory_order::acquire);
@@ -469,13 +488,12 @@ public:
         }
 
 #if ATOM_HAS_SPDLOG
-        spdlog::debug("LockFreeHashMap: Initialized with {} buckets", bucket_count_);
+        spdlog::debug("LockFreeHashMap: Initialized with {} buckets",
+                      bucket_count_);
 #endif
     }
 
-    ~LockFreeHashMap() {
-        clear();
-    }
+    ~LockFreeHashMap() { clear(); }
 
     /**
      * @brief Inserts or updates a key-value pair
@@ -491,11 +509,12 @@ public:
 
             // Search for existing key
             while (current != nullptr) {
-                if (!current->deleted.load(memory_order::acquire) && current->key == key) {
+                if (!current->deleted.load(memory_order::acquire) &&
+                    current->key == key) {
                     // Update existing value
                     std::lock_guard<std::mutex> lock(current->value_mutex);
                     current->value = value;
-                    return false; // Updated existing
+                    return false;  // Updated existing
                 }
                 current = current->next.load(memory_order::acquire);
             }
@@ -506,11 +525,11 @@ public:
             new_node->next.store(head, memory_order::relaxed);
 
             // Try to insert at head
-            if (buckets_[bucket_idx].compare_exchange_weak(head, new_node,
-                                                         memory_order::release,
-                                                         memory_order::acquire)) {
+            if (buckets_[bucket_idx].compare_exchange_weak(
+                    head, new_node, memory_order::release,
+                    memory_order::acquire)) {
                 size_.fetch_add(1, memory_order::relaxed);
-                return true; // Inserted new
+                return true;  // Inserted new
             }
 
             // Failed to insert, clean up and retry
@@ -543,7 +562,8 @@ public:
         Node* node = find_node(key);
         if (node != nullptr) {
             bool expected = false;
-            if (node->deleted.compare_exchange_strong(expected, true, memory_order::release)) {
+            if (node->deleted.compare_exchange_strong(expected, true,
+                                                      memory_order::release)) {
                 size_.fetch_sub(1, memory_order::relaxed);
                 return true;
             }
@@ -555,17 +575,13 @@ public:
      * @brief Gets the current size of the map
      * @return Number of elements in the map
      */
-    size_t size() const noexcept {
-        return size_.load(memory_order::relaxed);
-    }
+    size_t size() const noexcept { return size_.load(memory_order::relaxed); }
 
     /**
      * @brief Checks if the map is empty
      * @return true if empty, false otherwise
      */
-    bool empty() const noexcept {
-        return size() == 0;
-    }
+    bool empty() const noexcept { return size() == 0; }
 
     /**
      * @brief Clears all elements from the map
@@ -587,7 +603,7 @@ public:
 /**
  * @brief Lock-free queue for asynchronous operations
  */
-template<typename T>
+template <typename T>
 class LockFreeQueue {
 private:
     struct Node {
@@ -607,7 +623,8 @@ public:
 
     ~LockFreeQueue() {
         while (Node* old_head = head_.load(memory_order::relaxed)) {
-            head_.store(old_head->next.load(memory_order::relaxed), memory_order::relaxed);
+            head_.store(old_head->next.load(memory_order::relaxed),
+                        memory_order::relaxed);
             delete old_head;
         }
     }
@@ -627,23 +644,23 @@ public:
 
             if (last == tail_.load(memory_order::acquire)) {
                 if (next == nullptr) {
-                    if (last->next.compare_exchange_weak(next, new_node,
-                                                       memory_order::release,
-                                                       memory_order::relaxed)) {
+                    if (last->next.compare_exchange_weak(
+                            next, new_node, memory_order::release,
+                            memory_order::relaxed)) {
                         break;
                     }
                 } else {
                     tail_.compare_exchange_weak(last, next,
-                                              memory_order::release,
-                                              memory_order::relaxed);
+                                                memory_order::release,
+                                                memory_order::relaxed);
                 }
             }
         }
 
         Node* current_tail = tail_.load(memory_order::acquire);
         tail_.compare_exchange_weak(current_tail, new_node,
-                                  memory_order::release,
-                                  memory_order::relaxed);
+                                    memory_order::release,
+                                    memory_order::relaxed);
     }
 
     /**
@@ -660,11 +677,11 @@ public:
             if (first == head_.load(memory_order::acquire)) {
                 if (first == last) {
                     if (next == nullptr) {
-                        return false; // Queue is empty
+                        return false;  // Queue is empty
                     }
                     tail_.compare_exchange_weak(last, next,
-                                              memory_order::release,
-                                              memory_order::relaxed);
+                                                memory_order::release,
+                                                memory_order::relaxed);
                 } else {
                     if (next == nullptr) {
                         continue;
@@ -676,8 +693,8 @@ public:
                     }
 
                     if (head_.compare_exchange_weak(first, next,
-                                                  memory_order::release,
-                                                  memory_order::relaxed)) {
+                                                    memory_order::release,
+                                                    memory_order::relaxed)) {
                         result = *data;
                         delete data;
                         delete first;
@@ -695,14 +712,15 @@ public:
     bool empty() const {
         Node* first = head_.load(memory_order::acquire);
         Node* last = tail_.load(memory_order::acquire);
-        return (first == last) && (first->next.load(memory_order::acquire) == nullptr);
+        return (first == last) &&
+               (first->next.load(memory_order::acquire) == nullptr);
     }
 };
 
 // Convenience alias for string-based hash map
 using LockFreeStringMap = LockFreeHashMap<std::string, std::string>;
 
-} // namespace lockfree
+}  // namespace lockfree
 
 // ============================================================================
 // MEMORY MANAGEMENT
@@ -711,7 +729,8 @@ using LockFreeStringMap = LockFreeHashMap<std::string, std::string>;
 namespace memory {
 
 /**
- * @brief Epoch-based memory management for safe deallocation in concurrent environments
+ * @brief Epoch-based memory management for safe deallocation in concurrent
+ * environments
  */
 class EpochManager {
 private:
@@ -762,8 +781,8 @@ public:
 
         for (size_t i = 0; i < MAX_THREADS; ++i) {
             std::thread::id expected{};
-            if (thread_epochs_[i].thread_id.compare_exchange_strong(expected, current_thread_id,
-                                                                  std::memory_order_acquire)) {
+            if (thread_epochs_[i].thread_id.compare_exchange_strong(
+                    expected, current_thread_id, std::memory_order_acquire)) {
                 thread_index_ = i;
                 thread_epochs_[i].active.store(true, std::memory_order_release);
                 thread_registered_ = true;
@@ -776,7 +795,7 @@ public:
             }
         }
 
-        return false; // No available slots
+        return false;  // No available slots
     }
 
     /**
@@ -787,9 +806,12 @@ public:
             return;
         }
 
-        thread_epochs_[thread_index_].active.store(false, std::memory_order_release);
-        thread_epochs_[thread_index_].epoch.store(UINT64_MAX, std::memory_order_release);
-        thread_epochs_[thread_index_].thread_id.store(std::thread::id{}, std::memory_order_release);
+        thread_epochs_[thread_index_].active.store(false,
+                                                   std::memory_order_release);
+        thread_epochs_[thread_index_].epoch.store(UINT64_MAX,
+                                                  std::memory_order_release);
+        thread_epochs_[thread_index_].thread_id.store(
+            std::thread::id{}, std::memory_order_release);
 
         active_threads_.fetch_sub(1, std::memory_order_relaxed);
         thread_registered_ = false;
@@ -806,11 +828,12 @@ public:
      */
     uint64_t enter_critical_section() noexcept {
         if (!thread_registered_ && !register_thread()) {
-            return 0; // Failed to register
+            return 0;  // Failed to register
         }
 
         uint64_t current_epoch = global_epoch_.load(std::memory_order_acquire);
-        thread_epochs_[thread_index_].epoch.store(current_epoch, std::memory_order_release);
+        thread_epochs_[thread_index_].epoch.store(current_epoch,
+                                                  std::memory_order_release);
 
         return current_epoch;
     }
@@ -820,22 +843,26 @@ public:
      */
     void exit_critical_section() noexcept {
         if (thread_registered_ && thread_index_ != SIZE_MAX) {
-            thread_epochs_[thread_index_].epoch.store(UINT64_MAX, std::memory_order_release);
+            thread_epochs_[thread_index_].epoch.store(
+                UINT64_MAX, std::memory_order_release);
         }
     }
 
     /**
-     * @brief Advances the global epoch and returns the minimum safe epoch for deallocation
+     * @brief Advances the global epoch and returns the minimum safe epoch for
+     * deallocation
      * @return Minimum epoch that is safe for deallocation
      */
     uint64_t advance_epoch() noexcept {
-        uint64_t new_epoch = global_epoch_.fetch_add(1, std::memory_order_acq_rel) + 1;
+        uint64_t new_epoch =
+            global_epoch_.fetch_add(1, std::memory_order_acq_rel) + 1;
 
         // Find the minimum epoch among active threads
         uint64_t min_epoch = new_epoch;
         for (size_t i = 0; i < MAX_THREADS; ++i) {
             if (thread_epochs_[i].active.load(std::memory_order_acquire)) {
-                uint64_t thread_epoch = thread_epochs_[i].epoch.load(std::memory_order_acquire);
+                uint64_t thread_epoch =
+                    thread_epochs_[i].epoch.load(std::memory_order_acquire);
                 if (thread_epoch != UINT64_MAX && thread_epoch < min_epoch) {
                     min_epoch = thread_epoch;
                 }
@@ -843,10 +870,12 @@ public:
         }
 
         // Safe epoch is EPOCHS_TO_KEEP behind the minimum
-        uint64_t safe_epoch = (min_epoch > EPOCHS_TO_KEEP) ? (min_epoch - EPOCHS_TO_KEEP) : 0;
+        uint64_t safe_epoch =
+            (min_epoch > EPOCHS_TO_KEEP) ? (min_epoch - EPOCHS_TO_KEEP) : 0;
 
 #if ATOM_HAS_SPDLOG
-        spdlog::trace("EpochManager: Advanced to epoch {}, safe epoch: {}", new_epoch, safe_epoch);
+        spdlog::trace("EpochManager: Advanced to epoch {}, safe epoch: {}",
+                      new_epoch, safe_epoch);
 #endif
 
         return safe_epoch;
@@ -870,7 +899,8 @@ public:
 };
 
 /**
- * @brief Thread-local string pool for efficient string allocations in INI operations
+ * @brief Thread-local string pool for efficient string allocations in INI
+ * operations
  */
 class ThreadLocalStringPool {
 private:
@@ -899,7 +929,7 @@ public:
         allocations_.fetch_add(1, std::memory_order_relaxed);
 
         if (size > MAX_STRING_LENGTH) {
-            return nullptr; // Too large for pool
+            return nullptr;  // Too large for pool
         }
 
         // Try to find an available block
@@ -908,15 +938,16 @@ public:
             size_t index = (start_index + i) % POOL_SIZE;
             bool expected = false;
 
-            if (pool_[index].in_use.compare_exchange_strong(expected, true,
-                                                          std::memory_order_acquire)) {
-                next_index_.store((index + 1) % POOL_SIZE, std::memory_order_relaxed);
+            if (pool_[index].in_use.compare_exchange_strong(
+                    expected, true, std::memory_order_acquire)) {
+                next_index_.store((index + 1) % POOL_SIZE,
+                                  std::memory_order_relaxed);
                 pool_hits_.fetch_add(1, std::memory_order_relaxed);
                 return pool_[index].data;
             }
         }
 
-        return nullptr; // Pool exhausted
+        return nullptr;  // Pool exhausted
     }
 
     /**
@@ -965,7 +996,7 @@ public:
     }
 };
 
-} // namespace memory
+}  // namespace memory
 
 // ============================================================================
 // LOGGING SYSTEM
@@ -1013,13 +1044,15 @@ struct GlobalIniMetrics {
     double get_average_parse_time_ms() const noexcept {
         uint64_t ops = parse_operations.load(std::memory_order_relaxed);
         uint64_t total_ns = total_parse_time_ns.load(std::memory_order_relaxed);
-        return ops > 0 ? (static_cast<double>(total_ns) / ops / 1000000.0) : 0.0;
+        return ops > 0 ? (static_cast<double>(total_ns) / ops / 1000000.0)
+                       : 0.0;
     }
 
     double get_average_write_time_ms() const noexcept {
         uint64_t ops = write_operations.load(std::memory_order_relaxed);
         uint64_t total_ns = total_write_time_ns.load(std::memory_order_relaxed);
-        return ops > 0 ? (static_cast<double>(total_ns) / ops / 1000000.0) : 0.0;
+        return ops > 0 ? (static_cast<double>(total_ns) / ops / 1000000.0)
+                       : 0.0;
     }
 };
 
@@ -1046,11 +1079,11 @@ private:
 
         LogEntry() = default;
         LogEntry(std::string_view msg, std::string_view name, int lvl)
-            : timestamp(std::chrono::high_resolution_clock::now())
-            , message(msg)
-            , logger_name(name)
-            , level(lvl)
-            , thread_id(std::this_thread::get_id()) {}
+            : timestamp(std::chrono::high_resolution_clock::now()),
+              message(msg),
+              logger_name(name),
+              level(lvl),
+              thread_id(std::this_thread::get_id()) {}
     };
 
     lockfree::LockFreeQueue<LogEntry> log_queue_;
@@ -1067,8 +1100,9 @@ private:
             if (log_queue_.dequeue(entry)) {
 #if ATOM_HAS_SPDLOG
                 if (async_logger_) {
-                    async_logger_->log(static_cast<spdlog::level::level_enum>(entry.level),
-                                     "[{}] {}", entry.logger_name, entry.message);
+                    async_logger_->log(
+                        static_cast<spdlog::level::level_enum>(entry.level),
+                        "[{}] {}", entry.logger_name, entry.message);
                 }
 #endif
             } else {
@@ -1083,7 +1117,8 @@ public:
         try {
             // Create async logger with thread pool
             spdlog::init_thread_pool(8192, 1);
-            auto stdout_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+            auto stdout_sink =
+                std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
             async_logger_ = std::make_shared<spdlog::async_logger>(
                 "inicpp_async", stdout_sink, spdlog::thread_pool(),
                 spdlog::async_overflow_policy::block);
@@ -1119,7 +1154,8 @@ public:
      * @param logger_name Logger name
      * @param message Message to log
      */
-    void log_async(int level, std::string_view logger_name, std::string_view message) {
+    void log_async(int level, std::string_view logger_name,
+                   std::string_view message) {
         log_queue_.enqueue(LogEntry(message, logger_name, level));
     }
 
@@ -1143,8 +1179,8 @@ private:
 
 public:
     explicit PerformanceTimer(std::string_view operation_name)
-        : start_time_(std::chrono::high_resolution_clock::now())
-        , operation_name_(operation_name) {
+        : start_time_(std::chrono::high_resolution_clock::now()),
+          operation_name_(operation_name) {
 #if ATOM_HAS_SPDLOG
         spdlog::trace("PerformanceTimer: Started timing '{}'", operation_name_);
 #endif
@@ -1156,7 +1192,8 @@ public:
             end_time - start_time_);
 
 #if ATOM_HAS_SPDLOG
-        spdlog::debug("PerformanceTimer: '{}' took {} μs", operation_name_, duration.count());
+        spdlog::debug("PerformanceTimer: '{}' took {} μs", operation_name_,
+                      duration.count());
 #endif
 
         // Update global metrics
@@ -1164,12 +1201,14 @@ public:
         if (operation_name_.find("parse") != std::string::npos) {
             metrics.parse_operations.fetch_add(1, std::memory_order_relaxed);
             metrics.total_parse_time_ns.fetch_add(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count(),
+                std::chrono::duration_cast<std::chrono::nanoseconds>(duration)
+                    .count(),
                 std::memory_order_relaxed);
         } else if (operation_name_.find("write") != std::string::npos) {
             metrics.write_operations.fetch_add(1, std::memory_order_relaxed);
             metrics.total_write_time_ns.fetch_add(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count(),
+                std::chrono::duration_cast<std::chrono::nanoseconds>(duration)
+                    .count(),
                 std::memory_order_relaxed);
         }
     }
@@ -1181,56 +1220,63 @@ public:
     uint64_t get_elapsed_microseconds() const {
         auto current_time = std::chrono::high_resolution_clock::now();
         return std::chrono::duration_cast<std::chrono::microseconds>(
-            current_time - start_time_).count();
+                   current_time - start_time_)
+            .count();
     }
 };
 
-} // namespace logging
+}  // namespace logging
 
 // Logging macros for convenience
 #if ATOM_HAS_SPDLOG
 
-#define INICPP_LOG_TRACE(msg, ...) \
-    logging::LockFreeLogger::instance().log_async( \
-        static_cast<int>(spdlog::level::trace), \
-        "inicpp", \
+#define INICPP_LOG_TRACE(msg, ...)                        \
+    logging::LockFreeLogger::instance().log_async(        \
+        static_cast<int>(spdlog::level::trace), "inicpp", \
         fmt::format(msg, ##__VA_ARGS__))
 
-#define INICPP_LOG_DEBUG(msg, ...) \
-    logging::LockFreeLogger::instance().log_async( \
-        static_cast<int>(spdlog::level::debug), \
-        "inicpp", \
+#define INICPP_LOG_DEBUG(msg, ...)                        \
+    logging::LockFreeLogger::instance().log_async(        \
+        static_cast<int>(spdlog::level::debug), "inicpp", \
         fmt::format(msg, ##__VA_ARGS__))
 
-#define INICPP_LOG_INFO(msg, ...) \
-    logging::LockFreeLogger::instance().log_async( \
-        static_cast<int>(spdlog::level::info), \
-        "inicpp", \
+#define INICPP_LOG_INFO(msg, ...)                        \
+    logging::LockFreeLogger::instance().log_async(       \
+        static_cast<int>(spdlog::level::info), "inicpp", \
         fmt::format(msg, ##__VA_ARGS__))
 
-#define INICPP_LOG_WARN(msg, ...) \
-    logging::LockFreeLogger::instance().log_async( \
-        static_cast<int>(spdlog::level::warn), \
-        "inicpp", \
+#define INICPP_LOG_WARN(msg, ...)                        \
+    logging::LockFreeLogger::instance().log_async(       \
+        static_cast<int>(spdlog::level::warn), "inicpp", \
         fmt::format(msg, ##__VA_ARGS__))
 
-#define INICPP_LOG_ERROR(msg, ...) \
-    logging::LockFreeLogger::instance().log_async( \
-        static_cast<int>(spdlog::level::err), \
-        "inicpp", \
+#define INICPP_LOG_ERROR(msg, ...)                      \
+    logging::LockFreeLogger::instance().log_async(      \
+        static_cast<int>(spdlog::level::err), "inicpp", \
         fmt::format(msg, ##__VA_ARGS__))
 
-#define INICPP_PERF_TIMER(name) \
-    logging::PerformanceTimer _perf_timer(name)
+#define INICPP_PERF_TIMER(name) logging::PerformanceTimer _perf_timer(name)
 
 #else
 
-#define INICPP_LOG_TRACE(msg, ...) do {} while(0)
-#define INICPP_LOG_DEBUG(msg, ...) do {} while(0)
-#define INICPP_LOG_INFO(msg, ...) do {} while(0)
-#define INICPP_LOG_WARN(msg, ...) do {} while(0)
-#define INICPP_LOG_ERROR(msg, ...) do {} while(0)
-#define INICPP_PERF_TIMER(name) do {} while(0)
+#define INICPP_LOG_TRACE(msg, ...) \
+    do {                           \
+    } while (0)
+#define INICPP_LOG_DEBUG(msg, ...) \
+    do {                           \
+    } while (0)
+#define INICPP_LOG_INFO(msg, ...) \
+    do {                          \
+    } while (0)
+#define INICPP_LOG_WARN(msg, ...) \
+    do {                          \
+    } while (0)
+#define INICPP_LOG_ERROR(msg, ...) \
+    do {                           \
+    } while (0)
+#define INICPP_PERF_TIMER(name) \
+    do {                        \
+    } while (0)
 
 #endif
 
@@ -1241,7 +1287,8 @@ public:
 namespace monitoring {
 
 /**
- * @brief Advanced performance metrics for INI operations with lock-free collection
+ * @brief Advanced performance metrics for INI operations with lock-free
+ * collection
  */
 struct AdvancedIniMetrics {
     // Operation counters
@@ -1327,12 +1374,14 @@ struct AdvancedIniMetrics {
 
     double get_pool_hit_rate() const noexcept {
         uint64_t hits = pool_hits.load(std::memory_order_relaxed);
-        uint64_t total_allocs = memory_allocations.load(std::memory_order_relaxed);
+        uint64_t total_allocs =
+            memory_allocations.load(std::memory_order_relaxed);
         return total_allocs > 0 ? (100.0 * hits / total_allocs) : 0.0;
     }
 
     double get_contention_rate() const noexcept {
-        uint64_t acquisitions = lock_acquisitions.load(std::memory_order_relaxed);
+        uint64_t acquisitions =
+            lock_acquisitions.load(std::memory_order_relaxed);
         uint64_t contentions = lock_contentions.load(std::memory_order_relaxed);
         return acquisitions > 0 ? (100.0 * contentions / acquisitions) : 0.0;
     }
@@ -1340,19 +1389,22 @@ struct AdvancedIniMetrics {
     double get_average_parse_time_ms() const noexcept {
         uint64_t ops = parse_operations.load(std::memory_order_relaxed);
         uint64_t total_ns = total_parse_time_ns.load(std::memory_order_relaxed);
-        return ops > 0 ? (static_cast<double>(total_ns) / ops / 1000000.0) : 0.0;
+        return ops > 0 ? (static_cast<double>(total_ns) / ops / 1000000.0)
+                       : 0.0;
     }
 
     double get_average_write_time_ms() const noexcept {
         uint64_t ops = write_operations.load(std::memory_order_relaxed);
         uint64_t total_ns = total_write_time_ns.load(std::memory_order_relaxed);
-        return ops > 0 ? (static_cast<double>(total_ns) / ops / 1000000.0) : 0.0;
+        return ops > 0 ? (static_cast<double>(total_ns) / ops / 1000000.0)
+                       : 0.0;
     }
 
     double get_average_read_time_ms() const noexcept {
         uint64_t ops = read_operations.load(std::memory_order_relaxed);
         uint64_t total_ns = total_read_time_ns.load(std::memory_order_relaxed);
-        return ops > 0 ? (static_cast<double>(total_ns) / ops / 1000000.0) : 0.0;
+        return ops > 0 ? (static_cast<double>(total_ns) / ops / 1000000.0)
+                       : 0.0;
     }
 
     double get_max_parse_time_ms() const noexcept {
@@ -1376,19 +1428,19 @@ private:
     AdvancedIniMetrics metrics_;
     std::atomic<bool> monitoring_enabled_{true};
     std::atomic<bool> auto_reporting_enabled_{false};
-    std::atomic<uint64_t> report_interval_ms_{5000}; // 5 seconds default
+    std::atomic<uint64_t> report_interval_ms_{5000};  // 5 seconds default
     std::thread monitoring_thread_;
     std::atomic<bool> shutdown_requested_{false};
 
     // Histogram for latency tracking
     static constexpr size_t HISTOGRAM_BUCKETS = 20;
-    static constexpr uint64_t MAX_LATENCY_NS = 1000000000; // 1 second
+    static constexpr uint64_t MAX_LATENCY_NS = 1000000000;  // 1 second
     std::array<std::atomic<uint64_t>, HISTOGRAM_BUCKETS> latency_histogram_{};
 
     void monitoring_loop() {
         while (!shutdown_requested_.load(std::memory_order_acquire)) {
-            std::this_thread::sleep_for(
-                std::chrono::milliseconds(report_interval_ms_.load(std::memory_order_relaxed)));
+            std::this_thread::sleep_for(std::chrono::milliseconds(
+                report_interval_ms_.load(std::memory_order_relaxed)));
 
             if (auto_reporting_enabled_.load(std::memory_order_acquire)) {
                 generate_performance_report();
@@ -1409,10 +1461,13 @@ public:
             bucket.store(0, std::memory_order_relaxed);
         }
 
-        monitoring_thread_ = std::thread(&RealTimePerformanceMonitor::monitoring_loop, this);
+        monitoring_thread_ =
+            std::thread(&RealTimePerformanceMonitor::monitoring_loop, this);
 
 #if ATOM_HAS_SPDLOG
-        spdlog::info("RealTimePerformanceMonitor: Initialized with lock-free metrics collection");
+        spdlog::info(
+            "RealTimePerformanceMonitor: Initialized with lock-free metrics "
+            "collection");
 #endif
     }
 
@@ -1428,16 +1483,19 @@ public:
      * @param duration_ns Duration in nanoseconds
      */
     void record_parse_operation(uint64_t duration_ns) noexcept {
-        if (!monitoring_enabled_.load(std::memory_order_relaxed)) return;
+        if (!monitoring_enabled_.load(std::memory_order_relaxed))
+            return;
 
         metrics_.parse_operations.fetch_add(1, std::memory_order_relaxed);
-        metrics_.total_parse_time_ns.fetch_add(duration_ns, std::memory_order_relaxed);
+        metrics_.total_parse_time_ns.fetch_add(duration_ns,
+                                               std::memory_order_relaxed);
 
         // Update max time atomically
-        uint64_t current_max = metrics_.max_parse_time_ns.load(std::memory_order_relaxed);
+        uint64_t current_max =
+            metrics_.max_parse_time_ns.load(std::memory_order_relaxed);
         while (duration_ns > current_max &&
-               !metrics_.max_parse_time_ns.compare_exchange_weak(current_max, duration_ns,
-                                                               std::memory_order_relaxed)) {
+               !metrics_.max_parse_time_ns.compare_exchange_weak(
+                   current_max, duration_ns, std::memory_order_relaxed)) {
             // Retry if another thread updated the max
         }
 
@@ -1451,15 +1509,18 @@ public:
      * @param duration_ns Duration in nanoseconds
      */
     void record_write_operation(uint64_t duration_ns) noexcept {
-        if (!monitoring_enabled_.load(std::memory_order_relaxed)) return;
+        if (!monitoring_enabled_.load(std::memory_order_relaxed))
+            return;
 
         metrics_.write_operations.fetch_add(1, std::memory_order_relaxed);
-        metrics_.total_write_time_ns.fetch_add(duration_ns, std::memory_order_relaxed);
+        metrics_.total_write_time_ns.fetch_add(duration_ns,
+                                               std::memory_order_relaxed);
 
-        uint64_t current_max = metrics_.max_write_time_ns.load(std::memory_order_relaxed);
+        uint64_t current_max =
+            metrics_.max_write_time_ns.load(std::memory_order_relaxed);
         while (duration_ns > current_max &&
-               !metrics_.max_write_time_ns.compare_exchange_weak(current_max, duration_ns,
-                                                               std::memory_order_relaxed)) {
+               !metrics_.max_write_time_ns.compare_exchange_weak(
+                   current_max, duration_ns, std::memory_order_relaxed)) {
         }
 
         size_t bucket = get_latency_bucket(duration_ns);
@@ -1471,15 +1532,18 @@ public:
      * @param duration_ns Duration in nanoseconds
      */
     void record_read_operation(uint64_t duration_ns) noexcept {
-        if (!monitoring_enabled_.load(std::memory_order_relaxed)) return;
+        if (!monitoring_enabled_.load(std::memory_order_relaxed))
+            return;
 
         metrics_.read_operations.fetch_add(1, std::memory_order_relaxed);
-        metrics_.total_read_time_ns.fetch_add(duration_ns, std::memory_order_relaxed);
+        metrics_.total_read_time_ns.fetch_add(duration_ns,
+                                              std::memory_order_relaxed);
 
-        uint64_t current_max = metrics_.max_read_time_ns.load(std::memory_order_relaxed);
+        uint64_t current_max =
+            metrics_.max_read_time_ns.load(std::memory_order_relaxed);
         while (duration_ns > current_max &&
-               !metrics_.max_read_time_ns.compare_exchange_weak(current_max, duration_ns,
-                                                              std::memory_order_relaxed)) {
+               !metrics_.max_read_time_ns.compare_exchange_weak(
+                   current_max, duration_ns, std::memory_order_relaxed)) {
         }
 
         size_t bucket = get_latency_bucket(duration_ns);
@@ -1490,7 +1554,8 @@ public:
      * @brief Records lock contention
      */
     void record_lock_contention() noexcept {
-        if (!monitoring_enabled_.load(std::memory_order_relaxed)) return;
+        if (!monitoring_enabled_.load(std::memory_order_relaxed))
+            return;
 
         metrics_.lock_contentions.fetch_add(1, std::memory_order_relaxed);
     }
@@ -1499,7 +1564,8 @@ public:
      * @brief Records lock acquisition
      */
     void record_lock_acquisition() noexcept {
-        if (!monitoring_enabled_.load(std::memory_order_relaxed)) return;
+        if (!monitoring_enabled_.load(std::memory_order_relaxed))
+            return;
 
         metrics_.lock_acquisitions.fetch_add(1, std::memory_order_relaxed);
     }
@@ -1508,7 +1574,8 @@ public:
      * @brief Records cache hit
      */
     void record_cache_hit() noexcept {
-        if (!monitoring_enabled_.load(std::memory_order_relaxed)) return;
+        if (!monitoring_enabled_.load(std::memory_order_relaxed))
+            return;
 
         metrics_.cache_hits.fetch_add(1, std::memory_order_relaxed);
     }
@@ -1517,7 +1584,8 @@ public:
      * @brief Records cache miss
      */
     void record_cache_miss() noexcept {
-        if (!monitoring_enabled_.load(std::memory_order_relaxed)) return;
+        if (!monitoring_enabled_.load(std::memory_order_relaxed))
+            return;
 
         metrics_.cache_misses.fetch_add(1, std::memory_order_relaxed);
     }
@@ -1526,7 +1594,8 @@ public:
      * @brief Records memory allocation
      */
     void record_memory_allocation() noexcept {
-        if (!monitoring_enabled_.load(std::memory_order_relaxed)) return;
+        if (!monitoring_enabled_.load(std::memory_order_relaxed))
+            return;
 
         metrics_.memory_allocations.fetch_add(1, std::memory_order_relaxed);
     }
@@ -1535,7 +1604,8 @@ public:
      * @brief Records pool allocation hit
      */
     void record_pool_hit() noexcept {
-        if (!monitoring_enabled_.load(std::memory_order_relaxed)) return;
+        if (!monitoring_enabled_.load(std::memory_order_relaxed))
+            return;
 
         metrics_.pool_hits.fetch_add(1, std::memory_order_relaxed);
     }
@@ -1544,9 +1614,7 @@ public:
      * @brief Gets the current metrics reference
      * @return Reference to current metrics
      */
-    const AdvancedIniMetrics& get_metrics() const noexcept {
-        return metrics_;
-    }
+    const AdvancedIniMetrics& get_metrics() const noexcept { return metrics_; }
 
     /**
      * @brief Resets all metrics
@@ -1570,7 +1638,8 @@ public:
         monitoring_enabled_.store(enabled, std::memory_order_relaxed);
 
 #if ATOM_HAS_SPDLOG
-        spdlog::info("RealTimePerformanceMonitor: Monitoring {}", enabled ? "enabled" : "disabled");
+        spdlog::info("RealTimePerformanceMonitor: Monitoring {}",
+                     enabled ? "enabled" : "disabled");
 #endif
     }
 
@@ -1579,13 +1648,15 @@ public:
      * @param enabled Whether to enable auto reporting
      * @param interval_ms Reporting interval in milliseconds
      */
-    void set_auto_reporting(bool enabled, uint64_t interval_ms = 5000) noexcept {
+    void set_auto_reporting(bool enabled,
+                            uint64_t interval_ms = 5000) noexcept {
         auto_reporting_enabled_.store(enabled, std::memory_order_relaxed);
         report_interval_ms_.store(interval_ms, std::memory_order_relaxed);
 
 #if ATOM_HAS_SPDLOG
-        spdlog::info("RealTimePerformanceMonitor: Auto reporting {} (interval: {} ms)",
-                    enabled ? "enabled" : "disabled", interval_ms);
+        spdlog::info(
+            "RealTimePerformanceMonitor: Auto reporting {} (interval: {} ms)",
+            enabled ? "enabled" : "disabled", interval_ms);
 #endif
     }
 
@@ -1599,31 +1670,36 @@ public:
         spdlog::info("=== INI Performance Report ===");
         spdlog::info("Operations:");
         spdlog::info("  Parse: {} (avg: {:.3f} ms, max: {:.3f} ms)",
-                    m.parse_operations.load(), m.get_average_parse_time_ms(), m.get_max_parse_time_ms());
+                     m.parse_operations.load(), m.get_average_parse_time_ms(),
+                     m.get_max_parse_time_ms());
         spdlog::info("  Write: {} (avg: {:.3f} ms, max: {:.3f} ms)",
-                    m.write_operations.load(), m.get_average_write_time_ms(), m.get_max_write_time_ms());
+                     m.write_operations.load(), m.get_average_write_time_ms(),
+                     m.get_max_write_time_ms());
         spdlog::info("  Read: {} (avg: {:.3f} ms, max: {:.3f} ms)",
-                    m.read_operations.load(), m.get_average_read_time_ms(), m.get_max_read_time_ms());
+                     m.read_operations.load(), m.get_average_read_time_ms(),
+                     m.get_max_read_time_ms());
         spdlog::info("  Sections: {}", m.section_operations.load());
         spdlog::info("  Fields: {}", m.field_operations.load());
 
         spdlog::info("Concurrency:");
         spdlog::info("  Lock acquisitions: {}", m.lock_acquisitions.load());
         spdlog::info("  Lock contentions: {} ({:.2f}%)",
-                    m.lock_contentions.load(), m.get_contention_rate());
+                     m.lock_contentions.load(), m.get_contention_rate());
         spdlog::info("  Spin cycles: {}", m.spin_cycles.load());
         spdlog::info("  Yield operations: {}", m.yield_operations.load());
         spdlog::info("  Sleep operations: {}", m.sleep_operations.load());
 
         spdlog::info("Cache:");
-        spdlog::info("  Hits: {} ({:.2f}%)", m.cache_hits.load(), m.get_cache_hit_rate());
+        spdlog::info("  Hits: {} ({:.2f}%)", m.cache_hits.load(),
+                     m.get_cache_hit_rate());
         spdlog::info("  Misses: {}", m.cache_misses.load());
         spdlog::info("  Evictions: {}", m.cache_evictions.load());
 
         spdlog::info("Memory:");
         spdlog::info("  Allocations: {}", m.memory_allocations.load());
         spdlog::info("  Deallocations: {}", m.memory_deallocations.load());
-        spdlog::info("  Pool hits: {} ({:.2f}%)", m.pool_hits.load(), m.get_pool_hit_rate());
+        spdlog::info("  Pool hits: {} ({:.2f}%)", m.pool_hits.load(),
+                     m.get_pool_hit_rate());
         spdlog::info("  Epoch advances: {}", m.epoch_advances.load());
 
         spdlog::info("Errors:");
@@ -1634,11 +1710,17 @@ public:
         // Latency histogram
         spdlog::info("Latency Distribution:");
         for (size_t i = 0; i < HISTOGRAM_BUCKETS; ++i) {
-            uint64_t count = latency_histogram_[i].load(std::memory_order_relaxed);
+            uint64_t count =
+                latency_histogram_[i].load(std::memory_order_relaxed);
             if (count > 0) {
-                double bucket_start_ms = (static_cast<double>(i) * MAX_LATENCY_NS / HISTOGRAM_BUCKETS) / 1000000.0;
-                double bucket_end_ms = (static_cast<double>(i + 1) * MAX_LATENCY_NS / HISTOGRAM_BUCKETS) / 1000000.0;
-                spdlog::info("  {:.1f}-{:.1f} ms: {}", bucket_start_ms, bucket_end_ms, count);
+                double bucket_start_ms = (static_cast<double>(i) *
+                                          MAX_LATENCY_NS / HISTOGRAM_BUCKETS) /
+                                         1000000.0;
+                double bucket_end_ms = (static_cast<double>(i + 1) *
+                                        MAX_LATENCY_NS / HISTOGRAM_BUCKETS) /
+                                       1000000.0;
+                spdlog::info("  {:.1f}-{:.1f} ms: {}", bucket_start_ms,
+                             bucket_end_ms, count);
             }
         }
 
@@ -1659,20 +1741,23 @@ public:
 /**
  * @brief RAII timer for automatic operation timing
  */
-template<typename Operation>
+template <typename Operation>
 class ScopedOperationTimer {
 private:
     std::chrono::high_resolution_clock::time_point start_time_;
     RealTimePerformanceMonitor& monitor_;
 
 public:
-    explicit ScopedOperationTimer(RealTimePerformanceMonitor& monitor = RealTimePerformanceMonitor::instance())
-        : start_time_(std::chrono::high_resolution_clock::now()), monitor_(monitor) {}
+    explicit ScopedOperationTimer(RealTimePerformanceMonitor& monitor =
+                                      RealTimePerformanceMonitor::instance())
+        : start_time_(std::chrono::high_resolution_clock::now()),
+          monitor_(monitor) {}
 
     ~ScopedOperationTimer() {
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-            end_time - start_time_).count();
+                               end_time - start_time_)
+                               .count();
 
         if constexpr (std::is_same_v<Operation, struct ParseOperation>) {
             monitor_.record_parse_operation(duration_ns);
@@ -1697,14 +1782,17 @@ using ReadTimer = ScopedOperationTimer<ReadOperation>;
 /**
  * @brief Enhanced performance macros with automatic monitoring
  */
-#define INICPP_MONITOR_PARSE_OP() \
-    monitoring::ParseTimer _parse_timer(monitoring::RealTimePerformanceMonitor::instance())
+#define INICPP_MONITOR_PARSE_OP()        \
+    monitoring::ParseTimer _parse_timer( \
+        monitoring::RealTimePerformanceMonitor::instance())
 
-#define INICPP_MONITOR_WRITE_OP() \
-    monitoring::WriteTimer _write_timer(monitoring::RealTimePerformanceMonitor::instance())
+#define INICPP_MONITOR_WRITE_OP()        \
+    monitoring::WriteTimer _write_timer( \
+        monitoring::RealTimePerformanceMonitor::instance())
 
-#define INICPP_MONITOR_READ_OP() \
-    monitoring::ReadTimer _read_timer(monitoring::RealTimePerformanceMonitor::instance())
+#define INICPP_MONITOR_READ_OP()       \
+    monitoring::ReadTimer _read_timer( \
+        monitoring::RealTimePerformanceMonitor::instance())
 
 #define INICPP_RECORD_CACHE_HIT() \
     monitoring::RealTimePerformanceMonitor::instance().record_cache_hit()
@@ -1718,7 +1806,7 @@ using ReadTimer = ScopedOperationTimer<ReadOperation>;
 #define INICPP_RECORD_LOCK_ACQUISITION() \
     monitoring::RealTimePerformanceMonitor::instance().record_lock_acquisition()
 
-} // namespace monitoring
+}  // namespace monitoring
 
 // ============================================================================
 // CONCURRENT INI IMPLEMENTATION
@@ -1727,7 +1815,8 @@ using ReadTimer = ScopedOperationTimer<ReadOperation>;
 namespace concurrent {
 
 /**
- * @brief High-performance concurrent INI section using lock-free data structures
+ * @brief High-performance concurrent INI section using lock-free data
+ * structures
  */
 class ConcurrentIniSection {
 private:
@@ -1753,7 +1842,8 @@ public:
         modification_count_.fetch_add(1, std::memory_order_relaxed);
         section_lock_.unlock();
 
-        INICPP_LOG_DEBUG("ConcurrentIniSection: Set field '{}' = '{}'", key, value);
+        INICPP_LOG_DEBUG("ConcurrentIniSection: Set field '{}' = '{}'", key,
+                         value);
     }
 
     /**
@@ -1766,13 +1856,15 @@ public:
         INICPP_MONITOR_READ_OP();
 
         const_cast<sync::IniReaderWriterLock&>(section_lock_).lock_shared();
-        const_cast<std::atomic<uint64_t>&>(access_count_).fetch_add(1, std::memory_order_relaxed);
+        const_cast<std::atomic<uint64_t>&>(access_count_)
+            .fetch_add(1, std::memory_order_relaxed);
         bool found = fields_.find(key, value);
         const_cast<sync::IniReaderWriterLock&>(section_lock_).unlock_shared();
 
         if (found) {
             INICPP_RECORD_CACHE_HIT();
-            INICPP_LOG_TRACE("ConcurrentIniSection: Found field '{}' = '{}'", key, value);
+            INICPP_LOG_TRACE("ConcurrentIniSection: Found field '{}' = '{}'",
+                             key, value);
         } else {
             INICPP_RECORD_CACHE_MISS();
             INICPP_LOG_TRACE("ConcurrentIniSection: Field '{}' not found", key);
@@ -1797,7 +1889,7 @@ public:
         section_lock_.unlock();
 
         INICPP_LOG_DEBUG("ConcurrentIniSection: {} field '{}'",
-                        removed ? "Removed" : "Failed to remove", key);
+                         removed ? "Removed" : "Failed to remove", key);
         return removed;
     }
 
@@ -1816,9 +1908,7 @@ public:
      * @brief Checks if the section is empty
      * @return true if empty, false otherwise
      */
-    bool empty() const noexcept {
-        return size() == 0;
-    }
+    bool empty() const noexcept { return size() == 0; }
 
     /**
      * @brief Clears all fields from the section
@@ -1849,7 +1939,9 @@ public:
  */
 class ConcurrentIniFile {
 private:
-    lockfree::LockFreeHashMap<std::string, std::shared_ptr<ConcurrentIniSection>> sections_;
+    lockfree::LockFreeHashMap<std::string,
+                              std::shared_ptr<ConcurrentIniSection>>
+        sections_;
     sync::IniReaderWriterLock file_lock_;
     std::atomic<uint64_t> modification_count_{0};
     memory::EpochManager epoch_manager_;
@@ -1862,7 +1954,8 @@ public:
      * @param section_name Name of the section
      * @return Shared pointer to the section
      */
-    std::shared_ptr<ConcurrentIniSection> create_section(const std::string& section_name) {
+    std::shared_ptr<ConcurrentIniSection> create_section(
+        const std::string& section_name) {
         INICPP_MONITOR_WRITE_OP();
 
         file_lock_.lock();
@@ -1879,7 +1972,8 @@ public:
 
         file_lock_.unlock();
 
-        INICPP_LOG_DEBUG("ConcurrentIniFile: Created section '{}'", section_name);
+        INICPP_LOG_DEBUG("ConcurrentIniFile: Created section '{}'",
+                         section_name);
         return new_section;
     }
 
@@ -1888,7 +1982,8 @@ public:
      * @param section_name Name of the section
      * @return Shared pointer to the section, or nullptr if not found
      */
-    std::shared_ptr<ConcurrentIniSection> get_section(const std::string& section_name) const {
+    std::shared_ptr<ConcurrentIniSection> get_section(
+        const std::string& section_name) const {
         INICPP_MONITOR_READ_OP();
 
         const_cast<sync::IniReaderWriterLock&>(file_lock_).lock_shared();
@@ -1898,10 +1993,12 @@ public:
 
         if (found) {
             INICPP_RECORD_CACHE_HIT();
-            INICPP_LOG_TRACE("ConcurrentIniFile: Found section '{}'", section_name);
+            INICPP_LOG_TRACE("ConcurrentIniFile: Found section '{}'",
+                             section_name);
         } else {
             INICPP_RECORD_CACHE_MISS();
-            INICPP_LOG_TRACE("ConcurrentIniFile: Section '{}' not found", section_name);
+            INICPP_LOG_TRACE("ConcurrentIniFile: Section '{}' not found",
+                             section_name);
         }
 
         return found ? section : nullptr;
@@ -1923,7 +2020,8 @@ public:
         file_lock_.unlock();
 
         INICPP_LOG_DEBUG("ConcurrentIniFile: {} section '{}'",
-                        removed ? "Removed" : "Failed to remove", section_name);
+                         removed ? "Removed" : "Failed to remove",
+                         section_name);
         return removed;
     }
 
@@ -1942,9 +2040,7 @@ public:
      * @brief Checks if the file is empty
      * @return true if empty, false otherwise
      */
-    bool empty() const noexcept {
-        return size() == 0;
-    }
+    bool empty() const noexcept { return size() == 0; }
 
     /**
      * @brief Clears all sections
@@ -2009,7 +2105,9 @@ public:
                 }
             }
 
-            INICPP_LOG_INFO("ConcurrentIniFile: Successfully parsed {} characters", content.size());
+            INICPP_LOG_INFO(
+                "ConcurrentIniFile: Successfully parsed {} characters",
+                content.size());
             return true;
 
         } catch (const std::exception& e) {
@@ -2027,8 +2125,8 @@ public:
     }
 };
 
-} // namespace concurrent
+}  // namespace concurrent
 
-} // namespace inicpp
+}  // namespace inicpp
 
 #endif  // ATOM_EXTRA_INICPP_HPP

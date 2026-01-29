@@ -1,0 +1,215 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        // ===== C++ Debug Configurations =====
+        {
+            "name": "C++ Debug: Current File (GDB)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${fileDirname}/${fileBasenameNoExtension}",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "CMake: Build (Debug)",
+            "miDebuggerPath": "gdb"
+        },
+        {
+            "name": "C++ Debug: Current File (LLDB)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${fileDirname}/${fileBasenameNoExtension}",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stopOnEntry": false,
+            "preLaunchTask": "CMake: Build (Debug)"
+        },
+        {
+            "name": "C++ Debug: Current File (MSVC)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${fileDirname}/${fileBasenameNoExtension}.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build (MSVC Debug)"
+        },
+        // ===== Test Executable Configurations =====
+        {
+            "name": "Debug: All Tests (GDB)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/run_all_tests",
+            "args": [
+                "--gtest_color=yes"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "CMake: Build (Debug)"
+        },
+        {
+            "name": "Debug: All Tests (MSVC)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/Debug/run_all_tests.exe",
+            "args": [
+                "--gtest_color=yes"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build (MSVC Debug)"
+        },
+        {
+            "name": "Debug: Single Test (MSVC)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tests/Debug/run_all_tests.exe",
+            "args": [
+                "--gtest_filter=${input:testFilter}",
+                "--gtest_color=yes"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build (MSVC Debug)"
+        },
+        // ===== Example Executable Configurations =====
+        {
+            "name": "Debug: Example (Select)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/example/Debug/${input:exampleName}.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build (MSVC Debug)"
+        },
+        // ===== Python Debug Configurations =====
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: pytest",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "-v",
+                "--tb=short"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "justMyCode": false
+        },
+        {
+            "name": "Python: pytest (Current File)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "${file}",
+                "-v",
+                "--tb=short"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "justMyCode": false
+        },
+        // ===== CMake Debug (via CMake Tools extension) =====
+        {
+            "name": "CMake: Debug Target",
+            "type": "cmake",
+            "request": "launch",
+            "cmake": {
+                "target": "${command:cmake.launchTargetPath}"
+            }
+        },
+        // ===== Attach Configurations =====
+        {
+            "name": "Attach: C++ Process (MSVC)",
+            "type": "cppvsdbg",
+            "request": "attach",
+            "processId": "${command:pickProcess}"
+        },
+        {
+            "name": "Attach: C++ Process (GDB)",
+            "type": "cppdbg",
+            "request": "attach",
+            "program": "${workspaceFolder}/build/${input:attachProgram}",
+            "processId": "${command:pickProcess}",
+            "MIMode": "gdb"
+        },
+        {
+            "name": "Attach: Python Process",
+            "type": "debugpy",
+            "request": "attach",
+            "processId": "${command:pickProcess}"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "testFilter",
+            "type": "promptString",
+            "description": "GTest filter pattern (e.g., TestSuite.TestName or TestSuite.*)",
+            "default": "*"
+        },
+        {
+            "id": "exampleName",
+            "type": "promptString",
+            "description": "Name of the example executable to run",
+            "default": "example"
+        },
+        {
+            "id": "attachProgram",
+            "type": "promptString",
+            "description": "Path to the program to attach to (relative to build dir)",
+            "default": ""
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Build and Debug Tests",
+            "configurations": [
+                "Debug: All Tests (MSVC)"
+            ],
+            "stopAll": true
+        }
+    ]
+}

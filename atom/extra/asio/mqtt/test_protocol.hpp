@@ -1,11 +1,9 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <asio.hpp>
-#include <asio/ssl.hpp>
 #include <span>
 #include <vector>
 
-
+#include "../asio_compatibility.hpp"
 #include "protocol.hpp"
 #include "types.hpp"
 
@@ -54,14 +52,14 @@ TEST(PendingOperationTest, ConstructionAndFields) {
 }
 
 TEST(TCPTransportTest, ConstructionAndIsOpen) {
-    asio::io_context io;
+    net::io_context io;
     TCPTransport transport(io);
     // Socket is not open by default
     EXPECT_FALSE(transport.is_open());
 }
 
 TEST(TCPTransportTest, AsyncConnectFailure) {
-    asio::io_context io;
+    net::io_context io;
     TCPTransport transport(io);
 
     // Use an invalid host to force failure
@@ -77,12 +75,11 @@ TEST(TCPTransportTest, AsyncConnectFailure) {
 }
 
 TEST(TCPTransportTest, AsyncWriteAndRead) {
-    asio::io_context io;
+    net::io_context io;
     TCPTransport transport(io);
 
     // Open a local acceptor to connect to
-    asio::ip::tcp::acceptor acceptor(
-        io, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), 0));
+    tcp::acceptor acceptor(io, tcp::endpoint(tcp::v4(), 0));
     uint16_t port = acceptor.local_endpoint().port();
 
     bool connect_called = false;
@@ -92,7 +89,7 @@ TEST(TCPTransportTest, AsyncWriteAndRead) {
     });
 
     // Accept the connection
-    asio::ip::tcp::socket server_socket(io);
+    tcp::socket server_socket(io);
     acceptor.async_accept(server_socket, [](const std::error_code&) {});
 
     io.run_for(std::chrono::milliseconds(100));
@@ -109,7 +106,7 @@ TEST(TCPTransportTest, AsyncWriteAndRead) {
 
     // Read on server side
     std::vector<uint8_t> server_buf(4);
-    server_socket.async_read_some(asio::buffer(server_buf),
+    server_socket.async_read_some(net::buffer(server_buf),
                                   [](const std::error_code&, size_t) {});
 
     io.restart();
@@ -119,8 +116,8 @@ TEST(TCPTransportTest, AsyncWriteAndRead) {
     // Read test
     // Write from server to client
     std::vector<uint8_t> send_buf = {5, 6, 7, 8};
-    asio::async_write(server_socket, asio::buffer(send_buf),
-                      [](const std::error_code&, size_t) {});
+    net::async_write(server_socket, net::buffer(send_buf),
+                     [](const std::error_code&, size_t) {});
 
     std::array<uint8_t, 4> client_buf{};
     bool read_called = false;
@@ -141,8 +138,8 @@ TEST(TCPTransportTest, AsyncWriteAndRead) {
 }
 
 TEST(TLSTransportTest, ConstructionAndIsOpen) {
-    asio::io_context io;
-    asio::ssl::context ssl_ctx(asio::ssl::context::sslv23);
+    net::io_context io;
+    ssl_context ssl_ctx(ssl::context::sslv23);
     TLSTransport transport(io, ssl_ctx);
     EXPECT_FALSE(transport.is_open());
 }
@@ -153,8 +150,8 @@ TEST(TLSTransportTest, ConstructionAndIsOpen) {
 // called and invoke the callback with an error.
 
 TEST(TLSTransportTest, AsyncConnectFailure) {
-    asio::io_context io;
-    asio::ssl::context ssl_ctx(asio::ssl::context::sslv23);
+    net::io_context io;
+    ssl_context ssl_ctx(ssl::context::sslv23);
     TLSTransport transport(io, ssl_ctx);
 
     bool called = false;
@@ -168,8 +165,8 @@ TEST(TLSTransportTest, AsyncConnectFailure) {
 }
 
 TEST(TLSTransportTest, AsyncWriteAndReadError) {
-    asio::io_context io;
-    asio::ssl::context ssl_ctx(asio::ssl::context::sslv23);
+    net::io_context io;
+    ssl_context ssl_ctx(ssl::context::sslv23);
     TLSTransport transport(io, ssl_ctx);
 
     // Not connected, so write/read should fail

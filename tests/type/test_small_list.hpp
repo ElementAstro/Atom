@@ -80,7 +80,7 @@ TEST_F(SmallListTest, EmplaceOperations) {
 
 // Iterator Tests
 TEST_F(SmallListTest, IteratorOperations) {
-    for(int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 5; ++i) {
         list.pushBack(i);
     }
 
@@ -104,7 +104,7 @@ TEST_F(SmallListTest, ConstIterator) {
 TEST_F(SmallListTest, ReverseIterator) {
     list = {1, 2, 3, 4, 5};
     std::vector<int> reversed;
-    for(auto it = list.rbegin(); it != list.rend(); ++it) {
+    for (auto it = list.rbegin(); it != list.rend(); ++it) {
         reversed.push_back(*it);
     }
     EXPECT_THAT(reversed, ElementsAre(5, 4, 3, 2, 1));
@@ -200,7 +200,7 @@ TEST_F(SmallListTest, SingleElementOperations) {
 
 TEST_F(SmallListTest, LargeListOperations) {
     // Test with a large number of elements
-    for(int i = 0; i < TEST_SIZE; ++i) {
+    for (int i = 0; i < TEST_SIZE; ++i) {
         list.pushBack(i);
     }
 
@@ -216,7 +216,8 @@ struct ThrowingCopy {
 
     ThrowingCopy(int v) : value(v) {}
     ThrowingCopy(const ThrowingCopy& other) {
-        if(shouldThrow) throw std::runtime_error("Copy error");
+        if (shouldThrow)
+            throw std::runtime_error("Copy error");
         value = other.value;
     }
 };
@@ -231,7 +232,7 @@ TEST_F(SmallListTest, ExceptionSafety) {
 
     ThrowingCopy::shouldThrow = true;
     EXPECT_THROW(throwingList.pushBack(ThrowingCopy(2)), std::runtime_error);
-    EXPECT_EQ(throwingList.size(), 1); // List should remain unchanged
+    EXPECT_EQ(throwingList.size(), 1);  // List should remain unchanged
 }
 
 int main(int argc, char** argv) {

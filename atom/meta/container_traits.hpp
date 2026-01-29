@@ -1,17 +1,9 @@
 /*!
  * \file container_traits.hpp
- * \brief Container traits for C++20 with comprehensive container type analysis - OPTIMIZED VERSION
+ * \brief Container traits for C++20 with comprehensive container type analysis
  * \author Max Qian <lightapt.com>
  * \date 2024-04-02
- * \optimized 2025-01-22 - Performance optimizations by AI Assistant
  * \copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
- *
- * OPTIMIZATIONS APPLIED:
- * - Reduced template instantiation overhead with trait caching
- * - Optimized container capability detection with SFINAE improvements
- * - Enhanced compile-time container analysis with fast-path checks
- * - Improved string processing with lazy evaluation
- * - Added efficient container category classification
  */
 
 #ifndef ATOM_META_CONTAINER_TRAITS_HPP
@@ -41,7 +33,7 @@ template <typename Container>
 struct ContainerTraits;
 
 /**
- * \brief Optimized base traits for container types with enhanced detection
+ * \brief Base traits for container types
  * \tparam T Element type
  * \tparam Container Container type
  */
@@ -49,86 +41,62 @@ template <typename T, typename Container>
 struct ContainerTraitsBase {
     using value_type = T;
     using container_type = Container;
-
-    // Optimized: Conditional type definitions with better SFINAE
+    // Only define size_type and difference_type if present in Container
     using size_type = std::conditional_t<requires {
         typename Container::size_type;
     }, typename Container::size_type, std::size_t>;
-
+    // Only define difference_type if present, otherwise void for adapters
     using difference_type = std::conditional_t<requires {
         typename Container::difference_type;
     }, typename Container::difference_type, void>;
 
-    // Optimized: Iterator type detection with fallbacks
-    using iterator = std::conditional_t<requires {
-        typename Container::iterator;
-    }, typename Container::iterator, void>;
+    // Default iterator types (will be overridden if available)
+    using iterator = void;
+    using const_iterator = void;
+    using reverse_iterator = void;
+    using const_reverse_iterator = void;
 
-    using const_iterator = std::conditional_t<requires {
-        typename Container::const_iterator;
-    }, typename Container::const_iterator, void>;
-
-    using reverse_iterator = std::conditional_t<requires {
-        typename Container::reverse_iterator;
-    }, typename Container::reverse_iterator, void>;
-
-    using const_reverse_iterator = std::conditional_t<requires {
-        typename Container::const_reverse_iterator;
-    }, typename Container::const_reverse_iterator, void>;
-
-    // Optimized: Container categories with compile-time detection
+    // Container categories
     static constexpr bool is_sequence_container = false;
     static constexpr bool is_associative_container = false;
     static constexpr bool is_unordered_associative_container = false;
     static constexpr bool is_container_adapter = false;
 
-    // Optimized: Container capabilities with SFINAE detection
+    // Container capabilities
     static constexpr bool has_random_access = false;
     static constexpr bool has_bidirectional_access = false;
     static constexpr bool has_forward_access = false;
-
-    // Optimized: Method existence detection
-    static constexpr bool has_size = requires(const Container& c) { c.size(); };
-    static constexpr bool has_empty = requires(const Container& c) { c.empty(); };
-    static constexpr bool has_clear = requires(Container& c) { c.clear(); };
-    static constexpr bool has_begin_end = requires(Container& c) { c.begin(); c.end(); };
-    static constexpr bool has_rbegin_rend = requires(Container& c) { c.rbegin(); c.rend(); };
-    static constexpr bool has_front = requires(Container& c) { c.front(); };
-    static constexpr bool has_back = requires(Container& c) { c.back(); };
-    static constexpr bool has_push_front = requires(Container& c, const T& val) { c.push_front(val); };
-    static constexpr bool has_push_back = requires(Container& c, const T& val) { c.push_back(val); };
-    static constexpr bool has_pop_front = requires(Container& c) { c.pop_front(); };
-    static constexpr bool has_pop_back = requires(Container& c) { c.pop_back(); };
-    static constexpr bool has_insert = requires(Container& c, const T& val) { c.insert(val); };
-    static constexpr bool has_erase = requires(Container& c, typename Container::iterator it) { c.erase(it); };
-    static constexpr bool has_emplace = requires(Container& c) { c.emplace(); };
-    static constexpr bool has_emplace_front = requires(Container& c) { c.emplace_front(); };
-    static constexpr bool has_emplace_back = requires(Container& c) { c.emplace_back(); };
-    static constexpr bool has_reserve = requires(Container& c, size_type n) { c.reserve(n); };
-    static constexpr bool has_capacity = requires(const Container& c) { c.capacity(); };
-    static constexpr bool has_shrink_to_fit = requires(Container& c) { c.shrink_to_fit(); };
-    static constexpr bool has_subscript = requires(Container& c, size_type i) { c[i]; };
-    static constexpr bool has_at = requires(Container& c, size_type i) { c.at(i); };
-    static constexpr bool has_find = requires(Container& c, const T& val) { c.find(val); };
-    static constexpr bool has_count = requires(const Container& c, const T& val) { c.count(val); };
-    static constexpr bool has_key_type = requires { typename Container::key_type; };
-    static constexpr bool has_mapped_type = requires { typename Container::mapped_type; };
+    static constexpr bool has_size = true;
+    static constexpr bool has_empty = true;
+    static constexpr bool has_clear = true;
+    static constexpr bool has_begin_end = true;
+    static constexpr bool has_rbegin_rend = false;
+    static constexpr bool has_front = false;
+    static constexpr bool has_back = false;
+    static constexpr bool has_push_front = false;
+    static constexpr bool has_push_back = false;
+    static constexpr bool has_pop_front = false;
+    static constexpr bool has_pop_back = false;
+    static constexpr bool has_insert = false;
+    static constexpr bool has_erase = false;
+    static constexpr bool has_emplace = false;
+    static constexpr bool has_emplace_front = false;
+    static constexpr bool has_emplace_back = false;
+    static constexpr bool has_reserve = false;
+    static constexpr bool has_capacity = false;
+    static constexpr bool has_shrink_to_fit = false;
+    static constexpr bool has_subscript = false;
+    static constexpr bool has_at = false;
+    static constexpr bool has_find = false;
+    static constexpr bool has_count = false;
+    static constexpr bool has_key_type = false;
+    static constexpr bool has_mapped_type = false;
     static constexpr bool is_sorted = false;
     static constexpr bool is_unique = false;
     static constexpr bool is_fixed_size = false;
 
-    // Optimized: Lazy string evaluation with caching
-    struct name_cache {
-        static const std::string& full_name() {
-            static const std::string cached = DemangleHelper::demangle(typeid(Container).name());
-            return cached;
-        }
-    };
-
-    // Optimized: Additional compile-time analysis
-    static constexpr bool is_contiguous = false;  // Will be overridden for vector, array, string
-    static constexpr bool is_node_based = false;  // Will be overridden for list, set, map
-    static constexpr bool supports_parallel_algorithms = has_random_access;
+    static const inline std::string full_name =
+        DemangleHelper::demangle(typeid(Container).name());
 };
 
 /**
@@ -784,8 +752,9 @@ public:
      * \return New container with transformed elements
      */
     template <typename Func>
-    auto transform(Func func) -> container_pipe<std::vector<
-        std::invoke_result_t<Func, typename Container::value_type>>> {
+    auto transform(Func func)
+        -> container_pipe<std::vector<
+            std::invoke_result_t<Func, typename Container::value_type>>> {
         std::vector<std::invoke_result_t<Func, typename Container::value_type>>
             result;
         if constexpr (has_reserve_v<Container>) {
@@ -871,6 +840,139 @@ auto make_container_pipe(Container&& container) {
                                          ContainerName<KeyType, ValueType>> {  \
         /* Add specific capabilities here */                                   \
     }
+
+//==============================================================================
+// C++23 Enhanced Container Traits Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for sequence containers
+ */
+template <typename C>
+concept SequenceContainer = requires(C c) {
+    typename C::value_type;
+    typename C::iterator;
+    { c.begin() } -> std::input_or_output_iterator;
+    { c.end() } -> std::input_or_output_iterator;
+    { c.size() } -> std::convertible_to<std::size_t>;
+};
+
+/**
+ * @brief Concept for associative containers
+ */
+template <typename C>
+concept AssociativeContainer = requires(C c) {
+    typename C::key_type;
+    typename C::mapped_type;
+    { c.find(std::declval<typename C::key_type>()) };
+};
+
+/**
+ * @brief Concept for containers with random access
+ */
+template <typename C>
+concept RandomAccessContainer =
+    SequenceContainer<C> && requires(C c, std::size_t i) {
+        { c[i] } -> std::convertible_to<typename C::value_type&>;
+    };
+
+/**
+ * @brief Concept for resizable containers
+ */
+template <typename C>
+concept ResizableContainer =
+    SequenceContainer<C> && requires(C c, std::size_t n) {
+        { c.resize(n) };
+        { c.reserve(n) };
+    };
+
+/**
+ * @brief Get container type category as string
+ */
+template <typename Container>
+constexpr std::string_view getContainerCategory() {
+    using Traits = ContainerTraits<Container>;
+    if constexpr (Traits::is_sequence_container)
+        return "sequence";
+    else if constexpr (Traits::is_associative_container)
+        return "associative";
+    else if constexpr (Traits::is_unordered_associative_container)
+        return "unordered_associative";
+    else if constexpr (Traits::is_container_adapter)
+        return "adapter";
+    else
+        return "unknown";
+}
+
+/**
+ * @brief Container capability checker
+ */
+template <typename Container>
+struct ContainerCapabilities {
+    using Traits = ContainerTraits<Container>;
+
+    static constexpr bool can_push_back = Traits::has_push_back;
+    static constexpr bool can_push_front = Traits::has_push_front;
+    static constexpr bool can_random_access = Traits::has_random_access;
+    static constexpr bool can_iterate_reverse = Traits::has_rbegin_rend;
+    static constexpr bool can_insert = Traits::has_insert;
+    static constexpr bool can_erase = Traits::has_erase;
+
+    static auto summary() -> std::string {
+        std::string result = "Container Capabilities:\n";
+        result +=
+            "  Push Back: " + std::string(can_push_back ? "Yes" : "No") + "\n";
+        result +=
+            "  Push Front: " + std::string(can_push_front ? "Yes" : "No") +
+            "\n";
+        result += "  Random Access: " +
+                  std::string(can_random_access ? "Yes" : "No") + "\n";
+        result += "  Reverse Iterate: " +
+                  std::string(can_iterate_reverse ? "Yes" : "No") + "\n";
+        return result;
+    }
+};
+
+/**
+ * @brief Type-safe container operations
+ */
+template <SequenceContainer Container>
+class SafeContainerOps {
+    Container& container_;
+
+public:
+    explicit SafeContainerOps(Container& c) : container_(c) {}
+
+    auto safeAt(std::size_t index)
+        -> std::optional<typename Container::value_type> {
+        if (index < container_.size()) {
+            return container_[index];
+        }
+        return std::nullopt;
+    }
+
+    auto front() -> std::optional<typename Container::value_type> {
+        if (!container_.empty()) {
+            return container_.front();
+        }
+        return std::nullopt;
+    }
+
+    auto back() -> std::optional<typename Container::value_type> {
+        if (!container_.empty()) {
+            return container_.back();
+        }
+        return std::nullopt;
+    }
+};
+
+/**
+ * @brief Create safe container operations wrapper
+ */
+template <SequenceContainer Container>
+auto makeSafeOps(Container& c) {
+    return SafeContainerOps<Container>(c);
+}
 
 }  // namespace atom::meta
 

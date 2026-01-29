@@ -5,7 +5,6 @@
 #include <functional>
 #include <numeric>
 #include <optional>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -127,7 +126,8 @@ public:
     template <typename T, typename UnaryFunction>
     auto transform(UnaryFunction transform_f) const -> cstream<T> {
         T dest;
-        // Only call reserve if the container supports it (e.g., vector, string)
+        // Only call reserve() if the container supports it (e.g., vector,
+        // string)
         if constexpr (requires { dest.reserve(container_ref_.size()); }) {
             dest.reserve(container_ref_.size());
         }
@@ -160,12 +160,14 @@ public:
      */
     template <typename ValueType>
     auto erase(const ValueType& v) -> cstream<C>& {
+        // For associative containers (map, set), use different approach
         if constexpr (requires { container_ref_.erase(v); }) {
-            // For associative containers (map, set, etc.)
+            // For associative containers, erase by key/value directly
             container_ref_.erase(v);
         } else {
-            // For sequence containers (vector, list, etc.)
-            auto new_end = std::remove(container_ref_.begin(), container_ref_.end(), v);
+            // For sequence containers, use remove-erase idiom
+            auto new_end =
+                std::remove(container_ref_.begin(), container_ref_.end(), v);
             container_ref_.erase(new_end, container_ref_.end());
         }
         return *this;
@@ -195,6 +197,7 @@ public:
     template <typename UnaryFunction>
     auto cpFilter(UnaryFunction filter_func) const -> cstream<C> {
         C c;
+        c.reserve(container_ref_.size());
         std::copy_if(container_ref_.begin(), container_ref_.end(),
                      std::back_inserter(c), filter_func);
         return cstream<C>(std::move(c));
@@ -209,8 +212,8 @@ public:
      * @return value_type The accumulated value.
      */
     template <typename UnaryFunction = std::plus<value_type>>
-    auto accumulate(value_type initial = {}, UnaryFunction op = {}) const
-        -> value_type {
+    auto accumulate(value_type initial = {},
+                    UnaryFunction op = {}) const -> value_type {
         return std::accumulate(container_ref_.begin(), container_ref_.end(),
                                initial, op);
     }
@@ -318,12 +321,8 @@ public:
      * @brief Gets the minimum element in the container.
      *
      * @return value_type The minimum element.
-     * @throws std::runtime_error if the container is empty.
      */
     auto min() const -> value_type {
-        if (container_ref_.empty()) {
-            throw std::runtime_error("Cannot get minimum of empty container");
-        }
         return *std::min_element(container_ref_.begin(), container_ref_.end());
     }
 
@@ -331,12 +330,8 @@ public:
      * @brief Gets the maximum element in the container.
      *
      * @return value_type The maximum element.
-     * @throws std::runtime_error if the container is empty.
      */
     auto max() const -> value_type {
-        if (container_ref_.empty()) {
-            throw std::runtime_error("Cannot get maximum of empty container");
-        }
         return *std::max_element(container_ref_.begin(), container_ref_.end());
     }
 
@@ -344,12 +339,8 @@ public:
      * @brief Calculates the mean of the elements in the container.
      *
      * @return double The mean value.
-     * @throws std::runtime_error if the container is empty.
      */
     [[nodiscard]] auto mean() const -> double {
-        if (container_ref_.empty()) {
-            throw std::runtime_error("Cannot calculate mean of empty container");
-        }
         return static_cast<double>(accumulate()) / static_cast<double>(size());
     }
 
@@ -393,6 +384,7 @@ public:
     template <typename UnaryFunction>
     auto map(UnaryFunction f) const -> cstream<C> {
         C c;
+        c.reserve(container_ref_.size());
         std::transform(container_ref_.begin(), container_ref_.end(),
                        std::back_inserter(c), f);
         return cstream<C>(std::move(c));

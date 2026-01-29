@@ -1,10 +1,9 @@
 /*!
  * \file enum.hpp
- * \brief Enhanced Enum Utilities with Comprehensive Features - OPTIMIZED VERSION
- * \author Max Qian <lightapt.com>
- * \date 2023-03-29
- * \optimized 2025-01-22 - Performance optimizations by AI Assistant
- * \copyright Copyright (C) 2023-2024 Max Qian
+ * \brief Enhanced Enum Utilities with Comprehensive Features - OPTIMIZED
+ * VERSION \author Max Qian <lightapt.com> \date 2023-03-29 \optimized
+ * 2025-01-22 - Performance optimizations by AI Assistant \copyright Copyright
+ * (C) 2023-2024 Max Qian
  *
  * OPTIMIZATIONS APPLIED:
  * - Reduced enum value lookup overhead with optimized hash tables
@@ -20,15 +19,45 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <format>
 #include <functional>
+#include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <version>
+
+#include "type_info.hpp"
+
+// C++23 feature detection
+#if __cpp_lib_to_underlying >= 202102L
+#define ATOM_ENUM_HAS_TO_UNDERLYING 1
+#else
+#define ATOM_ENUM_HAS_TO_UNDERLYING 0
+#endif
 
 namespace atom::meta {
+
+//==============================================================================
+// C++23 std::to_underlying compatibility
+//==============================================================================
+
+#if ATOM_ENUM_HAS_TO_UNDERLYING
+using std::to_underlying;
+#else
+/**
+ * @brief Convert enum to underlying type (C++23 backport)
+ */
+template <typename E>
+    requires std::is_enum_v<E>
+constexpr auto to_underlying(E e) noexcept -> std::underlying_type_t<E> {
+    return static_cast<std::underlying_type_t<E>>(e);
+}
+#endif
 
 // **C++20 concept support**
 #if __cplusplus >= 202002L
@@ -63,7 +92,8 @@ struct EnumTraits {
         if constexpr (values.size() > 0) {
             // Optimized: Use constexpr algorithm for better performance
             constexpr auto min_element = []() constexpr {
-                underlying_type min_val = static_cast<underlying_type>(values[0]);
+                underlying_type min_val =
+                    static_cast<underlying_type>(values[0]);
                 for (size_t i = 1; i < values.size(); ++i) {
                     auto int_val = static_cast<underlying_type>(values[i]);
                     if (int_val < min_val) {
@@ -81,7 +111,8 @@ struct EnumTraits {
         if constexpr (values.size() > 0) {
             // Optimized: Use constexpr algorithm for better performance
             constexpr auto max_element = []() constexpr {
-                underlying_type max_val = static_cast<underlying_type>(values[0]);
+                underlying_type max_val =
+                    static_cast<underlying_type>(values[0]);
                 for (size_t i = 1; i < values.size(); ++i) {
                     auto int_val = static_cast<underlying_type>(values[i]);
                     if (int_val > max_val) {
@@ -109,7 +140,8 @@ struct EnumTraits {
         } else if constexpr (values.size() <= 8) {
             // Optimized: Unrolled loop for small enums
             for (const auto& val : values) {
-                if (val == value) return true;
+                if (val == value)
+                    return true;
             }
             return false;
         } else {
@@ -137,7 +169,8 @@ struct EnumTraits {
                     size_t mid = left + (right - left) / 2;
                     if (sorted_values[mid] == value) {
                         return true;
-                    } else if (static_cast<underlying_type>(sorted_values[mid]) <
+                    } else if (static_cast<underlying_type>(
+                                   sorted_values[mid]) <
                                static_cast<underlying_type>(value)) {
                         left = mid + 1;
                     } else {
@@ -148,7 +181,8 @@ struct EnumTraits {
             } else {
                 // Fallback to linear search for unsorted enums
                 for (const auto& val : values) {
-                    if (val == value) return true;
+                    if (val == value)
+                        return true;
                 }
                 return false;
             }
@@ -1174,6 +1208,409 @@ public:
         return integer_to_enum<T>(value);
     }
 };
+//==============================================================================
+// C++23 Enhanced Enum Utilities
+//==============================================================================
+
+/**
+ * @brief Format enum value as string with type information
+ */
+template <typename T>
+#if __cplusplus >= 202002L
+    requires EnumerationType<T>
+#endif
+auto format_enum(T value) -> std::string {
+    auto name = enum_name(value);
+    if (!name.empty()) {
+        return std::format("{}::{}", EnumTraits<T>::type_name, name);
+    }
+    return std::format("{}({})", EnumTraits<T>::type_name,
+                       to_underlying(value));
+}
+
+/**
+ * @brief Format flag enum as combined string
+ */
+template <typename T>
+#if __cplusplus >= 202002L
+    requires EnumerationType<T>
+#endif
+auto format_flags(T value) -> std::string {
+    if constexpr (!EnumTraits<T>::is_flags) {
+        return format_enum(value);
+    }
+
+    std::string result;
+    auto underlying = to_underlying(value);
+
+    for (size_t i = 0; i < EnumTraits<T>::values.size(); ++i) {
+        auto flag_val = to_underlying(EnumTraits<T>::values[i]);
+        if (flag_val != 0 && (underlying & flag_val) == flag_val) {
+            if (!result.empty())
+                result += " | ";
+            result += EnumTraits<T>::names[i];
+        }
+    }
+
+    if (result.empty()) {
+        return "(none)";
+    }
+    return result;
+}
+
+/**
+ * @brief Get all enum values that match a predicate
+ */
+template <typename T, typename Pred>
+#if __cplusplus >= 202002L
+    requires EnumerationType<T> && std::predicate<Pred, T>
+#endif
+auto filter_enum_values(Pred&& pred) -> std::vector<T> {
+    std::vector<T> result;
+    for (const auto& val : EnumTraits<T>::values) {
+        if (pred(val)) {
+            result.push_back(val);
+        }
+    }
+    return result;
+}
+
+/**
+ * @brief Transform enum values using a function
+ */
+template <typename T, typename Func>
+#if __cplusplus >= 202002L
+    requires EnumerationType<T>
+#endif
+auto transform_enum_values(Func&& func)
+    -> std::vector<std::invoke_result_t<Func, T>> {
+    std::vector<std::invoke_result_t<Func, T>> result;
+    result.reserve(EnumTraits<T>::values.size());
+    for (const auto& val : EnumTraits<T>::values) {
+        result.push_back(func(val));
+    }
+    return result;
+}
+
+/**
+ * @brief Enum switch helper for exhaustive matching
+ */
+template <typename T, typename... Handlers>
+#if __cplusplus >= 202002L
+    requires EnumerationType<T>
+#endif
+class EnumSwitch {
+    T value_;
+    std::tuple<Handlers...> handlers_;
+
+public:
+    constexpr EnumSwitch(T value, Handlers... handlers)
+        : value_(value), handlers_(std::move(handlers)...) {}
+
+    template <T Case, typename Handler>
+    constexpr auto case_(Handler&& handler) const {
+        if (value_ == Case) {
+            return handler();
+        }
+        return decltype(handler()){};
+    }
+};
+
+/**
+ * @brief Create an enum switch
+ */
+template <typename T>
+#if __cplusplus >= 202002L
+    requires EnumerationType<T>
+#endif
+constexpr auto make_enum_switch(T value) {
+    return EnumSwitch<T>(value);
+}
+
+/**
+ * @brief Enum value range for iteration
+ */
+template <typename T>
+#if __cplusplus >= 202002L
+    requires EnumerationType<T>
+#endif
+class EnumValueRange {
+public:
+    class iterator {
+        size_t index_;
+
+    public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = T;
+        using difference_type = std::ptrdiff_t;
+        using pointer = const T*;
+        using reference = T;
+
+        constexpr explicit iterator(size_t index = 0) : index_(index) {}
+
+        constexpr T operator*() const { return EnumTraits<T>::values[index_]; }
+        constexpr iterator& operator++() {
+            ++index_;
+            return *this;
+        }
+        constexpr iterator operator++(int) {
+            auto tmp = *this;
+            ++index_;
+            return tmp;
+        }
+        constexpr bool operator==(const iterator& other) const {
+            return index_ == other.index_;
+        }
+        constexpr bool operator!=(const iterator& other) const {
+            return index_ != other.index_;
+        }
+    };
+
+    constexpr iterator begin() const { return iterator(0); }
+    constexpr iterator end() const {
+        return iterator(EnumTraits<T>::values.size());
+    }
+    constexpr size_t size() const { return EnumTraits<T>::values.size(); }
+    constexpr bool empty() const { return EnumTraits<T>::values.empty(); }
+};
+
+/**
+ * @brief Get a range of all enum values
+ */
+template <typename T>
+#if __cplusplus >= 202002L
+    requires EnumerationType<T>
+#endif
+constexpr auto all_enum_values() -> EnumValueRange<T> {
+    return EnumValueRange<T>{};
+}
+
+/**
+ * @brief Enum serialization to JSON-like format
+ */
+template <typename T>
+#if __cplusplus >= 202002L
+    requires EnumerationType<T>
+#endif
+auto enum_to_json(T value) -> std::string {
+    auto name = enum_name(value);
+    if (!name.empty()) {
+        return std::format(R"({{"value": "{}", "underlying": {}}})", name,
+                           to_underlying(value));
+    }
+    return std::format(R"({{"value": null, "underlying": {}}})",
+                       to_underlying(value));
+}
+
+/**
+ * @brief Generate complete enum documentation
+ */
+template <typename T>
+#if __cplusplus >= 202002L
+    requires EnumerationType<T>
+#endif
+auto generate_enum_docs() -> std::string {
+    std::string result;
+    result += std::format("Enum: {}\n", EnumTraits<T>::type_name);
+    if (!EnumTraits<T>::type_description.empty()) {
+        result +=
+            std::format("Description: {}\n", EnumTraits<T>::type_description);
+    }
+    result +=
+        std::format("Is Flags: {}\n", EnumTraits<T>::is_flags ? "Yes" : "No");
+    result += std::format("Value Count: {}\n", EnumTraits<T>::values.size());
+    result += "Values:\n";
+
+    for (size_t i = 0; i < EnumTraits<T>::values.size(); ++i) {
+        result += std::format("  - {} = {}\n", EnumTraits<T>::names[i],
+                              to_underlying(EnumTraits<T>::values[i]));
+        if (i < EnumTraits<T>::descriptions.size() &&
+            !EnumTraits<T>::descriptions[i].empty()) {
+            result += std::format("    Description: {}\n",
+                                  EnumTraits<T>::descriptions[i]);
+        }
+    }
+
+    return result;
+}
+
+//==============================================================================
+// Integration with type_info.hpp
+//==============================================================================
+
+/**
+ * @brief Register an enum type with TypeRegistry
+ */
+template <typename T>
+    requires EnumerationType<T>
+void registerEnumType(std::string_view name = "") {
+    if (name.empty()) {
+        name = EnumTraits<T>::type_name;
+    }
+    // Register with the type registry
+    registerType<T>(name);
+}
+
+/**
+ * @brief Get TypeInfo for an enum type
+ */
+template <typename T>
+    requires EnumerationType<T>
+auto getEnumTypeInfo() -> TypeInfo {
+    return TypeInfo::fromType<T>();
+}
+
+/**
+ * @brief Extended enum info combining EnumTraits with TypeInfo
+ */
+template <typename T>
+    requires EnumerationType<T>
+struct ExtendedEnumInfo {
+    static constexpr std::string_view type_name = EnumTraits<T>::type_name;
+    static constexpr std::size_t value_count = EnumTraits<T>::values.size();
+    static constexpr bool is_flags = EnumTraits<T>::is_flags;
+
+    static auto getTypeInfo() -> TypeInfo { return TypeInfo::fromType<T>(); }
+
+    static auto getDemangledName() -> std::string {
+        return DemangleHelper::demangle(typeid(T));
+    }
+
+    static auto summary() -> std::string {
+        std::string result;
+        result += std::format("Enum: {}\n", type_name);
+        result += std::format("  Demangled: {}\n", getDemangledName());
+        result += std::format("  Value Count: {}\n", value_count);
+        result += std::format("  Is Flags: {}\n", is_flags ? "Yes" : "No");
+        result += "  Values:\n";
+
+        for (size_t i = 0; i < EnumTraits<T>::values.size(); ++i) {
+            result += std::format("    {} = {}\n", EnumTraits<T>::names[i],
+                                  to_underlying(EnumTraits<T>::values[i]));
+        }
+        return result;
+    }
+};
+
+/**
+ * @brief Enum value with TypeInfo association
+ */
+template <typename T>
+    requires EnumerationType<T>
+class TypedEnumValue {
+    T value_;
+    TypeInfo info_;
+
+public:
+    constexpr TypedEnumValue(T value)
+        : value_(value), info_(TypeInfo::fromType<T>()) {}
+
+    [[nodiscard]] constexpr T value() const noexcept { return value_; }
+    [[nodiscard]] const TypeInfo& typeInfo() const noexcept { return info_; }
+
+    [[nodiscard]] auto name() const -> std::string_view {
+        return enum_name(value_);
+    }
+
+    [[nodiscard]] auto underlying() const { return to_underlying(value_); }
+
+    [[nodiscard]] auto toJson() const -> std::string {
+        return enum_to_json(value_);
+    }
+
+    bool operator==(const TypedEnumValue& other) const noexcept {
+        return value_ == other.value_ && info_ == other.info_;
+    }
+};
+
+/**
+ * @brief Create a typed enum value
+ */
+template <typename T>
+    requires EnumerationType<T>
+constexpr auto makeTypedEnum(T value) -> TypedEnumValue<T> {
+    return TypedEnumValue<T>(value);
+}
+
+/**
+ * @brief Enum registry for runtime enum introspection
+ */
+class EnumRegistry {
+    struct EnumInfo {
+        std::string type_name;
+        std::vector<std::pair<std::string, std::int64_t>> values;
+        bool is_flags;
+    };
+
+    std::unordered_map<std::string, EnumInfo> enums_;
+    mutable std::shared_mutex mutex_;
+
+public:
+    template <typename T>
+        requires EnumerationType<T>
+    void registerEnum() {
+        EnumInfo info;
+        info.type_name = std::string(EnumTraits<T>::type_name);
+        info.is_flags = EnumTraits<T>::is_flags;
+
+        for (size_t i = 0; i < EnumTraits<T>::values.size(); ++i) {
+            info.values.emplace_back(std::string(EnumTraits<T>::names[i]),
+                                     static_cast<std::int64_t>(to_underlying(
+                                         EnumTraits<T>::values[i])));
+        }
+
+        std::unique_lock lock(mutex_);
+        enums_[info.type_name] = std::move(info);
+    }
+
+    [[nodiscard]] std::optional<EnumInfo> getEnumInfo(
+        std::string_view name) const {
+        std::shared_lock lock(mutex_);
+        auto it = enums_.find(std::string(name));
+        if (it != enums_.end()) {
+            return it->second;
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] std::vector<std::string> getRegisteredEnums() const {
+        std::shared_lock lock(mutex_);
+        std::vector<std::string> result;
+        result.reserve(enums_.size());
+        for (const auto& [name, _] : enums_) {
+            result.push_back(name);
+        }
+        return result;
+    }
+
+    static EnumRegistry& getInstance() {
+        static EnumRegistry instance;
+        return instance;
+    }
+};
+
+/**
+ * @brief Register enum macro
+ */
+#define ATOM_REGISTER_ENUM(EnumType) \
+    atom::meta::EnumRegistry::getInstance().registerEnum<EnumType>()
+
 }  // namespace atom::meta
+
+/**
+ * @brief std::format support for enums with EnumTraits
+ */
+template <typename T>
+    requires std::is_enum_v<T>
+struct std::formatter<T> : std::formatter<std::string> {
+    auto format(T value, std::format_context& ctx) const {
+        auto name = atom::meta::enum_name(value);
+        if (!name.empty()) {
+            return std::formatter<std::string>::format(std::string(name), ctx);
+        }
+        return std::formatter<std::string>::format(
+            std::to_string(atom::meta::to_underlying(value)), ctx);
+    }
+};
 
 #endif  // ATOM_META_ENUM_HPP

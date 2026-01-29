@@ -19,8 +19,18 @@
 #define ATOM_META_REFL_HPP
 
 #include <array>
+#include <concepts>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
+#include <version>
+
+// C++23 feature detection
+#if __cplusplus >= 202302L
+#define ATOM_REFL_CPP23 1
+#else
+#define ATOM_REFL_CPP23 0
+#endif
 
 #ifdef __clang__
 #define TSTR(s)                                                               \
@@ -104,8 +114,8 @@ constexpr auto FindIf(const L&, F&&, std::index_sequence<>) -> std::size_t {
 }
 
 template <class L, class F, std::size_t N0, std::size_t... Ns>
-constexpr auto FindIf(const L& list, F&& func, std::index_sequence<N0, Ns...>)
-    -> std::size_t {
+constexpr auto FindIf(const L& list, F&& func,
+                      std::index_sequence<N0, Ns...>) -> std::size_t {
     return func(list.template Get<N0>()) ? N0
                                          : FindIf(list, std::forward<F>(func),
                                                   std::index_sequence<Ns...>{});
@@ -195,7 +205,8 @@ struct ElemList {
     static constexpr std::size_t size = sizeof...(Es);
     explicit constexpr ElemList(Es... elements) : elems{elements...} {}
 
-    // Optimized: Add compile-time size check to avoid unnecessary instantiations
+    // Optimized: Add compile-time size check to avoid unnecessary
+    // instantiations
     static constexpr bool empty() noexcept { return size == 0; }
     template <class Init, class Func>
     constexpr auto Accumulate(Init init, Func&& func) const -> decltype(auto) {
@@ -224,7 +235,9 @@ struct ElemList {
         constexpr std::size_t idx = []() constexpr {
             std::size_t index = 0;
             std::size_t result = static_cast<std::size_t>(-1);
-            ((S::View() == Es::name ? (result = index, true) : (++index, false)) || ...);
+            ((S::View() == Es::name ? (result = index, true)
+                                    : (++index, false)) ||
+             ...);
             return result;
         }();
         static_assert(idx != static_cast<std::size_t>(-1), "Element not found");
@@ -392,8 +405,8 @@ struct TypeInfoBase {
                     vb.fields.ForEach([&](const auto& fld) {
                         using Field = std::decay_t<decltype(fld)>;
                         if constexpr (!Field::is_static && !Field::is_func) {
-                            std::forward<Func>(func)(fld,
-                                                     std::forward<U>(obj).*(fld.value));
+                            std::forward<Func>(func)(
+                                fld, std::forward<U>(obj).*(fld.value));
                         }
                     });
                 }
@@ -406,7 +419,8 @@ struct TypeInfoBase {
     // Optimized: Fast-path field access for common cases
     template <class FieldName, class U>
     static constexpr auto GetFieldValue(U&& obj) -> decltype(auto) {
-        constexpr auto field = TypeInfo<Type>::fields.template Find<FieldName>();
+        constexpr auto field =
+            TypeInfo<Type>::fields.template Find<FieldName>();
         if constexpr (!field.is_static && !field.is_func) {
             return std::forward<U>(obj).*(field.value);
         } else {
@@ -418,7 +432,8 @@ struct TypeInfoBase {
     // Optimized: Fast-path field setting for common cases
     template <class FieldName, class U, class V>
     static constexpr void SetFieldValue(U&& obj, V&& value) {
-        constexpr auto field = TypeInfo<Type>::fields.template Find<FieldName>();
+        constexpr auto field =
+            TypeInfo<Type>::fields.template Find<FieldName>();
         if constexpr (!field.is_static && !field.is_func) {
             std::forward<U>(obj).*(field.value) = std::forward<V>(value);
         } else {
@@ -439,21 +454,24 @@ struct TypeInfoBase {
     // Enhanced: Metadata support for fields
     template <class FieldName>
     static constexpr auto GetFieldMetadata() {
-        constexpr auto field = TypeInfo<Type>::fields.template Find<FieldName>();
+        constexpr auto field =
+            TypeInfo<Type>::fields.template Find<FieldName>();
         return field.attrs;
     }
 
     // Enhanced: Check if field has specific attribute
     template <class FieldName, class AttrName>
     static constexpr bool HasFieldAttribute() {
-        constexpr auto field = TypeInfo<Type>::fields.template Find<FieldName>();
+        constexpr auto field =
+            TypeInfo<Type>::fields.template Find<FieldName>();
         return field.attrs.template Contains<AttrName>();
     }
 
     // Enhanced: Get field count for iteration optimization
     static constexpr std::size_t GetNonStaticFieldCount() noexcept {
         if constexpr (requires { TypeInfo<Type>::fields; }) {
-            return TypeInfo<Type>::fields.Accumulate(0, [](std::size_t count, const auto& field) {
+            return TypeInfo<Type>::fields.Accumulate(0, [](std::size_t count,
+                                                           const auto& field) {
                 using Field = std::decay_t<decltype(field)>;
                 return count + (!Field::is_static && !Field::is_func ? 1 : 0);
             });
@@ -466,9 +484,10 @@ struct TypeInfoBase {
     template <class Predicate>
     static constexpr bool ValidateFields(Predicate&& pred) {
         if constexpr (GetFieldCount() > 0) {
-            return TypeInfo<Type>::fields.Accumulate(true, [&](bool acc, const auto& field) {
-                return acc && std::forward<Predicate>(pred)(field);
-            });
+            return TypeInfo<Type>::fields.Accumulate(
+                true, [&](bool acc, const auto& field) {
+                    return acc && std::forward<Predicate>(pred)(field);
+                });
         }
         return true;
     }
@@ -481,7 +500,8 @@ struct TypeInfoBase {
             TypeInfo<Type>::fields.ForEach([&](const auto& field) {
                 using Field = std::decay_t<decltype(field)>;
                 if constexpr (!Field::is_static && !Field::is_func) {
-                    std::forward<Func>(func)(field, std::forward<U>(obj).*(field.value), index++);
+                    std::forward<Func>(func)(
+                        field, std::forward<U>(obj).*(field.value), index++);
                 }
             });
         }
@@ -505,5 +525,600 @@ Field(Name, T) -> Field<Name, T, AttrList<>>;
     }
 
 #define ATOM_META_FIELD(Name, Member) atom::meta::Field(TSTR(Name), Member)
+
+//==============================================================================
+// C++20/23 Enhanced Static Reflection Utilities
+//==============================================================================
+
+namespace atom::meta {
+
+/**
+ * @brief Concept for types with reflection metadata
+ */
+template <typename T>
+concept HasReflection = requires {
+    typename TypeInfo<T>;
+    {
+        TypeInfo<T>::fields
+    } -> std::convertible_to<decltype(TypeInfo<T>::fields)>;
+};
+
+/**
+ * @brief Get field count at compile time
+ */
+template <HasReflection T>
+constexpr std::size_t field_count_v = TypeInfo<T>::fields.size;
+
+/**
+ * @brief Check if a type has a field with a specific name
+ */
+template <HasReflection T, typename Name>
+constexpr bool has_field_v = TypeInfo<T>::fields.template Contains<Name>();
+
+/**
+ * @brief Get field value by name (runtime)
+ */
+template <HasReflection T, typename Name>
+auto getFieldValue(T& obj, Name name) -> decltype(auto) {
+    return TypeInfo<T>::fields.template Find<Name>().value(obj);
+}
+
+/**
+ * @brief Set field value by name (runtime)
+ */
+template <HasReflection T, typename Name, typename V>
+void setFieldValue(T& obj, Name name, V&& value) {
+    auto& field = TypeInfo<T>::fields.template Find<Name>();
+    if constexpr (!field.is_const) {
+        obj.*(field.value) = std::forward<V>(value);
+    }
+}
+
+/**
+ * @brief Apply a visitor to all fields of an object
+ */
+template <HasReflection T, typename Visitor>
+constexpr void visitFields(T&& obj, Visitor&& visitor) {
+    TypeInfo<std::remove_cvref_t<T>>::ForEachVarOf(
+        std::forward<T>(obj), [&visitor](auto&& field, auto&& value) {
+            visitor(field.name.View(), std::forward<decltype(value)>(value));
+        });
+}
+
+/**
+ * @brief Get field names as array of string_view
+ */
+template <HasReflection T>
+constexpr auto getFieldNames() {
+    constexpr auto size = TypeInfo<T>::fields.size;
+    std::array<std::string_view, size> names{};
+    std::size_t i = 0;
+    TypeInfo<T>::fields.ForEach(
+        [&](const auto& field) { names[i++] = field.name.View(); });
+    return names;
+}
+
+/**
+ * @brief Serialize object fields to a simple string representation
+ */
+template <HasReflection T>
+auto serializeFields(const T& obj) -> std::string {
+    std::string result = "{";
+    bool first = true;
+    TypeInfo<T>::ForEachVarOf(obj, [&](auto&& field, auto&& value) {
+        if (!first)
+            result += ", ";
+        first = false;
+        result += "\"";
+        result += field.name.View();
+        result += "\": ";
+        if constexpr (std::is_arithmetic_v<
+                          std::remove_cvref_t<decltype(value)>>) {
+            result += std::to_string(value);
+        } else if constexpr (std::is_same_v<
+                                 std::remove_cvref_t<decltype(value)>,
+                                 std::string>) {
+            result += "\"" + value + "\"";
+        } else {
+            result += "<complex>";
+        }
+    });
+    result += "}";
+    return result;
+}
+
+/**
+ * @brief Compare two objects by their reflected fields
+ */
+template <HasReflection T>
+bool equalByFields(const T& a, const T& b) {
+    bool equal = true;
+    TypeInfo<T>::ForEachVarOf(a, [&](auto&& field, auto&& value_a) {
+        auto& value_b = b.*(field.value);
+        if (value_a != value_b) {
+            equal = false;
+        }
+    });
+    return equal;
+}
+
+/**
+ * @brief Copy fields from one object to another
+ */
+template <HasReflection T>
+void copyFields(const T& from, T& to) {
+    TypeInfo<T>::ForEachVarOf(from, [&](auto&& field, auto&& value) {
+        if constexpr (!field.is_const) {
+            to.*(field.value) = value;
+        }
+    });
+}
+
+/**
+ * @brief Field info structure for runtime introspection
+ */
+struct FieldInfo {
+    std::string_view name;
+    std::string_view type_name;
+    bool is_static;
+    bool is_const;
+    bool is_function;
+    std::size_t offset;
+};
+
+/**
+ * @brief Get runtime field information
+ */
+template <HasReflection T>
+auto getFieldInfos() -> std::vector<FieldInfo> {
+    std::vector<FieldInfo> infos;
+    TypeInfo<T>::fields.ForEach([&](const auto& field) {
+        FieldInfo info;
+        info.name = field.name.View();
+        info.is_static = field.is_static;
+        info.is_const = field.is_const;
+        info.is_function = field.is_func;
+        // Note: offset calculation would need additional implementation
+        info.offset = 0;
+        infos.push_back(info);
+    });
+    return infos;
+}
+
+//==============================================================================
+// Integration with type_info.hpp and abi.hpp
+//==============================================================================
+
+/**
+ * @brief Get demangled type name for reflected type
+ */
+template <HasReflection T>
+auto getReflectedTypeName() -> std::string {
+    return std::string(typeid(T).name());
+}
+
+/**
+ * @brief Reflection info combined with TypeInfo
+ */
+template <HasReflection T>
+struct ReflectionTypeInfo {
+    static constexpr std::size_t field_count = TypeInfo<T>::fields.size;
+
+    static auto getFieldNames() -> std::vector<std::string> {
+        std::vector<std::string> names;
+        TypeInfo<T>::fields.ForEach([&](const auto& field) {
+            names.push_back(std::string(field.name.View()));
+        });
+        return names;
+    }
+
+    static auto summary() -> std::string {
+        std::string result;
+        result += "Type: ";
+        result += typeid(T).name();
+        result += "\n";
+        result += "Field Count: ";
+        result += std::to_string(field_count);
+        result += "\nFields:\n";
+
+        TypeInfo<T>::fields.ForEach([&](const auto& field) {
+            result += "  - ";
+            result += field.name.View();
+            if (field.is_static)
+                result += " [static]";
+            if (field.is_const)
+                result += " [const]";
+            if (field.is_func)
+                result += " [func]";
+            result += "\n";
+        });
+
+        return result;
+    }
+};
+
+/**
+ * @brief Create a map of field names to BoxedValues for an object
+ */
+template <HasReflection T>
+auto objectToMap(const T& obj) -> std::unordered_map<std::string, std::any> {
+    std::unordered_map<std::string, std::any> result;
+
+    TypeInfo<T>::ForEachVarOf(obj, [&](auto&& field, auto&& value) {
+        result[std::string(field.name.View())] = value;
+    });
+
+    return result;
+}
+
+/**
+ * @brief Check if two reflected objects are equal
+ */
+template <HasReflection T>
+bool reflectedEqual(const T& a, const T& b) {
+    bool equal = true;
+    TypeInfo<T>::ForEachVarOf(a, [&](auto&& field, auto&& val_a) {
+        auto& val_b = b.*(field.value);
+        if (!(val_a == val_b)) {
+            equal = false;
+        }
+    });
+    return equal;
+}
+
+/**
+ * @brief Clone a reflected object
+ */
+template <HasReflection T>
+    requires std::default_initializable<T>
+auto cloneReflected(const T& src) -> T {
+    T dest{};
+    TypeInfo<T>::ForEachVarOf(src, [&](auto&& field, auto&& value) {
+        if constexpr (!std::decay_t<decltype(field)>::is_const) {
+            dest.*(field.value) = value;
+        }
+    });
+    return dest;
+}
+
+/**
+ * @brief Apply a transformation to all fields
+ */
+template <HasReflection T, typename Transform>
+void transformFields(T& obj, Transform&& transform) {
+    TypeInfo<T>::ForEachVarOf(obj, [&](auto&& field, auto&& value) {
+        if constexpr (!std::decay_t<decltype(field)>::is_const) {
+            std::forward<Transform>(transform)(field.name.View(), value);
+        }
+    });
+}
+
+/**
+ * @brief Reflection registry for runtime type queries
+ */
+class ReflectionRegistry {
+    struct TypeEntry {
+        std::string type_name;
+        std::vector<std::string> field_names;
+        std::size_t field_count;
+    };
+
+    std::unordered_map<std::string, TypeEntry> types_;
+    mutable std::shared_mutex mutex_;
+
+public:
+    template <HasReflection T>
+    void registerType(std::string_view name = "") {
+        TypeEntry entry;
+        entry.type_name = name.empty() ? typeid(T).name() : std::string(name);
+        entry.field_count = TypeInfo<T>::fields.size;
+
+        TypeInfo<T>::fields.ForEach([&](const auto& field) {
+            entry.field_names.push_back(std::string(field.name.View()));
+        });
+
+        std::unique_lock lock(mutex_);
+        types_[entry.type_name] = std::move(entry);
+    }
+
+    [[nodiscard]] std::optional<TypeEntry> getTypeEntry(
+        std::string_view name) const {
+        std::shared_lock lock(mutex_);
+        auto it = types_.find(std::string(name));
+        if (it != types_.end()) {
+            return it->second;
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] std::vector<std::string> getRegisteredTypes() const {
+        std::shared_lock lock(mutex_);
+        std::vector<std::string> result;
+        result.reserve(types_.size());
+        for (const auto& [name, _] : types_) {
+            result.push_back(name);
+        }
+        return result;
+    }
+
+    static ReflectionRegistry& getInstance() {
+        static ReflectionRegistry instance;
+        return instance;
+    }
+};
+
+/**
+ * @brief Register reflection type macro
+ */
+#define ATOM_REGISTER_REFLECTION(Type) \
+    atom::meta::ReflectionRegistry::getInstance().registerType<Type>(#Type)
+
+//==============================================================================
+// Advanced Reflection Utilities
+//==============================================================================
+
+/**
+ * @brief Field visitor with index
+ */
+template <HasReflection T, typename Visitor>
+void visitFieldsIndexed(T& obj, Visitor&& visitor) {
+    std::size_t index = 0;
+    TypeInfo<T>::fields.ForEach([&](const auto& field) {
+        visitor(index++, field.name.View(), field.value(obj));
+    });
+}
+
+/**
+ * @brief Get field by index
+ */
+template <HasReflection T, std::size_t Index>
+auto& getFieldByIndex(T& obj) {
+    return std::get<Index>(TypeInfo<T>::fields).value(obj);
+}
+
+/**
+ * @brief Field filter predicate
+ */
+template <HasReflection T, typename Predicate>
+auto filterFields(const T& obj, Predicate&& pred) {
+    std::vector<std::pair<std::string, std::any>> result;
+    TypeInfo<T>::fields.ForEach([&](const auto& field) {
+        if (pred(field.name.View(), field.value(obj))) {
+            result.emplace_back(std::string(field.name.View()),
+                                std::any(field.value(obj)));
+        }
+    });
+    return result;
+}
+
+/**
+ * @brief Apply function to each field
+ */
+template <HasReflection T, typename Func>
+void applyToFields(T& obj, Func&& func) {
+    TypeInfo<T>::fields.ForEach([&](auto& field) {
+        field.value(obj) = func(field.name.View(), field.value(obj));
+    });
+}
+
+/**
+ * @brief Field difference between two objects
+ */
+template <HasReflection T>
+auto fieldDifference(const T& a, const T& b) {
+    std::vector<std::string> different_fields;
+    TypeInfo<T>::fields.ForEach([&](const auto& field) {
+        if (field.value(a) != field.value(b)) {
+            different_fields.push_back(std::string(field.name.View()));
+        }
+    });
+    return different_fields;
+}
+
+/**
+ * @brief Copy specific fields between objects
+ */
+template <HasReflection T>
+void copyFields(const T& src, T& dst,
+                std::span<const std::string_view> fields) {
+    TypeInfo<T>::fields.ForEach([&](const auto& field) {
+        for (const auto& name : fields) {
+            if (field.name.View() == name) {
+                const_cast<std::remove_const_t<decltype(field.value(dst))>&>(
+                    field.value(dst)) = field.value(src);
+                break;
+            }
+        }
+    });
+}
+
+/**
+ * @brief Serialize object to JSON-like string
+ */
+template <HasReflection T>
+std::string toJsonString(const T& obj) {
+    std::ostringstream oss;
+    oss << "{";
+    bool first = true;
+    TypeInfo<T>::fields.ForEach([&](const auto& field) {
+        if (!first)
+            oss << ", ";
+        first = false;
+        oss << "\"" << field.name.View() << "\": ";
+
+        using FieldType = std::decay_t<decltype(field.value(obj))>;
+        if constexpr (std::is_same_v<FieldType, std::string>) {
+            oss << "\"" << field.value(obj) << "\"";
+        } else if constexpr (std::is_arithmetic_v<FieldType>) {
+            oss << field.value(obj);
+        } else if constexpr (std::is_same_v<FieldType, bool>) {
+            oss << (field.value(obj) ? "true" : "false");
+        } else {
+            oss << "\"<object>\"";
+        }
+    });
+    oss << "}";
+    return oss.str();
+}
+
+/**
+ * @brief Object builder with reflection
+ */
+template <HasReflection T>
+class ReflectedBuilder {
+    T obj_{};
+
+public:
+    ReflectedBuilder() = default;
+
+    template <typename Value>
+    ReflectedBuilder& set(std::string_view field_name, Value&& value) {
+        TypeInfo<T>::fields.ForEach([&](auto& field) {
+            if (field.name.View() == field_name) {
+                using FieldType = std::decay_t<decltype(field.value(obj_))>;
+                if constexpr (std::is_convertible_v<Value, FieldType>) {
+                    field.value(obj_) =
+                        static_cast<FieldType>(std::forward<Value>(value));
+                }
+            }
+        });
+        return *this;
+    }
+
+    T build() { return std::move(obj_); }
+
+    T& get() { return obj_; }
+};
+
+/**
+ * @brief Create a reflected builder
+ */
+template <HasReflection T>
+auto makeReflectedBuilder() {
+    return ReflectedBuilder<T>{};
+}
+
+/**
+ * @brief Field metadata
+ */
+struct FieldMetadata {
+    std::string name;
+    std::string type_name;
+    std::size_t offset;
+    std::size_t size;
+    bool is_const;
+    bool is_pointer;
+    bool is_reference;
+};
+
+/**
+ * @brief Get detailed field metadata
+ */
+template <HasReflection T>
+auto getFieldMetadata() {
+    std::vector<FieldMetadata> metadata;
+    TypeInfo<T>::fields.ForEach([&](const auto& field) {
+        using FieldType =
+            std::decay_t<decltype(field.value(std::declval<T&>()))>;
+        FieldMetadata meta;
+        meta.name = std::string(field.name.View());
+        meta.type_name = typeid(FieldType).name();
+        meta.size = sizeof(FieldType);
+        meta.is_const = std::is_const_v<FieldType>;
+        meta.is_pointer = std::is_pointer_v<FieldType>;
+        meta.is_reference = std::is_reference_v<FieldType>;
+        metadata.push_back(std::move(meta));
+    });
+    return metadata;
+}
+
+/**
+ * @brief Object diff with detailed changes
+ */
+template <HasReflection T>
+struct FieldChange {
+    std::string field_name;
+    std::any old_value;
+    std::any new_value;
+};
+
+template <HasReflection T>
+auto getObjectDiff(const T& old_obj, const T& new_obj) {
+    std::vector<FieldChange<T>> changes;
+    TypeInfo<T>::fields.ForEach([&](const auto& field) {
+        if (field.value(old_obj) != field.value(new_obj)) {
+            changes.push_back({std::string(field.name.View()),
+                               std::any(field.value(old_obj)),
+                               std::any(field.value(new_obj))});
+        }
+    });
+    return changes;
+}
+
+/**
+ * @brief Merge objects with priority
+ */
+template <HasReflection T>
+T mergeObjects(const T& base, const T& overlay,
+               const std::set<std::string>& overlay_fields = {}) {
+    T result = base;
+    TypeInfo<T>::fields.ForEach([&](auto& field) {
+        if (overlay_fields.empty() ||
+            overlay_fields.count(std::string(field.name.View()))) {
+            const_cast<std::remove_const_t<decltype(field.value(result))>&>(
+                field.value(result)) = field.value(overlay);
+        }
+    });
+    return result;
+}
+
+/**
+ * @brief Validate object fields
+ */
+template <HasReflection T>
+class ObjectValidator {
+    std::unordered_map<std::string, std::function<bool(const std::any&)>>
+        validators_;
+
+public:
+    template <typename FieldType>
+    ObjectValidator& addValidator(
+        std::string_view field,
+        std::function<bool(const FieldType&)> validator) {
+        validators_[std::string(field)] = [validator](const std::any& value) {
+            try {
+                return validator(std::any_cast<FieldType>(value));
+            } catch (...) {
+                return false;
+            }
+        };
+        return *this;
+    }
+
+    std::vector<std::string> validate(const T& obj) const {
+        std::vector<std::string> errors;
+        TypeInfo<T>::fields.ForEach([&](const auto& field) {
+            auto it = validators_.find(std::string(field.name.View()));
+            if (it != validators_.end()) {
+                if (!it->second(std::any(field.value(obj)))) {
+                    errors.push_back(std::string(field.name.View()));
+                }
+            }
+        });
+        return errors;
+    }
+
+    bool isValid(const T& obj) const { return validate(obj).empty(); }
+};
+
+/**
+ * @brief Create an object validator
+ */
+template <HasReflection T>
+auto makeValidator() {
+    return ObjectValidator<T>{};
+}
+
+}  // namespace atom::meta
 
 #endif

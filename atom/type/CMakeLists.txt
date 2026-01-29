@@ -2,65 +2,108 @@
 # License: GPL3
 
 cmake_minimum_required(VERSION 3.21)
+project(
+  atom-type
+  VERSION 1.0.0
+  LANGUAGES C CXX)
 
-# Define library name
-set(LIB_NAME atom-type)
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
-# Find all source files
-file(GLOB_RECURSE SOURCES "*.cpp")
-file(GLOB_RECURSE HEADERS "*.h" "*.hpp")
+# Explicit source files (avoid GLOB for better build system reliability)
+set(SOURCES rjson.cpp ryaml.cpp)
+
+# Explicit header files
+set(HEADERS
+    args.hpp
+    argsview.hpp
+    auto_table.hpp
+    compat.hpp
+    concurrent_map.hpp
+    concurrent_set.hpp
+    concurrent_vector.hpp
+    cstream.hpp
+    expected.hpp
+    flatmap.hpp
+    flatset.hpp
+    indestructible.hpp
+    iter.hpp
+    json-schema.hpp
+    json.hpp
+    json_fwd.hpp
+    no_offset_ptr.hpp
+    noncopyable.hpp
+    optional.hpp
+    pod_vector.hpp
+    pointer.hpp
+    qvariant.hpp
+    rjson.hpp
+    robin_hood.hpp
+    rtype.hpp
+    ryaml.hpp
+    small_list.hpp
+    small_vector.hpp
+    static_string.hpp
+    static_vector.hpp
+    string.hpp
+    trackable.hpp
+    uint.hpp
+    weak_ptr.hpp)
+
+# Determine if this is header-only
+if(NOT SOURCES)
+  set(IS_HEADER_ONLY TRUE)
+else()
+  set(IS_HEADER_ONLY FALSE)
+endif()
 
 # Create library target
-if(SOURCES)
-  # Create library with source files
-  add_library(${LIB_NAME} ${SOURCES} ${HEADERS})
+if(IS_HEADER_ONLY)
+  add_library(atom-type INTERFACE)
+  add_library(atom::type ALIAS atom-type)
+  atom_configure_module(atom-type HEADER_ONLY)
 else()
-  # Create header-only library
-  add_library(${LIB_NAME} INTERFACE)
+  add_library(atom-type STATIC ${SOURCES} ${HEADERS})
+  add_library(atom::type ALIAS atom-type)
+  atom_configure_module(atom-type)
 endif()
 
-# Handle header-only vs. compiled library differently
-if(SOURCES)
-  target_include_directories(
-    ${LIB_NAME} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-                       $<INSTALL_INTERFACE:include/atom/type>)
+# Find optional dependencies for JSON and YAML support
+find_package(nlohmann_json QUIET)
+find_package(yaml-cpp QUIET)
 
-  # Find required dependencies for JSON and YAML support
-  find_package(nlohmann_json QUIET)
+# Link optional dependencies
+if(IS_HEADER_ONLY)
   if(nlohmann_json_FOUND)
-    target_link_libraries(${LIB_NAME} PUBLIC nlohmann_json::nlohmann_json)
+    target_link_libraries(atom-type INTERFACE nlohmann_json::nlohmann_json)
   endif()
-
-  find_package(yaml-cpp QUIET)
   if(yaml-cpp_FOUND)
-    target_link_libraries(${LIB_NAME} PUBLIC yaml-cpp::yaml-cpp)
+    target_link_libraries(atom-type INTERFACE yaml-cpp::yaml-cpp)
   endif()
-
-  # Basic dependencies
-  target_link_libraries(${LIB_NAME} PUBLIC atom-error)
 else()
-  target_include_directories(
-    ${LIB_NAME} INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-                          $<INSTALL_INTERFACE:include/atom/type>)
-
-  target_link_libraries(${LIB_NAME} INTERFACE atom-error)
+  if(nlohmann_json_FOUND)
+    target_link_libraries(atom-type PUBLIC nlohmann_json::nlohmann_json)
+  endif()
+  if(yaml-cpp_FOUND)
+    target_link_libraries(atom-type PUBLIC yaml-cpp::yaml-cpp)
+  endif()
 endif()
 
-# Add module to global target list
-get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
-list(APPEND ATOM_MODULE_TARGETS ${LIB_NAME})
-set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")
-
-# Installation rules
+# Install library target
 install(
-  TARGETS ${LIB_NAME}
-  EXPORT ${LIB_NAME}-targets
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  TARGETS atom-type
+  EXPORT atom-type-targets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-  INCLUDES
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT runtime)
 
+# Install export targets
+install(
+  EXPORT atom-type-targets
+  FILE atom-typeTargets.cmake
+  NAMESPACE atom::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/atom
+  COMPONENT development)
+
+# Install headers
 install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/type)
-
-message(STATUS "Type module configured")

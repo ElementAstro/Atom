@@ -1,10 +1,10 @@
 /*!
  * \file facade_any.hpp
- * \brief Defines EnhancedBoxedValue, an enhanced version of BoxedValue utilizing the facade pattern - OPTIMIZED VERSION
- * \author Max Qian <lightapt.com>
- * \date 2025-04-21
- * \optimized 2025-01-22 - Performance optimizations by AI Assistant
- * \copyright Copyright (C) 2023-2025 Max Qian <lightapt.com>
+ * \brief Defines EnhancedBoxedValue, an enhanced version of BoxedValue
+ * utilizing the facade pattern - OPTIMIZED VERSION \author Max Qian
+ * <lightapt.com> \date 2025-04-21 \optimized 2025-01-22 - Performance
+ * optimizations by AI Assistant \copyright Copyright (C) 2023-2025 Max Qian
+ * <lightapt.com>
  *
  * OPTIMIZATIONS APPLIED:
  * - Enhanced dispatch system with compile-time trait caching
@@ -43,18 +43,28 @@ namespace enhanced_any_skills {
 template <typename T>
 struct type_traits {
     // Optimized: Cache trait detection results
-    static constexpr bool has_stream_operator = requires(std::ostream& os, const T& obj) { os << obj; };
-    static constexpr bool has_toString = requires(const T& obj) { obj.toString(); };
-    static constexpr bool has_to_string = requires(const T& obj) { obj.to_string(); };
-    static constexpr bool has_serialize = requires(const T& obj) { obj.serialize(); };
+    static constexpr bool has_stream_operator =
+        requires(std::ostream& os, const T& obj) { os << obj; };
+    static constexpr bool has_toString =
+        requires(const T& obj) { obj.toString(); };
+    static constexpr bool has_to_string =
+        requires(const T& obj) { obj.to_string(); };
+    static constexpr bool has_serialize =
+        requires(const T& obj) { obj.serialize(); };
     static constexpr bool has_toJson = requires(const T& obj) { obj.toJson(); };
-    static constexpr bool has_to_json = requires(const T& obj) { obj.to_json(); };
-    static constexpr bool has_equality = requires(const T& a, const T& b) { a == b; };
-    static constexpr bool has_less_than = requires(const T& a, const T& b) { a < b; };
+    static constexpr bool has_to_json =
+        requires(const T& obj) { obj.to_json(); };
+    static constexpr bool has_equality =
+        requires(const T& a, const T& b) { a == b; };
+    static constexpr bool has_less_than =
+        requires(const T& a, const T& b) { a < b; };
     static constexpr bool has_clone = requires(const T& obj) { obj.clone(); };
-    static constexpr bool is_printable = has_stream_operator || has_toString || has_to_string;
-    static constexpr bool is_stringable = has_toString || has_to_string || std::is_arithmetic_v<T>;
-    static constexpr bool is_serializable = has_serialize || has_toJson || has_to_json || std::is_arithmetic_v<T>;
+    static constexpr bool is_printable =
+        has_stream_operator || has_toString || has_to_string;
+    static constexpr bool is_stringable =
+        has_toString || has_to_string || std::is_arithmetic_v<T>;
+    static constexpr bool is_serializable =
+        has_serialize || has_toJson || has_to_json || std::is_arithmetic_v<T>;
 };
 
 /**
@@ -138,7 +148,8 @@ struct comparable_dispatch {
         if constexpr (type_traits<T>::has_equality) {
             return concrete_obj1 == concrete_obj2;
         } else if constexpr (std::is_arithmetic_v<T>) {
-            return concrete_obj1 == concrete_obj2;  // Arithmetic types always have ==
+            return concrete_obj1 ==
+                   concrete_obj2;  // Arithmetic types always have ==
         } else {
             return false;
         }
@@ -159,7 +170,8 @@ struct comparable_dispatch {
         if constexpr (type_traits<T>::has_less_than) {
             return concrete_obj1 < concrete_obj2;
         } else if constexpr (std::is_arithmetic_v<T>) {
-            return concrete_obj1 < concrete_obj2;  // Arithmetic types always have <
+            return concrete_obj1 <
+                   concrete_obj2;  // Arithmetic types always have <
         } else {
             return false;
         }
@@ -832,8 +844,8 @@ auto enhancedVar(T&& value) -> EnhancedBoxedValue {
  * \return EnhancedBoxedValue containing the value and description
  */
 template <typename T>
-auto enhancedVarWithDesc(T&& value, std::string_view description)
-    -> EnhancedBoxedValue {
+auto enhancedVarWithDesc(T&& value,
+                         std::string_view description) -> EnhancedBoxedValue {
     return EnhancedBoxedValue(std::forward<T>(value), description);
 }
 

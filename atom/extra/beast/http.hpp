@@ -23,9 +23,9 @@
 #include <vector>
 #include "concurrency_primitives.hpp"
 #include "connection_pool.hpp"
-#include "performance_monitor.hpp"
 #include "lock_free_queue.hpp"
 #include "memory_pool.hpp"
+#include "performance_monitor.hpp"
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -37,8 +37,6 @@ concept HttpResponseHandler =
     requires(T h, beast::error_code ec, http::response<http::string_body> res) {
         { h(ec, res) } -> std::same_as<void>;
     };
-
-
 
 template <typename T>
 concept BatchResponseHandler =
@@ -69,12 +67,13 @@ public:
      * @brief Constructs an HttpClient with advanced concurrency features
      * @param ioc The I/O context for asynchronous operations
      * @param enable_connection_pool Enable lock-free connection pooling
-     * @param enable_performance_monitoring Enable lock-free performance monitoring
+     * @param enable_performance_monitoring Enable lock-free performance
+     * monitoring
      * @throws std::bad_alloc If memory allocation fails
      */
     explicit HttpClient(net::io_context& ioc,
-                       bool enable_connection_pool = true,
-                       bool enable_performance_monitoring = true);
+                        bool enable_connection_pool = true,
+                        bool enable_performance_monitoring = true);
 
     HttpClient(const HttpClient&) = delete;
     HttpClient& operator=(const HttpClient&) = delete;
@@ -112,12 +111,12 @@ public:
      * @throws std::invalid_argument If host or port is empty
      * @throws beast::system_error On connection or request failure
      */
-    auto request(
-        http::verb method, std::string_view host, std::string_view port,
-        std::string_view target, int version = 11,
-        std::string_view content_type = "", std::string_view body = "",
-        const std::unordered_map<std::string, std::string>& headers = {})
-        -> http::response<http::string_body>;
+    auto request(http::verb method, std::string_view host,
+                 std::string_view port, std::string_view target,
+                 int version = 11, std::string_view content_type = "",
+                 std::string_view body = "",
+                 const std::unordered_map<std::string, std::string>& headers =
+                     {}) -> http::response<http::string_body>;
 
     /**
      * @brief Sends an asynchronous HTTP request with callback
@@ -138,8 +137,6 @@ public:
         std::string_view target, ResponseHandler&& handler, int version = 11,
         std::string_view content_type = "", std::string_view body = "",
         const std::unordered_map<std::string, std::string>& headers = {});
-
-
 
     /**
      * @brief Uploads a file using multipart form data
@@ -219,11 +216,13 @@ public:
         -> std::vector<http::response<http::string_body>>;
 
     /**
-     * @brief Sends multiple asynchronous requests using work-stealing thread pool
+     * @brief Sends multiple asynchronous requests using work-stealing thread
+     * pool
      * @param requests Vector of request tuples
      * @param handler The batch completion handler
      * @param headers Common headers for all requests
-     * @param max_concurrent_requests Maximum concurrent requests (0 = unlimited)
+     * @param max_concurrent_requests Maximum concurrent requests (0 =
+     * unlimited)
      * @throws std::invalid_argument If any parameters are invalid
      */
     template <BatchResponseHandler ResponseHandler>
@@ -261,14 +260,16 @@ public:
      * @param max_idle_time Maximum idle time before connection cleanup
      * @param connection_timeout Connection timeout duration
      */
-    void configureConnectionPool(std::size_t max_connections_per_host = 20,
-                                std::chrono::seconds max_idle_time = std::chrono::seconds{300},
-                                std::chrono::seconds connection_timeout = std::chrono::seconds{30});
+    void configureConnectionPool(
+        std::size_t max_connections_per_host = 20,
+        std::chrono::seconds max_idle_time = std::chrono::seconds{300},
+        std::chrono::seconds connection_timeout = std::chrono::seconds{30});
 
     /**
      * @brief Returns comprehensive performance statistics
      */
-    [[nodiscard]] atom::beast::monitoring::PerformanceMonitor::PerformanceStats getPerformanceStatistics() const;
+    [[nodiscard]] atom::beast::monitoring::PerformanceMonitor::PerformanceStats
+    getPerformanceStatistics() const;
 
     /**
      * @brief Resets all performance counters
@@ -289,7 +290,9 @@ private:
     // Advanced concurrency components
     std::unique_ptr<atom::beast::pool::LockFreeConnectionPool> connection_pool_;
     atom::beast::monitoring::PerformanceMonitor* performance_monitor_;
-    std::unique_ptr<atom::beast::concurrency::WorkStealingDeque<std::function<void()>>> work_queue_;
+    std::unique_ptr<
+        atom::beast::concurrency::WorkStealingDeque<std::function<void()>>>
+        work_queue_;
 
     // Configuration flags
     bool connection_pool_enabled_{true};
@@ -356,8 +359,6 @@ void HttpClient::asyncRequest(
                 });
         });
 }
-
-
 
 template <BatchResponseHandler ResponseHandler>
 void HttpClient::asyncBatchRequest(

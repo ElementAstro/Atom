@@ -31,7 +31,7 @@
 #endif
 
 #include <spdlog/spdlog.h>
-#include "atom/system/command.hpp"
+#include "atom/system/process/command.hpp"
 #include "socket.hpp"
 
 namespace atom::web {
@@ -241,7 +241,7 @@ auto scanPort(const std::string& host, uint16_t port,
 
         SocketGuard guard(sockfd);
 
-        struct addrinfo hints{};
+        struct addrinfo hints {};
         hints.ai_family = AF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
 
@@ -275,8 +275,8 @@ auto scanPort(const std::string& host, uint16_t port,
 }
 
 auto scanPortRange(const std::string& host, uint16_t startPort,
-                   uint16_t endPort, std::chrono::milliseconds timeout)
-    -> std::vector<uint16_t> {
+                   uint16_t endPort,
+                   std::chrono::milliseconds timeout) -> std::vector<uint16_t> {
     std::vector<uint16_t> openPorts;
 
     try {
@@ -291,7 +291,7 @@ auto scanPortRange(const std::string& host, uint16_t startPort,
         }
 
         const size_t portCount = endPort - startPort + 1;
-        openPorts.reserve(std::min(portCount, size_t{100}));
+        openPorts.reserve((std::min)(portCount, size_t{100}));
 
         spdlog::debug("Scanning {} ports on host '{}' from {} to {}", portCount,
                       host, startPort, endPort);
@@ -314,6 +314,93 @@ auto scanPortRange(const std::string& host, uint16_t startPort,
     return openPorts;
 }
 
+auto getServiceName(uint16_t port) -> std::string {
+    static const std::unordered_map<uint16_t, std::string> portToService = {
+        {21, "ftp"},
+        {22, "ssh"},
+        {23, "telnet"},
+        {25, "smtp"},
+        {53, "dns"},
+        {80, "http"},
+        {110, "pop3"},
+        {143, "imap"},
+        {443, "https"},
+        {465, "smtps"},
+        {993, "imaps"},
+        {995, "pop3s"},
+        {3306, "mysql"},
+        {5432, "postgresql"},
+        {6379, "redis"},
+        {27017, "mongodb"},
+        {9200, "elasticsearch"},
+        {5672, "rabbitmq"}};
+
+    auto it = portToService.find(port);
+    return it != portToService.end() ? it->second : "";
+}
+
+auto getServicePort(std::string_view serviceName) -> std::optional<uint16_t> {
+    const auto& services = getCommonServices();
+    std::string lowerName(serviceName);
+    std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    auto it = services.find(lowerName);
+    return it != services.end() ? std::optional<uint16_t>(it->second)
+                                : std::nullopt;
+}
+
+auto findAvailablePort(uint16_t startPort, uint16_t endPort,
+                       std::string_view host) -> std::optional<uint16_t> {
+    (void)host;  // Host parameter reserved for future use
+    for (uint16_t port = startPort; port <= endPort; ++port) {
+        if (!isPortInUse<uint16_t>(port)) {
+            return port;
+        }
+    }
+    return std::nullopt;
+}
+
+auto scanPortsConcurrent(std::string_view host,
+                         const std::vector<uint16_t>& ports,
+                         std::chrono::milliseconds timeout,
+                         size_t maxConcurrent) -> std::vector<uint16_t> {
+    std::vector<uint16_t> openPorts;
+    std::mutex mutex;
+    std::vector<std::future<void>> futures;
+
+    std::string hostStr(host);
+
+    for (size_t i = 0; i < ports.size(); ++i) {
+        if (futures.size() >= maxConcurrent) {
+            for (auto& f : futures) {
+                if (f.valid()) {
+                    f.wait();
+                }
+            }
+            futures.clear();
+        }
+
+        futures.push_back(std::async(
+            std::launch::async,
+            [&openPorts, &mutex, hostStr, port = ports[i], timeout]() {
+                if (atom::web::scanPort(hostStr, port, timeout)) {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    openPorts.push_back(port);
+                }
+            }));
+    }
+
+    for (auto& f : futures) {
+        if (f.valid()) {
+            f.wait();
+        }
+    }
+
+    std::sort(openPorts.begin(), openPorts.end());
+    return openPorts;
+}
+
 auto scanPortRangeAsync(const std::string& host, uint16_t startPort,
                         uint16_t endPort, std::chrono::milliseconds timeout)
     -> std::future<std::vector<uint16_t>> {
@@ -322,5 +409,40 @@ auto scanPortRangeAsync(const std::string& host, uint16_t startPort,
             return scanPortRange(host, startPort, endPort, timeout);
         });
 }
+
+auto getCommonServices() -> const std::unordered_map<std::string, uint16_t>& {
+    static const std::unordered_map<std::string, uint16_t> services = {
+        {"ftp", 21},
+        {"ssh", 22},
+        {"telnet", 23},
+        {"smtp", 25},
+        {"dns", 53},
+        {"http", 80},
+        {"pop3", 110},
+        {"imap", 143},
+        {"https", 443},
+        {"smtps", 465},
+        {"imaps", 993},
+        {"pop3s", 995},
+        {"mysql", 3306},
+        {"postgresql", 5432},
+        {"redis", 6379},
+        {"mongodb", 27017},
+        {"elasticsearch", 9200},
+        {"rabbitmq", 5672}};
+    return services;
+}
+
+// uint16_t
+template bool isPortInUse<uint16_t>(uint16_t);
+template std::future<bool> isPortInUseAsync<uint16_t>(uint16_t);
+template std::optional<int> getProcessIDOnPort<uint16_t>(uint16_t);
+template bool checkAndKillProgramOnPort<uint16_t>(uint16_t);
+
+// int (for test compatibility)
+template bool isPortInUse<int>(int);
+template std::future<bool> isPortInUseAsync<int>(int);
+template std::optional<int> getProcessIDOnPort<int>(int);
+template bool checkAndKillProgramOnPort<int>(int);
 
 }  // namespace atom::web

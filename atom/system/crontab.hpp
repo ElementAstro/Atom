@@ -1,16 +1,15 @@
-#ifndef CRONTAB_HPP
-#define CRONTAB_HPP
+﻿/**
+ * @file crontab.hpp
+ * @brief Backwards compatibility header for cron-like scheduling.
+ *
+ * @deprecated This header location is deprecated. Please use
+ * "atom/system/scheduling/crontab.hpp" instead.
+ */
 
-// Main header that includes all crontab components
-// This maintains the same interface as the original crontab.hpp
+#ifndef ATOM_SYSTEM_CRONTAB_HPP
+#define ATOM_SYSTEM_CRONTAB_HPP
 
-#include "crontab/cron_job.hpp"
-#include "crontab/cron_manager.hpp"
-#include "crontab/cron_validation.hpp"
+// Forward to the new location
+#include "scheduling/crontab.hpp"
 
-// Re-export types for backward compatibility
-using CronJob = ::CronJob;
-using CronValidationResult = ::CronValidationResult;
-using CronManager = ::CronManager;
-
-#endif  // CRONTAB_HPP
+#endif  // ATOM_SYSTEM_CRONTAB_HPP

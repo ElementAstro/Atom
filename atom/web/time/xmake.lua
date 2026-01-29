@@ -27,13 +27,13 @@ target("atom-web-time-object")
     add_files(table.unpack(time_sources))
 
     -- Add dependencies
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Add include directories
     add_includedirs("$(projectdir)/atom", {public = true})
 
     -- Platform-specific settings
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("wsock32", "ws2_32")
     end
 

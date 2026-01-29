@@ -1,70 +1,73 @@
--- filepath: d:\msys64\home\qwdma\Atom\example\xmake.lua
--- xmake configuration for Atom examples
+-- xmake configuration for Atom Examples
+-- This project is licensed under the terms of the GPL3 license.
+--
+-- Project Name: Atom Examples
+-- Description: Example programs for Atom framework
 -- Author: Max Qian
 -- License: GPL3
+
+-- Set minimum xmake version
+set_xmakever("2.8.0")
 
 -- Add standard build modes
 add_rules("mode.debug", "mode.release")
 
 -- Project configuration
-set_project("atom-examples")
+set_project("AtomExamples")
 set_version("1.0.0")
-set_license("GPL3")
+set_license("GPL-3.0")
 
--- Set C++ standard
-set_languages("c++20")
+-- Set C++ standard (match CMake - use C++23 if available, otherwise C++20)
+set_languages("c++23")
 
--- Define module directories with examples
-local example_dirs = {
-    "algorithm",
-    "async",
-    "components",
-    "connection",
-    "error",
-    "extra",
-    "image",
-    "io",
-    "log",
-    "memory",
-    "meta",
-    "search",
-    "serial",
-    "system",
-    "type",
-    "utils",
-    "web"
+-- =============================================================================
+-- Example Module Options
+-- =============================================================================
+
+-- Define example modules matching CMake structure
+local example_modules = {
+    "algorithm", "async", "components", "connection", "containers",
+    "error", "extra", "image", "io", "log", "memory", "meta",
+    "search", "secret", "serial", "sysinfo", "system", "type",
+    "utils", "web"
 }
 
--- Function to build examples from a directory
-function build_examples_from_dir(dir)
-    local files = os.files(dir .. "/*.cpp")
+-- Create options for each example module
+for _, module in ipairs(example_modules) do
+    option("example_" .. module)
+        set_default(false)
+        set_description("Build " .. module .. " examples")
+        set_showmenu(true)
+    option_end()
+end
 
-    for _, file in ipairs(files) do
-        local name = path.basename(file)
-        local example_name = "example_" .. dir:gsub("/", "_") .. "_" .. name
+-- Option to build all examples
+option("example_all")
+    set_default(false)
+    set_description("Build all examples")
+    set_showmenu(true)
+option_end()
 
-        target(example_name)
-            -- Set target kind to executable
-            set_kind("binary")
+-- =============================================================================
+-- Include Example Subdirectories
+-- =============================================================================
 
-            -- Add source file
-            add_files(file)
+-- Conditionally add example subdirectories based on build options
+for _, module in ipairs(example_modules) do
+    local should_build = has_config("example_" .. module) or has_config("example_all")
+    local module_dir = path.join(os.scriptdir(), module)
 
-            -- Add dependencies on atom libraries
-            add_deps("atom")
-
-            -- Add packages
-            add_packages("loguru")
-
-            -- Set output directory
-            set_targetdir("$(buildir)/examples/" .. dir)
-        target_end()
+    if should_build and os.isdir(module_dir) then
+        if os.isfile(path.join(module_dir, "xmake.lua")) then
+            includes(module)
+            print("Including " .. module .. " examples")
+        else
+            print("Skipping " .. module .. " examples (no xmake.lua)")
+        end
     end
 end
 
--- Build examples from all directories
-for _, dir in ipairs(example_dirs) do
-    if os.isdir(dir) then
-        build_examples_from_dir(dir)
-    end
-end
+-- Print configuration summary
+after_load(function ()
+    print("Atom Examples configuration completed")
+end)

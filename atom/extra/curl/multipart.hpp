@@ -2,9 +2,19 @@
 #define ATOM_EXTRA_CURL_MULTIPART_HPP
 
 #include <curl/curl.h>
+#include <memory>
 #include <string_view>
 
 namespace atom::extra::curl {
+struct MultipartFormMimeHolder {
+    curl_mime* form;
+    explicit MultipartFormMimeHolder(curl_mime* f) : form(f) {}
+    ~MultipartFormMimeHolder() {
+        if (form) {
+            curl_mime_free(form);
+        }
+    }
+};
 /**
  * @brief A class for building multipart/form-data requests.
  *
@@ -96,7 +106,7 @@ public:
 
 private:
     /** @brief The curl_mime handle for the multipart form. */
-    curl_mime* form_;
+    std::shared_ptr<MultipartFormMimeHolder> form_;
 
     /**
      * @brief Initializes the curl_mime handle.
@@ -112,6 +122,7 @@ private:
      * class.
      */
     friend class Session;
+    friend class Request;
 };
 }  // namespace atom::extra::curl
 

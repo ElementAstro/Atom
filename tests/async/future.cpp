@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
+#include <atomic>
 #include <chrono>
 #include <future>
-#include <thread>
-#include <atomic>
-#include <vector>
 #include <stdexcept>
+#include <thread>
+#include <vector>
 
 #include "atom/async/future.hpp"
 
@@ -116,7 +116,8 @@ TEST(MakeEnhancedFutureTest, CreateEnhancedFuture) {
 TEST(WhenAllTest, RangeOfFutures) {
     std::vector<std::shared_future<int>> futures;
     for (int i = 0; i < 5; ++i) {
-        futures.push_back(std::async(std::launch::async, [i]() { return i; }).share());
+        futures.push_back(
+            std::async(std::launch::async, [i]() { return i; }).share());
     }
 
     auto resultFuture = whenAll(futures.begin(), futures.end());
@@ -199,18 +200,19 @@ TEST(EnhancedFutureTest, WaitForTimeout) {
     // Should timeout and return nullopt
     auto result = enhancedFuture.waitFor(50ms);
     EXPECT_FALSE(result.has_value());
-    EXPECT_TRUE(enhancedFuture.isCancelled());  // Should be cancelled after timeout
+    EXPECT_TRUE(
+        enhancedFuture.isCancelled());  // Should be cancelled after timeout
 }
 
-// Note: WaitForWithCustomCancelPolicy test removed due to template constraint issue in implementation
+// Note: WaitForWithCustomCancelPolicy test removed due to template constraint
+// issue in implementation
 
 TEST(EnhancedFutureTest, ThenChaining) {
     auto enhancedFuture = makeEnhancedFuture([]() { return 10; });
 
-    auto chained = enhancedFuture
-        .then([](int x) { return x * 2; })
-        .then([](int x) { return x + 5; })
-        .then([](int x) { return std::to_string(x); });
+    auto chained = enhancedFuture.then([](int x) { return x * 2; })
+                       .then([](int x) { return x + 5; })
+                       .then([](int x) { return std::to_string(x); });
 
     EXPECT_EQ(chained.wait(), "25");
 }
@@ -222,7 +224,8 @@ TEST(EnhancedFutureTest, ThenWithException) {
 
     auto chained = enhancedFuture.then([](int x) { return x * 2; });
 
-    promise.set_exception(std::make_exception_ptr(std::runtime_error("test error")));
+    promise.set_exception(
+        std::make_exception_ptr(std::runtime_error("test error")));
     EXPECT_THROW(chained.wait(), InvalidFutureException);
 }
 
@@ -231,9 +234,11 @@ TEST(EnhancedFutureTest, CatchException) {
     auto future = promise.get_future().share();
     EnhancedFuture<int> enhancedFuture(std::move(future));
 
-    auto caught = enhancedFuture.catching([](std::exception_ptr) { return 999; });
+    auto caught =
+        enhancedFuture.catching([](std::exception_ptr) { return 999; });
 
-    promise.set_exception(std::make_exception_ptr(std::runtime_error("test error")));
+    promise.set_exception(
+        std::make_exception_ptr(std::runtime_error("test error")));
     EXPECT_EQ(caught.wait(), 999);
 }
 
@@ -254,13 +259,15 @@ TEST(EnhancedFutureTest, RetryWithFailure) {
     EnhancedFuture<int> enhancedFuture(std::move(future));
 
     int attemptCount = 0;
-    auto retried = enhancedFuture.retry([&attemptCount](int) -> int {
-        attemptCount++;
-        if (attemptCount < 3) {
-            throw std::runtime_error("Retry needed");
-        }
-        return 42;
-    }, 5);
+    auto retried = enhancedFuture.retry(
+        [&attemptCount](int) -> int {
+            attemptCount++;
+            if (attemptCount < 3) {
+                throw std::runtime_error("Retry needed");
+            }
+            return 42;
+        },
+        5);
 
     promise.set_value(1);
     EXPECT_EQ(retried.wait(), 42);
@@ -358,9 +365,7 @@ TEST(EnhancedFutureVoidTest, OnComplete) {
     EnhancedFuture<void> enhancedFuture(std::move(future));
 
     bool callbackCalled = false;
-    enhancedFuture.onComplete([&callbackCalled]() {
-        callbackCalled = true;
-    });
+    enhancedFuture.onComplete([&callbackCalled]() { callbackCalled = true; });
 
     promise.set_value();
     std::this_thread::sleep_for(100ms);
@@ -416,10 +421,9 @@ TEST(EnhancedFutureVoidTest, GetException) {
 TEST(EnhancedFutureVoidTest, ThenChaining) {
     auto enhancedFuture = makeEnhancedFuture([]() { /* void function */ });
 
-    auto chained = enhancedFuture
-        .then([]() { return 10; })
-        .then([](int x) { return x * 2; })
-        .then([](int x) { return std::to_string(x); });
+    auto chained = enhancedFuture.then([]() { return 10; })
+                       .then([](int x) { return x * 2; })
+                       .then([](int x) { return std::to_string(x); });
 
     EXPECT_EQ(chained.wait(), "20");
 }
@@ -446,20 +450,21 @@ TEST(EnhancedFutureVoidTest, MultipleCallbacks) {
 
 TEST(MakeEnhancedFutureTest, CreateVoidEnhancedFuture) {
     bool executed = false;
-    auto enhancedFuture = makeEnhancedFuture([&executed]() { executed = true; });
+    auto enhancedFuture =
+        makeEnhancedFuture([&executed]() { executed = true; });
     enhancedFuture.wait();
     EXPECT_TRUE(executed);
 }
 
 TEST(MakeEnhancedFutureTest, CreateWithArguments) {
-    auto enhancedFuture = makeEnhancedFuture([](int a, int b) { return a + b; }, 10, 20);
+    auto enhancedFuture =
+        makeEnhancedFuture([](int a, int b) { return a + b; }, 10, 20);
     EXPECT_EQ(enhancedFuture.wait(), 30);
 }
 
 TEST(MakeEnhancedFutureTest, CreateWithException) {
-    auto enhancedFuture = makeEnhancedFuture([]() -> int {
-        throw std::runtime_error("test exception");
-    });
+    auto enhancedFuture = makeEnhancedFuture(
+        []() -> int { throw std::runtime_error("test exception"); });
 
     EXPECT_THROW(enhancedFuture.wait(), InvalidFutureException);
 }
@@ -473,7 +478,8 @@ TEST(WhenAllTest, EmptyRange) {
 
 TEST(WhenAllTest, SingleFuture) {
     std::vector<std::shared_future<int>> futures;
-    futures.push_back(std::async(std::launch::async, []() { return 42; }).share());
+    futures.push_back(
+        std::async(std::launch::async, []() { return 42; }).share());
 
     auto resultFuture = whenAll(futures.begin(), futures.end());
     auto results = resultFuture.get();
@@ -483,10 +489,12 @@ TEST(WhenAllTest, SingleFuture) {
 
 TEST(WhenAllTest, MixedTypes) {
     auto future1 = std::async(std::launch::async, []() { return 1; });
-    auto future2 = std::async(std::launch::async, []() { return std::string("hello"); });
+    auto future2 =
+        std::async(std::launch::async, []() { return std::string("hello"); });
     auto future3 = std::async(std::launch::async, []() { return 3.14; });
 
-    auto resultFuture = whenAll(std::move(future1), std::move(future2), std::move(future3));
+    auto resultFuture =
+        whenAll(std::move(future1), std::move(future2), std::move(future3));
     auto results = resultFuture.get();
 
     EXPECT_EQ(std::get<0>(results), 1);
@@ -501,7 +509,8 @@ TEST(WhenAllTest, WithException) {
     });
     auto future3 = std::async(std::launch::async, []() { return 3; });
 
-    auto resultFuture = whenAll(std::move(future1), std::move(future2), std::move(future3));
+    auto resultFuture =
+        whenAll(std::move(future1), std::move(future2), std::move(future3));
     EXPECT_THROW(resultFuture.get(), std::runtime_error);
 }
 
@@ -515,7 +524,8 @@ TEST(InvalidFutureExceptionTest, Construction) {
 
 TEST(InvalidFutureExceptionTest, Inheritance) {
     try {
-        throw InvalidFutureException(__FILE__, __LINE__, __FUNCTION__, "Test exception");
+        throw InvalidFutureException(__FILE__, __LINE__, __FUNCTION__,
+                                     "Test exception");
     } catch (const std::exception& e) {
         std::string what_str = e.what();
         EXPECT_NE(what_str.find("Test exception"), std::string::npos);
@@ -533,7 +543,8 @@ TEST(EnhancedFutureTest, CallbackOnCancelledFuture) {
 
     // Adding callback to cancelled future should not crash
     bool callbackCalled = false;
-    enhancedFuture.onComplete([&callbackCalled](int) { callbackCalled = true; });
+    enhancedFuture.onComplete(
+        [&callbackCalled](int) { callbackCalled = true; });
 
     // Give some time to see if callback is called (it shouldn't be)
     std::this_thread::sleep_for(50ms);
@@ -568,7 +579,8 @@ TEST(EnhancedFutureTest, ConcurrentOperations) {
     std::vector<std::thread> threads;
     for (int i = 0; i < 5; ++i) {
         threads.emplace_back([&enhancedFuture, &callbackCount]() {
-            enhancedFuture.onComplete([&callbackCount](int) { callbackCount++; });
+            enhancedFuture.onComplete(
+                [&callbackCount](int) { callbackCount++; });
         });
     }
 
@@ -591,14 +603,14 @@ TEST(EnhancedFutureTest, ChainedOperationsWithDelay) {
     });
 
     auto chained = enhancedFuture
-        .then([](int x) {
-            std::this_thread::sleep_for(50ms);
-            return x * 2;
-        })
-        .then([](int x) {
-            std::this_thread::sleep_for(50ms);
-            return x + 5;
-        });
+                       .then([](int x) {
+                           std::this_thread::sleep_for(50ms);
+                           return x * 2;
+                       })
+                       .then([](int x) {
+                           std::this_thread::sleep_for(50ms);
+                           return x + 5;
+                       });
 
     EXPECT_EQ(chained.wait(), 25);
 }

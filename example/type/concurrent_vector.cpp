@@ -12,76 +12,75 @@
 
 #include "atom/type/concurrent_vector.hpp"
 
-// A sample class to demonstrate object handling
-class Person {
+// A sample class to demonstrate object handlingclass Person {
 private:
-    int id;
-    std::string name;
-    int age;
+int id;
+std::string name;
+int age;
 
 public:
-    Person() : id(0), name(""), age(0) {}
+Person() : id(0), name(""), age(0) {}
 
-    Person(int id, std::string name, int age)
-        : id(id), name(std::move(name)), age(age) {}
+Person(int id, std::string name, int age)
+    : id(id), name(std::move(name)), age(age) {}
 
-    // Copy constructor
-    Person(const Person& other) = default;
+// Copy constructor
+Person(const Person& other) = default;
 
-    // Move constructor
-    Person(Person&& other) noexcept
-        : id(other.id), name(std::move(other.name)), age(other.age) {}
+// Move constructor
+Person(Person&& other) noexcept
+    : id(other.id), name(std::move(other.name)), age(other.age) {}
 
-    // Copy assignment
-    Person& operator=(const Person& other) = default;
+// Copy assignment
+Person& operator=(const Person& other) = default;
 
-    // Move assignment
-    Person& operator=(Person&& other) noexcept {
-        if (this != &other) {
-            id = other.id;
-            name = std::move(other.name);
-            age = other.age;
-        }
-        return *this;
+// Move assignment
+Person& operator=(Person&& other) noexcept {
+    if (this != &other) {
+        id = other.id;
+        name = std::move(other.name);
+        age = other.age;
     }
-
-    // Equality operator
-    bool operator==(const Person& other) const {
-        return id == other.id && name == other.name && age == other.age;
-    }
-
-    // Getters
-    int getId() const { return id; }
-    const std::string& getName() const { return name; }
-    int getAge() const { return age; }
-
-    // Setters
-    void setName(const std::string& newName) { name = newName; }
-    void setAge(int newAge) { age = newAge; }
-
-    // For debugging
-    friend std::ostream& operator<<(std::ostream& os, const Person& p) {
-        os << "Person(id=" << p.id << ", name='" << p.name << "', age=" << p.age
-           << ")";
-        return os;
-    }
-};
-
-// Helper function to print a section header
-void printHeader(const std::string& title) {
-    std::cout << "\n==============================================="
-              << std::endl;
-    std::cout << "  " << title << std::endl;
-    std::cout << "===============================================" << std::endl;
+    return *this;
 }
 
-// Helper function to print a subsection header
-void printSubheader(const std::string& title) {
-    std::cout << "\n--- " << title << " ---" << std::endl;
+// Equality operator
+bool operator==(const Person& other) const {
+    return id == other.id && name == other.name && age == other.age;
 }
 
-// Helper to measure function execution time
-template <typename F, typename... Args>
+// Getters
+int getId() const { return id; }
+const std::string& getName() const { return name; }
+int getAge() const { return age; }
+
+// Setters
+void setName(const std::string& newName) { name = newName; }
+void setAge(int newAge) { age = newAge; }
+
+// For debugging
+friend std::ostream& operator<<(std::ostream& os, const Person& p) {
+    os << "Person(id=" << p.id << ", name='" << p.name << "', age=" << p.age
+       << ")";
+    return os;
+}
+}
+;
+
+// Helper function to print a section headervoid printHeader(const std::string&
+// title) {
+std::cout << "\n===============================================" << std::endl;
+std::cout << "  " << title << std::endl;
+std::cout << "===============================================" << std::endl;
+}
+
+// Helper function to print a subsection headervoid printSubheader(const
+// std::string& title) {
+std::cout << "\n--- " << title << " ---" << std::endl;
+}
+
+// Helper to measure function execution timetemplate <typename F, typename...
+// Args>
 auto measureExecutionTime(F func, Args&&... args) {
     auto start = std::chrono::high_resolution_clock::now();
     func(std::forward<Args>(args)...);

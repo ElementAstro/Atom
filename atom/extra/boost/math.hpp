@@ -10,21 +10,12 @@
 #include <boost/numeric/ublas/matrix.hpp>
 #include <boost/numeric/ublas/vector.hpp>
 
-#include <algorithm>
-#include <atomic>
 #include <cmath>
-#include <execution>
 #include <functional>
-#include <numeric>
-#include <random>
 #include <ranges>
 #include <stdexcept>
 #include <type_traits>
-#include <unordered_map>
 #include <vector>
-#ifdef __AVX2__
-#include <immintrin.h>
-#endif
 
 namespace atom::extra::boost {
 
@@ -34,183 +25,6 @@ namespace atom::extra::boost {
  */
 template <typename T>
 concept Numeric = std::is_arithmetic_v<T>;
-
-/**
- * @brief Concept to check if a type is floating point
- * @tparam T The type to check
- */
-template <typename T>
-concept FloatingPoint = std::is_floating_point_v<T>;
-
-/**
- * @brief Enhanced mathematical constants with high precision
- */
-template <FloatingPoint T>
-struct MathConstants {
-    static constexpr T PI =
-        static_cast<T>(3.141592653589793238462643383279502884L);
-    static constexpr T E =
-        static_cast<T>(2.718281828459045235360287471352662498L);
-    static constexpr T SQRT_2 =
-        static_cast<T>(1.414213562373095048801688724209698079L);
-    static constexpr T SQRT_PI =
-        static_cast<T>(1.772453850905516027298167483341145182L);
-    static constexpr T LN_2 =
-        static_cast<T>(0.693147180559945309417232121458176568L);
-    static constexpr T LN_10 =
-        static_cast<T>(2.302585092994045684017991454684364208L);
-    static constexpr T GOLDEN_RATIO =
-        static_cast<T>(1.618033988749894848204586834365638118L);
-    static constexpr T EULER_GAMMA =
-        static_cast<T>(0.577215664901532860606512090082402431L);
-};
-
-/**
- * @brief SIMD-optimized vector operations
- */
-template <FloatingPoint T>
-class VectorizedMath {
-public:
-    /**
-     * @brief SIMD-optimized vector addition
-     * @param a First vector
-     * @param b Second vector
-     * @param result Output vector
-     * @param size Vector size
-     */
-    static void vectorAdd(const T* a, const T* b, T* result,
-                          size_t size) noexcept {
-#ifdef __AVX2__
-        if constexpr (std::is_same_v<T, float>) {
-            vectorAddAVX(a, b, result, size);
-        } else if constexpr (std::is_same_v<T, double>) {
-            vectorAddAVXDouble(a, b, result, size);
-        } else {
-            vectorAddScalar(a, b, result, size);
-        }
-#else
-        vectorAddScalar(a, b, result, size);
-#endif
-    }
-
-    /**
-     * @brief SIMD-optimized dot product
-     * @param a First vector
-     * @param b Second vector
-     * @param size Vector size
-     * @return Dot product result
-     */
-    static T dotProduct(const T* a, const T* b, size_t size) noexcept {
-#ifdef __AVX2__
-        if constexpr (std::is_same_v<T, float>) {
-            return dotProductAVX(a, b, size);
-        } else if constexpr (std::is_same_v<T, double>) {
-            return dotProductAVXDouble(a, b, size);
-        } else {
-            return dotProductScalar(a, b, size);
-        }
-#else
-        return dotProductScalar(a, b, size);
-#endif
-    }
-
-private:
-#ifdef __AVX2__
-    static void vectorAddAVX(const float* a, const float* b, float* result,
-                             size_t size) noexcept {
-        size_t simd_size = size - (size % 8);
-        for (size_t i = 0; i < simd_size; i += 8) {
-            __m256 va = _mm256_loadu_ps(&a[i]);
-            __m256 vb = _mm256_loadu_ps(&b[i]);
-            __m256 vr = _mm256_add_ps(va, vb);
-            _mm256_storeu_ps(&result[i], vr);
-        }
-        // Handle remaining elements
-        for (size_t i = simd_size; i < size; ++i) {
-            result[i] = a[i] + b[i];
-        }
-    }
-
-    static void vectorAddAVXDouble(const double* a, const double* b,
-                                   double* result, size_t size) noexcept {
-        size_t simd_size = size - (size % 4);
-        for (size_t i = 0; i < simd_size; i += 4) {
-            __m256d va = _mm256_loadu_pd(&a[i]);
-            __m256d vb = _mm256_loadu_pd(&b[i]);
-            __m256d vr = _mm256_add_pd(va, vb);
-            _mm256_storeu_pd(&result[i], vr);
-        }
-        // Handle remaining elements
-        for (size_t i = simd_size; i < size; ++i) {
-            result[i] = a[i] + b[i];
-        }
-    }
-
-    static float dotProductAVX(const float* a, const float* b,
-                               size_t size) noexcept {
-        __m256 sum = _mm256_setzero_ps();
-        size_t simd_size = size - (size % 8);
-
-        for (size_t i = 0; i < simd_size; i += 8) {
-            __m256 va = _mm256_loadu_ps(&a[i]);
-            __m256 vb = _mm256_loadu_ps(&b[i]);
-            sum = _mm256_fmadd_ps(va, vb, sum);
-        }
-
-        // Horizontal sum
-        alignas(32) float temp[8];
-        _mm256_storeu_ps(temp, sum);
-        float result = temp[0] + temp[1] + temp[2] + temp[3] + temp[4] +
-                       temp[5] + temp[6] + temp[7];
-
-        // Handle remaining elements
-        for (size_t i = simd_size; i < size; ++i) {
-            result += a[i] * b[i];
-        }
-
-        return result;
-    }
-
-    static double dotProductAVXDouble(const double* a, const double* b,
-                                      size_t size) noexcept {
-        __m256d sum = _mm256_setzero_pd();
-        size_t simd_size = size - (size % 4);
-
-        for (size_t i = 0; i < simd_size; i += 4) {
-            __m256d va = _mm256_loadu_pd(&a[i]);
-            __m256d vb = _mm256_loadu_pd(&b[i]);
-            sum = _mm256_fmadd_pd(va, vb, sum);
-        }
-
-        // Horizontal sum
-        alignas(32) double temp[4];
-        _mm256_storeu_pd(temp, sum);
-        double result = temp[0] + temp[1] + temp[2] + temp[3];
-
-        // Handle remaining elements
-        for (size_t i = simd_size; i < size; ++i) {
-            result += a[i] * b[i];
-        }
-
-        return result;
-    }
-#endif
-
-    static void vectorAddScalar(const T* a, const T* b, T* result,
-                                size_t size) noexcept {
-        for (size_t i = 0; i < size; ++i) {
-            result[i] = a[i] + b[i];
-        }
-    }
-
-    static T dotProductScalar(const T* a, const T* b, size_t size) noexcept {
-        T result = T{0};
-        for (size_t i = 0; i < size; ++i) {
-            result += a[i] * b[i];
-        }
-        return result;
-    }
-};
 
 /**
  * @brief Wrapper class for special mathematical functions
@@ -278,73 +92,34 @@ public:
 };
 
 /**
- * @brief Enhanced wrapper class for statistical functions with parallel
- * processing
+ * @brief Wrapper class for statistical functions
  * @tparam T The numeric type
  */
 template <Numeric T>
 class Statistics {
-private:
-    static std::atomic<uint64_t> computation_count_;
-    static thread_local std::unordered_map<std::string, T> cache_;
-
 public:
     /**
-     * @brief Computes the mean of a dataset with optional parallel processing
+     * @brief Computes the mean of a dataset
      * @param data The input dataset
-     * @param use_parallel Whether to use parallel execution for large datasets
      * @return The mean of the dataset
      */
-    [[nodiscard]] static T mean(const std::vector<T>& data,
-                                bool use_parallel = true) {
-        ++computation_count_;
-
-        if (data.empty())
-            return T{0};
-
-        if (use_parallel && data.size() > 10000) {
-            return std::reduce(std::execution::par_unseq, data.begin(),
-                               data.end(), T{0}) /
-                   static_cast<T>(data.size());
-        } else {
-            return ::boost::math::statistics::mean(data);
+    [[nodiscard]] static T mean(const std::vector<T>& data) {
+        if (data.empty()) {
+            throw std::runtime_error("Dataset must not be empty");
         }
+        return ::boost::math::statistics::mean(data);
     }
 
     /**
-     * @brief Computes the variance of a dataset with enhanced precision
+     * @brief Computes the variance of a dataset
      * @param data The input dataset
-     * @param use_parallel Whether to use parallel execution
      * @return The variance of the dataset
      */
-    [[nodiscard]] static T variance(const std::vector<T>& data,
-                                    bool use_parallel = true) {
-        ++computation_count_;
-
-        if (data.size() < 2)
-            return T{0};
-
-        if (use_parallel && data.size() > 10000) {
-            T data_mean = mean(data, use_parallel);
-            T sum_sq_diff = std::transform_reduce(
-                std::execution::par_unseq, data.begin(), data.end(), T{0},
-                std::plus<T>{},
-                [data_mean](T x) { return (x - data_mean) * (x - data_mean); });
-            return sum_sq_diff / static_cast<T>(data.size() - 1);
-        } else {
-            return ::boost::math::statistics::variance(data);
+    [[nodiscard]] static T variance(const std::vector<T>& data) {
+        if (data.empty()) {
+            throw std::runtime_error("Dataset must not be empty");
         }
-    }
-
-    /**
-     * @brief Computes the standard deviation
-     * @param data The input dataset
-     * @param use_parallel Whether to use parallel execution
-     * @return The standard deviation
-     */
-    [[nodiscard]] static T standardDeviation(const std::vector<T>& data,
-                                             bool use_parallel = true) {
-        return std::sqrt(variance(data, use_parallel));
+        return ::boost::math::statistics::variance(data);
     }
 
     /**
@@ -353,7 +128,9 @@ public:
      * @return The skewness of the dataset
      */
     [[nodiscard]] static T skewness(const std::vector<T>& data) {
-        ++computation_count_;
+        if (data.empty()) {
+            throw std::runtime_error("Dataset must not be empty");
+        }
         return ::boost::math::statistics::skewness(data);
     }
 
@@ -363,358 +140,10 @@ public:
      * @return The kurtosis of the dataset
      */
     [[nodiscard]] static T kurtosis(const std::vector<T>& data) {
-        ++computation_count_;
+        if (data.empty()) {
+            throw std::runtime_error("Dataset must not be empty");
+        }
         return ::boost::math::statistics::kurtosis(data);
-    }
-
-    /**
-     * @brief Computes percentiles of a dataset
-     * @param data The input dataset
-     * @param percentiles Vector of percentiles to compute (0-100)
-     * @return Vector of percentile values
-     */
-    [[nodiscard]] static std::vector<T> percentiles(
-        std::vector<T> data, const std::vector<T>& percentiles) {
-        ++computation_count_;
-
-        if (data.empty())
-            return {};
-
-        std::sort(std::execution::par_unseq, data.begin(), data.end());
-
-        std::vector<T> result;
-        result.reserve(percentiles.size());
-
-        for (T p : percentiles) {
-            if (p < 0 || p > 100) {
-                throw std::invalid_argument(
-                    "Percentile must be between 0 and 100");
-            }
-
-            T index = (p / 100.0) * (data.size() - 1);
-            size_t lower = static_cast<size_t>(std::floor(index));
-            size_t upper = static_cast<size_t>(std::ceil(index));
-
-            if (lower == upper) {
-                result.push_back(data[lower]);
-            } else {
-                T weight = index - lower;
-                result.push_back(data[lower] * (1 - weight) +
-                                 data[upper] * weight);
-            }
-        }
-
-        return result;
-    }
-
-    /**
-     * @brief Computes the median of a dataset
-     * @param data The input dataset
-     * @return The median value
-     */
-    [[nodiscard]] static T median(std::vector<T> data) {
-        auto result = percentiles(data, {50.0});
-        return result.empty() ? T{0} : result[0];
-    }
-
-    /**
-     * @brief Computes the correlation coefficient between two datasets
-     * @param x First dataset
-     * @param y Second dataset
-     * @return Pearson correlation coefficient
-     */
-    [[nodiscard]] static T correlation(const std::vector<T>& x,
-                                       const std::vector<T>& y) {
-        ++computation_count_;
-
-        if (x.size() != y.size() || x.empty()) {
-            throw std::invalid_argument(
-                "Datasets must have the same non-zero size");
-        }
-
-        T mean_x = mean(x);
-        T mean_y = mean(y);
-
-        T numerator = T{0};
-        T sum_sq_x = T{0};
-        T sum_sq_y = T{0};
-
-        for (size_t i = 0; i < x.size(); ++i) {
-            T diff_x = x[i] - mean_x;
-            T diff_y = y[i] - mean_y;
-            numerator += diff_x * diff_y;
-            sum_sq_x += diff_x * diff_x;
-            sum_sq_y += diff_y * diff_y;
-        }
-
-        T denominator = std::sqrt(sum_sq_x * sum_sq_y);
-        return (denominator > T{0}) ? numerator / denominator : T{0};
-    }
-
-    /**
-     * @brief Computes linear regression coefficients
-     * @param x Independent variable
-     * @param y Dependent variable
-     * @return Pair of (slope, intercept)
-     */
-    [[nodiscard]] static std::pair<T, T> linearRegression(
-        const std::vector<T>& x, const std::vector<T>& y) {
-        ++computation_count_;
-
-        if (x.size() != y.size() || x.empty()) {
-            throw std::invalid_argument(
-                "Datasets must have the same non-zero size");
-        }
-
-        T mean_x = mean(x);
-        T mean_y = mean(y);
-
-        T numerator = T{0};
-        T denominator = T{0};
-
-        for (size_t i = 0; i < x.size(); ++i) {
-            T diff_x = x[i] - mean_x;
-            numerator += diff_x * (y[i] - mean_y);
-            denominator += diff_x * diff_x;
-        }
-
-        T slope = (denominator > T{0}) ? numerator / denominator : T{0};
-        T intercept = mean_y - slope * mean_x;
-
-        return {slope, intercept};
-    }
-
-    /**
-     * @brief Gets computation statistics
-     * @return Number of computations performed
-     */
-    [[nodiscard]] static uint64_t getComputationCount() {
-        return computation_count_.load();
-    }
-
-    /**
-     * @brief Resets computation statistics
-     */
-    static void resetStatistics() {
-        computation_count_.store(0);
-        cache_.clear();
-    }
-};
-
-/**
- * @brief Machine Learning utilities with vectorized operations
- * @tparam T The numeric type
- */
-template <FloatingPoint T>
-class MachineLearning {
-public:
-    /**
-     * @brief Sigmoid activation function with vectorization
-     * @param x Input value or vector
-     * @return Sigmoid output
-     */
-    [[nodiscard]] static T sigmoid(T x) noexcept {
-        return T{1} / (T{1} + std::exp(-x));
-    }
-
-    /**
-     * @brief Vectorized sigmoid function
-     * @param input Input vector
-     * @param output Output vector
-     * @param size Vector size
-     */
-    static void sigmoidVector(const T* input, T* output, size_t size) noexcept {
-        for (size_t i = 0; i < size; ++i) {
-            output[i] = sigmoid(input[i]);
-        }
-    }
-
-    /**
-     * @brief ReLU activation function
-     * @param x Input value
-     * @return ReLU output
-     */
-    [[nodiscard]] static constexpr T relu(T x) noexcept {
-        return std::max(T{0}, x);
-    }
-
-    /**
-     * @brief Vectorized ReLU function
-     * @param input Input vector
-     * @param output Output vector
-     * @param size Vector size
-     */
-    static void reluVector(const T* input, T* output, size_t size) noexcept {
-        for (size_t i = 0; i < size; ++i) {
-            output[i] = relu(input[i]);
-        }
-    }
-
-    /**
-     * @brief Softmax activation function
-     * @param input Input vector
-     * @param output Output vector
-     * @param size Vector size
-     */
-    static void softmax(const T* input, T* output, size_t size) noexcept {
-        // Find maximum for numerical stability
-        T max_val = *std::max_element(input, input + size);
-
-        // Compute exponentials and sum
-        T sum = T{0};
-        for (size_t i = 0; i < size; ++i) {
-            output[i] = std::exp(input[i] - max_val);
-            sum += output[i];
-        }
-
-        // Normalize
-        for (size_t i = 0; i < size; ++i) {
-            output[i] /= sum;
-        }
-    }
-
-    /**
-     * @brief K-means clustering (simplified implementation)
-     * @param data Input data points (flattened)
-     * @param dimensions Number of dimensions per point
-     * @param k Number of clusters
-     * @param max_iterations Maximum iterations
-     * @return Cluster centers
-     */
-    [[nodiscard]] static std::vector<T> kmeans(const std::vector<T>& data,
-                                               size_t dimensions, size_t k,
-                                               size_t max_iterations = 100) {
-        if (data.size() % dimensions != 0) {
-            throw std::invalid_argument(
-                "Data size must be divisible by dimensions");
-        }
-
-        size_t num_points = data.size() / dimensions;
-        if (num_points < k) {
-            throw std::invalid_argument("Number of points must be >= k");
-        }
-
-        // Initialize centroids randomly
-        std::vector<T> centroids(k * dimensions);
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<size_t> dist(0, num_points - 1);
-
-        for (size_t i = 0; i < k; ++i) {
-            size_t random_point = dist(gen);
-            for (size_t d = 0; d < dimensions; ++d) {
-                centroids[i * dimensions + d] =
-                    data[random_point * dimensions + d];
-            }
-        }
-
-        std::vector<size_t> assignments(num_points);
-
-        for (size_t iter = 0; iter < max_iterations; ++iter) {
-            // Assign points to nearest centroids
-            bool changed = false;
-            for (size_t p = 0; p < num_points; ++p) {
-                T min_distance = std::numeric_limits<T>::max();
-                size_t best_cluster = 0;
-
-                for (size_t c = 0; c < k; ++c) {
-                    T distance = T{0};
-                    for (size_t d = 0; d < dimensions; ++d) {
-                        T diff = data[p * dimensions + d] -
-                                 centroids[c * dimensions + d];
-                        distance += diff * diff;
-                    }
-
-                    if (distance < min_distance) {
-                        min_distance = distance;
-                        best_cluster = c;
-                    }
-                }
-
-                if (assignments[p] != best_cluster) {
-                    assignments[p] = best_cluster;
-                    changed = true;
-                }
-            }
-
-            if (!changed)
-                break;
-
-            // Update centroids
-            std::vector<T> new_centroids(k * dimensions, T{0});
-            std::vector<size_t> cluster_counts(k, 0);
-
-            for (size_t p = 0; p < num_points; ++p) {
-                size_t cluster = assignments[p];
-                cluster_counts[cluster]++;
-                for (size_t d = 0; d < dimensions; ++d) {
-                    new_centroids[cluster * dimensions + d] +=
-                        data[p * dimensions + d];
-                }
-            }
-
-            for (size_t c = 0; c < k; ++c) {
-                if (cluster_counts[c] > 0) {
-                    for (size_t d = 0; d < dimensions; ++d) {
-                        new_centroids[c * dimensions + d] /=
-                            static_cast<T>(cluster_counts[c]);
-                    }
-                }
-            }
-
-            centroids = std::move(new_centroids);
-        }
-
-        return centroids;
-    }
-
-    /**
-     * @brief Principal Component Analysis (simplified)
-     * @param data Input data matrix (row-major)
-     * @param rows Number of rows
-     * @param cols Number of columns
-     * @param num_components Number of principal components to compute
-     * @return Principal components (simplified implementation)
-     */
-    [[nodiscard]] static std::vector<T> pca(const std::vector<T>& data,
-                                            size_t rows, size_t cols,
-                                            size_t num_components) {
-        if (data.size() != rows * cols) {
-            throw std::invalid_argument("Data size mismatch");
-        }
-
-        // Center the data (subtract mean from each column)
-        std::vector<T> centered_data = data;
-        std::vector<T> column_means(cols, T{0});
-
-        // Compute column means
-        for (size_t c = 0; c < cols; ++c) {
-            for (size_t r = 0; r < rows; ++r) {
-                column_means[c] += data[r * cols + c];
-            }
-            column_means[c] /= static_cast<T>(rows);
-        }
-
-        // Center the data
-        for (size_t r = 0; r < rows; ++r) {
-            for (size_t c = 0; c < cols; ++c) {
-                centered_data[r * cols + c] -= column_means[c];
-            }
-        }
-
-        // For simplicity, return the first num_components columns of centered
-        // data In a full implementation, this would involve eigenvalue
-        // decomposition
-        std::vector<T> components;
-        components.reserve(rows * num_components);
-
-        for (size_t r = 0; r < rows; ++r) {
-            for (size_t c = 0; c < std::min(num_components, cols); ++c) {
-                components.push_back(centered_data[r * cols + c]);
-            }
-        }
-
-        return components;
     }
 };
 
@@ -1047,13 +476,23 @@ public:
         Matrix matrixCopy = matrix;
         ::boost::numeric::ublas::permutation_matrix<std::size_t>
             permutationMatrix(matrix.size1());
-        ::boost::numeric::ublas::lu_factorize(matrixCopy, permutationMatrix);
+        auto singular = ::boost::numeric::ublas::lu_factorize(
+            matrixCopy, permutationMatrix);
+
+        if (singular != 0) {
+            return T{0};
+        }
         T determinantValue = T{1};
         for (std::size_t i = 0; i < matrix.size1(); ++i) {
             determinantValue *= matrixCopy(i, i);
         }
-        return determinantValue *
-               (permutationMatrix.size() % 2 == 1 ? T{-1} : T{1});
+        int sign = 1;
+        for (std::size_t i = 0; i < permutationMatrix.size(); ++i) {
+            if (i != permutationMatrix(i)) {
+                sign = -sign;
+            }
+        }
+        return determinantValue * static_cast<T>(sign);
     }
 
     /**
@@ -1222,13 +661,6 @@ public:
                                               T{0.2}, T{1e-6}, 100);
     }
 };
-
-// Static member definitions
-template <Numeric T>
-inline std::atomic<uint64_t> Statistics<T>::computation_count_{0};
-
-template <Numeric T>
-inline thread_local std::unordered_map<std::string, T> Statistics<T>::cache_{};
 
 }  // namespace atom::extra::boost
 

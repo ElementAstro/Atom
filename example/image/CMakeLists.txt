@@ -1,34 +1,118 @@
-﻿# 示例目录: image
-cmake_minimum_required(VERSION 3.10)
+# Image Examples Directory
+cmake_minimum_required(VERSION 3.21)
 
-# 获取子目录名称（用于可执行文件前缀）
+# Get subdirectory name for executable prefix
 get_filename_component(SUBDIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 
-# 可选: 添加特定于image示例的选项
+# Image-specific build options
 option(ATOM_EXAMPLE_IMAGE_BUILD_ALL "Build all image examples" ON)
+option(ATOM_EXAMPLE_IMAGE_CORE "Build core image examples"
+       ${ATOM_EXAMPLE_IMAGE_BUILD_ALL})
+option(ATOM_EXAMPLE_IMAGE_IO "Build I/O image examples"
+       ${ATOM_EXAMPLE_IMAGE_BUILD_ALL})
+option(ATOM_EXAMPLE_IMAGE_PROCESSING "Build processing image examples"
+       ${ATOM_EXAMPLE_IMAGE_BUILD_ALL})
+option(ATOM_EXAMPLE_IMAGE_FORMATS "Build format image examples"
+       ${ATOM_EXAMPLE_IMAGE_BUILD_ALL})
+option(ATOM_EXAMPLE_IMAGE_METADATA "Build metadata image examples"
+       ${ATOM_EXAMPLE_IMAGE_BUILD_ALL})
 
-# 获取所有CPP文件
-file(GLOB CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+# Feature detection for conditional compilation
+if(ATOM_IMAGE_HAS_OPENCV)
+  message(STATUS "OpenCV support detected for image examples")
+endif()
 
-# 为每个CPP文件创建可执行文件
-foreach(CPP_FILE ${CPP_FILES})
-    # 获取不带扩展名的文件名
-    get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
+if(ATOM_IMAGE_HAS_CFITSIO)
+  message(STATUS "CFITSIO support detected for FITS examples")
+endif()
 
-    # 构造可执行文件名称（子目录名_文件名）
+if(ATOM_IMAGE_HAS_OCR)
+  message(STATUS "OCR support detected for text recognition examples")
+endif()
+
+# Function to add image example with dependencies
+function(add_image_example EXAMPLE_NAME SOURCE_FILE CATEGORY)
+  string(TOUPPER ${CATEGORY} CATEGORY_UPPER)
+  string(TOUPPER ${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
+
+  # Check if category is enabled
+  if(ATOM_EXAMPLE_IMAGE_${CATEGORY_UPPER})
     set(EXECUTABLE_NAME ${SUBDIR_NAME}_${EXAMPLE_NAME})
 
-    # 配置选项，允许单独控制每个示例的构建
-    string(TOUPPER ${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
-    option(ATOM_EXAMPLE_IMAGE_${EXAMPLE_NAME_UPPER} "Build image example: ${EXAMPLE_NAME}" ${ATOM_EXAMPLE_IMAGE_BUILD_ALL})
+    # Individual example option
+    option(ATOM_EXAMPLE_IMAGE_${EXAMPLE_NAME_UPPER}
+           "Build image example: ${EXAMPLE_NAME}"
+           ${ATOM_EXAMPLE_IMAGE_${CATEGORY_UPPER}})
 
-    # 有条件地添加可执行文件
     if(ATOM_EXAMPLE_IMAGE_${EXAMPLE_NAME_UPPER})
+      add_executable(${EXECUTABLE_NAME} ${SOURCE_FILE})
+      target_link_libraries(${EXECUTABLE_NAME} atom)
+
+      # Add conditional compilation flags
+      if(ATOM_IMAGE_HAS_OPENCV)
+        target_compile_definitions(${EXECUTABLE_NAME}
+                                   PRIVATE ATOM_IMAGE_HAS_OPENCV)
+      endif()
+
+      if(ATOM_IMAGE_HAS_CFITSIO)
+        target_compile_definitions(${EXECUTABLE_NAME}
+                                   PRIVATE ATOM_IMAGE_HAS_CFITSIO)
+      endif()
+
+      if(ATOM_IMAGE_HAS_OCR)
+        target_compile_definitions(${EXECUTABLE_NAME}
+                                   PRIVATE ATOM_IMAGE_HAS_OCR)
+      endif()
+
+      # Set IDE folder grouping
+      set_property(TARGET ${EXECUTABLE_NAME}
+                   PROPERTY FOLDER "Examples/Image/${CATEGORY}")
+
+      message(STATUS "Added image example: ${EXECUTABLE_NAME}")
+    endif()
+  endif()
+endfunction()
+
+# Function to add examples from a subdirectory
+function(add_image_examples_from_dir SUBDIR FOLDER_NAME)
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${SUBDIR})
+    file(GLOB SUBDIR_CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/${SUBDIR}/*.cpp)
+    foreach(CPP_FILE ${SUBDIR_CPP_FILES})
+      get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
+      set(EXECUTABLE_NAME ${SUBDIR_NAME}_${SUBDIR}_${EXAMPLE_NAME})
+
+      string(TOUPPER ${SUBDIR}_${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
+      option(ATOM_EXAMPLE_IMAGE_${EXAMPLE_NAME_UPPER}
+             "Build image example: ${SUBDIR}/${EXAMPLE_NAME}"
+             ${ATOM_EXAMPLE_IMAGE_BUILD_ALL})
+
+      if(ATOM_EXAMPLE_IMAGE_${EXAMPLE_NAME_UPPER})
         add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
         target_link_libraries(${EXECUTABLE_NAME} atom)
 
+        if(ATOM_IMAGE_HAS_OPENCV)
+          target_compile_definitions(${EXECUTABLE_NAME}
+                                     PRIVATE ATOM_IMAGE_HAS_OPENCV)
+        endif()
+        if(ATOM_IMAGE_HAS_CFITSIO)
+          target_compile_definitions(${EXECUTABLE_NAME}
+                                     PRIVATE ATOM_IMAGE_HAS_CFITSIO)
+        endif()
+        if(ATOM_IMAGE_HAS_OCR)
+          target_compile_definitions(${EXECUTABLE_NAME}
+                                     PRIVATE ATOM_IMAGE_HAS_OCR)
+        endif()
 
-        # 设置IDE文件夹分组
-        set_property(TARGET ${EXECUTABLE_NAME} PROPERTY FOLDER "Examples/Image")
-    endif()
-endforeach()
+        set_property(TARGET ${EXECUTABLE_NAME}
+                     PROPERTY FOLDER "Examples/Image/${FOLDER_NAME}")
+      endif()
+    endforeach()
+  endif()
+endfunction()
+
+# Add examples from subdirectories
+add_image_examples_from_dir("core" "Core")
+add_image_examples_from_dir("io" "IO")
+add_image_examples_from_dir("processing" "Processing")
+add_image_examples_from_dir("formats" "Formats")
+add_image_examples_from_dir("metadata" "Metadata")

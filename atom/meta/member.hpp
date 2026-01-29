@@ -1,16 +1,3 @@
-/*!
- * \file member.hpp
- * \brief Optimized member pointer utilities - OPTIMIZED VERSION
- * \optimized 2025-01-22 - Performance optimizations by AI Assistant
- *
- * OPTIMIZATIONS APPLIED:
- * - Enhanced member offset calculation with compile-time optimization
- * - Improved member pointer validation with fast-path checks
- * - Optimized member access patterns with better caching
- * - Added compile-time member analysis utilities
- * - Enhanced error handling with reduced overhead
- */
-
 #ifndef ATOM_FUNCTION_MEMBER_HPP
 #define ATOM_FUNCTION_MEMBER_HPP
 
@@ -51,25 +38,24 @@ template <typename T>
 concept member_pointer = std::is_member_pointer_v<T>;
 
 /**
- * @brief Optimized member offset calculation with compile-time caching
+ * @brief Gets the offset of a member within a structure
  */
 template <typename T, typename M>
-consteval std::size_t member_offset(M T::* member) noexcept {
-    // Optimized: Use offsetof-like calculation with better type safety
+consteval std::size_t member_offset(M T::*member) noexcept {
     return static_cast<std::size_t>(reinterpret_cast<std::ptrdiff_t>(
         &(static_cast<T const volatile*>(nullptr)->*member)));
 }
 
 /**
- * @brief Optimized member size calculation
+ * @brief Gets the size of a member within a structure
  */
 template <typename T, typename M>
-consteval std::size_t member_size([[maybe_unused]] M T::* member) noexcept {
-    return sizeof(M);  // More direct approach
+consteval std::size_t member_size(M T::*member) noexcept {
+    return sizeof((static_cast<T const volatile*>(nullptr)->*member));
 }
 
 /**
- * @brief Enhanced structure size calculation with additional metadata
+ * @brief Gets the total size of a structure
  */
 template <typename T>
 consteval std::size_t struct_size() noexcept {
@@ -77,30 +63,12 @@ consteval std::size_t struct_size() noexcept {
 }
 
 /**
- * @brief Optimized member alignment calculation
+ * @brief Gets the alignment of a member within a structure
  */
 template <typename T, typename M>
-consteval std::size_t member_alignment([[maybe_unused]] M T::* member) noexcept {
+consteval std::size_t member_alignment([[maybe_unused]] M T::*member) noexcept {
     return alignof(M);
 }
-
-/**
- * @brief Additional compile-time member analysis utilities
- */
-template <typename T, typename M>
-struct member_traits {
-    using class_type = T;
-    using member_type = M;
-    static constexpr std::size_t offset = member_offset(static_cast<M T::*>(nullptr));
-    static constexpr std::size_t size = sizeof(M);
-    static constexpr std::size_t alignment = alignof(M);
-    static constexpr bool is_const = std::is_const_v<M>;
-    static constexpr bool is_volatile = std::is_volatile_v<M>;
-    static constexpr bool is_reference = std::is_reference_v<M>;
-    static constexpr bool is_pointer = std::is_pointer_v<M>;
-    static constexpr bool is_fundamental = std::is_fundamental_v<M>;
-    static constexpr bool is_trivial = std::is_trivial_v<M>;
-};
 
 #if ATOM_ENABLE_DEBUG
 /**
@@ -123,7 +91,7 @@ void print_member_info(const std::string& struct_name,
  * @brief Validates that a member pointer is not null
  */
 template <typename T, typename M>
-constexpr void validate_member_ptr(M T::* member_ptr,
+constexpr void validate_member_ptr(M T::*member_ptr,
                                    std::string_view operation) {
     if (member_ptr == nullptr) {
         throw member_pointer_error(
@@ -147,7 +115,7 @@ constexpr void validate_pointer(const T* ptr, std::string_view operation) {
  * @throws member_pointer_error if member_ptr is null
  */
 template <typename T, typename MemberType>
-constexpr std::size_t offset_of(MemberType T::* member_ptr) {
+constexpr std::size_t offset_of(MemberType T::*member_ptr) {
     validate_member_ptr(member_ptr, "offset_of");
     return static_cast<std::size_t>(reinterpret_cast<std::ptrdiff_t>(
         &(static_cast<T const volatile*>(nullptr)->*member_ptr)));
@@ -157,9 +125,9 @@ constexpr std::size_t offset_of(MemberType T::* member_ptr) {
  * @brief Type-safe container_of implementation using type::expected for error
  * handling
  */
-template <typename Container, typename T, member_pointer MemberPtr>
+template <typename Container, typename MemberType>
 type::expected<Container*, member_pointer_error> safe_container_of(
-    T* ptr, MemberPtr Container::* member_ptr) noexcept {
+    MemberType* ptr, MemberType Container::*member_ptr) noexcept {
     try {
         if (ptr == nullptr) {
             return type::unexpected(
@@ -186,7 +154,7 @@ type::expected<Container*, member_pointer_error> safe_container_of(
  * @throws member_pointer_error if validation fails
  */
 template <typename T, typename MemberType>
-T* pointer_to_object(MemberType T::* member_ptr,
+T* pointer_to_object(MemberType T::*member_ptr,
                      MemberType* member_ptr_address) {
     static_assert(std::is_member_pointer_v<decltype(member_ptr)>,
                   "member_ptr must be a member pointer");
@@ -205,7 +173,7 @@ T* pointer_to_object(MemberType T::* member_ptr,
  * @throws member_pointer_error if validation fails
  */
 template <typename T, typename MemberType>
-const T* pointer_to_object(MemberType T::* member_ptr,
+const T* pointer_to_object(MemberType T::*member_ptr,
                            const MemberType* member_ptr_address) {
     static_assert(std::is_member_pointer_v<decltype(member_ptr)>,
                   "member_ptr must be a member pointer");
@@ -224,7 +192,7 @@ const T* pointer_to_object(MemberType T::* member_ptr,
  * @throws member_pointer_error if validation fails
  */
 template <typename Container, typename T, typename MemberPtr>
-Container* container_of(T* ptr, MemberPtr Container::* member_ptr) {
+Container* container_of(T* ptr, MemberPtr Container::*member_ptr) {
     validate_pointer(ptr, "container_of");
     validate_member_ptr(member_ptr, "container_of");
 
@@ -239,7 +207,7 @@ Container* container_of(T* ptr, MemberPtr Container::* member_ptr) {
  * @throws member_pointer_error if validation fails
  */
 template <typename Container, typename T, typename MemberPtr>
-const Container* container_of(const T* ptr, MemberPtr Container::* member_ptr) {
+const Container* container_of(const T* ptr, MemberPtr Container::*member_ptr) {
     validate_pointer(ptr, "container_of");
     validate_member_ptr(member_ptr, "container_of");
 
@@ -249,7 +217,7 @@ const Container* container_of(const T* ptr, MemberPtr Container::* member_ptr) {
 }
 
 /**
- * @brief Finds the container of a range of elements using C++20 ranges
+ * @brief Finds the container element that contains the given member pointer
  */
 template <std::ranges::range Container, typename T>
 auto container_of_range(Container& container, const T* ptr)
@@ -257,9 +225,16 @@ auto container_of_range(Container& container, const T* ptr)
     try {
         validate_pointer(ptr, "container_of_range");
 
-        auto it = std::ranges::find(container, *ptr);
-        if (it != std::ranges::end(container)) {
-            return &(*it);
+        // Find the container element that contains this member pointer
+        for (auto it = container.begin(); it != container.end(); ++it) {
+            // Check if the pointer is within the memory range of this object
+            const auto* obj_start = reinterpret_cast<const char*>(&(*it));
+            const auto* obj_end = obj_start + sizeof(*it);
+            const auto* ptr_addr = reinterpret_cast<const char*>(ptr);
+
+            if (ptr_addr >= obj_start && ptr_addr < obj_end) {
+                return &(*it);
+            }
         }
         return type::unexpected(
             member_pointer_error("Element not found in container"));
@@ -287,7 +262,7 @@ auto container_of_if_range(Container& container, Predicate pred)
  * @brief Check if a pointer points to a member of a specific object
  */
 template <typename T, typename M>
-bool is_member_of(const T* obj, const M* member_ptr, M T::* member) noexcept {
+bool is_member_of(const T* obj, const M* member_ptr, M T::*member) noexcept {
     try {
         validate_pointer(obj, "is_member_of");
         validate_pointer(member_ptr, "is_member_of");
@@ -352,6 +327,133 @@ private:
         }
     }
 };
+
+//==============================================================================
+// C++23 Enhanced Member Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for member object pointers
+ */
+template <typename T>
+concept member_object_pointer = std::is_member_object_pointer_v<T>;
+
+/**
+ * @brief Concept for member function pointers
+ */
+template <typename T>
+concept member_function_pointer = std::is_member_function_pointer_v<T>;
+
+/**
+ * @brief Get member info at compile time
+ */
+template <auto MemberPtr>
+struct member_info {
+    using class_type = typename member_traits<decltype(MemberPtr)>::class_type;
+    using value_type = typename member_traits<decltype(MemberPtr)>::value_type;
+    static constexpr std::size_t offset = member_offset(MemberPtr);
+    static constexpr std::size_t size = member_size(MemberPtr);
+    static constexpr bool is_function =
+        std::is_member_function_pointer_v<decltype(MemberPtr)>;
+};
+
+/**
+ * @brief Safe member access with optional result
+ */
+template <typename T, typename M>
+auto safe_member_access(T* obj, M T::*member)
+    -> std::optional<std::reference_wrapper<M>> {
+    if (obj) {
+        return std::ref(obj->*member);
+    }
+    return std::nullopt;
+}
+
+/**
+ * @brief Const-safe member access
+ */
+template <typename T, typename M>
+auto safe_member_access(const T* obj, M T::*member)
+    -> std::optional<std::reference_wrapper<const M>> {
+    if (obj) {
+        return std::cref(obj->*member);
+    }
+    return std::nullopt;
+}
+
+/**
+ * @brief Apply function to member and return result
+ */
+template <typename T, typename M, typename F>
+auto apply_to_member(T& obj, M T::*member, F&& func) {
+    return std::forward<F>(func)(obj.*member);
+}
+
+/**
+ * @brief Transform member value
+ */
+template <typename T, typename M, typename F>
+void transform_member(T& obj, M T::*member, F&& func) {
+    obj.*member = std::forward<F>(func)(obj.*member);
+}
+
+/**
+ * @brief Member comparison helper
+ */
+template <auto Member>
+struct member_comparator {
+    template <typename T>
+    bool operator()(const T& a, const T& b) const {
+        return a.*Member < b.*Member;
+    }
+};
+
+/**
+ * @brief Member equality helper
+ */
+template <auto Member>
+struct member_equals {
+    template <typename T>
+    bool operator()(const T& a, const T& b) const {
+        return a.*Member == b.*Member;
+    }
+};
+
+/**
+ * @brief Member hash helper
+ */
+template <auto Member>
+struct member_hash {
+    template <typename T>
+    std::size_t operator()(const T& obj) const {
+        return std::hash<typename member_info<Member>::value_type>{}(obj.*
+                                                                     Member);
+    }
+};
+
+/**
+ * @brief Extract member from object
+ */
+template <auto Member>
+struct member_extractor {
+    template <typename T>
+    auto operator()(const T& obj) const -> const auto& {
+        return obj.*Member;
+    }
+
+    template <typename T>
+    auto operator()(T& obj) -> auto& {
+        return obj.*Member;
+    }
+};
+
+/**
+ * @brief Create member extractor
+ */
+template <auto Member>
+constexpr auto extract_member() {
+    return member_extractor<Member>{};
+}
 
 }  // namespace atom::meta
 

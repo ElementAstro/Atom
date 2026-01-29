@@ -1,77 +1,227 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.21)
 
 # 设置项目名称
 project(AtomExamples)
 
-# 示例构建选项在 cmake/ExamplesBuildOptions.cmake 中定义
+# Set C++ standard (inherit from top-level if set, otherwise use 23)
+if(NOT DEFINED CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 23)
+endif()
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Add compile options
+if(MSVC)
+  add_compile_options(/W4)
+else()
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# Include example build options if not already included
+if(NOT DEFINED ATOM_EXAMPLE_BUILD_ALL)
+  include(${CMAKE_SOURCE_DIR}/cmake/ExamplesBuildOptions.cmake)
+endif()
+
+# Include CopyDependencies module if available
+if(EXISTS "${CMAKE_SOURCE_DIR}/cmake/CopyDependencies.cmake")
+  include(${CMAKE_SOURCE_DIR}/cmake/CopyDependencies.cmake)
+endif()
+
+# Include directories
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+# =============================================================================
+# Function to copy DLLs to example executable directory
+# =============================================================================
+function(copy_example_dlls TARGET_NAME)
+  if(WIN32)
+    # Use the comprehensive DLL copy function if available
+    if(COMMAND atom_setup_runtime_dependencies)
+      atom_setup_runtime_dependencies(${TARGET_NAME})
+      if(USE_VCPKG)
+        atom_copy_vcpkg_dlls(${TARGET_NAME})
+      endif()
+      return()
+    endif()
+
+    # Fallback: List of all DLL targets that might be needed by examples
+    set(DLL_TARGETS
+        atom-algorithm
+        atom-async
+        atom-components
+        atom-connection
+        atom-containers
+        atom-error
+        atom-image
+        atom-io
+        atom-log
+        atom-memory
+        atom-meta
+        atom-search
+        atom-secret
+        atom-serial
+        atom-sysinfo
+        atom-system
+        atom-type
+        atom-utils
+        atom-web)
+
+    # Copy each DLL if it exists as a SHARED library target
+    foreach(DLL_TARGET ${DLL_TARGETS})
+      if(TARGET ${DLL_TARGET})
+        get_target_property(TARGET_TYPE ${DLL_TARGET} TYPE)
+        if(TARGET_TYPE STREQUAL "SHARED_LIBRARY")
+          add_custom_command(
+            TARGET ${TARGET_NAME}
+            POST_BUILD
+            COMMAND
+              ${CMAKE_COMMAND} -E copy_if_different
+              "$<TARGET_FILE:${DLL_TARGET}>"
+              "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+            COMMENT "Copying ${DLL_TARGET} DLL to ${TARGET_NAME} directory"
+            VERBATIM)
+        endif()
+      endif()
+    endforeach()
+
+    # Copy third-party DLLs (spdlog, fmt, etc.)
+    if(TARGET spdlog::spdlog)
+      get_target_property(SPDLOG_TYPE spdlog::spdlog TYPE)
+      if(SPDLOG_TYPE STREQUAL "SHARED_LIBRARY")
+        add_custom_command(
+          TARGET ${TARGET_NAME}
+          POST_BUILD
+          COMMAND
+            ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:spdlog::spdlog>" "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+          COMMENT "Copying spdlog DLL to ${TARGET_NAME} directory"
+          VERBATIM)
+      endif()
+    endif()
+
+    if(TARGET fmt::fmt)
+      get_target_property(FMT_TYPE fmt::fmt TYPE)
+      if(FMT_TYPE STREQUAL "SHARED_LIBRARY")
+        add_custom_command(
+          TARGET ${TARGET_NAME}
+          POST_BUILD
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                  "$<TARGET_FILE:fmt::fmt>" "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+          COMMENT "Copying fmt DLL to ${TARGET_NAME} directory"
+          VERBATIM)
+      endif()
+    endif()
+  endif()
+endfunction()
+
+# Make the function available globally for example subdirectories
+macro(copy_example_dlls_macro TARGET_NAME)
+  copy_example_dlls(${TARGET_NAME})
+endmacro()
 
 # 有条件地添加子目录
-if(ATOM_EXAMPLE_BUILD_ALGORITHM)
-    add_subdirectory(algorithm)
+if(ATOM_EXAMPLE_BUILD_ALGORITHM
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/algorithm/CMakeLists.txt")
+  add_subdirectory(algorithm)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_ASYNC)
-    add_subdirectory(async)
+if(ATOM_EXAMPLE_BUILD_ASYNC
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/async/CMakeLists.txt")
+  add_subdirectory(async)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_COMPONENTS)
-    add_subdirectory(components)
+if(ATOM_EXAMPLE_BUILD_COMPONENTS
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/components/CMakeLists.txt")
+  add_subdirectory(components)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_CONNECTION)
-    add_subdirectory(connection)
+if(ATOM_EXAMPLE_BUILD_CONNECTION
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/connection/CMakeLists.txt")
+  add_subdirectory(connection)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_ERROR)
-    add_subdirectory(error)
+if(ATOM_EXAMPLE_BUILD_CONTAINERS
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/containers/CMakeLists.txt")
+  add_subdirectory(containers)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_EXTRA)
-    add_subdirectory(extra)
+if(ATOM_EXAMPLE_BUILD_ERROR
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/error/CMakeLists.txt")
+  add_subdirectory(error)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_IMAGE)
-    add_subdirectory(image)
+if(ATOM_EXAMPLE_BUILD_EXTRA
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/extra/CMakeLists.txt")
+  add_subdirectory(extra)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_IO)
-    add_subdirectory(io)
+if(ATOM_EXAMPLE_BUILD_IMAGE
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/image/CMakeLists.txt")
+  add_subdirectory(image)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_LOG)
-    add_subdirectory(log)
+if(ATOM_EXAMPLE_BUILD_IO AND EXISTS
+                             "${CMAKE_CURRENT_SOURCE_DIR}/io/CMakeLists.txt")
+  add_subdirectory(io)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_MEMORY)
-    add_subdirectory(memory)
+if(ATOM_EXAMPLE_BUILD_LOG AND EXISTS
+                              "${CMAKE_CURRENT_SOURCE_DIR}/log/CMakeLists.txt")
+  add_subdirectory(log)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_META)
-    add_subdirectory(meta)
+if(ATOM_EXAMPLE_BUILD_MEMORY
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/memory/CMakeLists.txt")
+  add_subdirectory(memory)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_SEARCH)
-    add_subdirectory(search)
+if(ATOM_EXAMPLE_BUILD_META
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/meta/CMakeLists.txt")
+  add_subdirectory(meta)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_SERIAL)
-    add_subdirectory(serial)
+if(ATOM_EXAMPLE_BUILD_SEARCH
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/search/CMakeLists.txt")
+  add_subdirectory(search)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_SYSTEM)
-    add_subdirectory(system)
+if(ATOM_EXAMPLE_BUILD_SECRET
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/secret/CMakeLists.txt")
+  add_subdirectory(secret)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_TYPE)
-    add_subdirectory(type)
+if(ATOM_EXAMPLE_BUILD_SERIAL
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/serial/CMakeLists.txt")
+  add_subdirectory(serial)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_UTILS)
-    add_subdirectory(utils)
+if(ATOM_EXAMPLE_BUILD_SYSINFO
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sysinfo/CMakeLists.txt")
+  add_subdirectory(sysinfo)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_WEB)
-    add_subdirectory(web)
+if(ATOM_EXAMPLE_BUILD_SYSTEM
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/system/CMakeLists.txt")
+  add_subdirectory(system)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_TYPE
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/type/CMakeLists.txt")
+  add_subdirectory(type)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_UTILS
+   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/utils/CMakeLists.txt")
+  add_subdirectory(utils)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_WEB AND EXISTS
+                              "${CMAKE_CURRENT_SOURCE_DIR}/web/CMakeLists.txt")
+  add_subdirectory(web)
+endif()
+
+# Test framework examples
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
+  add_subdirectory(tests)
 endif()
 
 # Set example targets grouping
@@ -79,7 +229,10 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(EXAMPLE_GROUP_NAME "Examples")
 
 # Recursively set all example targets to the example group
-get_property(TARGETS DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY BUILDSYSTEM_TARGETS)
+get_property(
+  TARGETS
+  DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  PROPERTY BUILDSYSTEM_TARGETS)
 foreach(TARGET ${TARGETS})
-    set_property(TARGET ${TARGET} PROPERTY FOLDER ${EXAMPLE_GROUP_NAME})
+  set_property(TARGET ${TARGET} PROPERTY FOLDER ${EXAMPLE_GROUP_NAME})
 endforeach()

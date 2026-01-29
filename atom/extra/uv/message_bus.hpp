@@ -4,37 +4,72 @@
 #include <chrono>
 #include <concepts>
 #include <coroutine>
-#include <expected>
+// Temporarily disable std::expected usage until compiler support is stable
+// #include <expected>
+#include <any>
 #include <functional>
 #include <future>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
-#include <vector>
-#include <queue>
-#include <mutex>
-#include <shared_mutex>
-#include <thread>
-#include <condition_variable>
-#include <span>
-#include <optional>
 #include <variant>
 
 #include <uv.h>
 
 namespace msgbus {
 
-// **Enhanced Core Concepts**
+// Simple Result type as a replacement for std::expected
+template <typename T, typename E>
+class Result {
+private:
+    std::variant<T, E> data_;
+
+public:
+    Result(const T& value) : data_(value) {}
+    Result(T&& value) : data_(std::move(value)) {}
+    Result(const E& error) : data_(error) {}
+    Result(E&& error) : data_(std::move(error)) {}
+
+    bool has_value() const { return std::holds_alternative<T>(data_); }
+    operator bool() const { return has_value(); }
+
+    const T& value() const { return std::get<T>(data_); }
+    T& value() { return std::get<T>(data_); }
+
+    const E& error() const { return std::get<E>(data_); }
+    E& error() { return std::get<E>(data_); }
+
+    const T& operator*() const { return value(); }
+    T& operator*() { return value(); }
+};
+
+// Specialization for void type
+template <typename E>
+class Result<void, E> {
+private:
+    std::optional<E> error_;
+
+public:
+    Result() : error_(std::nullopt) {}
+    Result(const E& error) : error_(error) {}
+    Result(E&& error) : error_(std::move(error)) {}
+
+    bool has_value() const { return !error_.has_value(); }
+    operator bool() const { return has_value(); }
+
+    void value() const { /* void has no value to return */ }
+
+    const E& error() const { return error_.value(); }
+    E& error() { return error_.value(); }
+};
+
+// **Core Concepts**
 template <typename T>
 concept Serializable = requires(T t) {
     { t.serialize() } -> std::convertible_to<std::string>;
     { T::deserialize(std::declval<std::string>()) } -> std::convertible_to<T>;
-};
-
-template <typename T>
-concept BinarySerializable = requires(T t) {
-    { t.serialize_binary() } -> std::convertible_to<std::vector<uint8_t>>;
-    { T::deserialize_binary(std::declval<std::span<const uint8_t>>()) } -> std::convertible_to<T>;
 };
 
 template <typename T>
@@ -48,142 +83,38 @@ concept AsyncMessageHandler = MessageHandler<F, T> && requires(F f, T t) {
     { f(t) } -> std::convertible_to<std::future<void>>;
 };
 
-template <typename F, typename T>
-concept CoroMessageHandler = MessageHandler<F, T> && requires(F f, T t) {
-    { f(t) } -> std::convertible_to<std::coroutine_handle<>>;
-};
-
-// **Message Priority Levels**
-enum class MessagePriority : uint8_t {
-    LOW = 0,
-    NORMAL = 1,
-    HIGH = 2,
-    CRITICAL = 3
-};
-
-// **Message Delivery Guarantees**
-enum class DeliveryGuarantee {
-    AT_MOST_ONCE,   // Fire and forget
-    AT_LEAST_ONCE,  // Retry until acknowledged
-    EXACTLY_ONCE    // Deduplication + retry
-};
-
-// **Compression Types**
-enum class CompressionType {
-    NONE,
-    LZ4,
-    ZSTD,
-    GZIP
-};
-
-// **Enhanced Error Types**
+// **Error Types**
 enum class MessageBusError {
     InvalidTopic,
     HandlerNotFound,
     QueueFull,
     SerializationError,
-    DeserializationError,
     NetworkError,
-    CompressionError,
-    DecompressionError,
-    AuthenticationError,
-    AuthorizationError,
-    RateLimitExceeded,
-    MessageTooLarge,
-    DuplicateMessage,
-    MessageExpired,
-    ShutdownInProgress,
-    InternalError
+    ShutdownInProgress
 };
 
-template <typename T>
-using Result = std::expected<T, MessageBusError>;
+// Note: Result template is now defined above as a class template
 
-// **Message Statistics**
-struct MessageStats {
-    std::atomic<uint64_t> messages_sent{0};
-    std::atomic<uint64_t> messages_received{0};
-    std::atomic<uint64_t> messages_dropped{0};
-    std::atomic<uint64_t> serialization_errors{0};
-    std::atomic<uint64_t> delivery_failures{0};
-    std::atomic<uint64_t> bytes_sent{0};
-    std::atomic<uint64_t> bytes_received{0};
-    std::chrono::steady_clock::time_point start_time{std::chrono::steady_clock::now()};
-
-    void reset() {
-        messages_sent = 0;
-        messages_received = 0;
-        messages_dropped = 0;
-        serialization_errors = 0;
-        delivery_failures = 0;
-        bytes_sent = 0;
-        bytes_received = 0;
-        start_time = std::chrono::steady_clock::now();
-    }
-};
-
-// **Enhanced Message Envelope**
+// **Message Envelope**
 template <MessageType T>
 struct MessageEnvelope {
     std::string topic;
     T payload;
     std::chrono::system_clock::time_point timestamp;
-    std::chrono::system_clock::time_point expiry_time;
     std::string sender_id;
-    std::string correlation_id;
-    std::string reply_to;
     uint64_t message_id;
-    MessagePriority priority;
-    DeliveryGuarantee delivery_guarantee;
-    CompressionType compression;
     std::unordered_map<std::string, std::string> metadata;
-    std::vector<std::string> routing_path;
-    uint32_t retry_count;
-    size_t payload_size;
-    std::string checksum;
 
-    MessageEnvelope(std::string t, T p, std::string s = "",
-                   MessagePriority prio = MessagePriority::NORMAL,
-                   DeliveryGuarantee guarantee = DeliveryGuarantee::AT_MOST_ONCE)
+    MessageEnvelope(std::string t, T p, std::string s = "")
         : topic(std::move(t)),
           payload(std::move(p)),
           timestamp(std::chrono::system_clock::now()),
-          expiry_time(timestamp + std::chrono::hours(24)), // Default 24h expiry
           sender_id(std::move(s)),
-          message_id(generate_id()),
-          priority(prio),
-          delivery_guarantee(guarantee),
-          compression(CompressionType::NONE),
-          retry_count(0),
-          payload_size(0) {
-        calculate_checksum();
-    }
-
-    bool is_expired() const {
-        return std::chrono::system_clock::now() > expiry_time;
-    }
-
-    void set_expiry(std::chrono::milliseconds ttl) {
-        expiry_time = timestamp + ttl;
-    }
-
-    bool verify_checksum() const {
-        return checksum == calculate_checksum_internal();
-    }
+          message_id(generate_id()) {}
 
 private:
     static std::atomic<uint64_t> id_counter;
     static uint64_t generate_id() { return ++id_counter; }
-
-    void calculate_checksum() {
-        checksum = calculate_checksum_internal();
-    }
-
-    std::string calculate_checksum_internal() const {
-        // Simple checksum implementation (in real code, use proper hash)
-        std::hash<std::string> hasher;
-        return std::to_string(hasher(topic + sender_id + std::to_string(message_id)));
-    }
 };
 
 template <MessageType T>
@@ -210,103 +141,133 @@ struct HandlerRegistration {
 
 using SubscriptionHandle = std::unique_ptr<HandlerRegistration>;
 
-// **Enhanced Configuration**
-struct MessageBusConfig {
-    // Queue configuration
+// **Back-pressure Configuration**
+struct BackPressureConfig {
     size_t max_queue_size = 10000;
-    size_t max_priority_queue_size = 1000;
     std::chrono::milliseconds timeout = std::chrono::milliseconds(1000);
     bool drop_oldest = true;
-    bool enable_priority_queues = true;
-
-    // Threading configuration
-    size_t worker_thread_count = std::thread::hardware_concurrency();
-    size_t io_thread_count = 2;
-    bool enable_thread_affinity = false;
-
-    // Performance configuration
-    size_t batch_size = 100;
-    std::chrono::milliseconds batch_timeout = std::chrono::milliseconds(10);
-    bool enable_message_batching = true;
-    bool enable_compression = false;
-    CompressionType default_compression = CompressionType::LZ4;
-    size_t compression_threshold = 1024; // Compress messages larger than 1KB
-
-    // Reliability configuration
-    bool enable_persistence = false;
-    std::string persistence_path = "./msgbus_data";
-    std::chrono::seconds message_retention = std::chrono::hours(24);
-    uint32_t max_retry_attempts = 3;
-    std::chrono::milliseconds retry_delay = std::chrono::milliseconds(100);
-
-    // Network configuration
-    bool enable_clustering = false;
-    std::vector<std::string> cluster_nodes;
-    uint16_t cluster_port = 8080;
-    std::chrono::seconds heartbeat_interval = std::chrono::seconds(30);
-
-    // Security configuration
-    bool enable_authentication = false;
-    bool enable_encryption = false;
-    std::string auth_token;
-
-    // Monitoring configuration
-    bool enable_metrics = true;
-    std::chrono::seconds metrics_interval = std::chrono::seconds(60);
-    bool enable_tracing = false;
 };
 
-// **Enhanced Coroutine Support**
+// **Coroutine Support**
 template <typename T>
 struct MessageAwaiter {
     std::string topic;
     MessageFilter<T> filter;
     std::chrono::milliseconds timeout;
-    MessagePriority min_priority;
 
     bool await_ready() const noexcept { return false; }
 
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle);
 
-    Result<MessageEnvelope<T>> await_resume();
+    Result<MessageEnvelope<T>, MessageBusError> await_resume();
 
 private:
-    std::shared_ptr<std::promise<Result<MessageEnvelope<T>>>> promise_;
+    std::shared_ptr<std::promise<Result<MessageEnvelope<T>, MessageBusError>>>
+        promise_;
 };
 
-template <typename T>
-struct BatchMessageAwaiter {
-    std::string topic_pattern;
-    size_t batch_size;
-    std::chrono::milliseconds timeout;
-    MessageFilter<T> filter;
+// **MessageBus Class Declaration**
+class MessageBus {
+public:
+    struct QueueStats {
+        size_t pending_messages;
+        size_t max_queue_size;
+        size_t total_handlers;
+        std::chrono::milliseconds avg_delivery_time;
+    };
 
-    bool await_ready() const noexcept { return false; }
+    explicit MessageBus(const BackPressureConfig& config = {});
+    ~MessageBus();
 
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle);
+    // Template-based subscription
+    template <MessageType T, MessageHandler<T> Handler>
+    SubscriptionHandle subscribe(const std::string& topic_pattern,
+                                 Handler&& handler,
+                                 MessageFilter<T> filter = nullptr);
 
-    Result<std::vector<MessageEnvelope<T>>> await_resume();
+    // Publish message
+    template <MessageType T>
+    Result<void, MessageBusError> publish(const std::string& topic, T&& message,
+                                          const std::string& sender_id = "");
+
+    // Simple publish without template deduction issues
+    template <MessageType T>
+    Result<void, MessageBusError> publish(const T& message) {
+        T message_copy = message;
+        return publish("default", std::move(message_copy), "");
+    }
+
+    // Coroutine-based message waiting
+    template <MessageType T>
+    MessageAwaiter<T> wait_for_message(
+        const std::string& topic, MessageFilter<T> filter = nullptr,
+        std::chrono::milliseconds timeout = std::chrono::milliseconds(5000));
+
+    // Get queue statistics
+    QueueStats get_stats() const;
+
+    void shutdown();
+    void process_messages();  // Synchronous processing for examples
+
+    static MessageBus* get_instance();
 
 private:
-    std::shared_ptr<std::promise<Result<std::vector<MessageEnvelope<T>>>>> promise_;
+    BackPressureConfig config_;
+    std::atomic<bool> shutdown_;
+    std::atomic<uint64_t> handler_id_counter_;
+
+    // Implementation details (will be defined in .cpp)
+    struct Impl;
+    std::unique_ptr<Impl> pimpl_;
 };
 
-template <typename T>
-struct PublishAwaiter {
-    MessageEnvelope<T> envelope;
-    DeliveryGuarantee guarantee;
+// Template method implementations
+template <MessageType T, MessageHandler<T> Handler>
+SubscriptionHandle MessageBus::subscribe(const std::string& topic_pattern,
+                                         Handler&& handler,
+                                         MessageFilter<T> filter) {
+    uint64_t handler_id = handler_id_counter_++;
 
-    bool await_ready() const noexcept { return guarantee == DeliveryGuarantee::AT_MOST_ONCE; }
+    auto wrapper = [handler = std::forward<Handler>(handler),
+                    filter](const std::any& envelope_any) {
+        try {
+            const auto& envelope =
+                std::any_cast<const MessageEnvelope<T>&>(envelope_any);
+            if (!filter || filter(envelope)) {
+                handler(envelope.payload);
+            }
+        } catch (const std::bad_any_cast& e) {
+            // Log error silently for now
+        }
+    };
 
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle);
+    // Simple implementation - queue the handler
+    // Note: This is a basic implementation for example purposes
+    auto cleanup = []() {
+        // Basic cleanup
+    };
 
-    Result<void> await_resume();
+    return std::make_unique<HandlerRegistration>(handler_id, topic_pattern,
+                                                 cleanup);
+}
 
-private:
-    std::shared_ptr<std::promise<Result<void>>> promise_;
-};
+template <MessageType T>
+Result<void, MessageBusError> MessageBus::publish(
+    const std::string& topic, T&& message, const std::string& sender_id) {
+    if (shutdown_.load()) {
+        return MessageBusError::ShutdownInProgress;
+    }
+
+    try {
+        MessageEnvelope<T> envelope(topic, std::forward<T>(message), sender_id);
+
+        // For this basic implementation, just return success
+        // In a full implementation, this would queue the message for processing
+        return {};  // Success
+    } catch (const std::exception& e) {
+        return MessageBusError::SerializationError;
+    }
+}
 
 }  // namespace msgbus

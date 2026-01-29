@@ -1,11 +1,11 @@
-#include <iostream>
-#include <vector>
-#include <thread>
-#include <chrono>
 #include <signal.h>
-#include <functional>
-#include <stdexcept>
+#include <chrono>
 #include <cstdlib>
+#include <functional>
+#include <iostream>
+#include <stdexcept>
+#include <thread>
+#include <vector>
 
 #include "atom/async/daemon.hpp"
 
@@ -18,7 +18,8 @@ int simpleTask(int argc, char** argv) {
     std::cout << "参数数量: " << argc << std::endl;
 
     for (int i = 0; i < argc; ++i) {
-        std::cout << "参数[" << i << "]: " << (argv[i] ? argv[i] : "nullptr") << std::endl;
+        std::cout << "参数[" << i << "]: " << (argv[i] ? argv[i] : "nullptr")
+                  << std::endl;
     }
 
     // 模拟工作
@@ -29,15 +30,16 @@ int simpleTask(int argc, char** argv) {
     return 0;
 }
 
-// 简单的任务回调函数 - 现代方式 (使用 std::span// filepath: examples/daemon_examples.cpp
-#include <iostream>
-#include <vector>
-#include <thread>
-#include <chrono>
+// 简单的任务回调函数 - 现代方式 (使用 std::span// filepath:
+// examples/daemon_examples.cpp
 #include <signal.h>
-#include <functional>
-#include <stdexcept>
+#include <chrono>
 #include <cstdlib>
+#include <functional>
+#include <iostream>
+#include <stdexcept>
+#include <thread>
+#include <vector>
 
 #include "atom/async/daemon.hpp"
 
@@ -50,7 +52,8 @@ int simpleTask(int argc, char** argv) {
     std::cout << "参数数量: " << argc << std::endl;
 
     for (int i = 0; i < argc; ++i) {
-        std::cout << "参数[" << i << "]: " << (argv[i] ? argv[i] : "nullptr") << std::endl;
+        std::cout << "参数[" << i << "]: " << (argv[i] ? argv[i] : "nullptr")
+                  << std::endl;
     }
 
     // 模拟工作

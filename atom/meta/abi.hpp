@@ -1,40 +1,45 @@
 /*!
  * \file abi.hpp
- * \brief An enhanced C++ ABI wrapper for type demangling and introspection - OPTIMIZED VERSION
+ * \brief An enhanced C++ ABI wrapper for type demangling and introspection
  * \author Max Qian <lightapt.com>
  * \date 2024-5-25
- * \optimized 2025-01-22 - Performance optimizations by AI Assistant
  * \copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
- *
- * OPTIMIZATIONS APPLIED:
- * - Enhanced caching system with lock-free operations where possible
- * - Optimized string operations with better memory management
- * - Improved template instantiation with compile-time optimizations
- * - Enhanced demangling performance with fast-path optimizations
- * - Better memory layout for cache-friendly access patterns
  */
 
 #ifndef ATOM_META_ABI_HPP
 #define ATOM_META_ABI_HPP
 
-#include <atomic>
-#include <chrono>
+#include <array>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
 #include <source_location>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <typeinfo>
-#include <unordered_map>
+#include <version>
 
 #include "atom/containers/high_performance.hpp"
 
+// C++23 feature detection
+#if __cpp_lib_expected >= 202202L
+#include <expected>
+#define ATOM_ABI_HAS_EXPECTED 1
+#else
+#define ATOM_ABI_HAS_EXPECTED 0
+#endif
+
+#ifdef _WIN32
 #ifdef _MSC_VER
+#ifndef ATOM_DISABLE_DBGHELP
 #include <dbghelp.h>
-#include <windows.h>
 #pragma comment(lib, "dbghelp.lib")
+#endif
+#include <windows.h>
+#endif
 #else
 #include <cxxabi.h>
 #include <dlfcn.h>
@@ -54,16 +59,39 @@ using String = containers::String;
 using Vector = containers::Vector<containers::String>;
 
 /*!
- * \brief Optimized configuration options for the ABI utilities
+ * \brief Configuration options for the ABI utilities
  */
 struct AbiConfig {
-    static constexpr std::size_t buffer_size = 4096;  // Increased for better performance
-    static constexpr std::size_t max_cache_size = 2048;  // Larger cache for better hit rates
+    static constexpr std::size_t buffer_size = 4096;
+    static constexpr std::size_t max_cache_size = 2048;
     static constexpr bool thread_safe_cache = true;
-    static constexpr bool enable_fast_path = true;  // Enable fast-path optimizations
-    static constexpr std::size_t cache_line_size = 64;  // For alignment optimizations
-    static constexpr bool use_string_view_cache = true;  // Use string_view for cache keys
-    static constexpr std::chrono::minutes cache_ttl{30};  // Cache time-to-live
+    static constexpr bool enable_lru_eviction = true;
+    static constexpr std::size_t eviction_batch_size = 256;
+};
+
+/*!
+ * \brief Error codes for ABI operations
+ */
+enum class AbiErrorCode {
+    Success = 0,
+    BufferTooSmall,
+    DemangleFailed,
+    InvalidInput,
+    UnknownError
+};
+
+/*!
+ * \brief Result structure for ABI operations (when std::expected is not
+ * available)
+ */
+struct AbiResult {
+    String value;
+    AbiErrorCode error = AbiErrorCode::Success;
+
+    [[nodiscard]] bool hasValue() const noexcept {
+        return error == AbiErrorCode::Success;
+    }
+    [[nodiscard]] explicit operator bool() const noexcept { return hasValue(); }
 };
 
 /*!
@@ -227,6 +255,215 @@ public:
                demangled_name.find('>') != String::npos;
     }
 
+    /*!
+     * \brief Get bare type name without qualifiers and namespaces
+     * \param demangled_name The demangled type name
+     * \return The bare type name
+     */
+    static auto getBareTypeName(std::string_view demangled_name) -> String {
+        String result(demangled_name);
+
+        // Remove const/volatile qualifiers
+        auto removePrefix = [&result](std::string_view prefix) {
+            if (result.size() > prefix.size() &&
+                std::string_view(result.data(), prefix.size()) == prefix) {
+                result = String(result.data() + prefix.size(),
+                                result.size() - prefix.size());
+            }
+        };
+
+        removePrefix("const ");
+        removePrefix("volatile ");
+
+        // Find last :: to get bare name
+        auto pos = result.rfind("::");
+        if (pos != String::npos && pos + 2 < result.size()) {
+            result = String(result.data() + pos + 2, result.size() - pos - 2);
+        }
+
+        // Remove template parameters for bare name
+        auto templatePos = result.find('<');
+        if (templatePos != String::npos) {
+            result = String(result.data(), templatePos);
+        }
+
+        return result;
+    }
+
+    /*!
+     * \brief Extract namespace from a demangled type name
+     * \param demangled_name The demangled type name
+     * \return The namespace, or empty string if none
+     */
+    static auto extractNamespace(std::string_view demangled_name) -> String {
+        auto pos = demangled_name.rfind("::");
+        if (pos != std::string_view::npos) {
+            return String(demangled_name.data(), pos);
+        }
+        return String{};
+    }
+
+    /*!
+     * \brief Extract template arguments from a demangled type name
+     * \param demangled_name The demangled type name
+     * \return Vector of template argument strings
+     */
+    static auto extractTemplateArgs(std::string_view demangled_name) -> Vector {
+        Vector args;
+        auto start = demangled_name.find('<');
+        auto end = demangled_name.rfind('>');
+
+        if (start == std::string_view::npos || end == std::string_view::npos ||
+            start >= end) {
+            return args;
+        }
+
+        std::string_view params =
+            demangled_name.substr(start + 1, end - start - 1);
+
+        int depth = 0;
+        std::size_t argStart = 0;
+
+        for (std::size_t i = 0; i < params.size(); ++i) {
+            char c = params[i];
+            if (c == '<' || c == '(')
+                ++depth;
+            else if (c == '>' || c == ')')
+                --depth;
+            else if (c == ',' && depth == 0) {
+                auto arg = params.substr(argStart, i - argStart);
+                // Trim whitespace
+                while (!arg.empty() && arg.front() == ' ')
+                    arg.remove_prefix(1);
+                while (!arg.empty() && arg.back() == ' ')
+                    arg.remove_suffix(1);
+                args.push_back(String(arg));
+                argStart = i + 1;
+            }
+        }
+
+        // Add last argument
+        auto arg = params.substr(argStart);
+        while (!arg.empty() && arg.front() == ' ')
+            arg.remove_prefix(1);
+        while (!arg.empty() && arg.back() == ' ')
+            arg.remove_suffix(1);
+        if (!arg.empty()) {
+            args.push_back(String(arg));
+        }
+
+        return args;
+    }
+
+    /*!
+     * \brief Check if a type is a pointer type
+     * \param demangled_name The demangled type name
+     * \return true if the type is a pointer
+     */
+    static bool isPointerType(std::string_view demangled_name) noexcept {
+        if (demangled_name.empty())
+            return false;
+        // Skip trailing spaces and check for *
+        auto pos = demangled_name.size();
+        while (pos > 0 && demangled_name[pos - 1] == ' ')
+            --pos;
+        return pos > 0 && demangled_name[pos - 1] == '*';
+    }
+
+    /*!
+     * \brief Check if a type is a reference type
+     * \param demangled_name The demangled type name
+     * \return true if the type is a reference
+     */
+    static bool isReferenceType(std::string_view demangled_name) noexcept {
+        if (demangled_name.empty())
+            return false;
+        auto pos = demangled_name.size();
+        while (pos > 0 && demangled_name[pos - 1] == ' ')
+            --pos;
+        return pos > 0 && demangled_name[pos - 1] == '&';
+    }
+
+    /*!
+     * \brief Check if a type is const qualified
+     * \param demangled_name The demangled type name
+     * \return true if the type is const
+     */
+    static bool isConstType(std::string_view demangled_name) noexcept {
+        return demangled_name.find("const") != std::string_view::npos;
+    }
+
+    /*!
+     * \brief Try to demangle without throwing exceptions
+     * \param mangled_name The mangled name
+     * \return AbiResult containing the demangled name or error
+     */
+    static auto tryDemangle(std::string_view mangled_name) noexcept
+        -> AbiResult {
+        try {
+            return AbiResult{demangleInternal(mangled_name),
+                             AbiErrorCode::Success};
+        } catch (...) {
+            return AbiResult{String(mangled_name),
+                             AbiErrorCode::DemangleFailed};
+        }
+    }
+
+#if ATOM_ABI_HAS_EXPECTED
+    /*!
+     * \brief Demangle using std::expected (C++23)
+     * \param mangled_name The mangled name
+     * \return Expected containing demangled name or error code
+     */
+    static auto demangleExpected(std::string_view mangled_name)
+        -> std::expected<String, AbiErrorCode> {
+        try {
+            return demangleInternal(mangled_name);
+        } catch (...) {
+            return std::unexpected(AbiErrorCode::DemangleFailed);
+        }
+    }
+#endif
+
+    /*!
+     * \brief Get type category as a string
+     * \tparam T The type to categorize
+     * \return String describing the type category
+     */
+    template <typename T>
+    static auto getTypeCategory() -> String {
+        if constexpr (std::is_void_v<T>)
+            return String("void");
+        else if constexpr (std::is_null_pointer_v<T>)
+            return String("nullptr_t");
+        else if constexpr (std::is_integral_v<T>)
+            return String("integral");
+        else if constexpr (std::is_floating_point_v<T>)
+            return String("floating_point");
+        else if constexpr (std::is_array_v<T>)
+            return String("array");
+        else if constexpr (std::is_enum_v<T>)
+            return String("enum");
+        else if constexpr (std::is_union_v<T>)
+            return String("union");
+        else if constexpr (std::is_class_v<T>)
+            return String("class");
+        else if constexpr (std::is_function_v<T>)
+            return String("function");
+        else if constexpr (std::is_pointer_v<T>)
+            return String("pointer");
+        else if constexpr (std::is_lvalue_reference_v<T>)
+            return String("lvalue_reference");
+        else if constexpr (std::is_rvalue_reference_v<T>)
+            return String("rvalue_reference");
+        else if constexpr (std::is_member_object_pointer_v<T>)
+            return String("member_object_pointer");
+        else if constexpr (std::is_member_function_pointer_v<T>)
+            return String("member_function_pointer");
+        else
+            return String("unknown");
+    }
+
 private:
     /*!
      * \brief Internal implementation of name demangling with caching
@@ -240,25 +477,18 @@ private:
             {
                 std::shared_lock readLock(cacheMutex_);
                 if (auto it = cache_.find(cacheKey); it != cache_.end()) {
-                    it->second.access_count.fetch_add(1, std::memory_order_relaxed);
-                    cache_hits_.fetch_add(1, std::memory_order_relaxed);
-                    return it->second.demangled_name;
+                    return it->second;
                 }
             }
         } else {
             if (auto it = cache_.find(cacheKey); it != cache_.end()) {
-                it->second.access_count.fetch_add(1, std::memory_order_relaxed);
-                cache_hits_.fetch_add(1, std::memory_order_relaxed);
-                return it->second.demangled_name;
+                return it->second;
             }
         }
 
-        // Cache miss
-        cache_misses_.fetch_add(1, std::memory_order_relaxed);
-
         String demangled;
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(ATOM_DISABLE_DBGHELP)
         std::array<char, AbiConfig::buffer_size> buffer;
         DWORD length = UnDecorateSymbolName(mangled_name.data(), buffer.data(),
                                             static_cast<DWORD>(buffer.size()),
@@ -275,25 +505,23 @@ private:
         }
 #else
         int status = -1;
+#ifndef _WIN32
         std::unique_ptr<char, void (*)(void*)> demangledName(
             abi::__cxa_demangle(mangled_name.data(), nullptr, nullptr, &status),
             std::free);
+#else
+        // On Windows, demangling is not available with MinGW
+        std::unique_ptr<char, void (*)(void*)> demangledName(nullptr,
+                                                             std::free);
+        status = -1;  // Indicate failure
+#endif
 
         if (status == 0 && demangledName) {
             demangled = String(demangledName.get());
         } else {
-            switch (status) {
-                case -1:
-                    throw AbiException(
-                        "Memory allocation failure during demangling");
-                case -2:
-                    demangled = String(mangled_name);
-                    break;
-                case -3:
-                    throw AbiException("Invalid mangled name");
-                default:
-                    demangled = String(mangled_name);
-            }
+            // On Windows or when demangling fails, return the original mangled
+            // name instead of throwing an exception
+            demangled = String(mangled_name);
         }
 #endif
 
@@ -308,7 +536,7 @@ private:
                     ++count;
                 }
             }
-            cache_[cacheKey] = CacheEntry(demangled);
+            cache_[cacheKey] = demangled;
         } else {
             if (cache_.size() >= AbiConfig::max_cache_size) {
                 auto it = cache_.begin();
@@ -319,7 +547,7 @@ private:
                     ++count;
                 }
             }
-            cache_[cacheKey] = CacheEntry(demangled);
+            cache_[cacheKey] = demangled;
         }
 
         return demangled;
@@ -332,8 +560,8 @@ private:
      * \param indent_level Indentation level for visualization
      * \return A string containing the hierarchical visualization
      */
-    static auto visualizeType(const String& type_name, int indent_level = 0)
-        -> String {
+    static auto visualizeType(const String& type_name,
+                              int indent_level = 0) -> String {
         String indent(indent_level * 4, ' ');
         String result;
 
@@ -391,8 +619,8 @@ private:
      * \param indent_level Indentation level
      * \return A visualization of the template parameters
      */
-    static auto visualizeTemplateParams(const String& params, int indent_level)
-        -> String {
+    static auto visualizeTemplateParams(const String& params,
+                                        int indent_level) -> String {
         String indent(indent_level * 4, ' ');
         String result;
         int paramIndex = 0;
@@ -447,8 +675,8 @@ private:
      * \param indent_level Indentation level
      * \return A visualization of the function parameters
      */
-    static auto visualizeFunctionParams(const String& params, int indent_level)
-        -> String {
+    static auto visualizeFunctionParams(const String& params,
+                                        int indent_level) -> String {
         if (params.empty()) {
             return String(indent_level * 4, ' ') + "    (no parameters)\n";
         }
@@ -506,76 +734,8 @@ private:
 #endif
 
 private:
-    // Optimized: Enhanced cache with better performance characteristics
-    struct alignas(AbiConfig::cache_line_size) CacheEntry {
-        String demangled_name;
-        std::chrono::steady_clock::time_point timestamp;
-        mutable std::atomic<uint32_t> access_count{0};
-
-        CacheEntry() = default;
-        CacheEntry(String name)
-            : demangled_name(std::move(name)),
-              timestamp(std::chrono::steady_clock::now()) {}
-
-        // Make it copyable and movable
-        CacheEntry(const CacheEntry& other)
-            : demangled_name(other.demangled_name),
-              timestamp(other.timestamp),
-              access_count(other.access_count.load()) {}
-
-        CacheEntry(CacheEntry&& other) noexcept
-            : demangled_name(std::move(other.demangled_name)),
-              timestamp(other.timestamp),
-              access_count(other.access_count.load()) {}
-
-        CacheEntry& operator=(const CacheEntry& other) {
-            if (this != &other) {
-                demangled_name = other.demangled_name;
-                timestamp = other.timestamp;
-                access_count.store(other.access_count.load());
-            }
-            return *this;
-        }
-
-        CacheEntry& operator=(CacheEntry&& other) noexcept {
-            if (this != &other) {
-                demangled_name = std::move(other.demangled_name);
-                timestamp = other.timestamp;
-                access_count.store(other.access_count.load());
-            }
-            return *this;
-        }
-    };
-
-    using OptimizedCache = std::unordered_map<std::string, CacheEntry>;
-    static inline OptimizedCache cache_;
+    static inline HashMap cache_;
     static inline std::shared_mutex cacheMutex_;
-
-    // Optimized: Cache statistics for monitoring
-    static inline std::atomic<uint64_t> cache_hits_{0};
-    static inline std::atomic<uint64_t> cache_misses_{0};
-
-public:
-    // Optimized: Cache performance monitoring
-    struct CacheStats {
-        uint64_t hits;
-        uint64_t misses;
-        double hit_rate;
-        std::size_t size;
-    };
-
-    static CacheStats getCacheStats() {
-        auto hits = cache_hits_.load(std::memory_order_relaxed);
-        auto misses = cache_misses_.load(std::memory_order_relaxed);
-        auto total = hits + misses;
-
-        return {
-            hits,
-            misses,
-            total > 0 ? static_cast<double>(hits) / total : 0.0,
-            cacheSize()
-        };
-    }
 };
 
 }  // namespace atom::meta

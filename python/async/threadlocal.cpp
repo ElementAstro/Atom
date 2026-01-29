@@ -108,7 +108,11 @@ Examples:
                     PyErr_SetString(PyExc_RuntimeError, e.what());
                     throw py::error_already_set();
                 } catch (const std::exception& e) {  // Fallback
-                    PyErr_SetString(PyExc_ValueError, e.what()); // Consistent with existing translator for std::invalid_argument or use PyExc_RuntimeError
+                    PyErr_SetString(
+                        PyExc_ValueError,
+                        e.what());  // Consistent with existing translator for
+                                    // std::invalid_argument or use
+                                    // PyExc_RuntimeError
                     throw py::error_already_set();
                 }
             },
@@ -389,7 +393,10 @@ Returns:
                     PyErr_SetString(PyExc_RuntimeError, e.what());
                     throw py::error_already_set();
                 } catch (const std::exception& e) {  // Fallback
-                    PyErr_SetString(PyExc_ValueError, e.what()); // Consistent with existing translator or use PyExc_RuntimeError
+                    PyErr_SetString(
+                        PyExc_ValueError,
+                        e.what());  // Consistent with existing translator or
+                                    // use PyExc_RuntimeError
                     throw py::error_already_set();
                 }
             },

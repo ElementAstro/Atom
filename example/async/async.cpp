@@ -50,7 +50,7 @@ void basicUsageExample() {
 
     // Start async task
     spdlog::info("Launching an asynchronous task using AsyncWorker.");
-    worker.startAsync(static_cast<int(*)(int, int)>(simpleTask), 1, 500);
+    worker.startAsync(static_cast<int (*)(int, int)>(simpleTask), 1, 500);
 
     // Check task status
     spdlog::info("Is the task currently active? {}",
@@ -88,7 +88,7 @@ void callbackAndTimeoutExample() {
 
     // Start async task
     spdlog::info("Starting an asynchronous task that should complete quickly.");
-    worker.startAsync(static_cast<int(*)(int, int)>(simpleTask), 2, 300);
+    worker.startAsync(static_cast<int (*)(int, int)>(simpleTask), 2, 300);
 
     // Wait for task to complete (triggers callback)
     spdlog::info(
@@ -101,7 +101,8 @@ void callbackAndTimeoutExample() {
     slowWorker.setTimeout(1s);  // Set 1 second timeout
 
     spdlog::info("Starting a long-running task to test timeout functionality.");
-    slowWorker.startAsync(static_cast<int(*)(int, int)>(simpleTask), 3, 2000);  // Task takes 2 seconds
+    slowWorker.startAsync(static_cast<int (*)(int, int)>(simpleTask), 3,
+                          2000);  // Task takes 2 seconds
 
     try {
         spdlog::info(
@@ -130,7 +131,8 @@ void managerExample() {
     // Add 3 tasks
     for (int i = 1; i <= 3; i++) {
         spdlog::info("Creating and launching task #{}.", i);
-        auto worker = manager.createWorker(static_cast<int(*)(int, int)>(simpleTask), i, i * 200);
+        auto worker = manager.createWorker(
+            static_cast<int (*)(int, int)>(simpleTask), i, i * 200);
         workers.push_back(worker);
     }
 
@@ -196,8 +198,9 @@ void cancellationExample() {
     // Create multiple tasks and then cancel all
     spdlog::info("Creating multiple new tasks for bulk cancellation.");
     for (int i = 1; i <= 3; i++) {
-        auto worker = manager.createWorker(
-            static_cast<int(*)(int, int)>(simpleTask), i, 2000);  // Each task runs for 2 seconds
+        auto worker =
+            manager.createWorker(static_cast<int (*)(int, int)>(simpleTask), i,
+                                 2000);  // Each task runs for 2 seconds
     }
 
     spdlog::info("Total number of tasks in manager: {}", manager.size());
@@ -231,7 +234,7 @@ void exceptionHandlingExample() {
 
     // Exception - task throws internally
     AsyncWorker<void> errorWorker;
-    errorWorker.startAsync(static_cast<void(*)()>(errorTask));
+    errorWorker.startAsync(static_cast<void (*)()>(errorTask));
 
     try {
         spdlog::info(
@@ -275,7 +278,7 @@ void taskValidationExample() {
 
     // Create task
     AsyncWorker<int> worker;
-    worker.startAsync(static_cast<int(*)(int, int)>(simpleTask), 6, 300);
+    worker.startAsync(static_cast<int (*)(int, int)>(simpleTask), 6, 300);
 
     // Wait for task to complete
     spdlog::info("Waiting for the task to complete before validation.");

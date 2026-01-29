@@ -1,0 +1,443 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        // ===== CMake Configure Tasks =====
+        {
+            "label": "CMake: Configure (Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--preset",
+                "debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$cmake"
+            ],
+            "detail": "Configure CMake with Debug preset (Ninja)"
+        },
+        {
+            "label": "CMake: Configure (Release)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--preset",
+                "release"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$cmake"
+            ],
+            "detail": "Configure CMake with Release preset (Ninja)"
+        },
+        {
+            "label": "CMake: Configure (MSVC Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--preset",
+                "msvc-vcpkg-debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$cmake"
+            ],
+            "detail": "Configure CMake with MSVC vcpkg Debug preset"
+        },
+        {
+            "label": "CMake: Configure (MSVC Release)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--preset",
+                "msvc-vcpkg-release"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$cmake"
+            ],
+            "detail": "Configure CMake with MSVC vcpkg Release preset"
+        },
+        // ===== CMake Build Tasks =====
+        {
+            "label": "CMake: Build (Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "--preset",
+                "debug",
+                "-j",
+                "8"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc",
+                "$msCompile"
+            ],
+            "detail": "Build project with Debug preset",
+            "dependsOn": []
+        },
+        {
+            "label": "CMake: Build (Release)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "--preset",
+                "release",
+                "-j",
+                "8"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$gcc",
+                "$msCompile"
+            ],
+            "detail": "Build project with Release preset"
+        },
+        {
+            "label": "CMake: Build (MSVC Debug)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "--preset",
+                "msvc-vcpkg-debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "Build project with MSVC vcpkg Debug preset"
+        },
+        {
+            "label": "CMake: Build (MSVC Release)",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "--preset",
+                "msvc-vcpkg-release"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "Build project with MSVC vcpkg Release preset"
+        },
+        // ===== Full Build Tasks (Configure + Build) =====
+        {
+            "label": "Full Build: Debug",
+            "dependsOn": [
+                "CMake: Configure (Debug)",
+                "CMake: Build (Debug)"
+            ],
+            "dependsOrder": "sequence",
+            "group": "build",
+            "detail": "Configure and build Debug"
+        },
+        {
+            "label": "Full Build: Release",
+            "dependsOn": [
+                "CMake: Configure (Release)",
+                "CMake: Build (Release)"
+            ],
+            "dependsOrder": "sequence",
+            "group": "build",
+            "detail": "Configure and build Release"
+        },
+        {
+            "label": "Full Build: MSVC Debug",
+            "dependsOn": [
+                "CMake: Configure (MSVC Debug)",
+                "CMake: Build (MSVC Debug)"
+            ],
+            "dependsOrder": "sequence",
+            "group": "build",
+            "detail": "Configure and build MSVC Debug with vcpkg"
+        },
+        // ===== Test Tasks =====
+        {
+            "label": "CTest: Run All Tests (Debug)",
+            "type": "shell",
+            "command": "ctest",
+            "args": [
+                "--preset",
+                "default",
+                "--output-on-failure"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "Run all tests with CTest"
+        },
+        {
+            "label": "CTest: Run All Tests (Release)",
+            "type": "shell",
+            "command": "ctest",
+            "args": [
+                "--preset",
+                "release",
+                "--output-on-failure"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "Run all tests with CTest (Release)"
+        },
+        {
+            "label": "CTest: Run All Tests (MSVC)",
+            "type": "shell",
+            "command": "ctest",
+            "args": [
+                "--preset",
+                "msvc-vcpkg",
+                "--output-on-failure"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "Run all tests with CTest (MSVC vcpkg)"
+        },
+        {
+            "label": "CTest: Run Tests Verbose",
+            "type": "shell",
+            "command": "ctest",
+            "args": [
+                "--test-dir",
+                "${workspaceFolder}/build",
+                "-V",
+                "--output-on-failure"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "Run all tests with verbose output"
+        },
+        // ===== Python Tasks =====
+        {
+            "label": "Python: Install Dev Dependencies",
+            "type": "shell",
+            "command": "pip",
+            "args": [
+                "install",
+                "-e",
+                ".[dev]"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "detail": "Install Python package in development mode"
+        },
+        {
+            "label": "Python: Run Tests (pytest)",
+            "type": "shell",
+            "command": "pytest",
+            "args": [
+                "-v",
+                "--tb=short"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "problemMatcher": [],
+            "detail": "Run Python tests with pytest"
+        },
+        {
+            "label": "Python: Lint with Ruff",
+            "type": "shell",
+            "command": "ruff",
+            "args": [
+                "check",
+                "."
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "problemMatcher": [],
+            "detail": "Run Ruff linter"
+        },
+        {
+            "label": "Python: Format with Black",
+            "type": "shell",
+            "command": "black",
+            "args": [
+                "."
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "detail": "Format Python code with Black"
+        },
+        // ===== Clean Tasks =====
+        {
+            "label": "Clean: Build Directory",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceFolder}/build",
+                "--target",
+                "clean"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "detail": "Clean build artifacts"
+        },
+        {
+            "label": "Clean: Full (Remove Build Dir)",
+            "type": "shell",
+            "windows": {
+                "command": "Remove-Item",
+                "args": [
+                    "-Recurse",
+                    "-Force",
+                    "-ErrorAction",
+                    "SilentlyContinue",
+                    "${workspaceFolder}/build"
+                ]
+            },
+            "linux": {
+                "command": "rm",
+                "args": [
+                    "-rf",
+                    "${workspaceFolder}/build"
+                ]
+            },
+            "osx": {
+                "command": "rm",
+                "args": [
+                    "-rf",
+                    "${workspaceFolder}/build"
+                ]
+            },
+            "problemMatcher": [],
+            "detail": "Remove build directory completely"
+        },
+        // ===== Documentation Tasks =====
+        {
+            "label": "Docs: Generate Doxygen",
+            "type": "shell",
+            "command": "doxygen",
+            "args": [
+                "Doxyfile"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "Generate Doxygen documentation"
+        },
+        {
+            "label": "Docs: Build Sphinx",
+            "type": "shell",
+            "command": "sphinx-build",
+            "args": [
+                "-b",
+                "html",
+                "docs",
+                "docs/_build"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "Build Sphinx documentation"
+        },
+        // ===== Pre-commit Tasks =====
+        {
+            "label": "Pre-commit: Run All",
+            "type": "shell",
+            "command": "pre-commit",
+            "args": [
+                "run",
+                "-a"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "detail": "Run all pre-commit hooks"
+        },
+        {
+            "label": "Pre-commit: Install Hooks",
+            "type": "shell",
+            "command": "pre-commit",
+            "args": [
+                "install"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "detail": "Install pre-commit hooks"
+        },
+        // ===== Format Tasks =====
+        {
+            "label": "Format: C++ (clang-format)",
+            "type": "shell",
+            "command": "clang-format",
+            "args": [
+                "-i",
+                "${file}"
+            ],
+            "problemMatcher": [],
+            "detail": "Format current C++ file with clang-format"
+        }
+    ]
+}

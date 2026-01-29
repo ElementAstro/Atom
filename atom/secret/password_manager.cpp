@@ -1,567 +1,644 @@
 #include "password_manager.hpp"
 
-#include <spdlog/spdlog.h>
 #include <algorithm>
-#include <regex>
+#include <sstream>
 
-#include "atom/type/json.hpp"
 #include "encryption.hpp"
-#include "storage.hpp"
+#include "serialization.hpp"
 
 namespace atom::secret {
 
-// JSON serialization for PasswordEntry
-void to_json(nlohmann::json& j, const PasswordEntry& p) {
-    j = nlohmann::json{
-        {"password", p.password},
-        {"username", p.username},
-        {"url", p.url},
-        {"notes", p.notes},
-        {"title", p.title},
-        {"category", p.category},
-        {"tags", p.tags},
-        {"created", std::chrono::system_clock::to_time_t(p.created)},
-        {"modified", std::chrono::system_clock::to_time_t(p.modified)},
-        {"expires", std::chrono::system_clock::to_time_t(p.expires)},
-        {"previousPasswords", p.previousPasswords}};
+// ============================================================================
+// PasswordManager Implementation
+// ============================================================================
+
+PasswordManager::PasswordManager()
+    : storage_(SecureStorage::create("atom-password-manager")),
+      isLocked_(true),
+      lastActivity_(std::chrono::system_clock::now()) {}
+
+PasswordManager::~PasswordManager() { lock(); }
+
+PasswordManager::PasswordManager(PasswordManager&& other) noexcept
+    : storage_(std::move(other.storage_)),
+      settings_(std::move(other.settings_)),
+      masterKey_(std::move(other.masterKey_)),
+      masterSalt_(std::move(other.masterSalt_)),
+      isLocked_(other.isLocked_),
+      lastActivity_(other.lastActivity_) {
+    other.isLocked_ = true;
+    other.lastActivity_ = std::chrono::system_clock::now();
 }
 
-void from_json(const nlohmann::json& j, PasswordEntry& p) {
-    j.at("password").get_to(p.password);
-    j.at("username").get_to(p.username);
-    j.at("url").get_to(p.url);
-    j.at("notes").get_to(p.notes);
-    j.at("title").get_to(p.title);
-    j.at("category").get_to(p.category);
-    j.at("tags").get_to(p.tags);
-    p.created = std::chrono::system_clock::from_time_t(
-        j.at("created").get<std::time_t>());
-    p.modified = std::chrono::system_clock::from_time_t(
-        j.at("modified").get<std::time_t>());
-    p.expires = std::chrono::system_clock::from_time_t(
-        j.at("expires").get<std::time_t>());
-    j.at("previousPasswords").get_to(p.previousPasswords);
+PasswordManager& PasswordManager::operator=(PasswordManager&& other) noexcept {
+    if (this != &other) {
+        lock();  // Clear current state
+
+        storage_ = std::move(other.storage_);
+        settings_ = std::move(other.settings_);
+        masterKey_ = std::move(other.masterKey_);
+        masterSalt_ = std::move(other.masterSalt_);
+        isLocked_ = other.isLocked_;
+        lastActivity_ = other.lastActivity_;
+
+        other.isLocked_ = true;
+        other.lastActivity_ = std::chrono::system_clock::now();
+    }
+    return *this;
 }
 
-PasswordManager::PasswordManager(std::string_view appName,
-                               const PasswordManagerSettings& settings)
-    : storage_(SecureStorage::create(appName)), settings_(settings), appName_(appName) {
-    spdlog::info("PasswordManager initialized for app: {}", appName);
-}
-
-Result<void> PasswordManager::addEntry(const PasswordEntry& entry,
-                                       std::string_view masterPassword) {
-    std::unique_lock lock(mutex_);
-    if (entry.title.empty()) {
-        return Result<void>::Failure("Entry title cannot be empty.");
-    }
-
-    nlohmann::json j = entry;
-    std::string plaintext = j.dump();
-
-    auto salt = Encryption::random_bytes(16);
-    auto key = Encryption::derive_key(
-        masterPassword,
-        std::string_view(reinterpret_cast<const char*>(salt.data()),
-                         salt.size()));
-    auto iv = Encryption::random_bytes(12);
-    auto aad = Encryption::random_bytes(16);
-
-    auto encrypted_result = Encryption::encrypt(plaintext, key, iv, aad);
-    if (encrypted_result.isError()) {
-        return Result<void>::Failure("Encryption failed: " +
-                                   encrypted_result.errorMessage());
-    }
-
-    auto ciphertext_with_tag = encrypted_result.value();
-
-    // Combine salt, iv, aad, and ciphertext with tag
-    std::string storable_data;
-    storable_data.reserve(salt.size() + iv.size() + aad.size() +
-                          ciphertext_with_tag.size());
-    storable_data.append(reinterpret_cast<const char*>(salt.data()),
-                         salt.size());
-    storable_data.append(reinterpret_cast<const char*>(iv.data()), iv.size());
-    storable_data.append(reinterpret_cast<const char*>(aad.data()), aad.size());
-    storable_data.append(
-        reinterpret_cast<const char*>(ciphertext_with_tag.data()),
-        ciphertext_with_tag.size());
-
-    auto store_result = storage_->store(entry.title, storable_data);
-    if (store_result.isError()) {
-        return Result<void>::Failure("Failed to store entry: " + store_result.errorMessage());
-    }
-
-    // Update metrics
-    {
-        std::unique_lock metrics_lock(mutex_);
-        metrics_.totalOperations++;
-        metrics_.successfulOperations++;
-        metrics_.totalEntries++;
-        metrics_.entriesByCategory[entry.category]++;
-        metrics_.lastOperation = std::chrono::system_clock::now();
-    }
-
-    return Result<void>();
-}
-
-Result<PasswordEntry> PasswordManager::getEntry(
-    std::string_view title, std::string_view masterPassword) const {
-    std::shared_lock lock(mutex_);
-    return getEntry_nolock(title, masterPassword);
-}
-
-Result<PasswordEntry> PasswordManager::getEntry_nolock(
-    std::string_view title, std::string_view masterPassword) const {
-    auto retrieve_result = storage_->retrieve(title);
-    if (retrieve_result.isError()) {
-        return Result<PasswordEntry>::Failure("Entry not found: " + retrieve_result.errorMessage());
-    }
-
-    const std::string& storable_data = retrieve_result.value();
-    if (storable_data.empty()) {
-        return Result<PasswordEntry>::Failure("Entry not found.");
-    }
-
-    if (storable_data.length() < 44) {  // 16 salt + 12 iv + 16 aad
-        return Result<PasswordEntry>::Failure("Invalid stored data: too short.");
-    }
-
-    std::string_view data_view(storable_data);
-    auto salt_sv = data_view.substr(0, 16);
-    auto iv_sv = data_view.substr(16, 12);
-    auto aad_sv = data_view.substr(28, 16);
-
-    std::vector<unsigned char> salt(salt_sv.begin(), salt_sv.end());
-    std::vector<unsigned char> iv(iv_sv.begin(), iv_sv.end());
-    std::vector<unsigned char> aad(aad_sv.begin(), aad_sv.end());
-    std::vector<unsigned char> ciphertext_with_tag(data_view.begin() + 44,
-                                                   data_view.end());
-
-    auto key = Encryption::derive_key(
-        masterPassword,
-        std::string_view(reinterpret_cast<const char*>(salt.data()),
-                         salt.size()));
-
-    auto decrypted_result =
-        Encryption::decrypt(ciphertext_with_tag, key, iv, aad);
-
-    if (decrypted_result.isError()) {
-        return Result<PasswordEntry>::Failure("Decryption failed: " +
-                                            decrypted_result.errorMessage());
-    }
-
-    try {
-        nlohmann::json j = nlohmann::json::parse(decrypted_result.value());
-        PasswordEntry entry = j.get<PasswordEntry>();
-        return Result<PasswordEntry>(std::move(entry));
-    } catch (const nlohmann::json::exception& e) {
-        return Result<PasswordEntry>::Failure("JSON parsing failed: " +
-                                            std::string(e.what()));
-    }
-}
-
-Result<void> PasswordManager::updateEntry(const PasswordEntry& entry,
-                                          std::string_view masterPassword) {
-    // This will overwrite the existing entry, which is the desired behavior for
-    // an update.
-    return addEntry(entry, masterPassword);
-}
-
-Result<void> PasswordManager::removeEntry(std::string_view title) {
-    std::unique_lock lock(mutex_);
-    auto remove_result = storage_->remove(title);
-    if (remove_result.isError()) {
-        return Result<void>::Failure("Failed to remove entry: " + remove_result.errorMessage());
-    }
-
-    // Update metrics
-    {
-        std::unique_lock metrics_lock(mutex_);
-        metrics_.totalOperations++;
-        metrics_.successfulOperations++;
-        metrics_.lastOperation = std::chrono::system_clock::now();
-    }
-
-    return Result<void>();
-}
-
-Result<std::vector<PasswordEntry>> PasswordManager::getAllEntries(
-    std::string_view masterPassword) const {
-    std::shared_lock lock(mutex_);
-    auto keys_result = storage_->getAllKeys();
-    if (keys_result.isError()) {
-        return Result<std::vector<PasswordEntry>>::Failure("Failed to get keys: " + keys_result.errorMessage());
-    }
-
-    const auto& keys = keys_result.value();
-    std::vector<PasswordEntry> entries;
-    entries.reserve(keys.size());
-
-    for (const auto& key : keys) {
-        // Call the non-locking version to avoid recursive lock issues.
-        auto entry_result = getEntry_nolock(key, masterPassword);
-        if (entry_result.isSuccess()) {
-            entries.push_back(std::move(entry_result.value()));
-        } else {
-            spdlog::warn("Failed to decrypt entry with key '{}': {}", key,
-                         entry_result.errorMessage());
-        }
-    }
-    return Result(std::move(entries));
-}
-
-// Enhanced search and filtering methods
-Result<std::vector<PasswordEntry>> PasswordManager::searchEntries(
-    const SearchOptions& options,
-    std::string_view masterPassword) const {
-
-    auto start = std::chrono::steady_clock::now();
-
-    auto all_entries_result = getAllEntries(masterPassword);
-    if (all_entries_result.isError()) {
-        return all_entries_result;
-    }
-
-    const auto& all_entries = all_entries_result.value();
-    std::vector<PasswordEntry> matching_entries;
-
-    for (const auto& entry : all_entries) {
-        if (matchesSearchCriteria(entry, options)) {
-            matching_entries.push_back(entry);
-        }
-    }
-
-    // Update metrics
-    auto end = std::chrono::steady_clock::now();
-    auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    {
-        std::unique_lock lock(mutex_);
-        metrics_.searchOperations++;
-        metrics_.totalOperations++;
-        metrics_.successfulOperations++;
-        metrics_.totalLatency += latency;
-        metrics_.lastOperation = std::chrono::system_clock::now();
-    }
-
-    return Result(std::move(matching_entries));
-}
-
-Result<std::vector<PasswordEntry>> PasswordManager::getEntriesByCategory(
-    PasswordCategory category,
-    std::string_view masterPassword) const {
-
-    SearchOptions options;
-    options.category = category;
-    return searchEntries(options, masterPassword);
-}
-
-Result<std::vector<PasswordEntry>> PasswordManager::getEntriesByTags(
-    const std::vector<std::string>& tags,
-    bool matchAll,
-    std::string_view masterPassword) const {
-
-    auto all_entries_result = getAllEntries(masterPassword);
-    if (all_entries_result.isError()) {
-        return all_entries_result;
-    }
-
-    const auto& all_entries = all_entries_result.value();
-    std::vector<PasswordEntry> matching_entries;
-
-    for (const auto& entry : all_entries) {
-        bool matches = false;
-
-        if (matchAll) {
-            // Entry must have all specified tags
-            matches = std::all_of(tags.begin(), tags.end(),
-                [&entry](const std::string& tag) {
-                    return std::find(entry.tags.begin(), entry.tags.end(), tag) != entry.tags.end();
-                });
-        } else {
-            // Entry must have at least one of the specified tags
-            matches = std::any_of(tags.begin(), tags.end(),
-                [&entry](const std::string& tag) {
-                    return std::find(entry.tags.begin(), entry.tags.end(), tag) != entry.tags.end();
-                });
-        }
-
-        if (matches) {
-            matching_entries.push_back(entry);
-        }
-    }
-
-    return Result(std::move(matching_entries));
-}
-
-Result<std::vector<PasswordEntry>> PasswordManager::getExpiringEntries(
-    int daysAhead,
-    std::string_view masterPassword) const {
-
-    auto all_entries_result = getAllEntries(masterPassword);
-    if (all_entries_result.isError()) {
-        return all_entries_result;
-    }
-
-    const auto& all_entries = all_entries_result.value();
-    std::vector<PasswordEntry> expiring_entries;
-
-    auto now = std::chrono::system_clock::now();
-    auto threshold = now + std::chrono::hours(24 * daysAhead);
-
-    for (const auto& entry : all_entries) {
-        if (entry.expires <= threshold && entry.expires > now) {
-            expiring_entries.push_back(entry);
-        }
-    }
-
-    return Result(std::move(expiring_entries));
-}
-
-// Bulk operations
-Result<std::vector<Result<void>>> PasswordManager::bulkOperation(
-    const std::vector<BulkPasswordOperation>& operations,
-    std::string_view masterPassword) {
-
-    std::vector<Result<void>> results;
-    results.reserve(operations.size());
-
-    for (const auto& op : operations) {
-        switch (op.operation) {
-            case BulkPasswordOperation::Type::Add:
-                results.push_back(addEntry(op.entry, masterPassword));
-                break;
-            case BulkPasswordOperation::Type::Update:
-                results.push_back(updateEntry(op.entry, masterPassword));
-                break;
-            case BulkPasswordOperation::Type::Remove:
-                results.push_back(removeEntry(op.title));
-                break;
-        }
-    }
-
-    return Result(std::move(results));
-}
-
-Result<std::vector<Result<void>>> PasswordManager::bulkAddEntries(
-    const std::vector<PasswordEntry>& entries,
-    std::string_view masterPassword) {
-
-    std::vector<Result<void>> results;
-    results.reserve(entries.size());
-
-    for (const auto& entry : entries) {
-        results.push_back(addEntry(entry, masterPassword));
-    }
-
-    return Result(std::move(results));
-}
-
-Result<std::vector<Result<void>>> PasswordManager::bulkRemoveEntries(
-    const std::vector<std::string>& titles) {
-
-    std::vector<Result<void>> results;
-    results.reserve(titles.size());
-
-    for (const auto& title : titles) {
-        results.push_back(removeEntry(title));
-    }
-
-    return Result(std::move(results));
-}
-
-// Password utilities
-Result<std::string> PasswordManager::generatePassword(
-    const PasswordGenerationOptions& options) const {
-
-    try {
-        std::string password = utils::generatePassword(options);
-        if (password.empty()) {
-            return Result<std::string>::Failure(ErrorCode::InvalidArgument,
-                std::string("Failed to generate password with given options"));
-        }
-        return Result<std::string>(std::move(password));
-    } catch (const std::exception& e) {
-        return Result<std::string>::Failure(ErrorCode::InvalidState,
-            std::string("Password generation failed: ") + e.what());
-    }
-}
-
-PasswordStrength PasswordManager::analyzePasswordStrength(std::string_view password) const {
-    return utils::analyzePasswordStrength(password);
-}
-
-Result<void> PasswordManager::validatePassword(std::string_view password) const {
-    std::shared_lock lock(mutex_);
-
-    if (!utils::validatePassword(password, settings_)) {
-        return Result<void>::Failure(ErrorCode::InvalidArgument,
-            std::string("Password does not meet security requirements"));
-    }
-
-    return Result<void>();
-}
-
-Result<std::unordered_map<std::string, std::vector<std::string>>>
-PasswordManager::findDuplicatePasswords(std::string_view masterPassword) const {
-
-    auto all_entries_result = getAllEntries(masterPassword);
-    if (all_entries_result.isError()) {
-        return Result<std::unordered_map<std::string, std::vector<std::string>>>::Failure(
-            all_entries_result.errorCode(), all_entries_result.errorMessage());
-    }
-
-    const auto& all_entries = all_entries_result.value();
-    std::unordered_map<std::string, std::vector<std::string>> password_map;
-
-    for (const auto& entry : all_entries) {
-        password_map[entry.password].push_back(entry.title);
-    }
-
-    // Remove entries with only one occurrence
-    auto it = password_map.begin();
-    while (it != password_map.end()) {
-        if (it->second.size() <= 1) {
-            it = password_map.erase(it);
-        } else {
-            ++it;
-        }
-    }
-
-    return Result(std::move(password_map));
-}
-
-Result<std::vector<PasswordEntry>> PasswordManager::findWeakPasswords(
-    std::string_view masterPassword) const {
-
-    auto all_entries_result = getAllEntries(masterPassword);
-    if (all_entries_result.isError()) {
-        return all_entries_result;
-    }
-
-    const auto& all_entries = all_entries_result.value();
-    std::vector<PasswordEntry> weak_entries;
-
-    for (const auto& entry : all_entries) {
-        PasswordStrength strength = analyzePasswordStrength(entry.password);
-        if (strength == PasswordStrength::VeryWeak || strength == PasswordStrength::Weak) {
-            weak_entries.push_back(entry);
-        }
-    }
-
-    return Result(std::move(weak_entries));
-}
-
-// Settings and metrics methods
-void PasswordManager::updateSettings(const PasswordManagerSettings& newSettings) {
-    std::unique_lock lock(mutex_);
-    settings_ = newSettings;
-    spdlog::info("Password manager settings updated");
-}
-
-PasswordManagerSettings PasswordManager::getSettings() const {
-    std::shared_lock lock(mutex_);
-    return settings_;
-}
-
-PasswordManagerMetrics PasswordManager::getMetrics() const {
-    std::shared_lock lock(mutex_);
-    return metrics_;
-}
-
-void PasswordManager::clearCache() {
-    storage_->clearCache();
-    std::unique_lock lock(mutex_);
-    metrics_ = PasswordManagerMetrics{};
-    spdlog::info("Password manager cache and metrics cleared");
-}
-
-// Helper methods
-bool PasswordManager::matchesSearchCriteria(const PasswordEntry& entry, const SearchOptions& options) const {
-    // Check category filter
-    if (options.category != PasswordCategory::General && entry.category != options.category) {
+bool PasswordManager::initialize(std::string_view masterPassword,
+                                 const PasswordManagerSettings& settings) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (masterPassword.empty()) {
         return false;
     }
 
-    // Check date filters
-    if (options.createdAfter != std::chrono::system_clock::time_point{} &&
-        entry.created < options.createdAfter) {
+    settings_ = settings;
+
+    // Generate a new salt for the master key
+    masterSalt_.resize(32);
+    if (RAND_bytes(masterSalt_.data(), static_cast<int>(masterSalt_.size())) !=
+        1) {
         return false;
     }
 
-    if (options.createdBefore != std::chrono::system_clock::time_point{} &&
-        entry.created > options.createdBefore) {
+    // Derive the master key
+    auto keyResult = deriveMasterKey(masterPassword);
+    if (keyResult.isError()) {
         return false;
     }
 
-    if (options.expiresAfter != std::chrono::system_clock::time_point{} &&
-        entry.expires < options.expiresAfter) {
+    masterKey_ = std::move(keyResult.value());
+    isLocked_ = false;
+    updateLastActivity();
+
+    // Store the salt in secure storage for future use
+    std::string saltData(masterSalt_.begin(), masterSalt_.end());
+    if (!storage_->store("__master_salt__", saltData)) {
+        PasswordManager::lock();
         return false;
     }
 
-    if (options.expiresBefore != std::chrono::system_clock::time_point{} &&
-        entry.expires > options.expiresBefore) {
+    return true;
+}
+
+void PasswordManager::lock() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Securely clear sensitive data
+    SecureMemory::secureClear(masterKey_);
+    SecureMemory::secureClear(masterSalt_);
+
+    isLocked_ = true;
+}
+
+bool PasswordManager::unlock(std::string_view masterPassword) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (masterPassword.empty()) {
         return false;
     }
 
-    // Check expiration filter
-    if (!options.includeExpired) {
-        auto now = std::chrono::system_clock::now();
-        if (entry.expires <= now) {
+    // Retrieve the master salt
+    std::string saltData = storage_->retrieve("__master_salt__");
+    if (saltData.empty()) {
+        return false;
+    }
+    masterSalt_.assign(saltData.begin(), saltData.end());
+
+    // Derive the master key
+    auto keyResult = deriveMasterKey(masterPassword);
+    if (keyResult.isError()) {
+        return false;
+    }
+
+    masterKey_ = std::move(keyResult.value());
+    isLocked_ = false;
+    updateLastActivity();
+
+    return true;
+}
+
+bool PasswordManager::isLocked() const noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return isLocked_;
+}
+
+bool PasswordManager::changeMasterPassword(std::string_view currentPassword,
+                                           std::string_view newPassword) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!ensureUnlocked() || currentPassword.empty() || newPassword.empty()) {
+        return false;
+    }
+
+    // Verify current password by deriving key
+    auto currentKeyResult = deriveMasterKey(currentPassword);
+    if (currentKeyResult.isError()) {
+        return false;
+    }
+
+    // Check if current key matches stored key
+    if (!SecureComparison::constantTimeEquals(currentKeyResult.value().data(),
+                                              masterKey_.data(),
+                                              masterKey_.size())) {
+        return false;
+    }
+
+    // Get all stored entries to re-encrypt with new key
+    auto allKeys = getAllKeys();
+    std::vector<std::pair<std::string, PasswordEntry>> allEntries;
+
+    for (const auto& key : allKeys) {
+        if (key == "__master_salt__")
+            continue;
+        auto entry = retrievePassword(key);
+        if (!entry.password.empty()) {
+            allEntries.emplace_back(key, std::move(entry));
+        }
+    }
+
+    // Generate new salt and derive new key
+    if (RAND_bytes(masterSalt_.data(), static_cast<int>(masterSalt_.size())) !=
+        1) {
+        return false;
+    }
+
+    auto newKeyResult = deriveMasterKey(newPassword);
+    if (newKeyResult.isError()) {
+        return false;
+    }
+
+    // Clear old key and set new key
+    SecureMemory::secureClear(masterKey_);
+    masterKey_ = std::move(newKeyResult.value());
+
+    // Store new salt
+    std::string saltData(masterSalt_.begin(), masterSalt_.end());
+    if (!storage_->store("__master_salt__", saltData)) {
+        return false;
+    }
+
+    // Re-encrypt and store all entries with new key
+    for (const auto& [key, entry] : allEntries) {
+        if (!storePassword(key, entry)) {
+            // If re-encryption fails, we're in a bad state
             return false;
         }
     }
 
-    // Check text search
-    if (!options.query.empty()) {
-        std::string query = options.query;
-        if (!options.caseSensitive) {
-            std::transform(query.begin(), query.end(), query.begin(), ::tolower);
-        }
+    updateLastActivity();
+    return true;
+}
 
-        auto checkField = [&](const std::string& field) -> bool {
-            std::string fieldCopy = field;
-            if (!options.caseSensitive) {
-                std::transform(fieldCopy.begin(), fieldCopy.end(), fieldCopy.begin(), ::tolower);
-            }
+bool PasswordManager::storePassword(std::string_view key,
+                                    const PasswordEntry& entry) {
+    std::lock_guard<std::mutex> lock(mutex_);
 
-            if (options.useRegex) {
-                try {
-                    std::regex pattern(query, options.caseSensitive ? std::regex::ECMAScript : std::regex::icase);
-                    return std::regex_search(fieldCopy, pattern);
-                } catch (const std::regex_error&) {
-                    return false;
-                }
-            } else {
-                return fieldCopy.find(query) != std::string::npos;
-            }
-        };
+    if (!ensureUnlocked() || key.empty()) {
+        return false;
+    }
+
+    // Serialize the entry to JSON
+    auto jsonResult = JsonSerializer::serializeEntry(entry);
+    if (jsonResult.isError()) {
+        return false;
+    }
+
+    // Encrypt the JSON data
+    auto encryptedResult = encryptData(jsonResult.value());
+    if (encryptedResult.isError()) {
+        return false;
+    }
+
+    // Serialize the encrypted data for storage
+    std::ostringstream oss;
+    const auto& encrypted = encryptedResult.value();
+
+    // Store as binary data: method(1) + salt_len(4) + salt + iv_len(4) + iv +
+    // tag_len(4) + tag + data
+    oss.write(reinterpret_cast<const char*>(&encrypted.method),
+              sizeof(encrypted.method));
+
+    uint32_t saltLen = static_cast<uint32_t>(encrypted.salt.size());
+    oss.write(reinterpret_cast<const char*>(&saltLen), sizeof(saltLen));
+    oss.write(reinterpret_cast<const char*>(encrypted.salt.data()), saltLen);
+
+    uint32_t ivLen = static_cast<uint32_t>(encrypted.iv.size());
+    oss.write(reinterpret_cast<const char*>(&ivLen), sizeof(ivLen));
+    oss.write(reinterpret_cast<const char*>(encrypted.iv.data()), ivLen);
+
+    uint32_t tagLen = static_cast<uint32_t>(encrypted.tag.size());
+    oss.write(reinterpret_cast<const char*>(&tagLen), sizeof(tagLen));
+    oss.write(reinterpret_cast<const char*>(encrypted.tag.data()), tagLen);
+
+    oss.write(reinterpret_cast<const char*>(encrypted.ciphertext.data()),
+              encrypted.ciphertext.size());
+
+    updateLastActivity();
+    return storage_->store(std::string(key), oss.str());
+}
+
+PasswordEntry PasswordManager::retrievePassword(std::string_view key) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!ensureUnlocked() || key.empty()) {
+        return PasswordEntry{};
+    }
+
+    // Retrieve encrypted data from storage
+    std::string data = storage_->retrieve(std::string(key));
+    if (data.empty()) {
+        return PasswordEntry{};
+    }
+    std::istringstream iss(data);
+
+    // Deserialize encrypted data
+    EncryptedData encrypted;
+
+    iss.read(reinterpret_cast<char*>(&encrypted.method),
+             sizeof(encrypted.method));
+
+    uint32_t saltLen, ivLen, tagLen;
+    iss.read(reinterpret_cast<char*>(&saltLen), sizeof(saltLen));
+    encrypted.salt.resize(saltLen);
+    iss.read(reinterpret_cast<char*>(encrypted.salt.data()), saltLen);
+
+    iss.read(reinterpret_cast<char*>(&ivLen), sizeof(ivLen));
+    encrypted.iv.resize(ivLen);
+    iss.read(reinterpret_cast<char*>(encrypted.iv.data()), ivLen);
+
+    iss.read(reinterpret_cast<char*>(&tagLen), sizeof(tagLen));
+    encrypted.tag.resize(tagLen);
+    iss.read(reinterpret_cast<char*>(encrypted.tag.data()), tagLen);
+
+    size_t dataLen = data.size() - iss.tellg();
+    encrypted.ciphertext.resize(dataLen);
+    iss.read(reinterpret_cast<char*>(encrypted.ciphertext.data()), dataLen);
+
+    // Decrypt the data
+    auto decryptedResult = decryptData(encrypted);
+    if (decryptedResult.isError()) {
+        return PasswordEntry{};
+    }
+
+    // Deserialize the JSON to PasswordEntry
+    auto entryResult =
+        JsonSerializer::deserializeEntry(decryptedResult.value());
+    if (entryResult.isError()) {
+        return PasswordEntry{};
+    }
+
+    updateLastActivity();
+    return entryResult.value();
+}
+
+bool PasswordManager::removePassword(std::string_view key) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!ensureUnlocked() || key.empty()) {
+        return false;
+    }
+
+    updateLastActivity();
+    return storage_->remove(std::string(key));
+}
+
+std::vector<std::string> PasswordManager::getAllKeys() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!ensureUnlocked()) {
+        return {};
+    }
+
+    auto allKeys = storage_->getAllKeys();
+
+    // Filter out internal keys
+    allKeys.erase(std::remove_if(allKeys.begin(), allKeys.end(),
+                                 [](const std::string& key) {
+                                     return key.starts_with("__") &&
+                                            key.ends_with("__");
+                                 }),
+                  allKeys.end());
+
+    updateLastActivity();
+    return allKeys;
+}
+
+std::vector<std::pair<std::string, PasswordEntry>>
+PasswordManager::searchPasswords(std::string_view query, bool searchInTitle,
+                                 bool searchInUsername, bool searchInUrl,
+                                 bool searchInNotes, bool searchInTags) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!ensureUnlocked() || query.empty()) {
+        return {};
+    }
+
+    std::vector<std::pair<std::string, PasswordEntry>> results;
+    auto allKeys = getAllKeys();
+
+    std::string lowerQuery;
+    lowerQuery.reserve(query.length());
+    for (char c : query) {
+        lowerQuery += std::tolower(c);
+    }
+
+    for (const auto& key : allKeys) {
+        auto entry = retrievePassword(key);
+        if (entry.password.empty())
+            continue;
 
         bool matches = false;
-        if (options.searchInTitle && checkField(entry.title)) matches = true;
-        if (options.searchInUsername && checkField(entry.username)) matches = true;
-        if (options.searchInUrl && checkField(entry.url)) matches = true;
-        if (options.searchInNotes && checkField(entry.notes)) matches = true;
 
-        if (options.searchInTags) {
+        // Helper lambda to check if text contains query (case-insensitive)
+        auto contains = [&lowerQuery](const std::string& text) {
+            std::string lowerText;
+            lowerText.reserve(text.length());
+            for (char c : text) {
+                lowerText += std::tolower(c);
+            }
+            return lowerText.find(lowerQuery) != std::string::npos;
+        };
+
+        if (searchInTitle && contains(entry.title))
+            matches = true;
+        if (searchInUsername && contains(entry.username))
+            matches = true;
+        if (searchInUrl && contains(entry.url))
+            matches = true;
+        if (searchInNotes && contains(entry.notes))
+            matches = true;
+
+        if (searchInTags) {
             for (const auto& tag : entry.tags) {
-                if (checkField(tag)) {
+                if (contains(tag)) {
                     matches = true;
                     break;
                 }
             }
         }
 
-        if (!matches) {
-            return false;
+        if (matches) {
+            results.emplace_back(key, std::move(entry));
         }
     }
 
+    updateLastActivity();
+    return results;
+}
+
+std::vector<std::pair<std::string, PasswordEntry>>
+PasswordManager::filterByCategory(PasswordCategory category) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!ensureUnlocked()) {
+        return {};
+    }
+
+    std::vector<std::pair<std::string, PasswordEntry>> results;
+    auto allKeys = getAllKeys();
+
+    for (const auto& key : allKeys) {
+        auto entry = retrievePassword(key);
+        if (entry.password.empty())
+            continue;
+
+        if (entry.category == category) {
+            results.emplace_back(key, std::move(entry));
+        }
+    }
+
+    updateLastActivity();
+    return results;
+}
+
+std::vector<std::pair<std::string, PasswordEntry>>
+PasswordManager::getExpiringPasswords(int daysAhead) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!ensureUnlocked()) {
+        return {};
+    }
+
+    std::vector<std::pair<std::string, PasswordEntry>> results;
+    auto allKeys = getAllKeys();
+    auto now = std::chrono::system_clock::now();
+    auto futureTime = now + std::chrono::hours(24 * daysAhead);
+
+    for (const auto& key : allKeys) {
+        auto entry = retrievePassword(key);
+        if (entry.password.empty())
+            continue;
+
+        if (entry.expires != std::chrono::system_clock::time_point{} &&
+            entry.expires <= futureTime) {
+            results.emplace_back(key, std::move(entry));
+        }
+    }
+
+    updateLastActivity();
+    return results;
+}
+
+std::string PasswordManager::generatePassword(int length, bool includeUppercase,
+                                              bool includeNumbers,
+                                              bool includeSpecial) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!ensureUnlocked()) {
+        return "";
+    }
+
+    PasswordGenerator::GenerationOptions options;
+    options.length = (length > 0) ? length : settings_.minPasswordLength;
+    options.includeUppercase = includeUppercase;
+    options.includeDigits = includeNumbers;
+    options.includeSpecial = includeSpecial;
+
+    auto result = PasswordGenerator::generatePassword(options);
+    updateLastActivity();
+
+    return result.isError() ? "" : result.value();
+}
+
+PasswordValidator::AnalysisResult PasswordManager::analyzePassword(
+    std::string_view password) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    updateLastActivity();
+    return PasswordValidator::analyzePassword(password);
+}
+
+Result<std::string> PasswordManager::exportToJson() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!ensureUnlocked()) {
+        return Result<std::string>("Password manager is locked");
+    }
+
+    std::vector<PasswordEntry> entries;
+    auto allKeys = getAllKeys();
+
+    for (const auto& key : allKeys) {
+        auto entry = retrievePassword(key);
+        if (!entry.password.empty()) {
+            entries.push_back(std::move(entry));
+        }
+    }
+
+    updateLastActivity();
+    return JsonSerializer::serializeEntries(entries);
+}
+
+Result<int> PasswordManager::importFromJson(const std::string& json,
+                                            bool overwriteExisting) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!ensureUnlocked()) {
+        return Result<int>::error("Password manager is locked");
+    }
+
+    auto entriesResult = JsonSerializer::deserializeEntries(json);
+    if (entriesResult.isError()) {
+        return Result<int>::error("Failed to parse JSON: " +
+                                  entriesResult.error());
+    }
+
+    const auto& entries = entriesResult.value();
+    int importedCount = 0;
+
+    for (const auto& entry : entries) {
+        // Generate a key from title and username
+        std::string key = entry.title;
+        if (!entry.username.empty()) {
+            key += "_" + entry.username;
+        }
+
+        // Check if entry already exists
+        if (!overwriteExisting) {
+            auto existingEntry = retrievePassword(key);
+            if (!existingEntry.password.empty()) {
+                continue;  // Skip existing entry
+            }
+        }
+
+        if (storePassword(key, entry)) {
+            importedCount++;
+        }
+    }
+
+    updateLastActivity();
+    return Result<int>(importedCount);
+}
+
+const PasswordManagerSettings& PasswordManager::getSettings() const noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return settings_;
+}
+
+bool PasswordManager::updateSettings(const PasswordManagerSettings& settings) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    settings_ = settings;
+    updateLastActivity();
     return true;
 }
 
-void PasswordManager::updateMetrics(bool /*success*/, std::chrono::milliseconds /*latency*/) {
-    // This method is now inlined where needed to handle const correctness
+PasswordManager::Statistics PasswordManager::getStatistics() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    Statistics stats;
+
+    if (!ensureUnlocked()) {
+        return stats;
+    }
+
+    auto allKeys = getAllKeys();
+    auto now = std::chrono::system_clock::now();
+    std::vector<std::string> passwords;
+
+    for (const auto& key : allKeys) {
+        auto entry = retrievePassword(key);
+        if (entry.password.empty())
+            continue;
+
+        stats.totalEntries++;
+
+        // Check if expired
+        if (entry.expires != std::chrono::system_clock::time_point{} &&
+            entry.expires <= now) {
+            stats.expiredEntries++;
+        }
+
+        // Check password strength
+        auto analysis = PasswordValidator::analyzePassword(entry.password);
+        if (analysis.strength == PasswordStrength::Weak ||
+            analysis.strength == PasswordStrength::VeryWeak) {
+            stats.weakPasswords++;
+        }
+
+        // Check for duplicates
+        if (std::find(passwords.begin(), passwords.end(), entry.password) !=
+            passwords.end()) {
+            stats.duplicatePasswords++;
+        } else {
+            passwords.push_back(entry.password);
+        }
+
+        // Update last modified time
+        if (entry.modified > stats.lastModified) {
+            stats.lastModified = entry.modified;
+        }
+    }
+
+    updateLastActivity();
+    return stats;
+}
+
+// ============================================================================
+// Private Methods
+// ============================================================================
+
+Result<std::vector<uint8_t>> PasswordManager::deriveMasterKey(
+    std::string_view masterPassword) {
+    return KeyDerivation::deriveKey(masterPassword, masterSalt_,
+                                    settings_.encryptionOptions.keyIterations,
+                                    32  // 256-bit key
+    );
+}
+
+Result<EncryptedData> PasswordManager::encryptData(const std::string& data) {
+    return Encryption::encryptWithKey(data, masterKey_,
+                                      settings_.encryptionOptions);
+}
+
+Result<std::string> PasswordManager::decryptData(
+    const EncryptedData& encryptedData) {
+    return Encryption::decryptWithKey(encryptedData, masterKey_);
+}
+
+void PasswordManager::checkAutoLock() {
+    if (settings_.autoLockTimeoutSeconds <= 0) {
+        return;  // Auto-lock disabled
+    }
+
+    auto now = std::chrono::system_clock::now();
+    auto elapsed =
+        std::chrono::duration_cast<std::chrono::seconds>(now - lastActivity_);
+
+    if (elapsed.count() >= settings_.autoLockTimeoutSeconds) {
+        PasswordManager::lock();
+    }
+}
+
+void PasswordManager::updateLastActivity() {
+    lastActivity_ = std::chrono::system_clock::now();
+}
+
+bool PasswordManager::ensureUnlocked() {
+    checkAutoLock();
+    return !isLocked_;
 }
 
 }  // namespace atom::secret

@@ -1,35 +1,24 @@
 #pragma once
 
-#include <asio.hpp>
-#include <asio/ssl.hpp>
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <random>
+#include <shared_mutex>
 #include <thread>
 #include <unordered_map>
-#include <spdlog/spdlog.h>
-
+#include "../asio_compatibility.hpp"
 #include "packet.hpp"
 #include "protocol.hpp"
 #include "types.hpp"
-#include "../concurrency/concurrency.hpp"
 
 /**
  * @file client.hpp
- * @brief Advanced MQTT Client with cutting-edge C++23 concurrency primitives
- *
- * This implementation features:
- * - Lock-free data structures for message queues
- * - Work-stealing thread pool for optimal performance
- * - Adaptive synchronization primitives
- * - Real-time performance monitoring
- * - NUMA-aware memory management
+ * @brief Defines the MQTT Client class, providing a modern C++20 MQTT client
+ * implementation.
  */
 
 namespace mqtt {
-
-// Namespace alias for concurrency primitives
-namespace concurrency = atom::extra::asio::concurrency;
 
 /**
  * @class Client
@@ -54,10 +43,12 @@ namespace concurrency = atom::extra::asio::concurrency;
 class Client {
 private:
     // Core components
-    asio::io_context
+    net::io_context
         io_context_;  ///< ASIO I/O context for all async operations.
-    std::unique_ptr<asio::ssl::context>
+#ifdef USE_SSL
+    std::unique_ptr<ssl_context>
         ssl_context_;  ///< SSL context for TLS connections.
+#endif
     std::unique_ptr<ITransport>
         transport_;  ///< Network transport (TCP or TLS).
     std::unique_ptr<std::thread>
@@ -70,34 +61,35 @@ private:
     std::string broker_host_;               ///< MQTT broker hostname or IP.
     uint16_t broker_port_{1883};            ///< MQTT broker port.
 
-    // Advanced packet handling with lock-free structures
-    std::atomic<uint16_t> next_packet_id_{1};
-    std::unordered_map<uint16_t, PendingOperation> pending_operations_;
-    mutable concurrency::reader_writer_spinlock pending_operations_lock_;
+    // Packet handling
+    std::atomic<uint16_t> next_packet_id_{
+        1};  ///< Next packet identifier for outgoing packets.
+    std::unordered_map<uint16_t, PendingOperation>
+        pending_operations_;  ///< Map of packet ID to pending operation.
+    std::mutex pending_operations_mutex_;  ///< Mutex for thread-safe access to
+                                           ///< pending operations.
 
-    // High-performance message queues
-    concurrency::lockfree_queue<Message> outbound_message_queue_;
-    concurrency::lockfree_queue<Message> inbound_message_queue_;
+    // Message handling
+    MessageHandler
+        message_handler_;  ///< User-defined message handler callback.
+    ConnectionHandler
+        connection_handler_;  ///< User-defined connection handler callback.
+    DisconnectionHandler
+        disconnection_handler_;  ///< User-defined disconnection handler
+                                 ///< callback.
 
-    // Message handling with performance monitoring
-    MessageHandler message_handler_;
-    ConnectionHandler connection_handler_;
-    DisconnectionHandler disconnection_handler_;
+    // Keep-alive mechanism
+    std::unique_ptr<net::steady_timer>
+        keep_alive_timer_;  ///< Timer for keep-alive interval.
+    std::unique_ptr<net::steady_timer>
+        ping_timeout_timer_;  ///< Timer for ping response timeout.
+    std::chrono::steady_clock::time_point
+        last_packet_received_;  ///< Timestamp of last received packet.
 
-    // Keep-alive mechanism with adaptive timing
-    std::unique_ptr<asio::steady_timer> keep_alive_timer_;
-    std::unique_ptr<asio::steady_timer> ping_timeout_timer_;
-    std::chrono::steady_clock::time_point last_packet_received_;
-
-    // Advanced statistics with lock-free counters
-    ClientStats stats_;
-    mutable concurrency::reader_writer_spinlock stats_lock_;
-
-    // Performance monitoring integration
-    concurrency::performance_monitor& perf_monitor_;
-
-    // Object pool for efficient memory management
-    concurrency::concurrent_object_pool<Message> message_pool_;
+    // Statistics and monitoring
+    ClientStats stats_;  ///< Client statistics (bytes sent/received, etc).
+    mutable std::shared_mutex
+        stats_mutex_;  ///< Mutex for thread-safe stats access.
 
     // Read buffer management
     static constexpr size_t READ_BUFFER_SIZE =
@@ -107,7 +99,7 @@ private:
     BinaryBuffer packet_buffer_;  ///< Buffer for assembling packets.
 
     // Reconnection logic
-    std::unique_ptr<asio::steady_timer>
+    std::unique_ptr<net::steady_timer>
         reconnect_timer_;  ///< Timer for reconnection attempts.
     std::chrono::seconds reconnect_delay_{1};  ///< Current reconnect delay.
     static constexpr std::chrono::seconds MAX_RECONNECT_DELAY{
@@ -325,7 +317,7 @@ public:
      * @return ClientStats structure.
      */
     [[nodiscard]] ClientStats get_stats() const {
-        concurrency::shared_lock_guard lock(stats_lock_);
+        std::shared_lock lock(stats_mutex_);
         return stats_;
     }
 
@@ -333,10 +325,9 @@ public:
      * @brief Reset the client statistics.
      */
     void reset_stats() {
-        stats_lock_.lock();
+        std::unique_lock lock(stats_mutex_);
         stats_ = ClientStats{};
         stats_.connected_since = std::chrono::steady_clock::now();
-        stats_lock_.unlock();
     }
 
     /** @} */
@@ -358,9 +349,9 @@ public:
 
     /**
      * @brief Get a reference to the underlying ASIO IO context.
-     * @return Reference to asio::io_context.
+     * @return Reference to net::io_context.
      */
-    [[nodiscard]] asio::io_context& get_io_context() noexcept {
+    [[nodiscard]] net::io_context& get_io_context() noexcept {
         return io_context_;
     }
 

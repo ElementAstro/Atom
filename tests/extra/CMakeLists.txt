@@ -1,91 +1,166 @@
-cmake_minimum_required(VERSION 3.20)
+# CMakeLists.txt for Atom Extra Tests This project is licensed under the terms
+# of the GPL3 license.
+#
+# Project Name: Atom Extra Tests Description: Comprehensive test suite for Atom
+# extra components Author: Max Qian License: GPL3
 
-project(atom_extra.test)
+cmake_minimum_required(VERSION 3.21)
+project(
+  atom-extra-tests
+  VERSION 1.0.0
+  LANGUAGES CXX)
 
-# Set C++20 standard
+# Set C++ standard
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Enable coroutines support
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    add_compile_options(-fcoroutines)
+# Find required packages
+find_package(GTest REQUIRED)
+# GMock is included with GTest in most modern installations Try to find GMock
+# separately, but don't fail if not found
+find_package(GMock QUIET)
+find_package(Threads REQUIRED)
+
+# Backward-compatible aliases for legacy GTest target names
+if(TARGET GTest::gtest AND NOT TARGET GTest::GTest)
+  add_library(GTest::GTest ALIAS GTest::gtest)
+endif()
+if(TARGET GTest::gtest_main AND NOT TARGET GTest::Main)
+  add_library(GTest::Main ALIAS GTest::gtest_main)
 endif()
 
-find_package(GTest QUIET)
+# Include directories
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/extra)
 
-if(NOT GTEST_FOUND)
-  include(FetchContent)
-  FetchContent_Declare(
-    googletest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG release-1.11.0
-  )
-  FetchContent_MakeAvailable(googletest)
-  include(GoogleTest)
-else()
-  include(GoogleTest)
-endif()
+# Function to create test executable for a module
+function(create_extra_test_executable MODULE_NAME)
+  set(TEST_TARGET atom-extra-${MODULE_NAME}-test)
 
-# Collect test sources from subdirectories, excluding problematic tests for now
-file(GLOB TEST_SOURCES
-    ${PROJECT_SOURCE_DIR}/inicpp/common.cpp
-    ${PROJECT_SOURCE_DIR}/inicpp/convert.cpp
-    ${PROJECT_SOURCE_DIR}/inicpp/field.cpp
-    # Temporarily exclude other tests due to linking issues
-    # ${PROJECT_SOURCE_DIR}/inicpp/file.cpp
-    # ${PROJECT_SOURCE_DIR}/beast/*.cpp
-)
+  # Collect all test source files for the module
+  file(GLOB_RECURSE TEST_SOURCES
+       "${CMAKE_CURRENT_SOURCE_DIR}/${MODULE_NAME}/*.cpp"
+       "${CMAKE_CURRENT_SOURCE_DIR}/${MODULE_NAME}/*.hpp")
 
-# Only create executable if there are source files
-if(TEST_SOURCES)
-    add_executable(${PROJECT_NAME} ${TEST_SOURCES})
+  if(TEST_SOURCES AND TARGET atom-extra-${MODULE_NAME})
+    # Create test executable
+    add_executable(${TEST_TARGET} ${TEST_SOURCES})
 
-    # Add include directories for the project
-    target_include_directories(${PROJECT_NAME} PRIVATE
-        ${CMAKE_SOURCE_DIR}/../../  # Root directory to find atom/extra headers
-        ${CMAKE_SOURCE_DIR}/../../atom/extra/beast  # For beast headers
-    )
+    # Link libraries
+    target_link_libraries(
+      ${TEST_TARGET} PRIVATE GTest::GTest GTest::Main GTest::gmock
+                             GTest::gmock_main Threads::Threads)
 
-    # Link with common libraries and external dependencies
-    target_link_libraries(${PROJECT_NAME}
-        gtest gtest_main gmock gmock_main
-        # Temporarily removed: atom-error loguru
-    )
-
-    # Add conditional linking for external libraries if available
-    find_package(Boost QUIET)
-    if(Boost_FOUND)
-        target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES})
-        target_include_directories(${PROJECT_NAME} PRIVATE ${Boost_INCLUDE_DIRS})
+    # Link to the corresponding extra module if it exists
+    if(TARGET atom-extra-${MODULE_NAME})
+      target_link_libraries(${TEST_TARGET} PRIVATE atom-extra-${MODULE_NAME})
     endif()
 
-    find_package(CURL QUIET)
-    if(CURL_FOUND)
-        target_link_libraries(${PROJECT_NAME} ${CURL_LIBRARIES})
-        target_include_directories(${PROJECT_NAME} PRIVATE ${CURL_INCLUDE_DIRS})
+    # Add Windows socket libraries for network-related modules
+    if(WIN32 AND (MODULE_NAME STREQUAL "beast" OR MODULE_NAME STREQUAL "asio"))
+      target_link_libraries(${TEST_TARGET} PRIVATE ws2_32 wsock32 mswsock)
     endif()
 
-    find_package(PkgConfig QUIET)
-    if(PkgConfig_FOUND)
-        pkg_check_modules(LIBUV libuv)
-        if(LIBUV_FOUND)
-            target_link_libraries(${PROJECT_NAME} ${LIBUV_LIBRARIES})
-            target_include_directories(${PROJECT_NAME} PRIVATE ${LIBUV_INCLUDE_DIRS})
-        endif()
+    # Add OpenSSL libraries for ASIO module (needed for SSL support)
+    if(MODULE_NAME STREQUAL "asio")
+      find_package(OpenSSL REQUIRED)
+      target_link_libraries(${TEST_TARGET} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
     endif()
 
-    # Add TBB for inicpp parallel processing
-    find_package(TBB QUIET)
-    if(TBB_FOUND)
-        target_link_libraries(${PROJECT_NAME} TBB::tbb)
-        message(STATUS "TBB found - linking with TBB")
+    # Add TBB libraries for inicpp module (needed for parallel algorithms)
+    if(MODULE_NAME STREQUAL "inicpp")
+      find_package(TBB REQUIRED)
+      target_link_libraries(${TEST_TARGET} PRIVATE TBB::tbb atom-error)
+    endif()
+
+    # Set compiler features
+    target_compile_features(${TEST_TARGET} PRIVATE cxx_std_20)
+
+    # Compiler flags
+    if(MSVC)
+      target_compile_options(${TEST_TARGET} PRIVATE /W4)
     else()
-        message(WARNING "TBB not found - inicpp parallel features may not work")
+      target_compile_options(${TEST_TARGET} PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 
-    # Register tests with CTest
-    add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
-else()
-    message(STATUS "No test sources found for ${PROJECT_NAME}, skipping target creation")
+    # Enable testing
+    enable_testing()
+
+    # Add test
+    add_test(NAME ${TEST_TARGET} COMMAND ${TEST_TARGET})
+
+    # Set test properties
+    set_tests_properties(
+      ${TEST_TARGET} PROPERTIES TIMEOUT 300 WORKING_DIRECTORY
+                                ${CMAKE_CURRENT_BINARY_DIR})
+
+    # Copy DLLs on Windows
+    if(WIN32)
+      if(COMMAND copy_test_dlls)
+        copy_test_dlls(${TEST_TARGET})
+      endif()
+
+      add_custom_command(
+        TARGET ${TEST_TARGET}
+        POST_BUILD
+        COMMAND
+          ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_RUNTIME_DLLS:${TEST_TARGET}>
+          $<TARGET_FILE_DIR:${TEST_TARGET}>
+        COMMAND_EXPAND_LISTS)
+    endif()
+
+    message(STATUS "Created test executable: ${TEST_TARGET}")
+  else()
+    message(STATUS "No test sources found for module: ${MODULE_NAME}")
+  endif()
+endfunction()
+
+# List of extra modules to test
+set(EXTRA_MODULES
+    asio
+    beast
+    boost
+    curl
+    dotenv
+    iconv
+    inicpp
+    injection
+    pugixml
+    spdlog
+    uv)
+
+# Create test executables for each module
+foreach(MODULE ${EXTRA_MODULES})
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${MODULE}")
+    create_extra_test_executable(${MODULE})
+  endif()
+endforeach()
+
+# Custom test targets
+add_custom_target(
+  run_extra_tests
+  COMMAND ${CMAKE_CTEST_COMMAND} --verbose
+  COMMENT "Running all extra component tests")
+
+add_custom_target(
+  run_extra_tests_parallel
+  COMMAND ${CMAKE_CTEST_COMMAND} --parallel 4 --verbose
+  COMMENT "Running extra component tests in parallel")
+
+# Code coverage (if available)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_COMPILER_IS_GNUCXX)
+  add_custom_target(
+    extra_coverage
+    COMMAND lcov --directory . --capture --output-file extra_coverage.info
+    COMMAND lcov --remove extra_coverage.info '/usr/*' --output-file
+            extra_coverage.info
+    COMMAND lcov --remove extra_coverage.info '*/gtest/*' --output-file
+            extra_coverage.info
+    COMMAND lcov --list extra_coverage.info
+    COMMAND genhtml -o extra_coverage_html extra_coverage.info
+    DEPENDS run_extra_tests
+    COMMENT "Generating code coverage report for extra components")
 endif()
+
+message(STATUS "Atom Extra Tests configuration completed")

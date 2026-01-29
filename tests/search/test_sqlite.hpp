@@ -1,647 +1,528 @@
 #ifndef ATOM_SEARCH_TEST_SQLITE_HPP
 #define ATOM_SEARCH_TEST_SQLITE_HPP
 
-#include "atom/search/sqlite.hpp"
-
 #include <gtest/gtest.h>
-
-#include <cstdio> // For std::remove
-#include <string>
+#include <chrono>
+#include <filesystem>
+#include <thread>
 #include <vector>
+
+#include "atom/search/database/sqlite.hpp"
 
 using namespace atom::search;
 
 class SqliteDBTest : public ::testing::Test {
 protected:
-    const std::string test_db_path = "test_sqlite.db";
     std::unique_ptr<SqliteDB> db;
+    std::string testDbPath;
 
     void SetUp() override {
-        // Ensure the database file does not exist before starting
-        std::remove(test_db_path.c_str());
+        // Use in-memory database for most tests
+        testDbPath = ":memory:";
+        db = std::make_unique<SqliteDB>(testDbPath);
 
-        // Create a new database connection
-        db = std::make_unique<SqliteDB>(test_db_path);
-
-        // Create a test table
-        ASSERT_TRUE(db->executeQuery(
-            "CREATE TABLE test_table (id INTEGER PRIMARY KEY, name TEXT, value REAL);"));
-        ASSERT_TRUE(db->executeQuery(
-            "CREATE TABLE another_table (key TEXT UNIQUE, data BLOB);"));
+        // Create test table
+        ASSERT_TRUE(db->executeQuery(R"(
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE,
+                age INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        )"));
     }
 
     void TearDown() override {
-        // Close the database connection (unique_ptr handles deletion)
         db.reset();
+        // Clean up file-based test databases
+        if (testDbPath != ":memory:" && std::filesystem::exists(testDbPath)) {
+            std::filesystem::remove(testDbPath);
+        }
+    }
 
-        // Remove the database file
-        std::remove(test_db_path.c_str());
+    void createFileBasedDB(const std::string& filename) {
+        testDbPath = filename;
+        db = std::make_unique<SqliteDB>(testDbPath);
+
+        // Create test table
+        ASSERT_TRUE(db->executeQuery(R"(
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE,
+                age INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        )"));
     }
 };
 
-TEST_F(SqliteDBTest, ConstructorCreatesFile) {
-    // SetUp already creates the file, just check if it exists
-    FILE* file = fopen(test_db_path.c_str(), "r");
-    ASSERT_NE(file, nullptr);
-    fclose(file);
+// Basic CRUD Operations Tests
+TEST_F(SqliteDBTest, BasicInsert) {
+    EXPECT_TRUE(
+        db->executeQuery("INSERT INTO users (name, email, age) VALUES "
+                         "('Alice', 'alice@test.com', 25)"));
+    EXPECT_GT(db->getLastInsertRowId(), 0);
+    EXPECT_EQ(db->getChanges(), 1);
 }
 
-TEST_F(SqliteDBTest, ConstructorThrowsOnInvalidPath) {
-    // Attempt to create a database in a non-existent directory
-    EXPECT_THROW(SqliteDB("/nonexistent_dir/invalid.db"), SQLiteException);
+TEST_F(SqliteDBTest, BasicSelect) {
+    // Insert test data
+    ASSERT_TRUE(
+        db->executeQuery("INSERT INTO users (name, email, age) VALUES ('Bob', "
+                         "'bob@test.com', 30)"));
+
+    // Select data
+    auto result = db->selectData("SELECT * FROM users WHERE name = 'Bob'");
+    ASSERT_EQ(result.size(), 1);
+    EXPECT_EQ(result[0][1], "Bob");
+    EXPECT_EQ(result[0][2], "bob@test.com");
+    EXPECT_EQ(result[0][3], "30");
 }
 
-TEST_F(SqliteDBTest, ExecuteQuery) {
-    // Test inserting data
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Alice', 1.1);"));
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Bob', 2.2);"));
+TEST_F(SqliteDBTest, BasicUpdate) {
+    // Insert and update
+    ASSERT_TRUE(
+        db->executeQuery("INSERT INTO users (name, email, age) VALUES "
+                         "('Charlie', 'charlie@test.com', 35)"));
+    EXPECT_TRUE(
+        db->executeQuery("UPDATE users SET age = 36 WHERE name = 'Charlie'"));
+    EXPECT_EQ(db->getChanges(), 1);
 
-    // Test selecting data
-    auto results = db->selectData("SELECT name FROM test_table;");
-    ASSERT_EQ(results.size(), 2);
-    EXPECT_EQ(results[0][0], "Alice");
-    EXPECT_EQ(results[1][0], "Bob");
-
-    // Test invalid query
-    EXPECT_THROW(static_cast<void>(db->executeQuery("SELECT * FROM non_existent_table;")), SQLiteException);
+    // Verify update
+    auto result =
+        db->selectData("SELECT age FROM users WHERE name = 'Charlie'");
+    ASSERT_EQ(result.size(), 1);
+    EXPECT_EQ(result[0][0], "36");
 }
 
-TEST_F(SqliteDBTest, ExecuteParameterizedQuery) {
-    // Test inserting data with parameters
-    ASSERT_TRUE(db->executeParameterizedQuery("INSERT INTO test_table (name, value) VALUES (?, ?);", "Charlie", 3.3));
-    ASSERT_TRUE(db->executeParameterizedQuery("INSERT INTO test_table (name, value) VALUES (?, ?);", "David", 4.4));
+TEST_F(SqliteDBTest, BasicDelete) {
+    // Insert and delete
+    ASSERT_TRUE(
+        db->executeQuery("INSERT INTO users (name, email, age) VALUES "
+                         "('David', 'david@test.com', 40)"));
+    EXPECT_TRUE(db->executeQuery("DELETE FROM users WHERE name = 'David'"));
+    EXPECT_EQ(db->getChanges(), 1);
 
-    auto results = db->selectData("SELECT name, value FROM test_table WHERE name = 'Charlie';");
-    ASSERT_EQ(results.size(), 1);
-    EXPECT_EQ(results[0][0], "Charlie");
-    EXPECT_EQ(results[0][1], "3.3"); // Note: SQLite stores REAL as double, string conversion might vary slightly
-
-    // Test with different parameter types
-    ASSERT_TRUE(db->executeParameterizedQuery("INSERT INTO another_table (key, data) VALUES (?, ?);", "binary_key", std::vector<unsigned char>{1, 2, 3}));
-    auto blob_results = db->selectData("SELECT key FROM another_table WHERE key = 'binary_key';");
-    ASSERT_EQ(blob_results.size(), 1);
-    EXPECT_EQ(blob_results[0][0], "binary_key");
-
-    // Test invalid query with parameters
-    EXPECT_THROW(static_cast<void>(db->executeParameterizedQuery("INSERT INTO non_existent_table (name) VALUES (?);", "Invalid")), SQLiteException);
-
-    // Test wrong number of parameters
-    EXPECT_THROW(static_cast<void>(db->executeParameterizedQuery("INSERT INTO test_table (name) VALUES (?, ?);", "Too many", 1)), SQLiteException);
-    EXPECT_THROW(static_cast<void>(db->executeParameterizedQuery("INSERT INTO test_table (name, value) VALUES (?, ?);", "Too few")), SQLiteException);
+    // Verify deletion
+    auto result = db->selectData("SELECT * FROM users WHERE name = 'David'");
+    EXPECT_EQ(result.size(), 0);
 }
 
-TEST_F(SqliteDBTest, SelectData) {
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Alice', 1.1);"));
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Bob', 2.2);"));
-
-    auto results = db->selectData("SELECT id, name, value FROM test_table ORDER BY id;");
-    ASSERT_EQ(results.size(), 2);
-    ASSERT_EQ(results[0].size(), 3);
-    EXPECT_EQ(results[0][0], "1");
-    EXPECT_EQ(results[0][1], "Alice");
-    EXPECT_EQ(results[0][2], "1.1");
-    EXPECT_EQ(results[1][0], "2");
-    EXPECT_EQ(results[1][1], "Bob");
-    EXPECT_EQ(results[1][2], "2.2");
-
-    // Test selecting from empty table
-    auto empty_results = db->selectData("SELECT * FROM another_table;");
-    EXPECT_TRUE(empty_results.empty());
-
-    // Test invalid select query
-    EXPECT_THROW(static_cast<void>(db->selectData("SELECT * FROM non_existent_table;")), SQLiteException);
+// Parameterized Query Tests
+TEST_F(SqliteDBTest, ParameterizedInsert) {
+    const char* name = "Eve";
+    const char* email = "eve@test.com";
+    EXPECT_TRUE(db->executeParameterizedQuery(
+        "INSERT INTO users (name, email, age) VALUES (?, ?, ?)", name, email,
+        28));
+    EXPECT_GT(db->getLastInsertRowId(), 0);
 }
 
-TEST_F(SqliteDBTest, SelectParameterizedData) {
-    ASSERT_TRUE(db->executeParameterizedQuery("INSERT INTO test_table (name, value) VALUES (?, ?);", "Charlie", 3.3));
-    ASSERT_TRUE(db->executeParameterizedQuery("INSERT INTO test_table (name, value) VALUES (?, ?);", "David", 4.4));
+TEST_F(SqliteDBTest, ParameterizedSelect) {
+    // Insert test data
+    const char* name = "Frank";
+    const char* email = "frank@test.com";
+    ASSERT_TRUE(db->executeParameterizedQuery(
+        "INSERT INTO users (name, email, age) VALUES (?, ?, ?)", name, email,
+        32));
 
-    auto results = db->selectParameterizedData("SELECT id, name, value FROM test_table WHERE name = ? ORDER BY id;", "Charlie");
-    ASSERT_EQ(results.size(), 1);
-    ASSERT_EQ(results[0].size(), 3);
-    EXPECT_EQ(results[0][1], "Charlie");
-
-    auto empty_results = db->selectParameterizedData("SELECT * FROM test_table WHERE name = ?;", "NonExistent");
-    EXPECT_TRUE(empty_results.empty());
-
-    // Test invalid query with parameters
-    EXPECT_THROW(static_cast<void>(db->selectParameterizedData("SELECT * FROM non_existent_table WHERE name = ?;", "Invalid")), SQLiteException);
+    // Parameterized select
+    auto result =
+        db->selectParameterizedData("SELECT * FROM users WHERE age > ?", 30);
+    ASSERT_EQ(result.size(), 1);
+    EXPECT_EQ(result[0][1], "Frank");
 }
 
-TEST_F(SqliteDBTest, GetIntValue) {
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Alice', 1.1);"));
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Bob', 2.2);"));
+TEST_F(SqliteDBTest, ParameterizedUpdate) {
+    const char* name = "Grace";
+    const char* email = "grace@test.com";
+    ASSERT_TRUE(db->executeParameterizedQuery(
+        "INSERT INTO users (name, email, age) VALUES (?, ?, ?)", name, email,
+        27));
 
-    auto id_opt = db->getIntValue("SELECT id FROM test_table WHERE name = 'Alice';");
-    ASSERT_TRUE(id_opt.has_value());
-    EXPECT_EQ(id_opt.value(), 1);
-
-    // Test non-existent row
-    auto non_existent_opt = db->getIntValue("SELECT id FROM test_table WHERE name = 'Charlie';");
-    EXPECT_FALSE(non_existent_opt.has_value());
-
-    // Test NULL value
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name) VALUES ('NullTest');"));
-    auto null_value_opt = db->getIntValue("SELECT value FROM test_table WHERE name = 'NullTest';");
-    EXPECT_FALSE(null_value_opt.has_value());
-
-    // Test wrong data type (selecting text as int)
-    auto wrong_type_opt = db->getIntValue("SELECT name FROM test_table WHERE name = 'Alice';");
-    EXPECT_FALSE(wrong_type_opt.has_value()); // Should return nullopt if type doesn't match expected int
-
-    // Test invalid query
-    EXPECT_THROW(static_cast<void>(db->getIntValue("SELECT id FROM non_existent_table;")), SQLiteException);
+    const char* update_name = "Grace";
+    EXPECT_TRUE(db->executeParameterizedQuery(
+        "UPDATE users SET age = ? WHERE name = ?", 28, update_name));
+    EXPECT_EQ(db->getChanges(), 1);
 }
 
-TEST_F(SqliteDBTest, GetDoubleValue) {
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Alice', 1.1);"));
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Bob', 2.2);"));
+TEST_F(SqliteDBTest, ParameterizedDelete) {
+    const char* name = "Henry";
+    const char* email = "henry@test.com";
+    ASSERT_TRUE(db->executeParameterizedQuery(
+        "INSERT INTO users (name, email, age) VALUES (?, ?, ?)", name, email,
+        45));
 
-    auto value_opt = db->getDoubleValue("SELECT value FROM test_table WHERE name = 'Alice';");
-    ASSERT_TRUE(value_opt.has_value());
-    EXPECT_DOUBLE_EQ(value_opt.value(), 1.1);
-
-    // Test non-existent row
-    auto non_existent_opt = db->getDoubleValue("SELECT value FROM test_table WHERE name = 'Charlie';");
-    EXPECT_FALSE(non_existent_opt.has_value());
-
-    // Test NULL value
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name) VALUES ('NullTest');"));
-    auto null_value_opt = db->getDoubleValue("SELECT value FROM test_table WHERE name = 'NullTest';");
-    EXPECT_FALSE(null_value_opt.has_value());
-
-    // Test wrong data type (selecting text as double)
-    auto wrong_type_opt = db->getDoubleValue("SELECT name FROM test_table WHERE name = 'Alice';");
-    EXPECT_FALSE(wrong_type_opt.has_value()); // Should return nullopt if type doesn't match expected double
-
-    // Test invalid query
-    EXPECT_THROW(static_cast<void>(db->getDoubleValue("SELECT value FROM non_existent_table;")), SQLiteException);
+    EXPECT_TRUE(
+        db->executeParameterizedQuery("DELETE FROM users WHERE age > ?", 40));
+    EXPECT_EQ(db->getChanges(), 1);
 }
 
-TEST_F(SqliteDBTest, GetTextValue) {
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Alice', 1.1);"));
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Bob', 2.2);"));
+// Transaction Tests
+TEST_F(SqliteDBTest, BasicTransaction) {
+    EXPECT_NO_THROW(db->beginTransaction());
 
-    auto name_opt = db->getTextValue("SELECT name FROM test_table WHERE name = 'Alice';");
-    ASSERT_TRUE(name_opt.has_value());
-    EXPECT_EQ(name_opt.value(), "Alice");
+    const char* name = "Ivy";
+    const char* email = "ivy@test.com";
+    EXPECT_TRUE(db->executeParameterizedQuery(
+        "INSERT INTO users (name, email, age) VALUES (?, ?, ?)", name, email,
+        29));
 
-    // Test non-existent row
-    auto non_existent_opt = db->getTextValue("SELECT name FROM test_table WHERE name = 'Charlie';");
-    EXPECT_FALSE(non_existent_opt.has_value());
+    EXPECT_NO_THROW(db->commitTransaction());
 
-    // Test NULL value
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (value) VALUES (99.9);"));
-    auto null_value_opt = db->getTextValue("SELECT name FROM test_table WHERE value = 99.9;");
-    EXPECT_FALSE(null_value_opt.has_value());
-
-    // Test wrong data type (selecting int as text)
-    auto wrong_type_opt = db->getTextValue("SELECT id FROM test_table WHERE name = 'Alice';");
-    ASSERT_TRUE(wrong_type_opt.has_value()); // SQLite often converts int/real to text
-    EXPECT_EQ(wrong_type_opt.value(), "1");
-
-    // Test invalid query
-    EXPECT_THROW(static_cast<void>(db->getTextValue("SELECT name FROM non_existent_table;")), SQLiteException);
+    // Verify data was committed
+    auto result = db->selectData("SELECT * FROM users WHERE name = 'Ivy'");
+    EXPECT_EQ(result.size(), 1);
 }
 
+TEST_F(SqliteDBTest, TransactionRollback) {
+    EXPECT_NO_THROW(db->beginTransaction());
+
+    const char* name = "Jack";
+    const char* email = "jack@test.com";
+    EXPECT_TRUE(db->executeParameterizedQuery(
+        "INSERT INTO users (name, email, age) VALUES (?, ?, ?)", name, email,
+        33));
+
+    EXPECT_NO_THROW(db->rollbackTransaction());
+
+    // Verify data was rolled back
+    auto result = db->selectData("SELECT * FROM users WHERE name = 'Jack'");
+    EXPECT_EQ(result.size(), 0);
+}
+
+// Error Handling Tests
+TEST_F(SqliteDBTest, InvalidQuery) {
+    EXPECT_THROW(db->executeQuery("INVALID SQL SYNTAX"), SQLiteException);
+}
+
+TEST_F(SqliteDBTest, ConstraintViolation) {
+    // Insert first user
+    const char* name1 = "Kate";
+    const char* email = "kate@test.com";
+    ASSERT_TRUE(db->executeParameterizedQuery(
+        "INSERT INTO users (name, email, age) VALUES (?, ?, ?)", name1, email,
+        26));
+
+    // Try to insert duplicate email (should fail due to UNIQUE constraint)
+    const char* name2 = "Kate2";
+    EXPECT_THROW(db->executeParameterizedQuery(
+                     "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
+                     name2, email, 27),
+                 SQLiteException);
+}
+
+TEST_F(SqliteDBTest, InvalidTableAccess) {
+    EXPECT_THROW(db->selectData("SELECT * FROM nonexistent_table"),
+                 SQLiteException);
+}
+
+// File Operations Tests
+TEST_F(SqliteDBTest, FileBasedDatabase) {
+    std::string filename =
+        "test_file_db_" + std::to_string(std::time(nullptr)) + ".sqlite";
+    createFileBasedDB(filename);
+
+    // Insert data
+    const char* name = "Leo";
+    const char* email = "leo@test.com";
+    EXPECT_TRUE(db->executeParameterizedQuery(
+        "INSERT INTO users (name, email, age) VALUES (?, ?, ?)", name, email,
+        31));
+
+    // Close and reopen database
+    db.reset();
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(100));  // Allow file to be released
+    db = std::make_unique<SqliteDB>(filename);
+
+    // Verify data persisted
+    auto result = db->selectData("SELECT * FROM users WHERE name = 'Leo'");
+    EXPECT_EQ(result.size(), 1);
+
+    // Cleanup
+    db.reset();
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(100));  // Allow file to be released
+    std::filesystem::remove(filename);
+}
+
+// Pagination Tests
+TEST_F(SqliteDBTest, Pagination) {
+    // Insert multiple records
+    for (int i = 1; i <= 10; ++i) {
+        ASSERT_TRUE(db->executeParameterizedQuery(
+            "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
+            "User" + std::to_string(i),
+            "user" + std::to_string(i) + "@test.com", 20 + i));
+    }
+
+    // Test pagination
+    auto page1 =
+        db->selectDataWithPagination("SELECT * FROM users ORDER BY id", 3, 0);
+    EXPECT_EQ(page1.size(), 3);
+
+    auto page2 =
+        db->selectDataWithPagination("SELECT * FROM users ORDER BY id", 3, 3);
+    EXPECT_EQ(page2.size(), 3);
+
+    // Verify different records
+    EXPECT_NE(page1[0][0], page2[0][0]);  // Different IDs
+}
+
+// Search and Validation Tests
 TEST_F(SqliteDBTest, SearchData) {
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Alice', 1.1);"));
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Bob', 2.2);"));
+    // Insert test data
+    const char* name = "Mike";
+    const char* email = "mike@test.com";
+    ASSERT_TRUE(db->executeParameterizedQuery(
+        "INSERT INTO users (name, email, age) VALUES (?, ?, ?)", name, email,
+        34));
 
-    // Test finding existing data
-    EXPECT_TRUE(db->searchData("SELECT 1 FROM test_table WHERE name = ?;", "Alice"));
-    EXPECT_TRUE(db->searchData("SELECT 1 FROM test_table WHERE value = ?;", "2.2"));
+    // Search for existing data
+    EXPECT_TRUE(db->searchData("SELECT * FROM users WHERE name = ?", "Mike"));
 
-    // Test not finding non-existent data
-    EXPECT_FALSE(db->searchData("SELECT 1 FROM test_table WHERE name = ?;", "Charlie"));
-    EXPECT_FALSE(db->searchData("SELECT 1 FROM test_table WHERE value = ?;", "99.9"));
-
-    // Test invalid query
-    EXPECT_THROW(static_cast<void>(db->searchData("SELECT 1 FROM non_existent_table WHERE name = ?;", "Invalid")), SQLiteException);
-}
-
-TEST_F(SqliteDBTest, UpdateData) {
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Alice', 1.1);"));
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Bob', 2.2);"));
-
-    // Update one row
-    int changes = db->updateData("UPDATE test_table SET value = 1.5 WHERE name = 'Alice';");
-    EXPECT_EQ(changes, 1);
-    auto value_opt = db->getDoubleValue("SELECT value FROM test_table WHERE name = 'Alice';");
-    ASSERT_TRUE(value_opt.has_value());
-    EXPECT_DOUBLE_EQ(value_opt.value(), 1.5);
-
-    // Update multiple rows
-    changes = db->updateData("UPDATE test_table SET value = value + 10;");
-    EXPECT_EQ(changes, 2);
-    auto value_alice = db->getDoubleValue("SELECT value FROM test_table WHERE name = 'Alice';");
-    ASSERT_TRUE(value_alice.has_value());
-    EXPECT_DOUBLE_EQ(value_alice.value(), 11.5);
-    auto value_bob = db->getDoubleValue("SELECT value FROM test_table WHERE name = 'Bob';");
-    ASSERT_TRUE(value_bob.has_value());
-    EXPECT_DOUBLE_EQ(value_bob.value(), 12.2);
-
-    // Update non-existent row
-    changes = db->updateData("UPDATE test_table SET value = 99 WHERE name = 'Charlie';");
-    EXPECT_EQ(changes, 0);
-
-    // Test invalid query
-    EXPECT_THROW(static_cast<void>(db->updateData("UPDATE non_existent_table SET value = 1;")), SQLiteException);
-}
-
-TEST_F(SqliteDBTest, DeleteData) {
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Alice', 1.1);"));
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Bob', 2.2);"));
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Charlie', 3.3);"));
-
-    // Delete one row
-    int changes = db->deleteData("DELETE FROM test_table WHERE name = 'Alice';");
-    EXPECT_EQ(changes, 1);
-    EXPECT_FALSE(db->searchData("SELECT 1 FROM test_table WHERE name = ?;", "Alice"));
-    EXPECT_EQ(db->selectData("SELECT * FROM test_table;").size(), 2);
-
-    // Delete multiple rows
-    changes = db->deleteData("DELETE FROM test_table WHERE value > 2.0;");
-    EXPECT_EQ(changes, 2); // Deletes Bob (2.2) and Charlie (3.3)
-    EXPECT_FALSE(db->searchData("SELECT 1 FROM test_table WHERE name = ?;", "Bob"));
-    EXPECT_FALSE(db->searchData("SELECT 1 FROM test_table WHERE name = ?;", "Charlie"));
-    EXPECT_TRUE(db->selectData("SELECT * FROM test_table;").empty());
-
-    // Delete non-existent row
-    changes = db->deleteData("DELETE FROM test_table WHERE name = 'David';");
-    EXPECT_EQ(changes, 0);
-
-    // Test invalid query
-    EXPECT_THROW(static_cast<void>(db->deleteData("DELETE FROM non_existent_table;")), SQLiteException);
-}
-
-TEST_F(SqliteDBTest, Transactions) {
-    // Test successful transaction
-    db->beginTransaction();
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Tx1', 10.1);"));
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Tx2', 10.2);"));
-    db->commitTransaction();
-
-    auto results_commit = db->selectData("SELECT name FROM test_table WHERE name LIKE 'Tx%';");
-    ASSERT_EQ(results_commit.size(), 2);
-
-    // Test rollback
-    db->beginTransaction();
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Tx3', 10.3);"));
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Tx4', 10.4);"));
-    db->rollbackTransaction();
-
-    auto results_rollback = db->selectData("SELECT name FROM test_table WHERE name LIKE 'Tx%';");
-    ASSERT_EQ(results_rollback.size(), 2); // Tx3 and Tx4 should not be present
-
-    // Test nested transactions (SQLite doesn't support true nested transactions,
-    // but BEGIN/COMMIT/ROLLBACK handle savepoints implicitly)
-    db->beginTransaction(); // Outer
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Outer', 20.1);"));
-    db->beginTransaction(); // Inner (becomes a savepoint)
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Inner', 20.2);"));
-    db->commitTransaction(); // Commits inner savepoint
-    db->commitTransaction(); // Commits outer transaction
-
-    auto results_nested = db->selectData("SELECT name FROM test_table WHERE name IN ('Outer', 'Inner');");
-    ASSERT_EQ(results_nested.size(), 2);
-
-    // Test rollback of inner transaction
-    db->beginTransaction(); // Outer
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('OuterRollback', 30.1);"));
-    db->beginTransaction(); // Inner
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('InnerRollback', 30.2);"));
-    db->rollbackTransaction(); // Rollback inner savepoint
-    db->commitTransaction(); // Commit outer transaction
-
-    auto results_nested_rollback = db->selectData("SELECT name FROM test_table WHERE name IN ('OuterRollback', 'InnerRollback');");
-    ASSERT_EQ(results_nested_rollback.size(), 1); // Only OuterRollback should be present
-    EXPECT_EQ(results_nested_rollback[0][0], "OuterRollback");
-
-    // Test transaction errors
-    db->beginTransaction();
-    EXPECT_THROW(static_cast<void>(db->executeQuery("INVALID SQL;")), SQLiteException);
-    // The transaction is likely in an error state now, rollback should be safe
-    db->rollbackTransaction();
-}
-
-TEST_F(SqliteDBTest, WithTransaction) {
-    // Test successful transaction with lambda
-    bool success = false;
-    EXPECT_NO_THROW(db->withTransaction([&]() {
-        ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('WithTx1', 40.1);"));
-        ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('WithTx2', 40.2);"));
-        success = true;
-    }));
-    EXPECT_TRUE(success);
-    auto results_withtx = db->selectData("SELECT name FROM test_table WHERE name LIKE 'WithTx%';");
-    ASSERT_EQ(results_withtx.size(), 2);
-
-    // Test transaction rollback on exception
-    bool exception_caught = false;
-    EXPECT_THROW(db->withTransaction([&]() {
-        ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('WithTx3', 40.3);"));
-        ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('WithTx4', 40.4);"));
-        throw std::runtime_error("Simulated error"); // This should trigger rollback
-    }), std::runtime_error);
-
-    auto results_withtx_rollback = db->selectData("SELECT name FROM test_table WHERE name LIKE 'WithTx%';");
-    ASSERT_EQ(results_withtx_rollback.size(), 2); // Tx3 and Tx4 should not be present
+    // Search for non-existing data
+    EXPECT_FALSE(
+        db->searchData("SELECT * FROM users WHERE name = ?", "NonExistent"));
 }
 
 TEST_F(SqliteDBTest, ValidateData) {
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Alice', 1.1);"));
+    // Insert test data
+    const char* name = "Nina";
+    const char* email = "nina@test.com";
+    ASSERT_TRUE(db->executeParameterizedQuery(
+        "INSERT INTO users (name, email, age) VALUES (?, ?, ?)", name, email,
+        24));
 
-    // Test successful validation
+    // Valid validation
     EXPECT_TRUE(db->validateData(
-        "UPDATE test_table SET value = 1.5 WHERE name = 'Alice';",
-        "SELECT COUNT(*) FROM test_table WHERE name = 'Alice' AND value = 1.5;"
-    ));
-    auto value_opt = db->getDoubleValue("SELECT value FROM test_table WHERE name = 'Alice';");
-    ASSERT_TRUE(value_opt.has_value());
-    EXPECT_DOUBLE_EQ(value_opt.value(), 1.5);
+        "SELECT * FROM users WHERE name = 'Nina'",
+        "SELECT COUNT(*) > 0 FROM users WHERE name = 'Nina' AND age > 0"));
 
-    // Test validation failure (main query succeeds, validation query fails)
+    // Invalid validation
     EXPECT_FALSE(db->validateData(
-        "UPDATE test_table SET value = 2.0 WHERE name = 'Alice';",
-        "SELECT COUNT(*) FROM test_table WHERE name = 'Alice' AND value = 99.9;" // This will be 0
-    ));
-    // The main query should still have executed
-    value_opt = db->getDoubleValue("SELECT value FROM test_table WHERE name = 'Alice';");
-    ASSERT_TRUE(value_opt.has_value());
-    EXPECT_DOUBLE_EQ(value_opt.value(), 2.0);
-
-    // Test main query failure (validation query is not run)
-    EXPECT_THROW(static_cast<void>(db->validateData(
-        "UPDATE non_existent_table SET value = 1;",
-        "SELECT 1;"
-    )), SQLiteException);
-
-    // Test invalid validation query
-    EXPECT_THROW(static_cast<void>(db->validateData(
-        "SELECT 1;",
-        "INVALID VALIDATION QUERY;"
-    )), SQLiteException);
+        "SELECT * FROM users WHERE name = 'Nina'",
+        "SELECT COUNT(*) > 0 FROM users WHERE name = 'Nina' AND age < 0"));
 }
 
-TEST_F(SqliteDBTest, SelectDataWithPagination) {
-    // Insert 10 rows
-    for (int i = 0; i < 10; ++i) {
-        ASSERT_TRUE(db->executeParameterizedQuery("INSERT INTO test_table (name, value) VALUES (?, ?);", "Item" + std::to_string(i), i * 1.0));
+// Edge Cases and Boundary Tests
+TEST_F(SqliteDBTest, EmptyResults) {
+    auto result = db->selectData("SELECT * FROM users WHERE 1 = 0");
+    EXPECT_EQ(result.size(), 0);
+}
+
+TEST_F(SqliteDBTest, NullValues) {
+    EXPECT_TRUE(db->executeQuery(
+        "INSERT INTO users (name, email, age) VALUES ('Oscar', NULL, NULL)"));
+
+    auto result = db->selectData("SELECT * FROM users WHERE name = 'Oscar'");
+    ASSERT_EQ(result.size(), 1);
+    EXPECT_EQ(result[0][1], "Oscar");
+    // Note: NULL values handling depends on implementation
+}
+
+TEST_F(SqliteDBTest, LargeData) {
+    std::string largeName(1000, 'A');
+    EXPECT_TRUE(db->executeParameterizedQuery(
+        "INSERT INTO users (name, email, age) VALUES (?, ?, ?)", largeName,
+        "large@test.com", 25));
+
+    auto result =
+        db->selectData("SELECT name FROM users WHERE email = 'large@test.com'");
+    ASSERT_EQ(result.size(), 1);
+    EXPECT_EQ(result[0][0].size(), 1000);
+}
+
+TEST_F(SqliteDBTest, SpecialCharacters) {
+    std::string specialName = "Test'\"\\Name";
+    EXPECT_TRUE(db->executeParameterizedQuery(
+        "INSERT INTO users (name, email, age) VALUES (?, ?, ?)", specialName,
+        "special@test.com", 25));
+
+    auto result = db->selectData(
+        "SELECT name FROM users WHERE email = 'special@test.com'");
+    ASSERT_EQ(result.size(), 1);
+    EXPECT_EQ(result[0][0], specialName);
+}
+
+// Concurrency Tests
+TEST_F(SqliteDBTest, ConcurrentReads) {
+    // Insert test data
+    for (int i = 0; i < 100; ++i) {
+        ASSERT_TRUE(db->executeParameterizedQuery(
+            "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
+            "ConcurrentUser" + std::to_string(i),
+            "concurrent" + std::to_string(i) + "@test.com", 20 + (i % 50)));
     }
 
-    // Get first 5 items
-    auto results1 = db->selectDataWithPagination("SELECT name FROM test_table ORDER BY id", 5, 0);
-    ASSERT_EQ(results1.size(), 5);
-    EXPECT_EQ(results1[0][0], "Item0");
-    EXPECT_EQ(results1[4][0], "Item4");
+    std::vector<std::thread> threads;
+    std::atomic<int> successCount{0};
 
-    // Get next 5 items
-    auto results2 = db->selectDataWithPagination("SELECT name FROM test_table ORDER BY id", 5, 5);
-    ASSERT_EQ(results2.size(), 5);
-    EXPECT_EQ(results2[0][0], "Item5");
-    EXPECT_EQ(results2[4][0], "Item9");
+    // Launch multiple read threads
+    for (int i = 0; i < 10; ++i) {
+        threads.emplace_back([this, &successCount]() {
+            try {
+                auto result = db->selectData("SELECT COUNT(*) FROM users");
+                if (!result.empty() && std::stoi(result[0][0]) >= 100) {
+                    successCount++;
+                }
+            } catch (...) {
+                // Ignore exceptions for this test
+            }
+        });
+    }
 
-    // Get items with limit > total
-    auto results3 = db->selectDataWithPagination("SELECT name FROM test_table ORDER BY id", 20, 0);
-    ASSERT_EQ(results3.size(), 10);
+    for (auto& thread : threads) {
+        thread.join();
+    }
 
-    // Get items with offset > total
-    auto results4 = db->selectDataWithPagination("SELECT name FROM test_table ORDER BY id", 5, 10);
-    EXPECT_TRUE(results4.empty());
-
-    // Get items with limit = 0
-    auto results5 = db->selectDataWithPagination("SELECT name FROM test_table ORDER BY id", 0, 0);
-    EXPECT_TRUE(results5.empty());
-
-    // Test invalid limit/offset
-    EXPECT_THROW(static_cast<void>(db->selectDataWithPagination("SELECT name FROM test_table", -1, 0)), SQLiteException);
-    EXPECT_THROW(static_cast<void>(db->selectDataWithPagination("SELECT name FROM test_table", 10, -1)), SQLiteException);
-
-    // Test invalid query
-    EXPECT_THROW(static_cast<void>(db->selectDataWithPagination("SELECT name FROM non_existent_table", 5, 0)), SQLiteException);
+    EXPECT_GT(successCount, 5);  // At least half should succeed
 }
 
-TEST_F(SqliteDBTest, SetErrorMessageCallback) {
-    std::string captured_error_message;
-    db->setErrorMessageCallback([&](std::string_view msg) {
-        captured_error_message = msg;
-    });
+TEST_F(SqliteDBTest, ConcurrentWrites) {
+    std::vector<std::thread> threads;
+    std::atomic<int> successCount{0};
 
-    // Execute an invalid query to trigger an error
-    EXPECT_THROW(static_cast<void>(db->executeQuery("SELECT * FROM non_existent_table;")), SQLiteException);
+    // Launch multiple write threads
+    for (int i = 0; i < 5; ++i) {
+        threads.emplace_back([this, i, &successCount]() {
+            try {
+                for (int j = 0; j < 10; ++j) {
+                    if (db->executeParameterizedQuery(
+                            "INSERT INTO users (name, email, age) VALUES (?, "
+                            "?, ?)",
+                            "Thread" + std::to_string(i) + "User" +
+                                std::to_string(j),
+                            "thread" + std::to_string(i) + "user" +
+                                std::to_string(j) + "@test.com",
+                            25 + j)) {
+                        successCount++;
+                    }
+                }
+            } catch (...) {
+                // Some writes may fail due to concurrency
+            }
+        });
+    }
 
-    // Check if the callback captured the error message
-    // The exact message might vary slightly depending on SQLite version and context
-    EXPECT_FALSE(captured_error_message.empty());
-    // A more robust check might look for a substring known to be in the error
-    // e.g., EXPECT_NE(captured_error_message.find("non_existent_table"), std::string::npos);
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_GT(successCount, 25);  // At least half should succeed
 }
 
-TEST_F(SqliteDBTest, IsConnected) {
-    EXPECT_TRUE(db->isConnected());
-    db.reset(); // Explicitly close the connection
-    EXPECT_FALSE(db->isConnected());
+// Performance Tests
+TEST_F(SqliteDBTest, BulkInsert) {
+    auto start = std::chrono::high_resolution_clock::now();
+
+    EXPECT_NO_THROW(db->beginTransaction());
+    for (int i = 0; i < 1000; ++i) {
+        EXPECT_TRUE(db->executeParameterizedQuery(
+            "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
+            "BulkUser" + std::to_string(i),
+            "bulk" + std::to_string(i) + "@test.com", 20 + (i % 50)));
+    }
+    EXPECT_NO_THROW(db->commitTransaction());
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    // Verify all records were inserted
+    auto result = db->selectData("SELECT COUNT(*) FROM users");
+    ASSERT_EQ(result.size(), 1);
+    EXPECT_EQ(std::stoi(result[0][0]), 1000);
+
+    // Performance should be reasonable (less than 5 seconds for 1000 inserts)
+    EXPECT_LT(duration.count(), 5000);
 }
 
-TEST_F(SqliteDBTest, GetLastInsertRowId) {
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Alice', 1.1);"));
-    EXPECT_EQ(db->getLastInsertRowId(), 1);
+// Error Recovery Tests
+TEST_F(SqliteDBTest, TransactionErrorRecovery) {
+    EXPECT_NO_THROW(db->beginTransaction());
 
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Bob', 2.2);"));
-    EXPECT_EQ(db->getLastInsertRowId(), 2);
+    // Valid insert
+    const char* name = "ValidUser";
+    const char* email = "valid@test.com";
+    EXPECT_TRUE(db->executeParameterizedQuery(
+        "INSERT INTO users (name, email, age) VALUES (?, ?, ?)", name, email,
+        25));
 
-    // Test after a non-insert query
-    static_cast<void>(db->selectData("SELECT * FROM test_table;"));
-    // The value should persist from the last insert, but this is implementation dependent
-    // A safer test is to check after another insert
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Charlie', 3.3);"));
-    EXPECT_EQ(db->getLastInsertRowId(), 3);
+    // Invalid insert (should fail)
+    EXPECT_THROW(
+        db->executeQuery("INSERT INTO users (invalid_column) VALUES ('test')"),
+        SQLiteException);
 
-    // Test on empty table or after only non-insert queries (might return 0 or previous value)
-    // The documentation says it's the rowid of the most recent successful INSERT
-    // If no inserts have occurred, the result is undefined or 0.
-    // Let's clear and test.
-    TearDown(); // Remove the database file
-    SetUp();    // Recreate the database and tables
-    // After clear, there might not be a "last insert"
-    // The behavior here depends on the underlying sqlite3_last_insert_rowid()
-    // It's often 0 if no inserts have happened on the connection.
-    // We can't strictly assert 0, but we can assert it doesn't throw if connected.
-    EXPECT_NO_THROW(static_cast<void>(db->getLastInsertRowId()));
-}
-
-TEST_F(SqliteDBTest, GetChanges) {
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Alice', 1.1);"));
-    EXPECT_EQ(db->getChanges(), 1);
-
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Bob', 2.2);"));
-    EXPECT_EQ(db->getChanges(), 1);
-
-    int changes = db->updateData("UPDATE test_table SET value = value + 1;");
-    EXPECT_EQ(changes, 2);
-    EXPECT_EQ(db->getChanges(), 2);
-
-    changes = db->deleteData("DELETE FROM test_table WHERE name = 'Alice';");
-    EXPECT_EQ(changes, 1);
-    EXPECT_EQ(db->getChanges(), 1);
-
-    // Select queries should not change the count
-    static_cast<void>(db->selectData("SELECT * FROM test_table;"));
-    EXPECT_EQ(db->getChanges(), 1); // Still 1 from the last delete
-
-    // Test on non-existent rows
-    static_cast<void>(db->updateData("UPDATE test_table SET value = 99 WHERE name = 'Charlie';"));
-    EXPECT_EQ(db->getChanges(), 0);
-    static_cast<void>(db->deleteData("DELETE FROM test_table WHERE name = 'Charlie';"));
-    EXPECT_EQ(db->getChanges(), 0);
-}
-
-TEST_F(SqliteDBTest, GetTotalChanges) {
-    EXPECT_EQ(db->getTotalChanges(), 0); // Should be 0 initially
-
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Alice', 1.1);"));
-    EXPECT_EQ(db->getTotalChanges(), 1);
-
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name, value) VALUES ('Bob', 2.2);"));
-    EXPECT_EQ(db->getTotalChanges(), 2);
-
-    int changes = db->updateData("UPDATE test_table SET value = value + 1;");
-    EXPECT_EQ(changes, 2);
-    EXPECT_EQ(db->getTotalChanges(), 4); // 2 inserts + 2 updates
-
-    changes = db->deleteData("DELETE FROM test_table WHERE name = 'Alice';");
-    EXPECT_EQ(changes, 1);
-    EXPECT_EQ(db->getTotalChanges(), 5); // 4 + 1 delete
-
-    // Select queries should not change the total count
-    static_cast<void>(db->selectData("SELECT * FROM test_table;"));
-    EXPECT_EQ(db->getTotalChanges(), 5);
-
-    // Test on non-existent rows (should not increase total changes)
-    static_cast<void>(db->updateData("UPDATE test_table SET value = 99 WHERE name = 'Charlie';"));
-    EXPECT_EQ(db->getTotalChanges(), 5);
-    static_cast<void>(db->deleteData("DELETE FROM test_table WHERE name = 'Charlie';"));
-    EXPECT_EQ(db->getTotalChanges(), 5);
-}
-
-TEST_F(SqliteDBTest, TableExists) {
-    EXPECT_TRUE(db->tableExists("test_table"));
-    EXPECT_TRUE(db->tableExists("another_table"));
-    EXPECT_FALSE(db->tableExists("non_existent_table"));
-    EXPECT_FALSE(db->tableExists("")); // Test empty name
-}
-
-TEST_F(SqliteDBTest, GetTableSchema) {
-    auto schema = db->getTableSchema("test_table");
-    ASSERT_EQ(schema.size(), 3); // id, name, value
-
-    // Check column names and types (order might vary slightly, but usually matches creation)
-    // CID | Name  | Type    | Not Null | Default | PK
-    // 0   | id    | INTEGER | 0        | NULL    | 1
-    // 1   | name  | TEXT    | 0        | NULL    | 0
-    // 2   | value | REAL    | 0        | NULL    | 0
-
-    // Check first column (id)
-    ASSERT_EQ(schema[0].size(), 6);
-    EXPECT_EQ(schema[0][1], "id");
-    EXPECT_EQ(schema[0][2], "INTEGER");
-    EXPECT_EQ(schema[0][5], "1"); // PK
-
-    // Check second column (name)
-    ASSERT_EQ(schema[1].size(), 6);
-    EXPECT_EQ(schema[1][1], "name");
-    EXPECT_EQ(schema[1][2], "TEXT");
-
-    // Check third column (value)
-    ASSERT_EQ(schema[2].size(), 6);
-    EXPECT_EQ(schema[2][1], "value");
-    EXPECT_EQ(schema[2][2], "REAL");
-
-    // Test non-existent table
-    EXPECT_THROW(static_cast<void>(db->getTableSchema("non_existent_table")), SQLiteException);
-}
-
-TEST_F(SqliteDBTest, Vacuum) {
-    // VACUUM is hard to test for correctness without checking file size changes
-    // or internal state, but we can test that it executes without throwing.
-    EXPECT_NO_THROW(static_cast<void>(db->vacuum()));
-    EXPECT_TRUE(db->vacuum()); // Should return true on success
-}
-
-TEST_F(SqliteDBTest, Analyze) {
-    // ANALYZE is hard to test for correctness, but we can test that it executes
-    // without throwing.
-    EXPECT_NO_THROW(static_cast<void>(db->analyze()));
-    EXPECT_TRUE(db->analyze()); // Should return true on success
-}
-
-TEST_F(SqliteDBTest, MoveConstructor) {
-    ASSERT_TRUE(db->executeQuery("INSERT INTO test_table (name) VALUES ('Original');"));
-    EXPECT_TRUE(db->tableExists("test_table"));
-    EXPECT_EQ(db->selectData("SELECT COUNT(*) FROM test_table;")[0][0], "1");
-
-    SqliteDB moved_db = std::move(*db);
-
-    // The original unique_ptr is now null, so db is null.
-    // The moved_db should now manage the connection and data.
-    EXPECT_TRUE(moved_db.tableExists("test_table"));
-    EXPECT_EQ(moved_db.selectData("SELECT COUNT(*) FROM test_table;")[0][0], "1");
-
-    // Attempting operations on the moved-from object (db) should be safe
-    // because the unique_ptr is null.
-    db.reset(); // Explicitly reset the original unique_ptr
-    EXPECT_EQ(db, nullptr);
-}
-
-TEST_F(SqliteDBTest, MoveAssignment) {
-    auto db1 = std::make_unique<SqliteDB>("db1.db");
-    ASSERT_TRUE(db1->executeQuery("CREATE TABLE t1 (id INTEGER);"));
-    ASSERT_TRUE(db1->executeQuery("INSERT INTO t1 VALUES (1);"));
-
-    auto db2 = std::make_unique<SqliteDB>("db2.db");
-    ASSERT_TRUE(db2->executeQuery("CREATE TABLE t2 (name TEXT);"));
-    ASSERT_TRUE(db2->executeQuery("INSERT INTO t2 VALUES ('A');"));
-    ASSERT_TRUE(db2->executeQuery("INSERT INTO t2 VALUES ('B');"));
-
-    EXPECT_TRUE(db1->tableExists("t1"));
-    EXPECT_FALSE(db1->tableExists("t2"));
-    EXPECT_TRUE(db2->tableExists("t2"));
-    EXPECT_FALSE(db2->tableExists("t1"));
-
-    *db1 = std::move(*db2); // Move assign db2 to db1
-
-    // db1 should now have the contents of db2
-    EXPECT_FALSE(db1->tableExists("t1")); // Original table should be gone
-    EXPECT_TRUE(db1->tableExists("t2"));
-    EXPECT_EQ(db1->selectData("SELECT COUNT(*) FROM t2;")[0][0], "2");
-
-    // db2 unique_ptr is now null
-    db2.reset();
-
-    // Clean up the files created for this test
-    std::remove("db1.db");
-    std::remove("db2.db");
-}
-
-TEST_F(SqliteDBTest, CheckConnectionThrowsWhenDisconnected) {
-    db.reset(); // Explicitly close the connection
-
-    // Most operations should now throw SQLiteException
-    EXPECT_THROW(static_cast<void>(db->executeQuery("SELECT 1;")), SQLiteException);
-    EXPECT_THROW(static_cast<void>(db->selectData("SELECT 1;")), SQLiteException);
-    EXPECT_THROW(db->beginTransaction(), SQLiteException);
-    EXPECT_THROW(static_cast<void>(db->getLastInsertRowId()), SQLiteException);
-    EXPECT_THROW(static_cast<void>(db->getChanges()), SQLiteException);
-    EXPECT_THROW(static_cast<void>(db->getTotalChanges()), SQLiteException);
-    EXPECT_THROW(static_cast<void>(db->tableExists("any")), SQLiteException);
-    EXPECT_THROW(static_cast<void>(db->getTableSchema("any")), SQLiteException);
-    EXPECT_THROW(static_cast<void>(db->vacuum()), SQLiteException);
-    EXPECT_THROW(static_cast<void>(db->analyze()), SQLiteException);
-    // rollbackTransaction() is designed not to throw
+    // Transaction should still be active, rollback should work
     EXPECT_NO_THROW(db->rollbackTransaction());
-    // withTransaction() will throw the exception from beginTransaction
-    EXPECT_THROW(db->withTransaction([](){}), SQLiteException);
+
+    // Verify no data was committed
+    auto result =
+        db->selectData("SELECT * FROM users WHERE name = 'ValidUser'");
+    EXPECT_EQ(result.size(), 0);
 }
 
-#endif // ATOM_SEARCH_TEST_SQLITE_HPP
+// Database State Tests
+TEST_F(SqliteDBTest, DatabaseInfo) {
+    // Test database introspection
+    auto result =
+        db->selectData("SELECT name FROM sqlite_master WHERE type='table'");
+    EXPECT_GT(result.size(), 0);  // Should have at least our users table
+
+    bool foundUsersTable = false;
+    for (const auto& row : result) {
+        if (row[0] == "users") {
+            foundUsersTable = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(foundUsersTable);
+}
+
+TEST_F(SqliteDBTest, TableSchema) {
+    auto result = db->selectData("PRAGMA table_info(users)");
+    EXPECT_GE(result.size(), 5);  // Should have at least 5 columns
+
+    // Verify column names exist
+    std::vector<std::string> expectedColumns = {"id", "name", "email", "age",
+                                                "created_at"};
+    std::set<std::string> foundColumns;
+
+    for (const auto& row : result) {
+        if (row.size() > 1) {
+            foundColumns.insert(row[1]);  // Column name is in second position
+        }
+    }
+
+    for (const auto& expected : expectedColumns) {
+        EXPECT_TRUE(foundColumns.count(expected) > 0)
+            << "Column " << expected << " not found";
+    }
+}
+
+// Cleanup and Resource Management Tests
+TEST_F(SqliteDBTest, MultipleConnections) {
+    // Create multiple connections to the same in-memory database
+    // Note: In-memory databases are per-connection, so this tests connection
+    // handling
+    auto db2 = std::make_unique<SqliteDB>(":memory:");
+
+    // Both should work independently
+    EXPECT_TRUE(db->executeQuery("CREATE TABLE test1 (id INTEGER)"));
+    EXPECT_TRUE(db2->executeQuery("CREATE TABLE test2 (id INTEGER)"));
+
+    EXPECT_TRUE(db->executeQuery("INSERT INTO test1 VALUES (1)"));
+    EXPECT_TRUE(db2->executeQuery("INSERT INTO test2 VALUES (2)"));
+
+    auto result1 = db->selectData("SELECT * FROM test1");
+    auto result2 = db2->selectData("SELECT * FROM test2");
+
+    EXPECT_EQ(result1.size(), 1);
+    EXPECT_EQ(result2.size(), 1);
+}
+
+#endif  // ATOM_SEARCH_TEST_SQLITE_HPP

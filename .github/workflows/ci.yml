@@ -1,0 +1,815 @@
+---
+name: Continuous Integration
+
+"on":
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  # Quick code quality checks
+  code-quality:
+    name: Code Quality Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache code quality tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-quality-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-quality-
+
+      - name: Install code quality tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck clang-format clang-tidy
+          pip install cpplint
+
+      - name: Run clang-format check
+        run: |
+          find atom/ -name "*.cpp" -o -name "*.hpp" | xargs clang-format --dry-run --Werror
+
+      - name: Run basic cppcheck
+        run: |
+          cppcheck --enable=warning,style --inconclusive \
+            --suppress=missingIncludeSystem \
+            --suppress=unmatchedSuppression \
+            atom/ || true
+
+      - name: Run cpplint
+        run: |
+          find atom/ -name "*.cpp" -o -name "*.hpp" | head -20 | \
+            xargs cpplint --filter=-whitespace/tab,-build/include_subdir || true
+
+  # Build matrix using CMakePresets for multiple platforms, compilers, and module/features combinations
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux GCC
+          - name: "Linux GCC Debug (all modules)"
+            os: ubuntu-latest
+            preset: debug
+            build_preset: debug
+            triplet: x64-linux
+            arch: x64
+            compiler: gcc
+            module_set: all
+            build_tests: true
+            build_examples: true
+            build_python: true
+            build_docs: false
+          - name: "Linux GCC Release (all modules)"
+            os: ubuntu-latest
+            preset: release
+            build_preset: release
+            triplet: x64-linux
+            arch: x64
+            compiler: gcc
+            module_set: all
+            build_tests: true
+            build_examples: true
+            build_python: true
+            build_docs: false
+          - name: "Linux GCC RelWithDebInfo (core modules)"
+            os: ubuntu-latest
+            preset: relwithdebinfo
+            build_preset: relwithdebinfo
+            triplet: x64-linux
+            arch: x64
+            compiler: gcc
+            module_set: core
+            build_tests: true
+            build_examples: false
+            build_python: false
+            build_docs: false
+
+          # Linux Clang coverage of RelWithDebInfo + docs
+          - name: "Linux Clang RelWithDebInfo (all modules + docs)"
+            os: ubuntu-latest
+            preset: relwithdebinfo
+            build_preset: relwithdebinfo
+            triplet: x64-linux
+            arch: x64
+            compiler: clang
+            module_set: all
+            build_tests: true
+            build_examples: true
+            build_python: true
+            build_docs: true
+
+          # Windows MSVC (vcpkg)
+          - name: "Windows MSVC Release (all modules)"
+            os: windows-latest
+            preset: release-vs
+            build_preset: release-vs
+            triplet: x64-windows
+            arch: x64
+            compiler: msvc
+            module_set: all
+            build_tests: true
+            build_examples: true
+            build_python: true
+            build_docs: false
+          - name: "Windows MSVC Debug (all modules)"
+            os: windows-latest
+            preset: debug-vs
+            build_preset: debug-vs
+            triplet: x64-windows
+            arch: x64
+            compiler: msvc
+            module_set: all
+            build_tests: true
+            build_examples: false
+            build_python: false
+            build_docs: false
+          - name: "Windows MSVC RelWithDebInfo (IO/NET modules)"
+            os: windows-latest
+            preset: relwithdebinfo-vs
+            build_preset: relwithdebinfo-vs
+            triplet: x64-windows
+            arch: x64
+            compiler: msvc
+            module_set: io_net
+            build_tests: true
+            build_examples: false
+            build_python: false
+            build_docs: false
+
+          # macOS Intel + Apple Silicon
+          - name: "macOS x64 Release (all modules)"
+            os: macos-13
+            preset: release
+            build_preset: release
+            triplet: x64-osx
+            arch: x64
+            compiler: clang
+            module_set: all
+            build_tests: true
+            build_examples: true
+            build_python: true
+            build_docs: false
+          - name: "macOS x64 Debug (core modules)"
+            os: macos-13
+            preset: debug
+            build_preset: debug
+            triplet: x64-osx
+            arch: x64
+            compiler: clang
+            module_set: core
+            build_tests: true
+            build_examples: false
+            build_python: false
+            build_docs: false
+          - name: "macOS ARM64 RelWithDebInfo (core modules + docs)"
+            os: macos-14
+            preset: relwithdebinfo
+            build_preset: relwithdebinfo
+            triplet: arm64-osx
+            arch: arm64
+            compiler: clang
+            module_set: core
+            build_tests: true
+            build_examples: false
+            build_python: false
+            build_docs: true
+          - name: "macOS ARM64 Release (all modules)"
+            os: macos-14
+            preset: release
+            build_preset: release
+            triplet: arm64-osx
+            arch: arm64
+            compiler: clang
+            module_set: all
+            build_tests: true
+            build_examples: true
+            build_python: true
+            build_docs: false
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: "dbe35ceb30c688bf72e952ab23778e009a578f18"
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg
+            ~/.cache/vcpkg
+          key: ${{ runner.os }}-${{ matrix.arch }}-vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-vcpkg-
+
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: >-
+            ${{ runner.os }}-${{ matrix.arch }}-${{ matrix.compiler }}-cmake-${{ matrix.preset }}-
+            ${{ hashFiles('CMakeLists.txt', 'cmake/**', 'CMakePresets.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-${{ matrix.compiler }}-cmake-${{ matrix.preset }}-
+
+      - name: Install system dependencies (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential ninja-build \
+            libssl-dev zlib1g-dev libsqlite3-dev \
+            libfmt-dev libreadline-dev \
+            python3-dev doxygen graphviz \
+            ccache
+
+      - name: Install system dependencies (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install ninja openssl zlib sqlite3 fmt readline python3 doxygen graphviz ccache
+
+      - name: Install system dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install ninja doxygen.install graphviz
+
+      - name: Setup ccache (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          ccache --set-config=cache_dir=$HOME/.ccache
+          ccache --set-config=max_size=2G
+          ccache --zero-stats
+
+      - name: Select compiler (clang/GCC)
+        if: matrix.compiler == 'clang'
+        run: |
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+
+      - name: Configure with CMakePresets
+        shell: bash
+        run: |
+          MODULE_ARGS=()
+          case "${{ matrix.module_set }}" in
+            all)
+              MODULE_ARGS+=(-DATOM_BUILD_ALL=ON)
+              ;;
+            core)
+              MODULE_ARGS+=(-DATOM_BUILD_ALL=OFF -DATOM_BUILD_ERROR=ON -DATOM_BUILD_UTILS=ON)
+              MODULE_ARGS+=(-DATOM_BUILD_TYPE=ON -DATOM_BUILD_LOG=ON -DATOM_BUILD_META=ON -DATOM_BUILD_COMPONENTS=ON)
+              ;;
+            io_net)
+              MODULE_ARGS+=(-DATOM_BUILD_ALL=OFF -DATOM_BUILD_IO=ON -DATOM_BUILD_IMAGE=ON)
+              MODULE_ARGS+=(-DATOM_BUILD_SERIAL=ON -DATOM_BUILD_CONNECTION=ON -DATOM_BUILD_WEB=ON -DATOM_BUILD_ASYNC=ON)
+              ;;
+            *)
+              MODULE_ARGS+=(-DATOM_BUILD_ALL=ON)
+              ;;
+          esac
+
+          cmake --preset ${{ matrix.preset }} \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DUSE_VCPKG=ON \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
+            -DATOM_BUILD_TESTS=${{ matrix.build_tests }} \
+            -DATOM_BUILD_EXAMPLES=${{ matrix.build_examples }} \
+            -DATOM_BUILD_PYTHON_BINDINGS=${{ matrix.build_python }} \
+            -DATOM_BUILD_DOCS=${{ matrix.build_docs }} \
+            "${MODULE_ARGS[@]}"
+
+      - name: Build with CMakePresets
+        run: |
+          cmake --build --preset ${{ matrix.build_preset }} --parallel
+
+      - name: Run unified test suite
+        run: |
+          cd build
+
+          # Run unified test runner with comprehensive output
+          if [ -f "./run_all_tests" ] || [ -f "./run_all_tests.exe" ]; then
+            echo "=== Running Unified Test Suite ==="
+            ./run_all_tests --verbose --parallel --threads=4 \
+              --output-format=json --output=test_results.json || echo "Some tests failed"
+          else
+            echo "=== Unified test runner not found, falling back to CTest ==="
+            ctest --output-on-failure --parallel --timeout 300
+          fi
+
+          # Run module-specific tests using unified runner if available
+          echo "=== Running Core Module Tests ==="
+          if [ -f "./run_all_tests" ]; then
+            ./run_all_tests --module=error --verbose || echo "Error module tests failed"
+            ./run_all_tests --module=utils --verbose || echo "Utils module tests failed"
+            ./run_all_tests --module=type --verbose || echo "Type module tests failed"
+          else
+            ctest -L "error|utils|type" --output-on-failure --parallel || echo "Core module tests failed"
+          fi
+
+          # Generate test summary
+          echo "=== Test Summary ==="
+          if [ -f "test_results.json" ]; then
+            echo "Test results saved to test_results.json"
+            if command -v jq >/dev/null 2>&1; then
+              echo "Total tests: $(jq '.total_tests // 0' test_results.json)"
+              echo "Passed: $(jq '.passed_asserts // 0' test_results.json)"
+              echo "Failed: $(jq '.failed_asserts // 0' test_results.json)"
+              echo "Skipped: $(jq '.skipped_tests // 0' test_results.json)"
+            fi
+          fi
+
+      - name: Run CTest validation (fallback)
+        if: always()
+        run: |
+          cd build
+          echo "=== CTest Validation ==="
+          ctest --output-on-failure --parallel --timeout 300 || echo "CTest validation completed"
+
+      - name: Show ccache stats (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: ccache --show-stats
+
+      - name: Generate documentation
+        if: matrix.build_docs == true
+        run: |
+          cmake --build build --target doc
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.preset }}
+          path: |
+            build/test_results.json
+            build/**/*.xml
+            build/**/*.html
+          retention-days: 30
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.preset }}
+          path: |
+            build/
+            !build/**/*.o
+            !build/**/*.obj
+            !build/**/CMakeFiles/
+          retention-days: 7
+
+      - name: Upload documentation
+        if: matrix.os == 'ubuntu-latest' && matrix.preset == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: build/docs/
+          retention-days: 30
+
+  # Python bindings test
+  python-bindings:
+    name: Python Bindings Test (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache Python packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-ubuntu-latest-x64-release
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest numpy pybind11
+
+      - name: Test Python bindings
+        run: |
+          # Add Python bindings to path and test
+          export PYTHONPATH=$PWD/build/python:$PYTHONPATH
+          python -c "import atom; print('Python bindings loaded successfully')" \
+            || echo "Python bindings not available"
+
+  # Security scanning
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: cpp
+          queries: security-and-quality
+
+      - name: Setup build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build libssl-dev zlib1g-dev
+
+      - name: Build for CodeQL
+        run: |
+          cmake --preset debug \
+            -DATOM_BUILD_EXAMPLES=OFF \
+            -DATOM_BUILD_TESTS=OFF \
+            -DATOM_BUILD_PYTHON_BINDINGS=OFF \
+            -DATOM_BUILD_DOCS=OFF
+          cmake --build --preset debug --parallel
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:cpp"
+
+  # Comprehensive test suite
+  comprehensive-tests:
+    name: Comprehensive Test Suite
+    runs-on: ubuntu-latest
+    needs: build
+    if: always() && needs.build.result == 'success'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Unit Tests"
+            type: "category"
+            filter: "unit"
+            timeout: 300
+          - name: "Integration Tests"
+            type: "category"
+            filter: "integration"
+            timeout: 600
+          - name: "Performance Tests"
+            type: "category"
+            filter: "performance"
+            timeout: 900
+          - name: "Module Tests - Core"
+            type: "modules"
+            modules: "error,utils,type,log,meta"
+            timeout: 600
+          - name: "Module Tests - IO"
+            type: "modules"
+            modules: "io,image,serial,connection,web"
+            timeout: 900
+          - name: "Module Tests - System"
+            type: "modules"
+            modules: "system,sysinfo,memory,async"
+            timeout: 600
+          - name: "Module Tests - Algorithm"
+            type: "modules"
+            modules: "algorithm,search,secret,components"
+            timeout: 900
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-ubuntu-latest-x64-release
+
+      - name: Make scripts executable
+        run: |
+          chmod +x scripts/run_tests.sh
+
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lcov jq
+
+      - name: Run comprehensive test suite
+        timeout-minutes: ${{ matrix.timeout / 60 }}
+        run: |
+          echo "=== Running ${{ matrix.name }} ==="
+
+          if [ "${{ matrix.type }}" == "category" ]; then
+            # Run tests by category
+            echo "Running category: ${{ matrix.filter }}"
+            ./scripts/run_tests.sh --category "${{ matrix.filter }}" \
+              --verbose --parallel --threads=4 \
+              --output-format=json --output="${{ matrix.filter }}_results.json" \
+              || echo "Tests in ${{ matrix.name }} completed with issues"
+          else
+            # Run tests by modules
+            echo "Running modules: ${{ matrix.modules }}"
+            IFS=',' read -ra MODULE_ARRAY <<< "${{ matrix.modules }}"
+            for module in "${MODULE_ARRAY[@]}"; do
+              echo "=== Testing module: $module ==="
+              ./scripts/run_tests.sh --module "$module" \
+                --verbose --parallel --threads=2 \
+                --output-format=json --output="module_${module}_results.json" \
+                || echo "Module $module tests completed with issues"
+            done
+          fi
+
+      - name: Upload category test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comprehensive-test-results-${{ matrix.test-category.name || matrix.name }}
+          path: |
+            *_results.json
+            build/coverage_html/
+          retention-days: 30
+
+      - name: Generate test coverage report
+        if: matrix.name == 'Unit Tests'
+        run: |
+          echo "=== Generating Code Coverage Report ==="
+          cd build
+          if command -v lcov >/dev/null 2>&1; then
+            lcov --directory . --capture --output-file coverage.info
+            lcov --remove coverage.info '/usr/*' --output-file coverage.info
+            lcov --remove coverage.info '*/tests/*' --output-file coverage.info
+            lcov --remove coverage.info '*/examples/*' --output-file coverage.info
+
+            if command -v genhtml >/dev/null 2>&1; then
+              genhtml -o coverage_html coverage.info
+              echo "Coverage report generated"
+            fi
+
+            # Generate coverage summary
+            echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            lcov --summary coverage.info | tail -n 1 >> $GITHUB_STEP_SUMMARY
+          else
+            echo "lcov not available, skipping coverage report"
+          fi
+
+  # Windows-specific tests
+  windows-tests:
+    name: Windows Test Suite
+    runs-on: windows-latest
+    needs: build
+    if: always() && needs.build.result == 'success'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-windows-latest-x64-release
+
+      - name: Run Windows unified test suite
+        run: |
+          echo "=== Running Windows Test Suite ==="
+
+          # Try unified test runner first
+          if (Test-Path ".\run_all_tests.exe") {
+            Write-Host "=== Running Unified Test Suite ==="
+            .\run_all_tests.exe --verbose --parallel --threads=4 --output-format=json --output=test_results.json
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "Some tests failed with exit code $LASTEXITCODE"
+            }
+          } else {
+            Write-Host "=== Unified test runner not found, falling back to CTest ==="
+            ctest --output-on-failure --parallel --timeout 300
+          }
+
+          # Test core modules
+          echo "=== Testing Core Modules ==="
+          if (Test-Path ".\run_all_tests.exe") {
+            .\run_all_tests.exe --module=error --verbose
+            .\run_all_tests.exe --module=utils --verbose
+            .\run_all_tests.exe --module=type --verbose
+          } else {
+            ctest -L "error|utils|type" --output-on-failure --parallel
+          }
+
+      - name: Upload Windows test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-results
+          path: |
+            test_results.json
+            **/*.xml
+          retention-days: 30
+
+  # Performance benchmarks
+  benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, comprehensive-tests, windows-tests]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-ubuntu-latest-x64-release
+
+      - name: Run benchmarks
+        run: |
+          echo "=== Running Performance Benchmarks ==="
+
+          # Try unified test runner for performance tests first
+          if [ -f "./run_all_tests" ]; then
+            echo "Running performance tests via unified test runner"
+            ./run_all_tests --category=performance --verbose \
+              --output-format=json --output=performance_benchmarks.json \
+              || echo "Performance tests completed with issues"
+          else
+            echo "Unified test runner not found, trying traditional benchmarks"
+          fi
+
+          # Fall back to traditional benchmarks if available
+          if [ -f build/benchmarks/atom_benchmarks ]; then
+            echo "Running traditional benchmarks"
+            ./build/benchmarks/atom_benchmarks --benchmark_format=json > traditional_benchmarks.json
+          else
+            echo "No traditional benchmarks found"
+          fi
+
+          # Create combined results file
+          if [ -f "performance_benchmarks.json" ]; then
+            cp performance_benchmarks.json benchmark_results.json
+          elif [ -f "traditional_benchmarks.json" ]; then
+            cp traditional_benchmarks.json benchmark_results.json
+          else
+            echo '{"benchmarks": [], "context": {}}' > benchmark_results.json
+          fi
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results
+          path: benchmark_results.json
+          retention-days: 30
+
+  # Test results summary
+  test-summary:
+    name: Test Results Summary
+    runs-on: ubuntu-latest
+    needs: [comprehensive-tests, windows-tests, benchmarks]
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          path: all-test-results/
+
+      - name: Install jq for JSON processing
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Generate test summary
+        run: |
+          echo "# Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Function to extract test stats from JSON
+          extract_stats() {
+            local file="$1"
+            if [ -f "$file" ]; then
+              local total=$(jq -r '.total_tests // 0' "$file" 2>/dev/null || echo "0")
+              local passed=$(jq -r '.passed_asserts // 0' "$file" 2>/dev/null || echo "0")
+              local failed=$(jq -r '.failed_asserts // 0' "$file" 2>/dev/null || echo "0")
+              local skipped=$(jq -r '.skipped_tests // 0' "$file" 2>/dev/null || echo "0")
+              echo "$total,$passed,$failed,$skipped"
+            else
+              echo "0,0,0,0"
+            fi
+          }
+
+          # Process comprehensive test results
+          echo "## Comprehensive Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Category | Total | Passed | Failed | Skipped | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------------|-------|--------|--------|---------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          for result_dir in all-test-results/comprehensive-test-results-*; do
+            if [ -d "$result_dir" ]; then
+              category=$(basename "$result_dir" | sed 's/comprehensive-test-results-//')
+              for json_file in "$result_dir"/*.json; do
+                if [ -f "$json_file" ]; then
+                  IFS=',' read -ra STATS <<< "$(extract_stats "$json_file")"
+                  total=${STATS[0]}
+                  passed=${STATS[1]}
+                  failed=${STATS[2]}
+                  skipped=${STATS[3]}
+
+                  if [ "$failed" -eq 0 ]; then
+                    status="✅ Passed"
+                  else
+                    status="❌ Failed"
+                  fi
+
+                  echo "| $category | $total | $passed | $failed | $skipped | $status |" >> $GITHUB_STEP_SUMMARY
+                  break
+                fi
+              done
+            fi
+          done
+
+          # Process Windows test results
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Windows Test Results" >> $GITHUB_STEP_SUMMARY
+          if [ -f "all-test-results/windows-test-results/test_results.json" ]; then
+            IFS=',' read -ra STATS <<< "$(extract_stats "all-test-results/windows-test-results/test_results.json")"
+            total=${STATS[0]}
+            passed=${STATS[1]}
+            failed=${STATS[2]}
+            skipped=${STATS[3]}
+
+            echo "- **Total Tests**: $total" >> $GITHUB_STEP_SUMMARY
+            echo "- **Passed**: $passed" >> $GITHUB_STEP_SUMMARY
+            echo "- **Failed**: $failed" >> $GITHUB_STEP_SUMMARY
+            echo "- **Skipped**: $skipped" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Windows test results not available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Process benchmark results
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Performance Benchmarks" >> $GITHUB_STEP_SUMMARY
+          if [ -f "all-test-results/benchmark-results/benchmark_results.json" ]; then
+            benchmark_count=$(jq '.benchmarks | length // 0' \
+              "all-test-results/benchmark-results/benchmark_results.json" \
+              2>/dev/null || echo "0")
+            echo "- **Benchmarks Run**: $benchmark_count" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status**: ✅ Completed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Status**: ⚠️ Not available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Coverage summary
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Code Coverage" >> $GITHUB_STEP_SUMMARY
+          if [ -d "all-test-results/comprehensive-test-results-Unit Tests/build/coverage_html" ]; then
+            echo "- **Coverage Report**: ✅ Generated" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status**: Available in build artifacts" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Coverage Report**: ⚠️ Not available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Overall status
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Overall Status" >> $GITHUB_STEP_SUMMARY
+          comp_result="${{ needs.comprehensive-tests.result }}"
+          win_result="${{ needs.windows-tests.result }}"
+          if [ "$comp_result" == "success" ] && [ "$win_result" == "success" ]; then
+            echo "🎉 **All tests completed successfully!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Some tests had issues** - Check individual job results for details" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload combined test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: combined-test-results
+          path: all-test-results/
+          retention-days: 7

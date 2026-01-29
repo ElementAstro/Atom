@@ -1,6 +1,69 @@
 #include "websocket.hpp"
+#include "session.hpp"
+
+#include <cstdint>
+#include <random>
+#include <vector>
 
 namespace atom::extra::curl {
+namespace {
+bool sendWebSocketFrame(CURL* handle, unsigned char opcode, const char* data,
+                        std::size_t length) {
+    if (!handle) {
+        return false;
+    }
+
+    std::vector<unsigned char> frame;
+    frame.reserve(length + 14);
+
+    frame.push_back(static_cast<unsigned char>(0x80 | (opcode & 0x0F)));
+
+    std::uint64_t payloadLen = length;
+    if (payloadLen <= 125) {
+        frame.push_back(static_cast<unsigned char>(0x80 | payloadLen));
+    } else if (payloadLen <= 0xFFFF) {
+        frame.push_back(0x80 | 126);
+        frame.push_back(static_cast<unsigned char>((payloadLen >> 8) & 0xFF));
+        frame.push_back(static_cast<unsigned char>(payloadLen & 0xFF));
+    } else {
+        frame.push_back(0x80 | 127);
+        for (int i = 7; i >= 0; --i) {
+            frame.push_back(
+                static_cast<unsigned char>((payloadLen >> (i * 8)) & 0xFF));
+        }
+    }
+
+    static thread_local std::mt19937 rng{std::random_device{}()};
+    std::uint8_t maskKey[4];
+    for (int i = 0; i < 4; ++i) {
+        maskKey[i] = static_cast<std::uint8_t>(rng() & 0xFF);
+    }
+
+    frame.insert(frame.end(), maskKey, maskKey + 4);
+
+    std::size_t payloadStart = frame.size();
+    frame.resize(frame.size() + payloadLen);
+    for (std::size_t i = 0; i < payloadLen; ++i) {
+        unsigned char c = static_cast<unsigned char>(data[i]);
+        frame[payloadStart + i] =
+            static_cast<unsigned char>(c ^ maskKey[i % 4]);
+    }
+
+    std::size_t sentTotal = 0;
+    while (sentTotal < frame.size()) {
+        std::size_t sent = 0;
+        CURLcode result = curl_easy_send(handle, frame.data() + sentTotal,
+                                         frame.size() - sentTotal, &sent);
+        if (result != CURLE_OK || sent == 0) {
+            return false;
+        }
+        sentTotal += sent;
+    }
+
+    return sentTotal == frame.size();
+}
+}  // namespace
+
 WebSocket::WebSocket() : handle_(nullptr), running_(false), connected_(false) {}
 
 WebSocket::~WebSocket() {
@@ -17,6 +80,7 @@ bool WebSocket::connect(const std::string& url,
     }
 
     url_ = url;
+    ensure_curl_global_init();
     handle_ = curl_easy_init();
     if (!handle_) {
         return false;
@@ -97,47 +161,8 @@ bool WebSocket::send(const std::string& message, bool binary) {
         return false;
     }
 
-    size_t sent = 0;
-    CURLcode result;
-
-    // Create WebSocket frame header
-    std::vector<char> frame;
-    frame.reserve(message.size() + 10);  // Max header size is 10 bytes
-
-    // First byte: FIN + Opcode
-    frame.push_back(
-        0x80 | (binary ? 0x02 : 0x01));  // 0x80=FIN, 0x01=text, 0x02=binary
-
-    // Second byte: Mask + Payload length
-    if (message.size() <= 125) {
-        frame.push_back(static_cast<char>(message.size()));
-    } else if (message.size() <= 65535) {
-        frame.push_back(126);
-        frame.push_back((message.size() >> 8) & 0xFF);
-        frame.push_back(message.size() & 0xFF);
-    } else {
-        frame.push_back(127);
-        uint64_t len = message.size();
-        for (int i = 7; i >= 0; i--) {
-            frame.push_back((len >> (i * 8)) & 0xFF);
-        }
-    }
-
-    // Add message data
-    frame.insert(frame.end(), message.begin(), message.end());
-
-    // Send frame
-    size_t sent_total = 0;
-    while (sent_total < frame.size()) {
-        result = curl_easy_send(handle_, frame.data() + sent_total,
-                                frame.size() - sent_total, &sent);
-        if (result != CURLE_OK) {
-            break;
-        }
-        sent_total += sent;
-    }
-
-    return result == CURLE_OK && sent_total == frame.size();
+    return sendWebSocketFrame(handle_, binary ? 0x02u : 0x01u, message.data(),
+                              message.size());
 }
 
 void WebSocket::on_message(MessageCallback callback) {
@@ -166,42 +191,107 @@ void WebSocket::receive_loop() {
         }
 
         if (received > 0) {
-            // Basic frame parsing
-            if (static_cast<unsigned char>(buffer[0]) == 0x88) {  // Close frame
-                uint16_t close_code = 1005;  // No status code
-                std::string reason;
+            size_t offset = 0;
+            while (offset + 2 <= received) {
+                unsigned char b1 = static_cast<unsigned char>(buffer[offset]);
+                unsigned char b2 =
+                    static_cast<unsigned char>(buffer[offset + 1]);
 
-                if (received >= 4) {  // Skip 2 bytes header
-                    close_code = (static_cast<uint16_t>(buffer[2]) << 8) |
-                                 static_cast<uint8_t>(buffer[3]);
-                    if (received > 4) {
-                        reason = std::string(buffer.data() + 4, received - 4);
+                unsigned char opcode = static_cast<unsigned char>(b1 & 0x0F);
+                bool masked = (b2 & 0x80) != 0;
+                std::uint64_t payloadLen =
+                    static_cast<std::uint64_t>(b2 & 0x7F);
+                std::size_t headerLen = 2;
+
+                if (payloadLen == 126) {
+                    if (offset + headerLen + 2 > received) {
+                        break;
+                    }
+                    payloadLen =
+                        (static_cast<std::uint64_t>(
+                             static_cast<unsigned char>(buffer[offset + 2]))
+                         << 8) |
+                        static_cast<std::uint64_t>(
+                            static_cast<unsigned char>(buffer[offset + 3]));
+                    headerLen += 2;
+                } else if (payloadLen == 127) {
+                    if (offset + headerLen + 8 > received) {
+                        break;
+                    }
+                    payloadLen = 0;
+                    for (int i = 0; i < 8; ++i) {
+                        payloadLen = (payloadLen << 8) |
+                                     static_cast<std::uint64_t>(
+                                         static_cast<unsigned char>(
+                                             buffer[offset + 2 + i]));
+                    }
+                    headerLen += 8;
+                }
+
+                std::uint8_t maskKey[4] = {0, 0, 0, 0};
+                if (masked) {
+                    if (offset + headerLen + 4 > received) {
+                        break;
+                    }
+                    for (int i = 0; i < 4; ++i) {
+                        maskKey[i] = static_cast<std::uint8_t>(
+                            static_cast<unsigned char>(
+                                buffer[offset + headerLen + i]));
+                    }
+                    headerLen += 4;
+                }
+
+                if (offset + headerLen + payloadLen > received) {
+                    break;
+                }
+
+                std::string payload;
+                payload.resize(static_cast<std::size_t>(payloadLen));
+                for (std::size_t i = 0; i < payloadLen; ++i) {
+                    unsigned char c = static_cast<unsigned char>(
+                        buffer[offset + headerLen + i]);
+                    if (masked) {
+                        c = static_cast<unsigned char>(c ^ maskKey[i % 4]);
+                    }
+                    payload[i] = static_cast<char>(c);
+                }
+
+                offset += headerLen + static_cast<std::size_t>(payloadLen);
+
+                if (opcode == 0x08) {
+                    int closeCode = 1005;
+                    std::string reason;
+                    if (payloadLen >= 2) {
+                        closeCode = (static_cast<int>(
+                                         static_cast<unsigned char>(payload[0]))
+                                     << 8) |
+                                    static_cast<int>(
+                                        static_cast<unsigned char>(payload[1]));
+                        if (payloadLen > 2) {
+                            reason.assign(payload.begin() + 2, payload.end());
+                        }
+                    }
+
+                    {
+                        std::lock_guard<std::mutex> lock(mutex_);
+                        running_ = false;
+                        connected_ = false;
+                    }
+
+                    if (close_callback_) {
+                        close_callback_(closeCode, reason);
+                    }
+
+                    return;
+                }
+
+                if (opcode == 0x01 || opcode == 0x02) {
+                    bool isBinary = (opcode == 0x02);
+                    if (message_callback_) {
+                        message_callback_(payload, isBinary);
                     }
                 }
-
-                {
-                    std::lock_guard<std::mutex> lock(mutex_);
-                    running_ = false;
-                    connected_ = false;
-                }
-
-                if (close_callback_) {
-                    close_callback_(close_code, reason);
-                }
-
-                break;
-            } else if (static_cast<unsigned char>(buffer[0]) == 0x81 ||
-                       static_cast<unsigned char>(buffer[0]) ==
-                           0x82) {  // Text or Binary frame
-                // Data frame
-                bool is_binary =
-                    (static_cast<unsigned char>(buffer[0]) == 0x82);
-                if (message_callback_) {
-                    message_callback_(std::string(buffer.data(), received),
-                                      is_binary);
-                }
             }
-            // 忽略其他控制帧
         }
     }
 }
@@ -216,11 +306,6 @@ void WebSocket::send_close_frame(int code, const std::string& reason) {
     payload[1] = static_cast<char>(code & 0xFF);
     std::memcpy(payload.data() + 2, reason.data(), reason.size());
 
-    size_t sent = 0;
-    // Workaround: send close frame payload directly since WebSocket frame
-    // API is unavailable.
-    CURLcode result =
-        curl_easy_send(handle_, payload.data(), payload.size(), &sent);
-    (void)result;
+    (void)sendWebSocketFrame(handle_, 0x08u, payload.data(), payload.size());
 }
 }  // namespace atom::extra::curl

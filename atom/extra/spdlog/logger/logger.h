@@ -10,10 +10,12 @@
 #include "../utils/timer.h"
 
 #include <spdlog/spdlog.h>
+#include <cstdint>
 #include <format>
 #include <memory>
 #include <ranges>
 #include <source_location>
+#include <utility>
 
 /**
  * @file logger.h
@@ -73,10 +75,12 @@ public:
      * @param args Arguments for formatting.
      * @param loc Source location (automatically captured).
      */
-    template <Formattable... Args>
-    void trace(
-        std::format_string<Args...> fmt, Args&&... args,
-        const std::source_location& loc = std::source_location::current());
+    template <typename... Args>
+    void trace(std::format_string<Args...> fmt, Args&&... args) {
+        log_with_location<Args...>(Level::trace, fmt,
+                                   std::forward<Args>(args)...,
+                                   std::source_location::current());
+    }
 
     /**
      * @brief Log a debug-level message with source location.
@@ -85,10 +89,12 @@ public:
      * @param args Arguments for formatting.
      * @param loc Source location (automatically captured).
      */
-    template <Formattable... Args>
-    void debug(
-        std::format_string<Args...> fmt, Args&&... args,
-        const std::source_location& loc = std::source_location::current());
+    template <typename... Args>
+    void debug(std::format_string<Args...> fmt, Args&&... args) {
+        log_with_location<Args...>(Level::debug, fmt,
+                                   std::forward<Args>(args)...,
+                                   std::source_location::current());
+    }
 
     /**
      * @brief Log an info-level message with source location.
@@ -97,10 +103,12 @@ public:
      * @param args Arguments for formatting.
      * @param loc Source location (automatically captured).
      */
-    template <Formattable... Args>
-    void info(
-        std::format_string<Args...> fmt, Args&&... args,
-        const std::source_location& loc = std::source_location::current());
+    template <typename... Args>
+    void info(std::format_string<Args...> fmt, Args&&... args) {
+        log_with_location<Args...>(Level::info, fmt,
+                                   std::forward<Args>(args)...,
+                                   std::source_location::current());
+    }
 
     /**
      * @brief Log a warning-level message with source location.
@@ -109,10 +117,12 @@ public:
      * @param args Arguments for formatting.
      * @param loc Source location (automatically captured).
      */
-    template <Formattable... Args>
-    void warn(
-        std::format_string<Args...> fmt, Args&&... args,
-        const std::source_location& loc = std::source_location::current());
+    template <typename... Args>
+    void warn(std::format_string<Args...> fmt, Args&&... args) {
+        log_with_location<Args...>(Level::warn, fmt,
+                                   std::forward<Args>(args)...,
+                                   std::source_location::current());
+    }
 
     /**
      * @brief Log an error-level message with source location.
@@ -121,10 +131,12 @@ public:
      * @param args Arguments for formatting.
      * @param loc Source location (automatically captured).
      */
-    template <Formattable... Args>
-    void error(
-        std::format_string<Args...> fmt, Args&&... args,
-        const std::source_location& loc = std::source_location::current());
+    template <typename... Args>
+    void error(std::format_string<Args...> fmt, Args&&... args) {
+        log_with_location<Args...>(Level::error, fmt,
+                                   std::forward<Args>(args)...,
+                                   std::source_location::current());
+    }
 
     /**
      * @brief Log a critical-level message with source location.
@@ -133,10 +145,12 @@ public:
      * @param args Arguments for formatting.
      * @param loc Source location (automatically captured).
      */
-    template <Formattable... Args>
-    void critical(
-        std::format_string<Args...> fmt, Args&&... args,
-        const std::source_location& loc = std::source_location::current());
+    template <typename... Args>
+    void critical(std::format_string<Args...> fmt, Args&&... args) {
+        log_with_location<Args...>(Level::critical, fmt,
+                                   std::forward<Args>(args)...,
+                                   std::source_location::current());
+    }
 
     /**
      * @brief Log a message with a custom context.
@@ -339,21 +353,38 @@ private:
                                             const LogContext& ctx) const;
 
     /**
-     * @brief Fast context enrichment using pre-allocated buffer.
-     * @param message Original message.
-     * @param ctx Context to add.
-     * @param buffer Pre-allocated buffer to write to.
-     */
-    void enrich_message_with_context_fast(const std::string& message,
-                                          const LogContext& ctx,
-                                          std::string& buffer) const;
-
-    /**
      * @brief Emit a log event to the event system.
      * @param event LogEvent type.
      * @param data Optional event data.
      */
     void emit_event(LogEvent event, const std::any& data = {});
 };
+
+template <Formattable... Args>
+inline void Logger::log_with_location(Level level,
+                                      std::format_string<Args...> fmt,
+                                      Args&&... args,
+                                      const std::source_location& loc) {
+    if (!should_log_internal(level)) {
+        return;
+    }
+
+    std::string message = std::format(fmt, std::forward<Args>(args)...);
+
+    const char* file = loc.file_name();
+    const char* function = loc.function_name();
+    const uint_least32_t line = loc.line();
+
+    if (file && *file) {
+        if (function && *function) {
+            message = std::format("[{}:{} {}] {}", file, line, function,
+                                  std::move(message));
+        } else {
+            message = std::format("[{}:{}] {}", file, line, std::move(message));
+        }
+    }
+
+    log_internal(level, message);
+}
 
 }  // namespace modern_log

@@ -12,55 +12,17 @@ LogSampler::LogSampler(SamplingStrategy strategy, double rate)
 }
 
 bool LogSampler::should_sample() {
-    return should_sample_advanced(Level::info, Priority::normal);
-}
-
-bool LogSampler::should_sample_advanced(Level level, Priority priority) {
-    // Refill rate limiting tokens
-    refill_tokens();
-
-    // Check rate limit first (fastest check)
-    if (!check_rate_limit()) {
-        dropped_.fetch_add(1);
-        return false;
-    }
-
-    // Apply priority-based sampling if enabled
-    double effective_rate = sample_rate_;
-    if (priority_sampling_enabled_.load()) {
-        effective_rate *= get_priority_rate(priority);
-    }
-
-    // Apply strategy-specific sampling
-    bool should_log = false;
     switch (strategy_) {
         case SamplingStrategy::none:
-            should_log = true;
-            break;
+            return true;
         case SamplingStrategy::uniform:
-            should_log = uniform_sample();
-            break;
+            return uniform_sample();
         case SamplingStrategy::adaptive:
-            should_log = adaptive_sample();
-            break;
+            return adaptive_sample();
         case SamplingStrategy::burst:
-            should_log = burst_sample();
-            break;
+            return burst_sample();
     }
-
-    if (!should_log) {
-        dropped_.fetch_add(1);
-    }
-
-    return should_log;
-}
-
-bool LogSampler::check_rate_limit() {
-    if (rate_limit_tokens_.load() > 0) {
-        rate_limit_tokens_.fetch_sub(1);
-        return true;
-    }
-    return false;
+    return true;
 }
 
 size_t LogSampler::get_dropped_count() const { return dropped_.load(); }
@@ -78,35 +40,6 @@ void LogSampler::set_strategy(SamplingStrategy strategy, double rate) {
     if (rate >= 0.0 && rate <= 1.0) {
         sample_rate_ = rate;
     }
-}
-
-void LogSampler::set_priority_sampling(bool enabled) {
-    priority_sampling_enabled_.store(enabled);
-}
-
-void LogSampler::set_priority_rate(Priority priority, double rate) {
-    if (rate >= 0.0 && rate <= 1.0) {
-        priority_rates_[static_cast<size_t>(priority)].store(rate);
-    }
-}
-
-void LogSampler::set_rate_limit(size_t max_tokens, std::chrono::milliseconds refill_interval) {
-    max_tokens_.store(max_tokens);
-    token_refill_interval_ms_.store(refill_interval.count());
-    rate_limit_tokens_.store(max_tokens);
-}
-
-void LogSampler::set_burst_threshold(size_t threshold) {
-    burst_threshold_.store(threshold);
-}
-
-std::tuple<size_t, size_t, double, bool> LogSampler::get_detailed_stats() const {
-    return {
-        counter_.load(),
-        dropped_.load(),
-        get_current_rate(),
-        detect_burst()
-    };
 }
 
 void LogSampler::reset_stats() {
@@ -164,8 +97,7 @@ bool LogSampler::burst_sample() {
         last_burst = now;
     }
 
-    size_t max_burst =
-        static_cast<size_t>(sample_rate_ * 10);
+    size_t max_burst = static_cast<size_t>(sample_rate_ * 10);
     bool should_log = burst_counter++ < max_burst;
 
     if (!should_log) {
@@ -181,45 +113,6 @@ double LogSampler::get_system_load() const {
     static thread_local std::uniform_real_distribution<> dis(0.0, 1.0);
 
     return dis(gen) * 0.5;
-}
-
-void LogSampler::refill_tokens() const {
-    // Simple time-based refill - use a simpler approach for atomic compatibility
-    static thread_local auto last_refill = std::chrono::steady_clock::now();
-    auto now = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_refill);
-
-    if (elapsed.count() >= static_cast<long>(token_refill_interval_ms_.load())) {
-        size_t max_tokens = max_tokens_.load();
-        size_t current_tokens = rate_limit_tokens_.load();
-        if (current_tokens < max_tokens) {
-            rate_limit_tokens_.store(max_tokens);
-        }
-        last_refill = now;
-    }
-}
-
-bool LogSampler::detect_burst() const {
-    // Simple burst detection using thread-local storage
-    static thread_local auto last_check = std::chrono::steady_clock::now();
-    static thread_local size_t local_count = 0;
-
-    auto now = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_check);
-
-    if (elapsed >= std::chrono::milliseconds(1000)) {
-        bool burst_detected = local_count > burst_threshold_.load();
-        local_count = 0;
-        last_check = now;
-        return burst_detected;
-    }
-
-    local_count++;
-    return false;
-}
-
-double LogSampler::get_priority_rate(Priority priority) const {
-    return priority_rates_[static_cast<size_t>(priority)].load();
 }
 
 }  // namespace modern_log

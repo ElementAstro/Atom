@@ -1,6 +1,7 @@
 #ifndef ATOM_MEMORY_UTILS_HPP
 #define ATOM_MEMORY_UTILS_HPP
 
+#include <immintrin.h>  // For memory prefetching
 #include <atomic>
 #include <cassert>
 #include <chrono>
@@ -14,7 +15,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <immintrin.h>  // For memory prefetching
 
 // Cache line size for alignment optimizations
 #ifndef CACHE_LINE_SIZE
@@ -29,7 +29,7 @@ namespace atom::memory {
 struct Config {
     static constexpr size_t DefaultAlignment = alignof(std::max_align_t);
     static constexpr size_t CacheLineSize = CACHE_LINE_SIZE;
-    static constexpr size_t PageSize = 4096;  // Common page size
+    static constexpr size_t PageSize = 4096;                 // Common page size
     static constexpr size_t HugePageSize = 2 * 1024 * 1024;  // 2MB huge pages
 
     static constexpr bool EnableMemoryTracking =
@@ -84,7 +84,8 @@ namespace alignment {
  */
 template <size_t Alignment>
 constexpr bool isAligned(const void* ptr) noexcept {
-    static_assert((Alignment & (Alignment - 1)) == 0, "Alignment must be a power of 2");
+    static_assert((Alignment & (Alignment - 1)) == 0,
+                  "Alignment must be a power of 2");
     return (reinterpret_cast<uintptr_t>(ptr) & (Alignment - 1)) == 0;
 }
 
@@ -93,7 +94,8 @@ constexpr bool isAligned(const void* ptr) noexcept {
  */
 template <size_t Alignment>
 constexpr size_t alignUp(size_t value) noexcept {
-    static_assert((Alignment & (Alignment - 1)) == 0, "Alignment must be a power of 2");
+    static_assert((Alignment & (Alignment - 1)) == 0,
+                  "Alignment must be a power of 2");
     return (value + Alignment - 1) & ~(Alignment - 1);
 }
 
@@ -102,7 +104,8 @@ constexpr size_t alignUp(size_t value) noexcept {
  */
 template <size_t Alignment>
 constexpr size_t alignDown(size_t value) noexcept {
-    static_assert((Alignment & (Alignment - 1)) == 0, "Alignment must be a power of 2");
+    static_assert((Alignment & (Alignment - 1)) == 0,
+                  "Alignment must be a power of 2");
     return value & ~(Alignment - 1);
 }
 
@@ -111,7 +114,8 @@ constexpr size_t alignDown(size_t value) noexcept {
  */
 template <size_t Alignment>
 constexpr size_t alignmentPadding(const void* ptr) noexcept {
-    static_assert((Alignment & (Alignment - 1)) == 0, "Alignment must be a power of 2");
+    static_assert((Alignment & (Alignment - 1)) == 0,
+                  "Alignment must be a power of 2");
     uintptr_t addr = reinterpret_cast<uintptr_t>(ptr);
     return (Alignment - (addr & (Alignment - 1))) & (Alignment - 1);
 }
@@ -122,32 +126,39 @@ constexpr size_t alignmentPadding(const void* ptr) noexcept {
 template <size_t Alignment>
 class AlignedAllocator {
 public:
-    static_assert((Alignment & (Alignment - 1)) == 0, "Alignment must be a power of 2");
-    static_assert(Alignment >= sizeof(void*), "Alignment must be at least pointer size");
+    static_assert((Alignment & (Alignment - 1)) == 0,
+                  "Alignment must be a power of 2");
+    static_assert(Alignment >= sizeof(void*),
+                  "Alignment must be at least pointer size");
 
     static void* allocate(size_t size) {
-        if (size == 0) return nullptr;
+        if (size == 0)
+            return nullptr;
 
         size_t total_size = size + Alignment + sizeof(void*);
         void* raw_ptr = std::malloc(total_size);
-        if (!raw_ptr) return nullptr;
+        if (!raw_ptr)
+            return nullptr;
 
         // Calculate aligned address
         uintptr_t raw_addr = reinterpret_cast<uintptr_t>(raw_ptr);
         uintptr_t aligned_addr = alignUp<Alignment>(raw_addr + sizeof(void*));
 
         // Store original pointer before aligned memory
-        void** stored_ptr = reinterpret_cast<void**>(aligned_addr - sizeof(void*));
+        void** stored_ptr =
+            reinterpret_cast<void**>(aligned_addr - sizeof(void*));
         *stored_ptr = raw_ptr;
 
         return reinterpret_cast<void*>(aligned_addr);
     }
 
     static void deallocate(void* ptr) noexcept {
-        if (!ptr) return;
+        if (!ptr)
+            return;
 
         // Retrieve original pointer
-        void** stored_ptr = reinterpret_cast<void**>(static_cast<char*>(ptr) - sizeof(void*));
+        void** stored_ptr =
+            reinterpret_cast<void**>(static_cast<char*>(ptr) - sizeof(void*));
         std::free(*stored_ptr);
     }
 };
@@ -162,7 +173,7 @@ using CacheAlignedAllocator = AlignedAllocator<Config::CacheLineSize>;
  */
 using PageAlignedAllocator = AlignedAllocator<Config::PageSize>;
 
-} // namespace alignment
+}  // namespace alignment
 
 /**
  * @brief Advanced smart pointer utilities and helpers
@@ -193,7 +204,11 @@ public:
     explicit operator bool() const noexcept { return ptr_ != nullptr; }
 
     void reset(T* p = nullptr) noexcept { ptr_ = p; }
-    T* release() noexcept { T* result = ptr_; ptr_ = nullptr; return result; }
+    T* release() noexcept {
+        T* result = ptr_;
+        ptr_ = nullptr;
+        return result;
+    }
 };
 
 /**
@@ -210,21 +225,13 @@ public:
     template <typename U>
     WeakRef(const std::shared_ptr<U>& shared) : weak_ptr_(shared) {}
 
-    std::shared_ptr<T> lock() const noexcept {
-        return weak_ptr_.lock();
-    }
+    std::shared_ptr<T> lock() const noexcept { return weak_ptr_.lock(); }
 
-    bool expired() const noexcept {
-        return weak_ptr_.expired();
-    }
+    bool expired() const noexcept { return weak_ptr_.expired(); }
 
-    void reset() noexcept {
-        weak_ptr_.reset();
-    }
+    void reset() noexcept { weak_ptr_.reset(); }
 
-    size_t use_count() const noexcept {
-        return weak_ptr_.use_count();
-    }
+    size_t use_count() const noexcept { return weak_ptr_.use_count(); }
 
     // Enhanced functionality
     template <typename F>
@@ -275,7 +282,9 @@ public:
 
     // Movable
     ScopedResource(ScopedResource&& other) noexcept
-        : resource_(other.resource_), deleter_(std::move(other.deleter_)), released_(other.released_) {
+        : resource_(other.resource_),
+          deleter_(std::move(other.deleter_)),
+          released_(other.released_) {
         other.released_ = true;
     }
 
@@ -295,7 +304,9 @@ public:
     T* get() const noexcept { return resource_; }
     T& operator*() const noexcept { return *resource_; }
     T* operator->() const noexcept { return resource_; }
-    explicit operator bool() const noexcept { return resource_ != nullptr && !released_; }
+    explicit operator bool() const noexcept {
+        return resource_ != nullptr && !released_;
+    }
 
     T* release() noexcept {
         released_ = true;
@@ -311,7 +322,7 @@ public:
     }
 };
 
-} // namespace smart_ptr
+}  // namespace smart_ptr
 
 /**
  * @brief Creates a std::shared_ptr object and validates constructor arguments
@@ -319,13 +330,9 @@ public:
  */
 template <typename T, typename... Args>
 auto makeShared(Args&&... args) -> ConstructorArguments_t<T, Args...> {
-    if constexpr (IsConstructible<T, Args...>::value) {
-        return std::make_shared<T>(std::forward<Args>(args)...);
-    } else {
-        static_assert(IsConstructible<T, Args...>::value,
-                      "Arguments do not match any constructor of the type T");
-        return nullptr;
-    }
+    static_assert(IsConstructible<T, Args...>::value,
+                  "Arguments do not match any constructor of the type T");
+    return std::make_shared<T>(std::forward<Args>(args)...);
 }
 
 /**
@@ -334,13 +341,9 @@ auto makeShared(Args&&... args) -> ConstructorArguments_t<T, Args...> {
  */
 template <typename T, typename... Args>
 auto makeUnique(Args&&... args) -> UniqueConstructorArguments_t<T, Args...> {
-    if constexpr (IsConstructible<T, Args...>::value) {
-        return std::make_unique<T>(std::forward<Args>(args)...);
-    } else {
-        static_assert(IsConstructible<T, Args...>::value,
-                      "Arguments do not match any constructor of the type T");
-        return nullptr;
-    }
+    static_assert(IsConstructible<T, Args...>::value,
+                  "Arguments do not match any constructor of the type T");
+    return std::make_unique<T>(std::forward<Args>(args)...);
 }
 
 /**
@@ -486,7 +489,8 @@ inline void prefetchRange(const void* start, size_t size) noexcept {
 /**
  * @brief Cache-friendly memory copy
  */
-inline void cacheFriendlyMemcpy(void* dest, const void* src, size_t size) noexcept {
+inline void cacheFriendlyMemcpy(void* dest, const void* src,
+                                size_t size) noexcept {
     if constexpr (Config::EnableCacheOptimization) {
         // Prefetch source data
         prefetchRange(src, size);
@@ -497,7 +501,8 @@ inline void cacheFriendlyMemcpy(void* dest, const void* src, size_t size) noexce
         // Flush destination from cache if it's a large copy
         if (size > Config::CacheLineSize * 4) {
             const char* dest_addr = static_cast<const char*>(dest);
-            for (size_t offset = 0; offset < size; offset += Config::CacheLineSize) {
+            for (size_t offset = 0; offset < size;
+                 offset += Config::CacheLineSize) {
                 _mm_clflush(dest_addr + offset);
             }
         }
@@ -531,7 +536,8 @@ public:
     CacheAlignedAllocator(const CacheAlignedAllocator<U>&) noexcept {}
 
     pointer allocate(size_type n) {
-        if (n == 0) return nullptr;
+        if (n == 0)
+            return nullptr;
 
         size_type size = n * sizeof(T);
         void* ptr = alignment::CacheAlignedAllocator::allocate(size);
@@ -558,7 +564,7 @@ public:
     }
 };
 
-} // namespace cache
+}  // namespace cache
 
 /**
  * @brief RAII helpers and resource management utilities
@@ -584,9 +590,7 @@ public:
         }
     }
 
-    void dismiss() noexcept {
-        dismissed_ = true;
-    }
+    void dismiss() noexcept { dismissed_ = true; }
 
     // Non-copyable, non-movable
     ScopeGuard(const ScopeGuard&) = delete;
@@ -629,7 +633,9 @@ public:
 
     // Movable
     ResourceWrapper(ResourceWrapper&& other) noexcept
-        : resource_(other.resource_), deleter_(std::move(other.deleter_)), valid_(other.valid_) {
+        : resource_(other.resource_),
+          deleter_(std::move(other.deleter_)),
+          valid_(other.valid_) {
         other.valid_ = false;
     }
 
@@ -664,7 +670,7 @@ auto makeResourceWrapper(T resource, Deleter deleter) {
     return ResourceWrapper<T, Deleter>(resource, deleter);
 }
 
-} // namespace raii
+}  // namespace raii
 
 }  // namespace atom::memory
 

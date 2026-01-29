@@ -5,21 +5,15 @@ WSClient::WSClient(net::io_context& ioc)
     : resolver_(std::make_shared<tcp::resolver>(net::make_strand(ioc))),
       ws_(std::make_shared<websocket::stream<tcp::socket>>(
           net::make_strand(ioc))),
-      ping_timer_(std::make_shared<net::steady_timer>(ioc.get_executor())),
-      incoming_message_queue_(std::make_unique<atom::beast::concurrency::LockFreeMPMCQueue<std::string>>()),
-      outgoing_message_queue_(std::make_unique<atom::beast::concurrency::LockFreeMPMCQueue<std::string>>()),
-      performance_monitor_(&atom::beast::monitoring::get_global_performance_monitor()) {
-
+      ping_timer_(std::make_shared<net::steady_timer>(ioc.get_executor())) {
     if (!resolver_ || !ws_ || !ping_timer_) {
         throw std::bad_alloc();
     }
-
-    spdlog::info("WSClient initialized with lock-free message queues and performance monitoring");
 }
 
 WSClient::~WSClient() noexcept {
     try {
-        if (is_connected_.load(std::memory_order_acquire) && ws_ && ws_->is_open()) {
+        if (is_connected_ && ws_ && ws_->is_open()) {
             beast::error_code ec;
             ws_->close(websocket::close_code::normal, ec);
         }
@@ -150,19 +144,14 @@ void WSClient::connect(std::string_view host, std::string_view port) {
         throw beast::system_error{ec};
     }
 
-    is_connected_.store(true, std::memory_order_release);
-
-    // Record connection opened
-    if (performance_monitor_) {
-        performance_monitor_->record_ws_connection_opened();
-    }
-
+    is_connected_ = true;
     startPing();
-    spdlog::info("Successfully connected to WebSocket server {}:{}", host, port);
+    spdlog::info("Successfully connected to WebSocket server {}:{}", host,
+                 port);
 }
 
 void WSClient::send(std::string_view message) {
-    if (!is_connected_.load(std::memory_order_acquire)) {
+    if (!is_connected_) {
         throw std::logic_error("Cannot send message: not connected");
     }
 
@@ -170,37 +159,23 @@ void WSClient::send(std::string_view message) {
     ws_->write(net::buffer(message), ec);
 
     if (ec) {
-        is_connected_.store(false, std::memory_order_release);
-        if (performance_monitor_) {
-            performance_monitor_->record_ws_connection_closed();
-        }
+        is_connected_ = false;
         spdlog::error("Failed to send message: {}", ec.message());
         throw beast::system_error{ec};
     }
-
-    // Record message sent
-    if (performance_monitor_) {
-        performance_monitor_->record_ws_message_sent(message.size());
-    }
-
-    spdlog::debug("Message sent successfully: {} bytes", message.size());
 }
 
 std::string WSClient::receive() {
-    if (!is_connected_.load(std::memory_order_acquire)) {
+    if (!is_connected_) {
         throw std::logic_error("Cannot receive message: not connected");
     }
 
     beast::flat_buffer buffer;
     beast::error_code ec;
-    auto start_time = std::chrono::steady_clock::now();
     ws_->read(buffer, ec);
 
     if (ec) {
-        is_connected_.store(false, std::memory_order_release);
-        if (performance_monitor_) {
-            performance_monitor_->record_ws_connection_closed();
-        }
+        is_connected_ = false;
         spdlog::error("Failed to receive message: {}", ec.message());
         if (ec == websocket::error::closed) {
             spdlog::info("WebSocket connection closed by peer.");
@@ -208,103 +183,13 @@ std::string WSClient::receive() {
         throw beast::system_error{ec};
     }
 
-    auto message = beast::buffers_to_string(buffer.data());
-
-    // Record message received
-    if (performance_monitor_) {
-        performance_monitor_->record_ws_message_received(message.size(), start_time);
-    }
-
-    // Try to enqueue message in lock-free queue
-    if (incoming_message_queue_ && !incoming_message_queue_->empty()) {
-        // Check backpressure
-        if (backpressure_enabled_.load(std::memory_order_acquire) &&
-            current_queue_size_.load(std::memory_order_acquire) >= backpressure_threshold_.load(std::memory_order_acquire)) {
-            spdlog::warn("Incoming message queue backpressure active, dropping message");
-        } else {
-            incoming_message_queue_->enqueue(std::string(message));
-            current_queue_size_.fetch_add(1, std::memory_order_acq_rel);
-        }
-    }
-
-    return message;
+    return beast::buffers_to_string(buffer.data());
 }
 
-bool WSClient::isConnected() const noexcept {
-    return is_connected_.load(std::memory_order_acquire);
-}
-
-void WSClient::configureMessageQueue(std::size_t max_queue_size, std::size_t backpressure_threshold) {
-    max_queue_size_.store(max_queue_size, std::memory_order_release);
-    backpressure_threshold_.store(backpressure_threshold, std::memory_order_release);
-
-    spdlog::info("Message queue configured: max_size={}, backpressure_threshold={}",
-                max_queue_size, backpressure_threshold);
-}
-
-void WSClient::setBackpressureEnabled(bool enabled) noexcept {
-    backpressure_enabled_.store(enabled, std::memory_order_release);
-    spdlog::info("Backpressure control {}", enabled ? "enabled" : "disabled");
-}
-
-WSClient::QueueStatistics WSClient::getQueueStatistics() const noexcept {
-    return QueueStatistics{
-        incoming_message_queue_ ? incoming_message_queue_->size() : 0,
-        outgoing_message_queue_ ? outgoing_message_queue_->size() : 0,
-        max_queue_size_.load(std::memory_order_acquire),
-        backpressure_enabled_.load(std::memory_order_acquire) &&
-            current_queue_size_.load(std::memory_order_acquire) >= backpressure_threshold_.load(std::memory_order_acquire),
-        backpressure_threshold_.load(std::memory_order_acquire)
-    };
-}
-
-bool WSClient::tryReceiveMessage(std::string& message) noexcept {
-    if (!incoming_message_queue_) {
-        return false;
-    }
-
-    if (incoming_message_queue_->try_dequeue(message)) {
-        current_queue_size_.fetch_sub(1, std::memory_order_acq_rel);
-        return true;
-    }
-
-    return false;
-}
-
-bool WSClient::trySendMessage(std::string_view message) noexcept {
-    if (!outgoing_message_queue_ || !is_connected_.load(std::memory_order_acquire)) {
-        return false;
-    }
-
-    // Check backpressure
-    if (backpressure_enabled_.load(std::memory_order_acquire) &&
-        current_queue_size_.load(std::memory_order_acquire) >= backpressure_threshold_.load(std::memory_order_acquire)) {
-        return false;
-    }
-
-    outgoing_message_queue_->enqueue(std::string(message));
-    current_queue_size_.fetch_add(1, std::memory_order_acq_rel);
-
-    // Try to send immediately if possible
-    try {
-        send(message);
-
-        // Remove from queue since it was sent successfully
-        std::string dummy;
-        if (outgoing_message_queue_->try_dequeue(dummy)) {
-            current_queue_size_.fetch_sub(1, std::memory_order_acq_rel);
-        }
-
-        return true;
-    } catch (const std::exception& e) {
-        spdlog::debug("Failed to send queued message immediately: {}", e.what());
-        return true; // Message is still queued for later retry
-    }
-}
+bool WSClient::isConnected() const noexcept { return is_connected_; }
 
 void WSClient::close() {
-    bool was_connected = is_connected_.load(std::memory_order_acquire);
-    if (!was_connected && !(ws_ && ws_->is_open())) {
+    if (!is_connected_ && !(ws_ && ws_->is_open())) {
         spdlog::debug("Close called but not connected or stream not open.");
         return;
     }
@@ -323,16 +208,11 @@ void WSClient::close() {
     beast::error_code ec;
     if (ws_ && ws_->is_open()) {
         ws_->close(websocket::close_code::normal, ec);
-    } else if (was_connected) {
+    } else if (is_connected_) {
         spdlog::warn("Close called, was connected but stream is not open.");
     }
 
-    is_connected_.store(false, std::memory_order_release);
-
-    // Record connection closed
-    if (performance_monitor_ && was_connected) {
-        performance_monitor_->record_ws_connection_closed();
-    }
+    is_connected_ = false;
 
     if (ec) {
         if (ec != net::error::operation_aborted &&
@@ -348,7 +228,7 @@ void WSClient::close() {
 }
 
 void WSClient::startPing() {
-    if (!is_connected_.load(std::memory_order_acquire) || ping_interval_.count() <= 0 || !ws_ ||
+    if (!is_connected_ || ping_interval_.count() <= 0 || !ws_ ||
         !ws_->is_open()) {
         return;
     }
@@ -365,7 +245,7 @@ void WSClient::startPing() {
                 return;
             }
 
-            if (!is_connected_.load(std::memory_order_acquire) || !ws_ || !ws_->is_open()) {
+            if (!is_connected_ || !ws_ || !ws_->is_open()) {
                 return;
             }
 
@@ -381,11 +261,21 @@ void WSClient::startPing() {
                             spdlog::warn(
                                 "Ping failed: {}. Connection might be lost.",
                                 ec.message());
+                            is_connected_ = false;
                             return;
                         }
 
-                        if (is_connected_.load(std::memory_order_acquire)) {
-                            startPing();
+                        // Schedule next ping instead of immediate recursion
+                        if (is_connected_ && ws_ && ws_->is_open()) {
+                            ping_timer_->expires_after(ping_interval_);
+                            ping_timer_->async_wait(net::bind_executor(
+                                ws_->get_executor(),
+                                [this, self = shared_from_this()](
+                                    beast::error_code timer_ec) {
+                                    if (!timer_ec && is_connected_) {
+                                        startPing();
+                                    }
+                                }));
                         }
                     }));
         }));

@@ -4,7 +4,6 @@
 #include "ipv6.hpp"
 #include "unix_domain.hpp"
 
-
 namespace atom::web {
 
 // Factory method for creating Address objects

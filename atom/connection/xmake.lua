@@ -15,17 +15,20 @@ set_version("1.0.0", {build = "%Y%m%d%H%M"})
 set_license("GPL-3.0")
 
 -- Set languages
-set_languages("c11", "cxx17")
+set_languages("c11", "cxx20")
 
 -- Add build modes
 add_rules("mode.debug", "mode.release")
 
 -- Add required packages
-add_requires("loguru", "openssl")
+local use_system_packages = has_config("use_system_packages")
+add_requires("spdlog", {system = use_system_packages, configs = {fmt_external = true}})
+add_requires("fmt", {system = use_system_packages})
+add_requires("openssl", {system = use_system_packages})
 
 -- Add optional packages
 if has_config("enable-libssh") then
-    add_requires("libssh")
+    add_requires("libssh", {system = use_system_packages})
 end
 
 -- Define configuration options
@@ -41,46 +44,58 @@ option("enable-ssh")
     set_showmenu(true)
 option_end()
 
--- Define base sources and headers
+-- Define base sources and headers (organized by connection type)
 local base_sources = {
-    "async_fifoclient.cpp",
-    "async_fifoserver.cpp",
-    "async_sockethub.cpp",
-    "async_tcpclient.cpp",
-    "async_udpclient.cpp",
-    "async_udpserver.cpp",
-    "fifoclient.cpp",
-    "fifoserver.cpp",
-    "sockethub.cpp",
-    "tcpclient.cpp",
-    "udpclient.cpp",
-    "udpserver.cpp"
+    -- FIFO/Named Pipe connections
+    "fifo/fifoclient.cpp",
+    "fifo/fifoserver.cpp",
+    "fifo/async_fifoclient.cpp",
+    "fifo/async_fifoserver.cpp",
+    -- TCP connections
+    "tcp/tcpclient.cpp",
+    "tcp/async_tcpclient.cpp",
+    -- UDP connections
+    "udp/udpclient.cpp",
+    "udp/udpserver.cpp",
+    "udp/async_udpclient.cpp",
+    "udp/async_udpserver.cpp",
+    -- Serial/TTY connections
+    "serial/ttybase.cpp",
+    -- Shared utilities
+    "shared/sockethub.cpp",
+    "shared/async_sockethub.cpp"
 }
 
 local base_headers = {
-    "async_fifoclient.hpp",
-    "async_fifoserver.hpp",
-    "async_sockethub.hpp",
-    "async_tcpclient.hpp",
-    "async_udpclient.hpp",
-    "async_udpserver.hpp",
-    "fifoclient.hpp",
-    "fifoserver.hpp",
-    "sockethub.hpp",
-    "tcpclient.hpp",
-    "udpclient.hpp",
-    "udpserver.hpp"
+    -- FIFO/Named Pipe connections
+    "fifo/fifoclient.hpp",
+    "fifo/fifoserver.hpp",
+    "fifo/async_fifoclient.hpp",
+    "fifo/async_fifoserver.hpp",
+    -- TCP connections
+    "tcp/tcpclient.hpp",
+    "tcp/async_tcpclient.hpp",
+    -- UDP connections
+    "udp/udpclient.hpp",
+    "udp/udpserver.hpp",
+    "udp/async_udpclient.hpp",
+    "udp/async_udpserver.hpp",
+    -- Serial/TTY connections
+    "serial/ttybase.hpp",
+    -- Shared utilities
+    "shared/sockethub.hpp",
+    "shared/async_sockethub.hpp"
 }
 
 -- SSH-related files (conditional)
 local ssh_sources = {
-    "sshclient.cpp",
-    "sshserver.cpp"
+    "ssh/sshclient.cpp",
+    "ssh/sshserver.cpp"
 }
 
 local ssh_headers = {
-    "sshclient.hpp",
-    "sshserver.hpp"
+    "ssh/sshclient.hpp",
+    "ssh/sshserver.hpp"
 }
 
 -- Main static library target
@@ -102,7 +117,7 @@ target("atom-connection")
     add_includedirs(".", {public = true})
 
     -- Add packages
-    add_packages("loguru", "openssl")
+    add_packages("spdlog", "fmt", "openssl")
 
     -- Add SSH package conditionally
     if has_config("enable-ssh") then
@@ -110,10 +125,12 @@ target("atom-connection")
     end
 
     -- Add system libraries
-    add_syslinks("pthread")
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
 
     -- Windows-specific libraries
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("ws2_32", "mswsock")
     end
 
@@ -170,15 +187,17 @@ target("atom-connection-object")
 
     -- Configuration
     add_includedirs(".")
-    add_packages("loguru", "openssl")
+    add_packages("spdlog", "fmt", "openssl")
 
     if has_config("enable-ssh") then
         add_packages("libssh")
     end
 
-    add_syslinks("pthread")
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
 
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("ws2_32", "mswsock")
     end
 

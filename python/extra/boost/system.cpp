@@ -317,9 +317,8 @@ Examples:
             .def("__bool__", &ResultT::operator bool,
                  "Checks if the Result has a value.");
         /*
-        TODO: Fix the __str__ method to return a string representation of the Result object.
-        .def("__str__", [](const ResultT& r) {
-        if (r.hasValue()) {
+        TODO: Fix the __str__ method to return a string representation of the
+    Result object. .def("__str__", [](const ResultT& r) { if (r.hasValue()) {
             // Cast the value to py::object first
             py::object value_obj = py::cast(r.value());
             // Then convert the py::object to its Python string representation

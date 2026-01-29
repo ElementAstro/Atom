@@ -3,6 +3,7 @@
 
 #include <zlib.h>
 #include <algorithm>
+#include <array>
 #include <boost/beast/core/detail/base64.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/functional/hash.hpp>
@@ -12,7 +13,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
-#include "atom/utils/string.hpp"
+// #include "atom/utils/text/string.hpp" // Removed to avoid dependency issues
 
 /**
  * @brief High-performance HTTP utility functions for web operations
@@ -21,6 +22,16 @@
  * authentication, compression, URL encoding, and cookie management.
  */
 namespace http_utils {
+
+// Simple trim function to avoid dependency issues
+inline std::string_view trim(std::string_view str) {
+    const auto start = str.find_first_not_of(" \t\n\r");
+    if (start == std::string_view::npos) {
+        return {};
+    }
+    const auto end = str.find_last_not_of(" \t\n\r");
+    return str.substr(start, end - start + 1);
+}
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -181,22 +192,22 @@ inline std::string decompress(std::string_view data, bool use_gzip = true,
  */
 inline std::string urlEncode(std::string_view input) {
     static constexpr char hex_digits[] = "0123456789ABCDEF";
-    static constexpr bool unreserved[256] = {
-        // Initialize lookup table for unreserved characters
-        ['-'] = true, ['_'] = true, ['.'] = true, ['~'] = true, ['A'] = true,
-        ['B'] = true, ['C'] = true, ['D'] = true, ['E'] = true, ['F'] = true,
-        ['G'] = true, ['H'] = true, ['I'] = true, ['J'] = true, ['K'] = true,
-        ['L'] = true, ['M'] = true, ['N'] = true, ['O'] = true, ['P'] = true,
-        ['Q'] = true, ['R'] = true, ['S'] = true, ['T'] = true, ['U'] = true,
-        ['V'] = true, ['W'] = true, ['X'] = true, ['Y'] = true, ['Z'] = true,
-        ['a'] = true, ['b'] = true, ['c'] = true, ['d'] = true, ['e'] = true,
-        ['f'] = true, ['g'] = true, ['h'] = true, ['i'] = true, ['j'] = true,
-        ['k'] = true, ['l'] = true, ['m'] = true, ['n'] = true, ['o'] = true,
-        ['p'] = true, ['q'] = true, ['r'] = true, ['s'] = true, ['t'] = true,
-        ['u'] = true, ['v'] = true, ['w'] = true, ['x'] = true, ['y'] = true,
-        ['z'] = true, ['0'] = true, ['1'] = true, ['2'] = true, ['3'] = true,
-        ['4'] = true, ['5'] = true, ['6'] = true, ['7'] = true, ['8'] = true,
-        ['9'] = true};
+    // Initialize lookup table for unreserved characters
+    static const auto unreserved = []() {
+        std::array<bool, 256> table{};
+        // Unreserved characters: ALPHA / DIGIT / "-" / "." / "_" / "~"
+        for (char c = 'A'; c <= 'Z'; ++c)
+            table[static_cast<unsigned char>(c)] = true;
+        for (char c = 'a'; c <= 'z'; ++c)
+            table[static_cast<unsigned char>(c)] = true;
+        for (char c = '0'; c <= '9'; ++c)
+            table[static_cast<unsigned char>(c)] = true;
+        table[static_cast<unsigned char>('-')] = true;
+        table[static_cast<unsigned char>('.')] = true;
+        table[static_cast<unsigned char>('_')] = true;
+        table[static_cast<unsigned char>('~')] = true;
+        return table;
+    }();
 
     std::string result;
     result.reserve(input.size() * 2);  // Reasonable estimate
@@ -743,8 +754,8 @@ public:
     static std::pair<std::string, std::string> parseContentType(
         std::string_view content_type_header) {
         size_t semicolon_pos = content_type_header.find(';');
-        std::string content_type = std::string(
-            atom::utils::trim(content_type_header.substr(0, semicolon_pos)));
+        std::string content_type =
+            std::string(trim(content_type_header.substr(0, semicolon_pos)));
 
         std::string charset;
         if (semicolon_pos != std::string_view::npos) {
@@ -754,8 +765,7 @@ public:
             if (charset_pos != std::string_view::npos) {
                 std::string_view charset_part = params.substr(charset_pos + 8);
                 size_t end_pos = charset_part.find_first_of(" ;");
-                charset = std::string(
-                    atom::utils::trim(charset_part.substr(0, end_pos)));
+                charset = std::string(trim(charset_part.substr(0, end_pos)));
 
                 // Remove quotes if present
                 if (charset.size() >= 2 && charset.front() == '"' &&

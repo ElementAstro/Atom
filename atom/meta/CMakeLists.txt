@@ -1,177 +1,108 @@
-# CMakeLists.txt for atom-meta - OPTIMIZED VERSION
-# This project is licensed under the terms of the GPL3 license.
+# CMakeLists.txt for atom-meta This project is licensed under the terms of the
+# GPL3 license.
 #
-# Project Name: atom-meta
-# Description: High-performance meta programming library for C++ with optimizations
-# Author: Max Qian
-# License: GPL3
-# Optimized: 2025-01-22 - Performance optimizations and feature enhancements
+# Project Name: atom-meta Description: a library for meta programming in C++
+# Author: Max Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom-meta
-  VERSION 2.0.0  # Bumped version for optimized release
+  VERSION 1.0.0
   LANGUAGES C CXX)
 
-# C++ Standard Requirements
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
-# Sources (implementation files)
-set(SOURCES
-    global_ptr.cpp
-    # Add other .cpp files here if needed
-)
+# Sources
+set(SOURCES global_ptr.cpp)
 
-# Headers (all optimized header files)
+# Headers
 set(HEADERS
-    any.hpp              # BoxedValue system (optimized)
-    global_ptr.hpp       # GlobalSharedPtrManager (optimized)
-    type_info.hpp        # TypeInfo system (optimized)
-    refl.hpp            # Reflection system (optimized)
-    refl_json.hpp       # JSON reflection (enhanced)
-    refl_yaml.hpp       # YAML reflection
-    invoke.hpp          # Function invocation (optimized)
-    concept.hpp         # Concepts and traits (optimized)
-    # Add other header files
-)
+    abi.hpp
+    any.hpp
+    anymeta.hpp
+    awaitable.hpp
+    bind_first.hpp
+    concept.hpp
+    constructor.hpp
+    container_traits.hpp
+    conversion.hpp
+    decorate.hpp
+    enum.hpp
+    facade.hpp
+    facade_any.hpp
+    facade_proxy.hpp
+    ffi.hpp
+    field_count.hpp
+    func_traits.hpp
+    global_ptr.hpp
+    god.hpp
+    invoke.hpp
+    member.hpp
+    overload.hpp
+    property.hpp
+    proxy.hpp
+    proxy_params.hpp
+    raw_name.hpp
+    refl.hpp
+    refl_json.hpp
+    refl_yaml.hpp
+    signature.hpp
+    stepper.hpp
+    template_traits.hpp
+    time.hpp
+    type_caster.hpp
+    type_info.hpp
+    vany.hpp)
 
-# Dependencies
-set(LIBS)
+# Logging dependency (spdlog preferred) - must be found before creating targets
+find_package(spdlog CONFIG REQUIRED)
 
-# Optional dependencies
-find_package(Boost QUIET)
-if(Boost_FOUND)
-    list(APPEND LIBS Boost::boost)
-    add_compile_definitions(ATOM_USE_BOOST)
-endif()
-
-find_package(yaml-cpp QUIET)
-if(yaml-cpp_FOUND)
-    list(APPEND LIBS yaml-cpp)
-    add_compile_definitions(ATOM_USE_YAML_CPP)
-endif()
-
-# Build Object Library
-add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
-
-# Compiler-specific optimizations
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    if(MSVC)
-        target_compile_options(${PROJECT_NAME}_object PRIVATE /O2 /Ob2 /DNDEBUG)
-    else()
-        target_compile_options(${PROJECT_NAME}_object PRIVATE -O3 -march=native -DNDEBUG)
-    endif()
-endif()
-
-# Enable all warnings for better code quality
-if(MSVC)
-    target_compile_options(${PROJECT_NAME}_object PRIVATE /W4)
+# Create library using object library pattern for better build performance
+add_library(atom-meta_object OBJECT ${SOURCES} ${HEADERS})
+set_property(TARGET atom-meta_object PROPERTY POSITION_INDEPENDENT_CODE 1)
+# Use header-only spdlog to avoid linking conflicts with MinGW
+if(TARGET spdlog::spdlog)
+  target_link_libraries(atom-meta_object PUBLIC spdlog::spdlog)
 else()
-    target_compile_options(${PROJECT_NAME}_object PRIVATE -Wall -Wextra -Wpedantic)
+  target_link_libraries(atom-meta_object PUBLIC spdlog::spdlog)
+  target_compile_definitions(atom-meta_object PUBLIC SPDLOG_HEADER_ONLY)
 endif()
 
-target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
+# Create static library from object library
+add_library(atom-meta STATIC $<TARGET_OBJECTS:atom-meta_object>)
+add_library(atom::meta ALIAS atom-meta)
 
-# Build Static Library
-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
-target_include_directories(${PROJECT_NAME} PUBLIC .)
+# Configure module with standardized settings
+atom_configure_module(atom-meta)
 
-set_target_properties(
-  ${PROJECT_NAME}
-  PROPERTIES VERSION ${PROJECT_VERSION}
-             SOVERSION ${PROJECT_VERSION_MAJOR}
-             OUTPUT_NAME ${PROJECT_NAME})
-
-# Testing configuration
-option(ATOM_META_BUILD_TESTS "Build atom-meta tests" ON)
-if(ATOM_META_BUILD_TESTS)
-    enable_testing()
-    find_package(GTest QUIET)
-    if(GTest_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests")
-        add_subdirectory(tests)
-    else()
-        message(STATUS "GTest not found or tests directory missing, tests will not be built")
-    endif()
+# Use header-only spdlog to avoid linking conflicts with MinGW
+if(TARGET spdlog::spdlog)
+  target_link_libraries(atom-meta PUBLIC spdlog::spdlog)
+else()
+  target_link_libraries(atom-meta PUBLIC spdlog::spdlog)
+  target_compile_definitions(atom-meta PUBLIC SPDLOG_HEADER_ONLY)
 endif()
 
-# Benchmarking configuration
-option(ATOM_META_BUILD_BENCHMARKS "Build atom-meta benchmarks" OFF)
-if(ATOM_META_BUILD_BENCHMARKS)
-    find_package(benchmark QUIET)
-    if(benchmark_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks")
-        add_subdirectory(benchmarks)
-    else()
-        message(STATUS "Google Benchmark not found or benchmarks directory missing, benchmarks will not be built")
-    endif()
-endif()
+# =============================================================================
+# Installation
+# =============================================================================
 
-# Documentation configuration
-option(ATOM_META_BUILD_DOCS "Build atom-meta documentation" OFF)
-if(ATOM_META_BUILD_DOCS)
-    find_package(Doxygen QUIET)
-    if(Doxygen_FOUND)
-        set(DOXYGEN_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/docs)
-        set(DOXYGEN_PROJECT_NAME "Atom Meta Library")
-        set(DOXYGEN_PROJECT_BRIEF "High-performance meta programming library for C++")
-        set(DOXYGEN_EXTRACT_ALL YES)
-        set(DOXYGEN_GENERATE_HTML YES)
-        set(DOXYGEN_GENERATE_XML YES)
+# Install library target
+install(
+  TARGETS atom-meta
+  EXPORT atom-meta-targets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT runtime)
 
-        doxygen_add_docs(
-            ${PROJECT_NAME}_docs
-            ${CMAKE_CURRENT_SOURCE_DIR}
-            COMMENT "Generating API documentation with Doxygen"
-        )
-    else()
-        message(STATUS "Doxygen not found, documentation will not be built")
-    endif()
-endif()
+# Install export targets
+install(
+  EXPORT atom-meta-targets
+  FILE atom-metaTargets.cmake
+  NAMESPACE atom::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/atom
+  COMPONENT development)
 
-# Install rules
-install(TARGETS ${PROJECT_NAME} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+# Install headers
 install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/meta)
-
-# Register this module as an Atom module
-set_property(GLOBAL APPEND PROPERTY ATOM_MODULE_TARGETS ${PROJECT_NAME})
-
-# Package configuration
-include(CMakePackageConfigHelpers)
-write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY AnyNewerVersion
-)
-
-# Only configure package config if template exists
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}Config.cmake.in")
-    configure_package_config_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}Config.cmake.in"
-        "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
-        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
-    )
-
-    install(FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
-    )
-endif()
-
-# Print configuration summary
-message(STATUS "=== Atom Meta Library Configuration ===")
-message(STATUS "Version: ${PROJECT_VERSION}")
-message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")
-message(STATUS "Build tests: ${ATOM_META_BUILD_TESTS}")
-message(STATUS "Build benchmarks: ${ATOM_META_BUILD_BENCHMARKS}")
-message(STATUS "Build documentation: ${ATOM_META_BUILD_DOCS}")
-if(Boost_FOUND)
-    message(STATUS "Boost support: ENABLED")
-else()
-    message(STATUS "Boost support: DISABLED")
-endif()
-message(STATUS "========================================")

@@ -78,7 +78,8 @@ void Document::validate() const {
         throw DocumentValidationException("Document ID cannot be empty");
     }
     if (id_.size() > 256) {
-        throw DocumentValidationException("Document ID too long (max 256 chars)");
+        throw DocumentValidationException(
+            "Document ID too long (max 256 chars)");
     }
     if (content_.empty()) {
         throw DocumentValidationException("Document content cannot be empty");
@@ -106,7 +107,8 @@ void Document::add_tag(const std::string& tag) {
         throw DocumentValidationException("Tag cannot be empty");
     }
     if (tag.length() > 100) {
-        throw DocumentValidationException("Tag too long (max 100 chars): " + tag);
+        throw DocumentValidationException("Tag too long (max 100 chars): " +
+                                          tag);
     }
     tags_.insert(tag);
 }
@@ -119,9 +121,11 @@ SearchEngine::SearchEngine(unsigned num_threads, SearchConfig config)
                                    : std::thread::hardware_concurrency()),
       shard_mask_([this] {
           size_t shard_count = num_threads_;
-          if (shard_count == 0) shard_count = 1;
+          if (shard_count == 0)
+              shard_count = 1;
           size_t power = 1;
-          while (power < shard_count) power <<= 1;
+          while (power < shard_count)
+              power <<= 1;
           return power - 1;
       }()),
       config_(std::move(config)) {
@@ -131,8 +135,10 @@ SearchEngine::SearchEngine(unsigned num_threads, SearchConfig config)
     }
     task_queue_ = std::make_unique<ConcurrentQueue<SearchTask>>();
     start_worker_threads();
-    spdlog::info("SearchEngine initialized with {} shards, {} worker threads, cache size: {}.",
-                 shards_.size(), num_threads_, config_.cache_size);
+    spdlog::info(
+        "SearchEngine initialized with {} shards, {} worker threads, cache "
+        "size: {}.",
+        shards_.size(), num_threads_, config_.cache_size);
 }
 
 SearchEngine::~SearchEngine() {
@@ -141,7 +147,7 @@ SearchEngine::~SearchEngine() {
 }
 
 SearchEngine::Shard& SearchEngine::get_shard(const String& key) const {
-    return *shards_[std::hash<String>{}(key) & shard_mask_];
+    return *shards_[std::hash<String>{}(key)&shard_mask_];
 }
 
 void SearchEngine::add_document(const Document& doc) {
@@ -246,7 +252,8 @@ std::vector<std::shared_ptr<Document>> SearchEngine::fuzzy_search_by_tag(
 
     std::vector<std::future<std::vector<String>>> futures;
     for (const auto& shard_ptr : shards_) {
-        futures.push_back(std::async(std::launch::async, [&tag, tolerance, this, &shard_ptr] {
+        futures.push_back(std::async(std::launch::async, [&tag, tolerance, this,
+                                                          &shard_ptr] {
             std::vector<String> matched_doc_ids;
             std::shared_lock lock(shard_ptr->mutex);
             for (const auto& [current_tag, doc_ids] : shard_ptr->tag_index) {
@@ -306,23 +313,24 @@ std::vector<std::shared_ptr<Document>> SearchEngine::search_by_content(
 
     std::vector<std::future<HashMap<String, double>>> futures;
     for (const auto& shard_ptr : shards_) {
-        futures.push_back(std::async(std::launch::async, [&tokens, this, &shard_ptr] {
-            HashMap<String, double> local_scores;
-            std::shared_lock lock(shard_ptr->mutex);
-            for (const auto& token : tokens) {
-                auto it = shard_ptr->content_index.find(token);
-                if (it != shard_ptr->content_index.end()) {
-                    for (const auto& doc_id : it->second) {
-                        auto doc_it = shard_ptr->documents.find(doc_id);
-                        if (doc_it != shard_ptr->documents.end()) {
-                            local_scores[doc_id] +=
-                                tf_idf(*doc_it->second, std::string_view(token));
+        futures.push_back(
+            std::async(std::launch::async, [&tokens, this, &shard_ptr] {
+                HashMap<String, double> local_scores;
+                std::shared_lock lock(shard_ptr->mutex);
+                for (const auto& token : tokens) {
+                    auto it = shard_ptr->content_index.find(token);
+                    if (it != shard_ptr->content_index.end()) {
+                        for (const auto& doc_id : it->second) {
+                            auto doc_it = shard_ptr->documents.find(doc_id);
+                            if (doc_it != shard_ptr->documents.end()) {
+                                local_scores[doc_id] += tf_idf(
+                                    *doc_it->second, std::string_view(token));
+                            }
                         }
                     }
                 }
-            }
-            return local_scores;
-        }));
+                return local_scores;
+            }));
     }
 
     HashMap<String, double> total_scores;
@@ -398,20 +406,21 @@ std::vector<String> SearchEngine::auto_complete(const String& prefix,
 
     std::vector<std::future<std::vector<String>>> futures;
     for (const auto& shard_ptr : shards_) {
-        futures.push_back(std::async(std::launch::async, [&prefix_lower, &shard_ptr] {
-            std::vector<String> suggestions;
-            std::shared_lock lock(shard_ptr->mutex);
-            for (const auto& [tag, _] : shard_ptr->tag_index) {
-                std::string tag_lower = tag;
-                std::transform(tag_lower.begin(), tag_lower.end(),
-                               tag_lower.begin(),
-                               [](unsigned char c) { return std::tolower(c); });
-                if (tag_lower.rfind(prefix_lower, 0) == 0) {
-                    suggestions.push_back(String(tag));
+        futures.push_back(
+            std::async(std::launch::async, [&prefix_lower, &shard_ptr] {
+                std::vector<String> suggestions;
+                std::shared_lock lock(shard_ptr->mutex);
+                for (const auto& [tag, _] : shard_ptr->tag_index) {
+                    std::string tag_lower = tag;
+                    std::transform(
+                        tag_lower.begin(), tag_lower.end(), tag_lower.begin(),
+                        [](unsigned char c) { return std::tolower(c); });
+                    if (tag_lower.rfind(prefix_lower, 0) == 0) {
+                        suggestions.push_back(String(tag));
+                    }
                 }
-            }
-            return suggestions;
-        }));
+                return suggestions;
+            }));
     }
 
     std::vector<String> all_suggestions;
@@ -460,7 +469,8 @@ void SearchEngine::save_index(const String& filename) const {
 
             const auto& tags = doc->get_tags();
             size_t num_tags = tags.size();
-            ofs.write(reinterpret_cast<const char*>(&num_tags), sizeof(num_tags));
+            ofs.write(reinterpret_cast<const char*>(&num_tags),
+                      sizeof(num_tags));
             for (const auto& tag : tags) {
                 len = tag.size();
                 ofs.write(reinterpret_cast<const char*>(&len), sizeof(len));
@@ -510,7 +520,8 @@ void SearchEngine::load_index(const String& filename) {
             }
 
             int click_count;
-            ifs.read(reinterpret_cast<char*>(&click_count), sizeof(click_count));
+            ifs.read(reinterpret_cast<char*>(&click_count),
+                     sizeof(click_count));
 
             auto doc = std::make_shared<Document>(
                 String(doc_id_str), String(content_str),
@@ -525,8 +536,6 @@ void SearchEngine::load_index(const String& filename) {
     }
     total_docs_ = total_docs;
 }
-
-
 
 void SearchEngine::clear() {
     for (auto& shard_ptr : shards_) {
@@ -557,8 +566,8 @@ std::vector<String> SearchEngine::get_all_document_ids() const {
     return all_ids;
 }
 
-void SearchEngine::add_content_to_index(
-    Shard& /* doc_shard */, const std::shared_ptr<Document>& doc) {
+void SearchEngine::add_content_to_index(Shard& /* doc_shard */,
+                                        const std::shared_ptr<Document>& doc) {
     auto tokens = tokenize_content(String(doc->get_content()));
     String doc_id = String(doc->get_id());
     for (const auto& token : tokens) {
@@ -587,17 +596,19 @@ void SearchEngine::remove_content_from_index(
     }
 }
 
-std::vector<String> SearchEngine::tokenize_content(const String& content) const {
+std::vector<String> SearchEngine::tokenize_content(
+    const String& content) const {
     return tokenize_content_optimized(content);
 }
 
-std::vector<String> SearchEngine::tokenize_content_optimized(const String& content) const {
+std::vector<String> SearchEngine::tokenize_content_optimized(
+    const String& content) const {
     std::vector<String> tokens;
-    tokens.reserve(50); // Reserve space for typical document size
+    tokens.reserve(50);  // Reserve space for typical document size
 
     std::string content_str = std::string(content);
     std::string token_std;
-    token_std.reserve(32); // Reserve space for typical token size
+    token_std.reserve(32);  // Reserve space for typical token size
 
     // Use more efficient tokenization
     const char* start = content_str.c_str();
@@ -610,7 +621,8 @@ std::vector<String> SearchEngine::tokenize_content_optimized(const String& conte
             ++current;
         }
 
-        if (current >= end) break;
+        if (current >= end)
+            break;
 
         // Extract alphanumeric token
         const char* token_start = current;
@@ -633,7 +645,8 @@ std::vector<String> SearchEngine::tokenize_content_optimized(const String& conte
     return tokens;
 }
 
-std::vector<String> SearchEngine::get_cached_tokens(const String& doc_id, const String& content) const {
+std::vector<String> SearchEngine::get_cached_tokens(
+    const String& doc_id, const String& content) const {
     auto& shard = get_shard(doc_id);
 
     // Check cache first
@@ -652,7 +665,8 @@ std::vector<String> SearchEngine::get_cached_tokens(const String& doc_id, const 
     return tokens;
 }
 
-void SearchEngine::cache_tokenized_content(const String& doc_id, const std::vector<String>& tokens) const {
+void SearchEngine::cache_tokenized_content(
+    const String& doc_id, const std::vector<String>& tokens) const {
     auto& shard = get_shard(doc_id);
     std::unique_lock cache_lock(shard.cache_mutex);
 
@@ -663,7 +677,8 @@ void SearchEngine::cache_tokenized_content(const String& doc_id, const std::vect
         // Remove oldest 20% of entries (simple cleanup)
         auto it = shard.tokenized_content_cache.begin();
         std::advance(it, shard.tokenized_content_cache.size() / 5);
-        shard.tokenized_content_cache.erase(shard.tokenized_content_cache.begin(), it);
+        shard.tokenized_content_cache.erase(
+            shard.tokenized_content_cache.begin(), it);
     }
 }
 
@@ -675,7 +690,8 @@ void SearchEngine::invalidate_content_cache(const String& doc_id) const {
     shard.tokenized_content_cache.erase(doc_id);
 
     // Remove related TF-IDF cache entries
-    for (auto it = shard.tf_idf_cache.begin(); it != shard.tf_idf_cache.end();) {
+    for (auto it = shard.tf_idf_cache.begin();
+         it != shard.tf_idf_cache.end();) {
         if (it->first.first == doc_id) {
             it = shard.tf_idf_cache.erase(it);
         } else {
@@ -689,7 +705,8 @@ double SearchEngine::tf_idf(const Document& doc, std::string_view term) const {
     return tf_idf_cached(doc, term);
 }
 
-double SearchEngine::tf_idf_cached(const Document& doc, std::string_view term) const {
+double SearchEngine::tf_idf_cached(const Document& doc,
+                                   std::string_view term) const {
     String doc_id = String(doc.get_id());
     String term_str(term);
 
@@ -733,9 +750,10 @@ double SearchEngine::tf_idf_cached(const Document& doc, std::string_view term) c
     int doc_freq = (it != term_shard.doc_frequency.end()) ? it->second : 0;
     lock.unlock();
 
-    double idf = (doc_freq > 0)
-                     ? std::log(static_cast<double>(total_docs_.load()) / doc_freq)
-                     : 0;
+    double idf =
+        (doc_freq > 0)
+            ? std::log(static_cast<double>(total_docs_.load()) / doc_freq)
+            : 0;
 
     double result = tf * idf;
 
@@ -782,8 +800,10 @@ int SearchEngine::levenshtein_distance(std::string_view s1,
     const size_t m = s1.length();
     const size_t n = s2.length();
 
-    if (m == 0) return static_cast<int>(n);
-    if (n == 0) return static_cast<int>(m);
+    if (m == 0)
+        return static_cast<int>(n);
+    if (n == 0)
+        return static_cast<int>(m);
 
     std::vector<int> prev_row(n + 1);
     std::vector<int> curr_row(n + 1);
@@ -864,19 +884,22 @@ SearchResults SearchEngine::search_by_tag_enhanced(
     for (size_t i = start_idx; i < end_idx; ++i) {
         SearchResult result;
         result.document = documents[i];
-        result.score = 1.0; // Tag matches have uniform score
+        result.score = 1.0;  // Tag matches have uniform score
         result.matched_terms = {tag};
         results.results.push_back(std::move(result));
     }
 
     auto end_time = std::chrono::steady_clock::now();
-    results.search_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    results.search_time_ms =
+        std::chrono::duration<double, std::milli>(end_time - start_time)
+            .count();
 
     // Cache result
     cache_result(cache_key, results);
 
     metrics_.total_searches++;
-    metrics_.total_search_time_ms += static_cast<uint64_t>(results.search_time_ms);
+    metrics_.total_search_time_ms +=
+        static_cast<uint64_t>(results.search_time_ms);
 
     return results;
 }
@@ -886,7 +909,8 @@ SearchResults SearchEngine::search_by_content_enhanced(
     auto start_time = std::chrono::steady_clock::now();
 
     // Check cache first
-    std::string cache_key = generate_cache_key("content:" + std::string(query), pagination);
+    std::string cache_key =
+        generate_cache_key("content:" + std::string(query), pagination);
     SearchResults cached_result;
     if (get_cached_result(cache_key, cached_result)) {
         metrics_.cache_hits++;
@@ -921,32 +945,37 @@ SearchResults SearchEngine::search_by_content_enhanced(
         }
         result.score = total_score;
 
-        result.matched_terms = extract_matched_terms(*documents[i], query_terms_str);
+        result.matched_terms =
+            extract_matched_terms(*documents[i], query_terms_str);
         result.snippet = generate_snippet(*documents[i], query_terms_str);
 
         results.results.push_back(std::move(result));
     }
 
     auto end_time = std::chrono::steady_clock::now();
-    results.search_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    results.search_time_ms =
+        std::chrono::duration<double, std::milli>(end_time - start_time)
+            .count();
 
     // Cache result
     cache_result(cache_key, results);
 
     metrics_.total_searches++;
-    metrics_.total_search_time_ms += static_cast<uint64_t>(results.search_time_ms);
+    metrics_.total_search_time_ms +=
+        static_cast<uint64_t>(results.search_time_ms);
 
     return results;
 }
 
 // Helper method implementations
-std::string SearchEngine::generate_cache_key(const std::string& query,
-                                            const SearchPagination& pagination) const {
+std::string SearchEngine::generate_cache_key(
+    const std::string& query, const SearchPagination& pagination) const {
     return query + "|offset:" + std::to_string(pagination.offset) +
            "|limit:" + std::to_string(pagination.limit);
 }
 
-bool SearchEngine::get_cached_result(const std::string& cache_key, SearchResults& result) const {
+bool SearchEngine::get_cached_result(const std::string& cache_key,
+                                     SearchResults& result) const {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     auto it = result_cache_.find(cache_key);
     if (it != result_cache_.end()) {
@@ -963,7 +992,8 @@ bool SearchEngine::get_cached_result(const std::string& cache_key, SearchResults
     return false;
 }
 
-void SearchEngine::cache_result(const std::string& cache_key, const SearchResults& result) const {
+void SearchEngine::cache_result(const std::string& cache_key,
+                                const SearchResults& result) const {
     std::lock_guard<std::mutex> lock(cache_mutex_);
 
     // Clean up cache if it's too large
@@ -976,7 +1006,9 @@ void SearchEngine::cache_result(const std::string& cache_key, const SearchResult
             size_t to_remove = result_cache_.size() / 5;
 
             // Create vector of entries with timestamps for sorting
-            std::vector<std::pair<std::chrono::steady_clock::time_point, std::string>> entries;
+            std::vector<
+                std::pair<std::chrono::steady_clock::time_point, std::string>>
+                entries;
             entries.reserve(result_cache_.size());
 
             for (const auto& [key, value] : result_cache_) {
@@ -984,7 +1016,8 @@ void SearchEngine::cache_result(const std::string& cache_key, const SearchResult
             }
 
             // Sort by timestamp (oldest first)
-            std::partial_sort(entries.begin(), entries.begin() + to_remove, entries.end());
+            std::partial_sort(entries.begin(), entries.begin() + to_remove,
+                              entries.end());
 
             // Remove oldest entries
             for (size_t i = 0; i < to_remove; ++i) {
@@ -1024,9 +1057,9 @@ void SearchEngine::cleanup_expired_cache() const {
     }
 }
 
-std::string SearchEngine::generate_snippet(const Document& doc,
-                                          const std::vector<std::string>& terms,
-                                          size_t max_length) const {
+std::string SearchEngine::generate_snippet(
+    const Document& doc, const std::vector<std::string>& terms,
+    size_t max_length) const {
     std::string content = std::string(doc.get_content());
     if (content.length() <= max_length) {
         return content;
@@ -1047,21 +1080,24 @@ std::string SearchEngine::generate_snippet(const Document& doc,
     size_t length = std::min(max_length, content.length() - start);
 
     std::string snippet = content.substr(start, length);
-    if (start > 0) snippet = "..." + snippet;
-    if (start + length < content.length()) snippet += "...";
+    if (start > 0)
+        snippet = "..." + snippet;
+    if (start + length < content.length())
+        snippet += "...";
 
     return snippet;
 }
 
-std::vector<std::string> SearchEngine::extract_matched_terms(const Document& doc,
-                                                           const std::vector<std::string>& query_terms) const {
+std::vector<std::string> SearchEngine::extract_matched_terms(
+    const Document& doc, const std::vector<std::string>& query_terms) const {
     std::vector<std::string> matched;
     std::string content = std::string(doc.get_content());
     std::transform(content.begin(), content.end(), content.begin(), ::tolower);
 
     for (const auto& term : query_terms) {
         std::string term_lower = term;
-        std::transform(term_lower.begin(), term_lower.end(), term_lower.begin(), ::tolower);
+        std::transform(term_lower.begin(), term_lower.end(), term_lower.begin(),
+                       ::tolower);
         if (content.find(term_lower) != std::string::npos) {
             matched.push_back(term);
         }
@@ -1069,10 +1105,6 @@ std::vector<std::string> SearchEngine::extract_matched_terms(const Document& doc
 
     return matched;
 }
-
-
-
-
 
 // Configuration and metrics methods
 void SearchEngine::reset_metrics() noexcept {
@@ -1111,7 +1143,8 @@ void SearchEngine::optimize_index() {
         std::unique_lock lock(shard_ptr->mutex);
 
         // Clean up empty tag index entries
-        for (auto it = shard_ptr->tag_index.begin(); it != shard_ptr->tag_index.end();) {
+        for (auto it = shard_ptr->tag_index.begin();
+             it != shard_ptr->tag_index.end();) {
             if (it->second.empty()) {
                 it = shard_ptr->tag_index.erase(it);
                 cleaned_entries++;
@@ -1121,7 +1154,8 @@ void SearchEngine::optimize_index() {
         }
 
         // Clean up empty content index entries
-        for (auto it = shard_ptr->content_index.begin(); it != shard_ptr->content_index.end();) {
+        for (auto it = shard_ptr->content_index.begin();
+             it != shard_ptr->content_index.end();) {
             if (it->second.empty()) {
                 it = shard_ptr->content_index.erase(it);
                 cleaned_entries++;
@@ -1140,25 +1174,31 @@ void SearchEngine::optimize_index() {
             if (shard_ptr->tokenized_content_cache.size() > 3000) {
                 // Remove oldest 30% of tokenized content cache entries
                 auto it = shard_ptr->tokenized_content_cache.begin();
-                std::advance(it, shard_ptr->tokenized_content_cache.size() * 3 / 10);
-                shard_ptr->tokenized_content_cache.erase(shard_ptr->tokenized_content_cache.begin(), it);
+                std::advance(
+                    it, shard_ptr->tokenized_content_cache.size() * 3 / 10);
+                shard_ptr->tokenized_content_cache.erase(
+                    shard_ptr->tokenized_content_cache.begin(), it);
             }
 
             if (shard_ptr->tf_idf_cache.size() > 8000) {
                 // Remove oldest 30% of TF-IDF cache entries
                 auto it = shard_ptr->tf_idf_cache.begin();
                 std::advance(it, shard_ptr->tf_idf_cache.size() * 3 / 10);
-                shard_ptr->tf_idf_cache.erase(shard_ptr->tf_idf_cache.begin(), it);
+                shard_ptr->tf_idf_cache.erase(shard_ptr->tf_idf_cache.begin(),
+                                              it);
             }
         }
     }
 
     double cache_hit_ratio = (total_cache_hits + total_cache_misses > 0)
-        ? static_cast<double>(total_cache_hits) / (total_cache_hits + total_cache_misses)
-        : 0.0;
+                                 ? static_cast<double>(total_cache_hits) /
+                                       (total_cache_hits + total_cache_misses)
+                                 : 0.0;
 
-    spdlog::info("Index optimization completed. Cleaned {} empty entries. Cache hit ratio: {:.2f}%",
-                 cleaned_entries, cache_hit_ratio * 100.0);
+    spdlog::info(
+        "Index optimization completed. Cleaned {} empty entries. Cache hit "
+        "ratio: {:.2f}%",
+        cleaned_entries, cache_hit_ratio * 100.0);
 }
 
 std::unordered_map<std::string, size_t> SearchEngine::get_index_stats() const {
@@ -1181,7 +1221,8 @@ std::unordered_map<std::string, size_t> SearchEngine::get_index_stats() const {
         // Cache statistics
         {
             std::shared_lock cache_lock(shard_ptr->cache_mutex);
-            total_tokenized_cache_entries += shard_ptr->tokenized_content_cache.size();
+            total_tokenized_cache_entries +=
+                shard_ptr->tokenized_content_cache.size();
             total_tf_idf_cache_entries += shard_ptr->tf_idf_cache.size();
         }
 
@@ -1210,7 +1251,8 @@ SearchResults SearchEngine::fuzzy_search_by_tag_enhanced(
     auto start_time = std::chrono::steady_clock::now();
 
     // Check cache first
-    std::string cache_key = generate_cache_key("fuzzy:" + tag + "|tol:" + std::to_string(tolerance), pagination);
+    std::string cache_key = generate_cache_key(
+        "fuzzy:" + tag + "|tol:" + std::to_string(tolerance), pagination);
     SearchResults cached_result;
     if (get_cached_result(cache_key, cached_result)) {
         metrics_.cache_hits++;
@@ -1232,19 +1274,22 @@ SearchResults SearchEngine::fuzzy_search_by_tag_enhanced(
     for (size_t i = start_idx; i < end_idx; ++i) {
         SearchResult result;
         result.document = documents[i];
-        result.score = 1.0 / (1.0 + tolerance); // Score based on tolerance
+        result.score = 1.0 / (1.0 + tolerance);  // Score based on tolerance
         result.matched_terms = {tag};
         results.results.push_back(std::move(result));
     }
 
     auto end_time = std::chrono::steady_clock::now();
-    results.search_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    results.search_time_ms =
+        std::chrono::duration<double, std::milli>(end_time - start_time)
+            .count();
 
     // Cache result
     cache_result(cache_key, results);
 
     metrics_.total_searches++;
-    metrics_.total_search_time_ms += static_cast<uint64_t>(results.search_time_ms);
+    metrics_.total_search_time_ms +=
+        static_cast<uint64_t>(results.search_time_ms);
 
     return results;
 }
@@ -1256,7 +1301,8 @@ SearchResults SearchEngine::search_by_tags_enhanced(
     // Create cache key from tags
     std::string tags_str;
     for (const auto& tag : tags) {
-        if (!tags_str.empty()) tags_str += ",";
+        if (!tags_str.empty())
+            tags_str += ",";
         tags_str += tag;
     }
     std::string cache_key = generate_cache_key("tags:" + tags_str, pagination);
@@ -1295,13 +1341,16 @@ SearchResults SearchEngine::search_by_tags_enhanced(
     }
 
     auto end_time = std::chrono::steady_clock::now();
-    results.search_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    results.search_time_ms =
+        std::chrono::duration<double, std::milli>(end_time - start_time)
+            .count();
 
     // Cache result
     cache_result(cache_key, results);
 
     metrics_.total_searches++;
-    metrics_.total_search_time_ms += static_cast<uint64_t>(results.search_time_ms);
+    metrics_.total_search_time_ms +=
+        static_cast<uint64_t>(results.search_time_ms);
 
     return results;
 }
@@ -1311,7 +1360,8 @@ SearchResults SearchEngine::boolean_search_enhanced(
     auto start_time = std::chrono::steady_clock::now();
 
     // Check cache first
-    std::string cache_key = generate_cache_key("boolean:" + std::string(query), pagination);
+    std::string cache_key =
+        generate_cache_key("boolean:" + std::string(query), pagination);
     SearchResults cached_result;
     if (get_cached_result(cache_key, cached_result)) {
         metrics_.cache_hits++;
@@ -1333,28 +1383,32 @@ SearchResults SearchEngine::boolean_search_enhanced(
     for (size_t i = start_idx; i < end_idx; ++i) {
         SearchResult result;
         result.document = documents[i];
-        result.score = 1.0; // Boolean matches have uniform score
+        result.score = 1.0;  // Boolean matches have uniform score
         results.results.push_back(std::move(result));
     }
 
     auto end_time = std::chrono::steady_clock::now();
-    results.search_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    results.search_time_ms =
+        std::chrono::duration<double, std::milli>(end_time - start_time)
+            .count();
 
     // Cache result
     cache_result(cache_key, results);
 
     metrics_.total_searches++;
-    metrics_.total_search_time_ms += static_cast<uint64_t>(results.search_time_ms);
+    metrics_.total_search_time_ms +=
+        static_cast<uint64_t>(results.search_time_ms);
 
     return results;
 }
 
-SearchResults SearchEngine::phrase_search(
-    const String& phrase, const SearchPagination& pagination) {
+SearchResults SearchEngine::phrase_search(const String& phrase,
+                                          const SearchPagination& pagination) {
     auto start_time = std::chrono::steady_clock::now();
 
     // Check cache first
-    std::string cache_key = generate_cache_key("phrase:" + std::string(phrase), pagination);
+    std::string cache_key =
+        generate_cache_key("phrase:" + std::string(phrase), pagination);
     SearchResults cached_result;
     if (get_cached_result(cache_key, cached_result)) {
         metrics_.cache_hits++;
@@ -1366,7 +1420,8 @@ SearchResults SearchEngine::phrase_search(
     results.offset = pagination.offset;
 
     std::string phrase_str = std::string(phrase);
-    std::transform(phrase_str.begin(), phrase_str.end(), phrase_str.begin(), ::tolower);
+    std::transform(phrase_str.begin(), phrase_str.end(), phrase_str.begin(),
+                   ::tolower);
 
     // Search through all documents for exact phrase match
     std::vector<std::shared_ptr<Document>> matching_docs;
@@ -1374,7 +1429,8 @@ SearchResults SearchEngine::phrase_search(
         std::shared_lock lock(shard_ptr->mutex);
         for (const auto& [doc_id, doc] : shard_ptr->documents) {
             std::string content = std::string(doc->get_content());
-            std::transform(content.begin(), content.end(), content.begin(), ::tolower);
+            std::transform(content.begin(), content.end(), content.begin(),
+                           ::tolower);
             if (content.find(phrase_str) != std::string::npos) {
                 matching_docs.push_back(doc);
             }
@@ -1385,25 +1441,29 @@ SearchResults SearchEngine::phrase_search(
 
     // Apply pagination
     size_t start_idx = std::min(pagination.offset, matching_docs.size());
-    size_t end_idx = std::min(start_idx + pagination.limit, matching_docs.size());
+    size_t end_idx =
+        std::min(start_idx + pagination.limit, matching_docs.size());
 
     for (size_t i = start_idx; i < end_idx; ++i) {
         SearchResult result;
         result.document = matching_docs[i];
-        result.score = 1.0; // Phrase matches have uniform score
+        result.score = 1.0;  // Phrase matches have uniform score
         result.matched_terms = {phrase_str};
         result.snippet = generate_snippet(*matching_docs[i], {phrase_str});
         results.results.push_back(std::move(result));
     }
 
     auto end_time = std::chrono::steady_clock::now();
-    results.search_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    results.search_time_ms =
+        std::chrono::duration<double, std::milli>(end_time - start_time)
+            .count();
 
     // Cache result
     cache_result(cache_key, results);
 
     metrics_.total_searches++;
-    metrics_.total_search_time_ms += static_cast<uint64_t>(results.search_time_ms);
+    metrics_.total_search_time_ms +=
+        static_cast<uint64_t>(results.search_time_ms);
 
     return results;
 }
@@ -1413,7 +1473,8 @@ SearchResults SearchEngine::wildcard_search(
     auto start_time = std::chrono::steady_clock::now();
 
     // Check cache first
-    std::string cache_key = generate_cache_key("wildcard:" + std::string(pattern), pagination);
+    std::string cache_key =
+        generate_cache_key("wildcard:" + std::string(pattern), pagination);
     SearchResults cached_result;
     if (get_cached_result(cache_key, cached_result)) {
         metrics_.cache_hits++;
@@ -1475,7 +1536,8 @@ SearchResults SearchEngine::wildcard_search(
 
         // Apply pagination
         size_t start_idx = std::min(pagination.offset, matching_docs.size());
-        size_t end_idx = std::min(start_idx + pagination.limit, matching_docs.size());
+        size_t end_idx =
+            std::min(start_idx + pagination.limit, matching_docs.size());
 
         for (size_t i = start_idx; i < end_idx; ++i) {
             SearchResult result;
@@ -1487,27 +1549,32 @@ SearchResults SearchEngine::wildcard_search(
         }
     } catch (const std::regex_error& e) {
         spdlog::error("Invalid wildcard pattern: {}", e.what());
-        throw SearchOperationException("Invalid wildcard pattern: " + std::string(e.what()));
+        throw SearchOperationException("Invalid wildcard pattern: " +
+                                       std::string(e.what()));
     }
 
     auto end_time = std::chrono::steady_clock::now();
-    results.search_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    results.search_time_ms =
+        std::chrono::duration<double, std::milli>(end_time - start_time)
+            .count();
 
     // Cache result
     cache_result(cache_key, results);
 
     metrics_.total_searches++;
-    metrics_.total_search_time_ms += static_cast<uint64_t>(results.search_time_ms);
+    metrics_.total_search_time_ms +=
+        static_cast<uint64_t>(results.search_time_ms);
 
     return results;
 }
 
-SearchResults SearchEngine::regex_search(
-    const String& regex_pattern, const SearchPagination& pagination) {
+SearchResults SearchEngine::regex_search(const String& regex_pattern,
+                                         const SearchPagination& pagination) {
     auto start_time = std::chrono::steady_clock::now();
 
     // Check cache first
-    std::string cache_key = generate_cache_key("regex:" + std::string(regex_pattern), pagination);
+    std::string cache_key =
+        generate_cache_key("regex:" + std::string(regex_pattern), pagination);
     SearchResults cached_result;
     if (get_cached_result(cache_key, cached_result)) {
         metrics_.cache_hits++;
@@ -1519,7 +1586,8 @@ SearchResults SearchEngine::regex_search(
     results.offset = pagination.offset;
 
     try {
-        std::regex pattern(std::string(regex_pattern), std::regex_constants::icase);
+        std::regex pattern(std::string(regex_pattern),
+                           std::regex_constants::icase);
         std::vector<std::shared_ptr<Document>> matching_docs;
 
         // Search through all documents
@@ -1537,29 +1605,35 @@ SearchResults SearchEngine::regex_search(
 
         // Apply pagination
         size_t start_idx = std::min(pagination.offset, matching_docs.size());
-        size_t end_idx = std::min(start_idx + pagination.limit, matching_docs.size());
+        size_t end_idx =
+            std::min(start_idx + pagination.limit, matching_docs.size());
 
         for (size_t i = start_idx; i < end_idx; ++i) {
             SearchResult result;
             result.document = matching_docs[i];
             result.score = 1.0;
             result.matched_terms = {std::string(regex_pattern)};
-            result.snippet = generate_snippet(*matching_docs[i], {std::string(regex_pattern)});
+            result.snippet = generate_snippet(*matching_docs[i],
+                                              {std::string(regex_pattern)});
             results.results.push_back(std::move(result));
         }
     } catch (const std::regex_error& e) {
         spdlog::error("Invalid regex pattern: {}", e.what());
-        throw SearchOperationException("Invalid regex pattern: " + std::string(e.what()));
+        throw SearchOperationException("Invalid regex pattern: " +
+                                       std::string(e.what()));
     }
 
     auto end_time = std::chrono::steady_clock::now();
-    results.search_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+    results.search_time_ms =
+        std::chrono::duration<double, std::milli>(end_time - start_time)
+            .count();
 
     // Cache result
     cache_result(cache_key, results);
 
     metrics_.total_searches++;
-    metrics_.total_search_time_ms += static_cast<uint64_t>(results.search_time_ms);
+    metrics_.total_search_time_ms +=
+        static_cast<uint64_t>(results.search_time_ms);
 
     return results;
 }
@@ -1573,7 +1647,8 @@ size_t SearchEngine::bulk_insert(const std::vector<Document>& documents) {
             add_document(doc);
             successful_inserts++;
         } catch (const std::exception& e) {
-            spdlog::warn("Failed to insert document {}: {}", std::string(doc.get_id()), e.what());
+            spdlog::warn("Failed to insert document {}: {}",
+                         std::string(doc.get_id()), e.what());
         }
     }
 
@@ -1590,7 +1665,8 @@ size_t SearchEngine::bulk_update(const std::vector<Document>& documents) {
             update_document(doc);
             successful_updates++;
         } catch (const std::exception& e) {
-            spdlog::warn("Failed to update document {}: {}", std::string(doc.get_id()), e.what());
+            spdlog::warn("Failed to update document {}: {}",
+                         std::string(doc.get_id()), e.what());
         }
     }
 
@@ -1607,7 +1683,8 @@ size_t SearchEngine::bulk_delete(const std::vector<String>& doc_ids) {
             remove_document(doc_id);
             successful_deletes++;
         } catch (const std::exception& e) {
-            spdlog::warn("Failed to delete document {}: {}", std::string(doc_id), e.what());
+            spdlog::warn("Failed to delete document {}: {}",
+                         std::string(doc_id), e.what());
         }
     }
 
@@ -1626,22 +1703,14 @@ std::string SearchEngine::stem_word(const std::string& word) const {
 
     // Simple suffix removal rules (basic Porter stemmer subset)
     static const std::vector<std::pair<std::string, std::string>> rules = {
-        {"ies", "y"},
-        {"ied", "y"},
-        {"ying", "y"},
-        {"ing", ""},
-        {"ly", ""},
-        {"ed", ""},
-        {"ies", "i"},
-        {"ied", "i"},
-        {"ies", ""},
-        {"s", ""}
-    };
+        {"ies", "y"}, {"ied", "y"}, {"ying", "y"}, {"ing", ""}, {"ly", ""},
+        {"ed", ""},   {"ies", "i"}, {"ied", "i"},  {"ies", ""}, {"s", ""}};
 
     for (const auto& [suffix, replacement] : rules) {
         if (stemmed.length() > suffix.length() &&
             stemmed.substr(stemmed.length() - suffix.length()) == suffix) {
-            stemmed = stemmed.substr(0, stemmed.length() - suffix.length()) + replacement;
+            stemmed = stemmed.substr(0, stemmed.length() - suffix.length()) +
+                      replacement;
             break;
         }
     }
@@ -1649,7 +1718,8 @@ std::string SearchEngine::stem_word(const std::string& word) const {
     return stemmed;
 }
 
-std::vector<String> SearchEngine::tokenize_with_stemming(const String& content) const {
+std::vector<String> SearchEngine::tokenize_with_stemming(
+    const String& content) const {
     auto tokens = tokenize_content_optimized(content);
 
     if (config_.enable_stemming) {
@@ -1664,7 +1734,8 @@ std::vector<String> SearchEngine::tokenize_with_stemming(const String& content) 
 }
 
 // Enhanced Boolean Query Parser Implementation
-SearchEngine::BooleanQuery SearchEngine::parse_boolean_query(const String& query) const {
+SearchEngine::BooleanQuery SearchEngine::parse_boolean_query(
+    const String& query) const {
     BooleanQuery parsed_query;
     std::string query_str = std::string(query);
 
@@ -1675,7 +1746,8 @@ SearchEngine::BooleanQuery SearchEngine::parse_boolean_query(const String& query
     while (iss >> token) {
         // Convert to uppercase for operator matching
         std::string upper_token = token;
-        std::transform(upper_token.begin(), upper_token.end(), upper_token.begin(), ::toupper);
+        std::transform(upper_token.begin(), upper_token.end(),
+                       upper_token.begin(), ::toupper);
 
         if (upper_token == "AND") {
             parsed_query.operators.push_back(BooleanQuery::Operator::AND);
@@ -1685,12 +1757,14 @@ SearchEngine::BooleanQuery SearchEngine::parse_boolean_query(const String& query
             parsed_query.operators.push_back(BooleanQuery::Operator::NOT);
         } else {
             // Remove quotes if present
-            if (token.front() == '"' && token.back() == '"' && token.length() > 1) {
+            if (token.front() == '"' && token.back() == '"' &&
+                token.length() > 1) {
                 token = token.substr(1, token.length() - 2);
             }
 
             // Convert to lowercase for searching
-            std::transform(token.begin(), token.end(), token.begin(), ::tolower);
+            std::transform(token.begin(), token.end(), token.begin(),
+                           ::tolower);
             parsed_query.terms.push_back(token);
         }
     }
@@ -1698,7 +1772,8 @@ SearchEngine::BooleanQuery SearchEngine::parse_boolean_query(const String& query
     return parsed_query;
 }
 
-std::vector<std::shared_ptr<Document>> SearchEngine::execute_boolean_query(const BooleanQuery& query) const {
+std::vector<std::shared_ptr<Document>> SearchEngine::execute_boolean_query(
+    const BooleanQuery& query) const {
     if (query.terms.empty()) {
         return {};
     }
@@ -1727,8 +1802,8 @@ std::vector<std::shared_ptr<Document>> SearchEngine::execute_boolean_query(const
         } else {
             // Apply operator (default to AND if no operator specified)
             BooleanQuery::Operator op = (i - 1 < query.operators.size())
-                ? query.operators[i - 1]
-                : BooleanQuery::Operator::AND;
+                                            ? query.operators[i - 1]
+                                            : BooleanQuery::Operator::AND;
 
             switch (op) {
                 case BooleanQuery::Operator::AND: {
@@ -1783,20 +1858,21 @@ std::vector<std::pair<String, size_t>> SearchEngine::auto_complete_ranked(
 
     std::vector<std::future<std::vector<std::pair<String, size_t>>>> futures;
     for (const auto& shard_ptr : shards_) {
-        futures.push_back(std::async(std::launch::async, [&prefix_lower, &shard_ptr] {
-            std::vector<std::pair<String, size_t>> suggestions;
-            std::shared_lock lock(shard_ptr->mutex);
-            for (const auto& [tag, doc_ids] : shard_ptr->tag_index) {
-                std::string tag_lower = tag;
-                std::transform(tag_lower.begin(), tag_lower.end(),
-                               tag_lower.begin(),
-                               [](unsigned char c) { return std::tolower(c); });
-                if (tag_lower.rfind(prefix_lower, 0) == 0) {
-                    suggestions.emplace_back(String(tag), doc_ids.size());
+        futures.push_back(
+            std::async(std::launch::async, [&prefix_lower, &shard_ptr] {
+                std::vector<std::pair<String, size_t>> suggestions;
+                std::shared_lock lock(shard_ptr->mutex);
+                for (const auto& [tag, doc_ids] : shard_ptr->tag_index) {
+                    std::string tag_lower = tag;
+                    std::transform(
+                        tag_lower.begin(), tag_lower.end(), tag_lower.begin(),
+                        [](unsigned char c) { return std::tolower(c); });
+                    if (tag_lower.rfind(prefix_lower, 0) == 0) {
+                        suggestions.emplace_back(String(tag), doc_ids.size());
+                    }
                 }
-            }
-            return suggestions;
-        }));
+                return suggestions;
+            }));
     }
 
     std::unordered_map<String, size_t> suggestion_map;
@@ -1824,7 +1900,8 @@ std::vector<std::pair<String, size_t>> SearchEngine::auto_complete_ranked(
 }
 
 // Document similarity calculation
-double SearchEngine::calculate_cosine_similarity(const Document& doc1, const Document& doc2) const {
+double SearchEngine::calculate_cosine_similarity(const Document& doc1,
+                                                 const Document& doc2) const {
     auto tf_vector1 = create_tf_vector(doc1);
     auto tf_vector2 = create_tf_vector(doc2);
 
@@ -1852,9 +1929,12 @@ double SearchEngine::calculate_cosine_similarity(const Document& doc1, const Doc
     return dot_product / (std::sqrt(norm1) * std::sqrt(norm2));
 }
 
-double SearchEngine::calculate_jaccard_similarity(const Document& doc1, const Document& doc2) const {
-    auto tokens1 = get_cached_tokens(String(doc1.get_id()), String(doc1.get_content()));
-    auto tokens2 = get_cached_tokens(String(doc2.get_id()), String(doc2.get_content()));
+double SearchEngine::calculate_jaccard_similarity(const Document& doc1,
+                                                  const Document& doc2) const {
+    auto tokens1 =
+        get_cached_tokens(String(doc1.get_id()), String(doc1.get_content()));
+    auto tokens2 =
+        get_cached_tokens(String(doc2.get_id()), String(doc2.get_content()));
 
     HashSet<String> set1(tokens1.begin(), tokens1.end());
     HashSet<String> set2(tokens2.begin(), tokens2.end());
@@ -1877,9 +1957,11 @@ double SearchEngine::calculate_jaccard_similarity(const Document& doc1, const Do
     return static_cast<double>(intersection.size()) / union_size;
 }
 
-std::unordered_map<String, double> SearchEngine::create_tf_vector(const Document& doc) const {
+std::unordered_map<String, double> SearchEngine::create_tf_vector(
+    const Document& doc) const {
     std::unordered_map<String, double> tf_vector;
-    auto tokens = get_cached_tokens(String(doc.get_id()), String(doc.get_content()));
+    auto tokens =
+        get_cached_tokens(String(doc.get_id()), String(doc.get_content()));
 
     // Count term frequencies
     std::unordered_map<String, size_t> term_counts;
@@ -1897,7 +1979,8 @@ std::unordered_map<String, double> SearchEngine::create_tf_vector(const Document
 
 // Find similar documents
 std::vector<std::pair<std::shared_ptr<Document>, double>>
-SearchEngine::find_similar_documents(const String& doc_id, size_t max_results, double min_similarity) {
+SearchEngine::find_similar_documents(const String& doc_id, size_t max_results,
+                                     double min_similarity) {
     // Find the reference document
     auto& shard = get_shard(doc_id);
     std::shared_lock lock(shard.mutex);
@@ -1916,10 +1999,11 @@ SearchEngine::find_similar_documents(const String& doc_id, size_t max_results, d
         std::shared_lock shard_lock(shard_ptr->mutex);
         for (const auto& [other_doc_id, other_doc] : shard_ptr->documents) {
             if (other_doc_id == doc_id) {
-                continue; // Skip self
+                continue;  // Skip self
             }
 
-            double similarity = calculate_cosine_similarity(*reference_doc, *other_doc);
+            double similarity =
+                calculate_cosine_similarity(*reference_doc, *other_doc);
             if (similarity >= min_similarity) {
                 similar_docs.emplace_back(other_doc, similarity);
             }
@@ -1939,7 +2023,8 @@ SearchEngine::find_similar_documents(const String& doc_id, size_t max_results, d
 }
 
 // Semantic search implementation
-SearchResults SearchEngine::semantic_search(const String& query_text, const SearchPagination& pagination) {
+SearchResults SearchEngine::semantic_search(
+    const String& query_text, const SearchPagination& pagination) {
     SearchResults results;
     results.total_count = 0;
     results.offset = pagination.offset;
@@ -1958,7 +2043,7 @@ SearchResults SearchEngine::semantic_search(const String& query_text, const Sear
         std::shared_lock lock(shard_ptr->mutex);
         for (const auto& [doc_id, doc] : shard_ptr->documents) {
             double similarity = calculate_cosine_similarity(query_doc, *doc);
-            if (similarity > 0.01) { // Minimum threshold
+            if (similarity > 0.01) {  // Minimum threshold
                 scored_docs.emplace_back(doc, similarity);
             }
         }
@@ -1978,13 +2063,15 @@ SearchResults SearchEngine::semantic_search(const String& query_text, const Sear
         SearchResult result;
         result.document = scored_docs[i].first;
         result.score = scored_docs[i].second;
-        result.matched_terms = {}; // Could be enhanced to show matched terms
+        result.matched_terms = {};  // Could be enhanced to show matched terms
         results.results.push_back(result);
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
-    results.search_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        end_time - start_time).count();
+    results.search_time_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end_time -
+                                                              start_time)
+            .count();
 
     return results;
 }

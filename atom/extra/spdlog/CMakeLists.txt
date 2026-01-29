@@ -1,20 +1,8 @@
-cmake_minimum_required(VERSION 3.20)
-project(modern_log VERSION 1.0.0 LANGUAGES CXX)
+# CMakeLists.txt for modern logging library (spdlog wrapper) Integrated with
+# main Atom build system
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-if(MSVC)
-    add_compile_options(/W4)
-else()
-    add_compile_options(-Wall -Wextra -Wpedantic)
-endif()
-
-find_package(spdlog REQUIRED)
-find_package(fmt REQUIRED)
-
-add_library(modern_log
+# Source files
+set(SPDLOG_SOURCES
     core/context.cpp
     filters/filter.cpp
     filters/builtin_filters.cpp
@@ -24,51 +12,37 @@ add_library(modern_log
     utils/timer.cpp
     utils/archiver.cpp
     logger/logger.cpp
-    logger/manager.cpp
-)
+    logger/manager.cpp)
 
-target_include_directories(modern_log
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
+# Header files (main header)
+set(SPDLOG_HEADERS modern_log.h)
 
-target_link_libraries(modern_log
-    PUBLIC
-        spdlog::spdlog
-        fmt::fmt
-)
+# Create library
+add_library(atom-extra-spdlog ${SPDLOG_SOURCES} ${SPDLOG_HEADERS})
 
-target_compile_features(modern_log
-    PUBLIC
-        cxx_std_23
-)
+# Set target properties
+target_include_directories(atom-extra-spdlog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(modern_log_example examples/basic_usage.cpp)
-target_link_libraries(modern_log_example modern_log)
+# Set target properties for consistency
+set_target_properties(
+  atom-extra-spdlog
+  PROPERTIES CXX_STANDARD 23
+             CXX_STANDARD_REQUIRED ON
+             CXX_EXTENSIONS OFF)
 
-if(BUILD_TESTING)
-    enable_testing()
-    add_subdirectory(tests)
+# Find and link required packages (optional)
+find_package(spdlog QUIET)
+find_package(fmt QUIET)
+
+if(spdlog_FOUND AND fmt_FOUND)
+  target_link_libraries(atom-extra-spdlog PUBLIC spdlog::spdlog fmt::fmt)
+  message(STATUS "Found spdlog and fmt, linking to atom-extra-spdlog")
+else()
+  message(
+    STATUS
+      "spdlog or fmt not found, atom-extra-spdlog may have limited functionality"
+  )
 endif()
 
-include(GNUInstallDirs)
-
-install(TARGETS modern_log
-    EXPORT modern_log_targets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
-
-install(DIRECTORY include/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
-
-install(EXPORT modern_log_targets
-    FILE modern_log_targets.cmake
-    NAMESPACE modern_log::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/modern_log
-)
+# Installation rules (optional) install(TARGETS atom-extra-spdlog DESTINATION
+# lib) install(FILES ${SPDLOG_HEADERS} DESTINATION include/atom/extra/spdlog)

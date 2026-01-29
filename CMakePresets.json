@@ -12,8 +12,7 @@
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "CMAKE_COLOR_DIAGNOSTICS": "ON"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {
@@ -22,8 +21,7 @@
             "generator": "Unix Makefiles",
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "CMAKE_COLOR_DIAGNOSTICS": "ON"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {
@@ -51,6 +49,27 @@
             }
         },
         {
+            "name": "base-msvc-vcpkg",
+            "hidden": true,
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/build",
+            "toolchainFile": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_C_COMPILER": "cl",
+                "CMAKE_CXX_COMPILER": "cl",
+                "USE_VCPKG": "ON",
+                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "VCPKG_HOST_TRIPLET": "x64-windows"
+            },
+            "environment": {
+                "MSYSTEM": null,
+                "VCPKG_ROOT": "C:/vcpkg",
+                "VCPKG_FORCE_DOWNLOADED_BINARIES": "1"
+            }
+        },
+        {
             "name": "base",
             "hidden": true,
             "inherits": "base-ninja",
@@ -64,6 +83,33 @@
             "name": "base-msys2",
             "hidden": true,
             "inherits": "base-mingw",
+            "binaryDir": "${sourceDir}/build-mingw64",
+            "cacheVariables": {
+                "USE_VCPKG": "OFF",
+                "OPENSSL_ROOT_DIR": "D:/msys64/mingw64",
+                "ZLIB_ROOT": "D:/msys64/mingw64",
+                "CMAKE_PREFIX_PATH": "D:/msys64/mingw64"
+            },
+            "condition": {
+                "type": "matches",
+                "string": "$env{PATH}",
+                "regex": ".*msys64.*|.*msys2.*"
+            }
+        },
+        {
+            "name": "base-msys2-vcpkg",
+            "hidden": true,
+            "inherits": "base-mingw",
+            "binaryDir": "${sourceDir}/build-mingw64",
+            "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+            "cacheVariables": {
+                "USE_VCPKG": "ON",
+                "VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic",
+                "VCPKG_HOST_TRIPLET": "x64-mingw-dynamic"
+            },
+            "environment": {
+                "VCPKG_ROOT": "$penv{VCPKG_ROOT}"
+            },
             "condition": {
                 "type": "matches",
                 "string": "$env{PATH}",
@@ -94,6 +140,50 @@
             }
         },
         {
+            "name": "_common-minsizerel-config",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "CMAKE_CXX_FLAGS": "-Os -ffunction-sections -fdata-sections",
+                "CMAKE_EXE_LINKER_FLAGS": "-Wl,--gc-sections -s",
+                "CMAKE_SHARED_LINKER_FLAGS": "-Wl,--gc-sections -s"
+            }
+        },
+        {
+            "name": "_common-release-lto-config",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_FLAGS": "-O3 -flto=auto",
+                "CMAKE_EXE_LINKER_FLAGS": "-flto=auto",
+                "CMAKE_SHARED_LINKER_FLAGS": "-flto=auto",
+                "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON"
+            }
+        },
+        {
+            "name": "_common-fast-build-config",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ATOM_ENABLE_CCACHE": "ON",
+                "ATOM_ENABLE_PCH": "ON",
+                "ATOM_ENABLE_UNITY_BUILD": "ON",
+                "ATOM_ENABLE_FAST_LINK": "ON",
+                "CMAKE_UNITY_BUILD": "ON",
+                "CMAKE_UNITY_BUILD_BATCH_SIZE": "16"
+            }
+        },
+        {
+            "name": "_common-minimal-config",
+            "hidden": true,
+            "cacheVariables": {
+                "ATOM_BUILD_MINIMAL": "ON",
+                "ATOM_BUILD_ALL": "OFF",
+                "ATOM_BUILD_TESTS": "OFF",
+                "ATOM_BUILD_EXAMPLES": "OFF"
+            }
+        },
+        {
             "name": "_vs-debug-config",
             "hidden": true,
             "cacheVariables": {
@@ -114,47 +204,6 @@
             "hidden": true,
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
-            }
-        },
-        {
-            "name": "_python-config",
-            "hidden": true,
-            "cacheVariables": {
-                "ATOM_BUILD_PYTHON_BINDINGS": "ON",
-                "BUILD_SHARED_LIBS": "ON"
-            }
-        },
-        {
-            "name": "_features-config",
-            "hidden": true,
-            "cacheVariables": {
-                "ATOM_BUILD_EXAMPLES": "ON",
-                "ATOM_BUILD_TESTS": "ON",
-                "ATOM_BUILD_DOCS": "ON"
-            }
-        },
-        {
-            "name": "_optimization-config",
-            "hidden": true,
-            "cacheVariables": {
-                "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON",
-                "CMAKE_CXX_FLAGS": "-march=native -mtune=native"
-            }
-        },
-        {
-            "name": "_sanitizer-config",
-            "hidden": true,
-            "cacheVariables": {
-                "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
-                "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer"
-            }
-        },
-        {
-            "name": "_coverage-config",
-            "hidden": true,
-            "cacheVariables": {
-                "CMAKE_CXX_FLAGS": "--coverage",
-                "CMAKE_C_FLAGS": "--coverage"
             }
         },
         {
@@ -182,6 +231,38 @@
             ]
         },
         {
+            "name": "minsizerel",
+            "displayName": "MinSizeRel (Optimized for Size)",
+            "inherits": [
+                "base",
+                "_common-minsizerel-config"
+            ]
+        },
+        {
+            "name": "release-lto",
+            "displayName": "Release with LTO",
+            "inherits": [
+                "base",
+                "_common-release-lto-config"
+            ]
+        },
+        {
+            "name": "fast-build",
+            "displayName": "Fast Build (All Optimizations)",
+            "inherits": [
+                "base",
+                "_common-fast-build-config"
+            ]
+        },
+        {
+            "name": "minimal",
+            "displayName": "Minimal (Core Modules Only)",
+            "inherits": [
+                "base",
+                "_common-minimal-config"
+            ]
+        },
+        {
             "name": "debug-msys2",
             "displayName": "Debug (MSYS2)",
             "inherits": [
@@ -202,6 +283,30 @@
             "displayName": "RelWithDebInfo (MSYS2)",
             "inherits": [
                 "base-msys2",
+                "_common-relwithdebinfo-config"
+            ]
+        },
+        {
+            "name": "debug-msys2-vcpkg",
+            "displayName": "Debug (MSYS2 with vcpkg)",
+            "inherits": [
+                "base-msys2-vcpkg",
+                "_common-debug-config"
+            ]
+        },
+        {
+            "name": "release-msys2-vcpkg",
+            "displayName": "Release (MSYS2 with vcpkg)",
+            "inherits": [
+                "base-msys2-vcpkg",
+                "_common-release-config"
+            ]
+        },
+        {
+            "name": "relwithdebinfo-msys2-vcpkg",
+            "displayName": "RelWithDebInfo (MSYS2 with vcpkg)",
+            "inherits": [
+                "base-msys2-vcpkg",
                 "_common-relwithdebinfo-config"
             ]
         },
@@ -254,71 +359,28 @@
             ]
         },
         {
-            "name": "debug-full",
-            "displayName": "Debug with all features",
+            "name": "msvc-vcpkg-debug",
+            "displayName": "Debug (MSVC with vcpkg)",
             "inherits": [
-                "base",
-                "_common-debug-config",
-                "_features-config",
-                "_sanitizer-config"
+                "base-msvc-vcpkg",
+                "_vs-debug-config"
             ]
         },
         {
-            "name": "release-optimized",
-            "displayName": "Release with optimizations",
+            "name": "msvc-vcpkg-release",
+            "displayName": "Release (MSVC with vcpkg)",
             "inherits": [
-                "base",
-                "_common-release-config",
-                "_optimization-config"
+                "base-msvc-vcpkg",
+                "_vs-release-config"
             ]
         },
         {
-            "name": "python-dev",
-            "displayName": "Python development build",
+            "name": "msvc-vcpkg-relwithdebinfo",
+            "displayName": "RelWithDebInfo (MSVC with vcpkg)",
             "inherits": [
-                "base",
-                "_common-relwithdebinfo-config",
-                "_python-config",
-                "_features-config"
+                "base-msvc-vcpkg",
+                "_vs-relwithdebinfo-config"
             ]
-        },
-        {
-            "name": "python-release",
-            "displayName": "Python release build",
-            "inherits": [
-                "base",
-                "_common-release-config",
-                "_python-config",
-                "_optimization-config"
-            ]
-        },
-        {
-            "name": "coverage",
-            "displayName": "Coverage analysis build",
-            "inherits": [
-                "base",
-                "_common-debug-config",
-                "_features-config",
-                "_coverage-config"
-            ],
-            "cacheVariables": {
-                "ATOM_ENABLE_COVERAGE": "ON",
-                "ATOM_COVERAGE_HTML": "ON",
-                "CMAKE_BUILD_TYPE": "Debug"
-            }
-        },
-        {
-            "name": "minimal",
-            "displayName": "Minimal build",
-            "inherits": [
-                "base"
-            ],
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "MinSizeRel",
-                "ATOM_BUILD_EXAMPLES": "OFF",
-                "ATOM_BUILD_TESTS": "OFF",
-                "ATOM_BUILD_DOCS": "OFF"
-            }
         }
     ],
     "buildPresets": [
@@ -338,6 +400,26 @@
             "jobs": 8
         },
         {
+            "name": "minsizerel",
+            "configurePreset": "minsizerel",
+            "jobs": 8
+        },
+        {
+            "name": "release-lto",
+            "configurePreset": "release-lto",
+            "jobs": 8
+        },
+        {
+            "name": "fast-build",
+            "configurePreset": "fast-build",
+            "jobs": 8
+        },
+        {
+            "name": "minimal",
+            "configurePreset": "minimal",
+            "jobs": 8
+        },
+        {
             "name": "debug-msys2",
             "configurePreset": "debug-msys2",
             "jobs": 8
@@ -350,6 +432,21 @@
         {
             "name": "relwithdebinfo-msys2",
             "configurePreset": "relwithdebinfo-msys2",
+            "jobs": 8
+        },
+        {
+            "name": "debug-msys2-vcpkg",
+            "configurePreset": "debug-msys2-vcpkg",
+            "jobs": 8
+        },
+        {
+            "name": "release-msys2-vcpkg",
+            "configurePreset": "release-msys2-vcpkg",
+            "jobs": 8
+        },
+        {
+            "name": "relwithdebinfo-msys2-vcpkg",
+            "configurePreset": "relwithdebinfo-msys2-vcpkg",
             "jobs": 8
         },
         {
@@ -383,40 +480,91 @@
             "configuration": "RelWithDebInfo"
         },
         {
-            "name": "debug-full",
-            "configurePreset": "debug-full",
-            "jobs": 8
+            "name": "msvc-vcpkg-debug",
+            "configurePreset": "msvc-vcpkg-debug",
+            "configuration": "Debug"
         },
         {
-            "name": "release-optimized",
-            "configurePreset": "release-optimized",
-            "jobs": 8
+            "name": "msvc-vcpkg-release",
+            "configurePreset": "msvc-vcpkg-release",
+            "configuration": "Release"
         },
         {
-            "name": "python-dev",
-            "configurePreset": "python-dev",
-            "jobs": 8
-        },
-        {
-            "name": "python-release",
-            "configurePreset": "python-release",
-            "jobs": 8
-        },
-        {
-            "name": "coverage",
-            "configurePreset": "coverage",
-            "jobs": 8
-        },
-        {
-            "name": "minimal",
-            "configurePreset": "minimal",
-            "jobs": 8
+            "name": "msvc-vcpkg-relwithdebinfo",
+            "configurePreset": "msvc-vcpkg-relwithdebinfo",
+            "configuration": "RelWithDebInfo"
         }
     ],
     "testPresets": [
         {
             "name": "default",
             "configurePreset": "debug",
+            "output": {
+                "verbosity": "verbose"
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        },
+        {
+            "name": "release",
+            "configurePreset": "release",
+            "output": {
+                "verbosity": "verbose"
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        },
+        {
+            "name": "msys2",
+            "configurePreset": "debug-msys2",
+            "output": {
+                "verbosity": "verbose"
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        },
+        {
+            "name": "msys2-release",
+            "configurePreset": "release-msys2",
+            "output": {
+                "verbosity": "verbose"
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        },
+        {
+            "name": "vs-debug",
+            "configurePreset": "debug-vs",
+            "output": {
+                "verbosity": "verbose"
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        },
+        {
+            "name": "vs-release",
+            "configurePreset": "release-vs",
+            "output": {
+                "verbosity": "verbose"
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": true
+            }
+        },
+        {
+            "name": "msvc-vcpkg",
+            "configurePreset": "msvc-vcpkg-debug",
             "output": {
                 "verbosity": "verbose"
             },

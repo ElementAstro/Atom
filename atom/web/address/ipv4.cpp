@@ -1,4 +1,5 @@
 #include "ipv4.hpp"
+#include "atom/web/utils/ip.hpp"
 
 #ifdef _WIN32
 #include <WS2tcpip.h>
@@ -7,14 +8,16 @@
 #include <arpa/inet.h>
 #endif
 
+#include <algorithm>
 #include <array>
 #include <bitset>
 #include <charconv>
+#include <compare>
 #include <cstring>
+#include <format>
 #include <iomanip>
 #include <sstream>
 #include <string>
-
 
 #include <spdlog/spdlog.h>
 
@@ -43,7 +46,7 @@ static WinsockInitializer winsockInit;
 /**
  * @brief Fast IPv4 validation without regex
  */
-auto fastIsValidIPv4(std::string_view address) -> bool {
+[[maybe_unused]] auto fastIsValidIPv4(std::string_view address) -> bool {
     if (address.empty() || address.length() > 15) {
         return false;
     }
@@ -87,7 +90,8 @@ auto fastIsValidIPv4(std::string_view address) -> bool {
 }  // namespace
 
 auto IPv4::isValidIPv4(std::string_view address) -> bool {
-    return fastIsValidIPv4(address);
+    // Reuse shared util to avoid duplication and ensure consistency
+    return atom::web::isValidIPv4(std::string(address));
 }
 
 IPv4::IPv4(std::string_view address) {
@@ -193,7 +197,8 @@ auto IPv4::isInRange(std::string_view start, std::string_view end) -> bool {
         uint32_t currentIp = ntohl(ipValue);
 
         if (startIp > endIp) {
-            throw AddressRangeError("Invalid range: start IP > end IP");
+            throw AddressRangeError(
+                std::string_view{"Invalid range: start IP > end IP"});
         }
 
         bool inRange = currentIp >= startIp && currentIp <= endIp;
@@ -251,6 +256,82 @@ auto IPv4::isEqual(const Address& other) const -> bool {
 
 auto IPv4::getType() const -> std::string_view { return "IPv4"; }
 
+auto IPv4::operator<=>(const Address& other) const -> std::partial_ordering {
+    if (other.getType() != "IPv4") {
+        return std::partial_ordering::unordered;
+    }
+
+    const auto* ipv4Other = dynamic_cast<const IPv4*>(&other);
+    if (!ipv4Other) {
+        return std::partial_ordering::unordered;
+    }
+
+    uint32_t thisHost = ntohl(ipValue);
+    uint32_t otherHost = ntohl(ipv4Other->ipValue);
+
+    if (thisHost < otherHost) {
+        return std::partial_ordering::less;
+    }
+    if (thisHost > otherHost) {
+        return std::partial_ordering::greater;
+    }
+    return std::partial_ordering::equivalent;
+}
+
+auto IPv4::getOctets() const -> std::array<uint8_t, OCTET_COUNT> {
+    uint32_t hostOrder = ntohl(ipValue);
+    return {static_cast<uint8_t>((hostOrder >> 24) & 0xFF),
+            static_cast<uint8_t>((hostOrder >> 16) & 0xFF),
+            static_cast<uint8_t>((hostOrder >> 8) & 0xFF),
+            static_cast<uint8_t>(hostOrder & 0xFF)};
+}
+
+auto IPv4::isPrivate() const -> bool {
+    auto octets = getOctets();
+    // 10.0.0.0/8
+    if (octets[0] == 10) {
+        return true;
+    }
+    // 172.16.0.0/12
+    if (octets[0] == 172 && (octets[1] >= 16 && octets[1] <= 31)) {
+        return true;
+    }
+    // 192.168.0.0/16
+    if (octets[0] == 192 && octets[1] == 168) {
+        return true;
+    }
+    return false;
+}
+
+auto IPv4::isLoopback() const -> bool {
+    auto octets = getOctets();
+    // 127.0.0.0/8
+    return octets[0] == 127;
+}
+
+auto IPv4::isMulticast() const -> bool {
+    auto octets = getOctets();
+    // 224.0.0.0 - 239.255.255.255 (224.0.0.0/4)
+    return octets[0] >= 224 && octets[0] <= 239;
+}
+
+auto IPv4::isLinkLocal() const -> bool {
+    auto octets = getOctets();
+    // 169.254.0.0/16
+    return octets[0] == 169 && octets[1] == 254;
+}
+
+auto IPv4::fromOctets(std::span<const uint8_t, OCTET_COUNT> octets) -> IPv4 {
+    std::string addrStr =
+        std::format("{}.{}.{}.{}", octets[0], octets[1], octets[2], octets[3]);
+    return IPv4(addrStr);
+}
+
+auto IPv4::fromOctets(uint8_t a, uint8_t b, uint8_t c, uint8_t d) -> IPv4 {
+    std::string addrStr = std::format("{}.{}.{}.{}", a, b, c, d);
+    return IPv4(addrStr);
+}
+
 auto IPv4::getNetworkAddress(std::string_view mask) const -> std::string {
     try {
         uint32_t maskValue = ipToInteger(mask);
@@ -286,8 +367,8 @@ auto IPv4::getBroadcastAddress(std::string_view mask) const -> std::string {
     }
 }
 
-auto IPv4::isSameSubnet(const Address& other, std::string_view mask) const
-    -> bool {
+auto IPv4::isSameSubnet(const Address& other,
+                        std::string_view mask) const -> bool {
     try {
         if (other.getType() != "IPv4") {
             return false;
@@ -343,7 +424,7 @@ auto IPv4::ipToInteger(std::string_view ipAddr) const -> uint32_t {
 auto IPv4::integerToIp(uint32_t ipAddr) const -> std::string {
     try {
         std::array<char, INET_ADDRSTRLEN> buffer{};
-        struct in_addr addr{};
+        struct in_addr addr {};
         addr.s_addr = ipAddr;
 
         if (inet_ntop(AF_INET, &addr, buffer.data(), buffer.size()) ==

@@ -4,7 +4,7 @@
 # Project Name: Atom Description: Atom Library for all of the Element Astro
 # Project Author: Max Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom
   VERSION 1.0.0
@@ -39,10 +39,15 @@ endif()
 # =============================================================================
 
 if(UNIX AND NOT APPLE)
-  # Linux-specific dependencies
-  pkg_check_modules(SYSTEMD REQUIRED libsystemd)
-  if(SYSTEMD_FOUND)
-    message(STATUS "Found libsystemd: ${SYSTEMD_VERSION}")
+  # Linux-specific dependencies (optional)
+  find_package(PkgConfig QUIET)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(SYSTEMD QUIET libsystemd)
+    if(SYSTEMD_FOUND)
+      message(STATUS "Found libsystemd: ${SYSTEMD_VERSION}")
+    else()
+      message(STATUS "libsystemd not found - some features may be limited")
+    endif()
   endif()
 endif()
 
@@ -139,6 +144,16 @@ if(ATOM_BUILD_ERROR)
     message(STATUS "Building error module")
   else()
     message(STATUS "Skipping error module due to missing or invalid directory")
+  endif()
+endif()
+
+if(ATOM_BUILD_IMAGE)
+  check_module_directory("image" "image" IMAGE_VALID)
+  if(IMAGE_VALID)
+    list(APPEND SUBDIRECTORIES image)
+    message(STATUS "Building image module")
+  else()
+    message(STATUS "Skipping image module due to missing or invalid directory")
   endif()
 endif()
 
@@ -272,9 +287,13 @@ endif()
 # Dependency Resolution
 # =============================================================================
 
-# Process module dependencies
-scan_module_dependencies()
-process_module_dependencies()
+# Process module dependencies (if functions are available)
+if(COMMAND atom_scan_module_dependencies)
+  atom_scan_module_dependencies()
+endif()
+if(COMMAND atom_process_module_dependencies)
+  atom_process_module_dependencies()
+endif()
 
 # =============================================================================
 # Add Subdirectories
@@ -292,6 +311,13 @@ foreach(dir ${SUBDIRECTORIES})
     )
   endif()
 endforeach()
+
+# =============================================================================
+# Add Extra Components
+# =============================================================================
+
+# Note: Extra components are added at the top-level CMakeLists.txt Do not add
+# them here to avoid duplicate target definitions
 
 # =============================================================================
 # Create Combined Library
@@ -329,6 +355,8 @@ if(ATOM_BUILD_UNIFIED_LIBRARY)
       RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
       INCLUDES
       DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+  else()
+    message(STATUS "No module targets found for unified library")
   endif()
 endif()
 

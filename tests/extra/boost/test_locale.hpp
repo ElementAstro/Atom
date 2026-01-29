@@ -4,7 +4,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/regex.hpp>
 #include <iostream>

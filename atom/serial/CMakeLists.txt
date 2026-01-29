@@ -2,64 +2,118 @@
 # License: GPL3
 
 cmake_minimum_required(VERSION 3.21)
+project(
+  atom-serial
+  VERSION 1.0.0
+  LANGUAGES C CXX)
+
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 # Define library name
 set(LIB_NAME atom-serial)
 
-# Find all source files
-file(GLOB_RECURSE SOURCES "*.cpp")
-file(GLOB_RECURSE HEADERS "*.h" "*.hpp")
+# Check for USB support
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+  pkg_check_modules(LIBUSB QUIET libusb-1.0)
+endif()
+
+# Sources
+set(SOURCES # Core files
+    core/scanner.cpp core/serial_port.cpp)
+
+# Add platform-specific Bluetooth sources On macOS, use the Objective-C++
+# implementation (.mm file) On other platforms, use the C++ implementation (.cpp
+# file)
 if(APPLE)
-  file(GLOB_RECURSE MM_SOURCES "*.mm")
-  list(APPEND SOURCES ${MM_SOURCES})
+  list(APPEND SOURCES bluetooth/bluetooth_serial_mac.mm)
+  # Enable Objective-C++ for the .mm file
+  enable_language(OBJCXX)
+else()
+  list(APPEND SOURCES bluetooth/bluetooth_serial.cpp)
+endif()
+
+# Add USB files only if libusb is available
+if(LIBUSB_FOUND)
+  list(APPEND SOURCES usb/usb.cpp)
+  message(STATUS "USB support enabled for atom-serial")
+else()
+  message(STATUS "USB support disabled for atom-serial (libusb not found)")
+endif()
+
+# Headers
+set(HEADERS
+    # Backwards compatibility headers (in root)
+    scanner.hpp
+    serial_port.hpp
+    bluetooth_serial.hpp
+    bluetooth_serial_mac.hpp
+    bluetooth_serial_unix.hpp
+    bluetooth_serial_win.hpp
+    serial_port_unix.hpp
+    serial_port_win.hpp
+    # Actual implementation headers (in subdirectories)
+    core/scanner.hpp
+    core/serial_port.hpp
+    bluetooth/bluetooth_serial.hpp
+    bluetooth/bluetooth_serial_mac.hpp
+    bluetooth/bluetooth_serial_unix.hpp
+    bluetooth/bluetooth_serial_win.hpp
+    platform/serial_port_unix.hpp
+    platform/serial_port_win.hpp)
+
+# Add USB headers only if libusb is available
+if(LIBUSB_FOUND)
+  list(APPEND HEADERS usb.hpp usb/usb.hpp)
 endif()
 
 # Create library target
 add_library(${LIB_NAME} ${SOURCES} ${HEADERS})
+add_library(atom::serial ALIAS ${LIB_NAME})
 
-# Set C++ standard requirements
-target_compile_features(${LIB_NAME} PUBLIC cxx_std_20)
+# Configure module using standardized function
+atom_configure_module(${LIB_NAME})
 
-# Add compiler-specific optimizations
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(${LIB_NAME} PRIVATE
-        -Wall -Wextra -Wpedantic
-        -O3 -march=native
-        -ffast-math
-    )
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-    target_compile_options(${LIB_NAME} PRIVATE
-        /W4 /O2 /arch:AVX2
-        /fp:fast
-    )
-endif()
-
-# Setup include directories
-target_include_directories(
-  ${LIB_NAME} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-                     $<INSTALL_INTERFACE:include/atom/serial>)
+# Find spdlog for logging
+find_package(spdlog QUIET)
 
 # Set platform-specific dependencies
 if(WIN32)
-  target_link_libraries(${LIB_NAME} PUBLIC atom-error SetupAPI
-                                           Cfgmgr32)
+  target_link_libraries(${LIB_NAME} PUBLIC atom-error atom-log SetupAPI
+                                           Cfgmgr32 ws2_32 rpcrt4)
+  if(spdlog_FOUND)
+    target_link_libraries(${LIB_NAME} PUBLIC spdlog::spdlog)
+  endif()
 elseif(APPLE)
   find_library(IOKIT_FRAMEWORK IOKit REQUIRED)
   find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
+  find_library(IOBLUETOOTH_FRAMEWORK IOBluetooth REQUIRED)
   target_link_libraries(
-    ${LIB_NAME} PUBLIC atom-error ${IOKIT_FRAMEWORK}
-                       ${FOUNDATION_FRAMEWORK})
+    ${LIB_NAME} PUBLIC atom-error atom-log ${IOKIT_FRAMEWORK}
+                       ${FOUNDATION_FRAMEWORK} ${IOBLUETOOTH_FRAMEWORK})
+  if(spdlog_FOUND)
+    target_link_libraries(${LIB_NAME} PUBLIC spdlog::spdlog)
+  endif()
 else() # Linux/Unix
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(UDEV REQUIRED libudev)
-  pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 
-  target_include_directories(${LIB_NAME} PUBLIC ${UDEV_INCLUDE_DIRS}
-                                                ${LIBUSB_INCLUDE_DIRS})
+  target_include_directories(${LIB_NAME} PUBLIC ${UDEV_INCLUDE_DIRS})
 
-  target_link_libraries(
-    ${LIB_NAME} PUBLIC atom-error ${UDEV_LIBRARIES}
-                       ${LIBUSB_LIBRARIES})
+  target_link_libraries(${LIB_NAME} PUBLIC atom-error atom-log
+                                           ${UDEV_LIBRARIES})
+
+  # Add USB support if available
+  if(LIBUSB_FOUND)
+    target_include_directories(${LIB_NAME} PUBLIC ${LIBUSB_INCLUDE_DIRS})
+    target_link_libraries(${LIB_NAME} PUBLIC ${LIBUSB_LIBRARIES})
+    target_compile_definitions(${LIB_NAME} PUBLIC ATOM_SERIAL_HAS_USB)
+  endif()
+
+  if(spdlog_FOUND)
+    target_link_libraries(${LIB_NAME} PUBLIC spdlog::spdlog)
+  endif()
 endif()
 
 # Add Bluetooth support if available
@@ -76,34 +130,7 @@ elseif(UNIX)
   endif()
 endif()
 
-# Add module to global target list
-get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
-list(APPEND ATOM_MODULE_TARGETS ${LIB_NAME})
-set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")
-
-# Installation rules
-install(
-  TARGETS ${LIB_NAME}
-  EXPORT ${LIB_NAME}-targets
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-  INCLUDES
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-
+# Install headers
 install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/serial)
 
-# Add test executable (optional)
-option(BUILD_SERIAL_TESTS "Build serial communication tests" OFF)
-if(BUILD_SERIAL_TESTS)
-    add_executable(test_serial_cross_platform test_cross_platform.cpp)
-    target_link_libraries(test_serial_cross_platform PRIVATE ${LIB_NAME})
-    target_compile_features(test_serial_cross_platform PRIVATE cxx_std_20)
-
-    # Add test to CTest if available
-    if(CMAKE_TESTING_ENABLED)
-        add_test(NAME SerialCrossPlatformTest COMMAND test_serial_cross_platform)
-    endif()
-endif()
-
-message(STATUS "Serial module configured with cross-platform optimizations")
+message(STATUS "Serial module configured")

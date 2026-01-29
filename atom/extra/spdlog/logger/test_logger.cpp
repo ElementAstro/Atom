@@ -1,18 +1,18 @@
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <spdlog/sinks/ostream_sink.h>
+#include <spdlog/spdlog.h>
 #include <memory>
+#include <sstream>
 #include <thread>
 #include <vector>
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/ostream_sink.h>
-#include <sstream>
 #include "logger.h"
 
 using ::testing::_;
+using ::testing::InSequence;
+using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::StrictMock;
-using ::testing::NiceMock;
-using ::testing::InSequence;
 using namespace modern_log;
 
 // Mock classes for testing
@@ -20,15 +20,20 @@ class MockLogEventSystem : public LogEventSystem {
 public:
     // Only override if the base class method is virtual!
     MOCK_METHOD(void, emit, (LogEvent event, const std::any& data), ());
-    // subscribe and unsubscribe in LogEventSystem return EventId and bool, not void, and are not virtual
-    MOCK_METHOD(EventId, subscribe, (LogEvent event, EventCallback callback), ());
+    // subscribe and unsubscribe in LogEventSystem return EventId and bool, not
+    // void, and are not virtual
+    MOCK_METHOD(EventId, subscribe, (LogEvent event, EventCallback callback),
+                ());
     MOCK_METHOD(bool, unsubscribe, (LogEvent event, EventId event_id), ());
 };
 
 class MockLogFilter : public LogFilter {
 public:
     // Only override if the base class method is virtual!
-    MOCK_METHOD(bool, should_log, (const std::string& message, Level level, const LogContext& context), (const));
+    MOCK_METHOD(bool, should_log,
+                (const std::string& message, Level level,
+                 const LogContext& context),
+                (const));
     MOCK_METHOD(void, add_filter, (FilterFunc filter), ());
     MOCK_METHOD(void, clear_filters, (), ());
 };
@@ -39,7 +44,8 @@ public:
     MOCK_METHOD(bool, should_sample, (), ());
     MOCK_METHOD(size_t, get_dropped_count, (), (const));
     MOCK_METHOD(double, get_current_rate, (), (const));
-    MOCK_METHOD(void, set_strategy, (SamplingStrategy strategy, double rate), ());
+    MOCK_METHOD(void, set_strategy, (SamplingStrategy strategy, double rate),
+                ());
     MOCK_METHOD(void, reset_stats, (), ());
 };
 
@@ -48,7 +54,8 @@ protected:
     void SetUp() override {
         // Create an in-memory spdlog logger for testing
         log_stream = std::make_shared<std::ostringstream>();
-        auto sink = std::make_shared<spdlog::sinks::ostream_sink_mt>(*log_stream);
+        auto sink =
+            std::make_shared<spdlog::sinks::ostream_sink_mt>(*log_stream);
         spdlog_logger = std::make_shared<spdlog::logger>("test_logger", sink);
         spdlog_logger->set_level(spdlog::level::trace);
 
@@ -61,9 +68,7 @@ protected:
     std::unique_ptr<MockLogEventSystem> mock_event_system;
     MockLogEventSystem* event_system_ptr;
 
-    std::string getLogOutput() const {
-        return log_stream->str();
-    }
+    std::string getLogOutput() const { return log_stream->str(); }
 
     void clearLogOutput() {
         log_stream->str("");
@@ -107,7 +112,8 @@ TEST_F(LoggerTest, FormattedLogging) {
     logger.info("User {} logged in with status {}", "john", 200);
 
     std::string output = getLogOutput();
-    EXPECT_NE(output.find("User john logged in with status 200"), std::string::npos);
+    EXPECT_NE(output.find("User john logged in with status 200"),
+              std::string::npos);
 }
 
 TEST_F(LoggerTest, ContextEnrichment) {
@@ -116,9 +122,9 @@ TEST_F(LoggerTest, ContextEnrichment) {
     LogContext ctx;
     // FIX: Use chainable with_* methods instead of set_* methods
     ctx.with_user("user123")
-       .with_session("session456")
-       .with_trace("trace789")
-       .with_request("req000");
+        .with_session("session456")
+        .with_trace("trace789")
+        .with_request("req000");
 
     logger.with_context(ctx);
     logger.info("test message");
@@ -340,11 +346,10 @@ TEST_F(LoggerTest, ContextMerging) {
     Logger logger(spdlog_logger);
 
     LogContext ctx1;
-    ctx1.with_user("user1")
-        .with_session("session1");
+    ctx1.with_user("user1").with_session("session1");
 
     LogContext ctx2;
-    ctx2.with_user("user2")  // Should override
+    ctx2.with_user("user2")     // Should override
         .with_trace("trace1");  // Should add
 
     logger.with_context(ctx1).with_context(ctx2);
@@ -353,7 +358,7 @@ TEST_F(LoggerTest, ContextMerging) {
     std::string output = getLogOutput();
     EXPECT_NE(output.find("user=user2"), std::string::npos);  // Overridden
     EXPECT_NE(output.find("session=session1"), std::string::npos);  // Preserved
-    EXPECT_NE(output.find("trace=trace1"), std::string::npos);  // Added
+    EXPECT_NE(output.find("trace=trace1"), std::string::npos);      // Added
 }
 
 TEST_F(LoggerTest, ContextualLogging) {

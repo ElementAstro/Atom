@@ -7,12 +7,12 @@
 #include <vector>
 #include "../core/types.h"
 
-
 namespace modern_log {
 
 /**
  * @class LogEventSystem
- * @brief High-performance event system for logging with optimized callback management.
+ * @brief High-performance event system for logging with optimized callback
+ * management.
  *
  * This class implements a thread-safe event system for logging, allowing
  * components to subscribe to, unsubscribe from, and emit log-related events.
@@ -64,8 +64,9 @@ private:
         1};  ///< Counter for generating unique subscription IDs.
 
     // Performance optimization fields
-    std::atomic<size_t> total_subscribers_{0};  ///< Total number of active subscribers
-    mutable std::atomic<size_t> events_emitted_{0};  ///< Statistics counter
+    std::atomic<size_t> total_subscribers_{
+        0};  ///< Total number of active subscribers
+    mutable std::atomic<size_t> events_emitted_{0};     ///< Statistics counter
     mutable std::atomic<size_t> callbacks_invoked_{0};  ///< Statistics counter
 
 public:

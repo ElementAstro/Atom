@@ -33,7 +33,7 @@
 
 感谢您的贡献和支持！我们期待着您的代码、问题和建议，以使项目变得更好。
 
-# Contributing Guidelines
+## Contributing Guidelines
 
 Welcome to our project! Please read the following guidelines to ensure that your contributions align with the requirements of the project.
 

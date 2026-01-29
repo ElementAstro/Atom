@@ -4,11 +4,11 @@
 
 #include <atomic>
 #include <chrono>
+#include <exception>
+#include <future>
+#include <memory>
 #include <stdexcept>
 #include <thread>
-#include <memory>
-#include <future>
-#include <exception>
 
 #include "atom/async/async.hpp"
 
@@ -82,7 +82,12 @@ TEST_F(AsyncWorkerTest, StartAsyncTaskThrows) {
 
 TEST_F(AsyncWorkerTest, GetResultWithTimeoutSuccess) {
     AsyncWorker<int> worker;
-    worker.startAsync([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 7);
+    worker.startAsync(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        7);
     EXPECT_EQ(worker.getResult(100ms), 14);
 }
 
@@ -92,9 +97,9 @@ TEST_F(AsyncWorkerTest, GetResultWithTimeoutFailure) {
         std::this_thread::sleep_for(200ms);
         return 1;
     });
-    EXPECT_THROW({
-        [[maybe_unused]] auto result = worker.getResult(10ms);
-    }, TimeoutException);
+    EXPECT_THROW(
+        { [[maybe_unused]] auto result = worker.getResult(10ms); },
+        TimeoutException);
 }
 
 TEST_F(AsyncWorkerTest, CancelTask) {
@@ -114,7 +119,12 @@ TEST_F(AsyncWorkerTest, IsDoneAndIsActive) {
     EXPECT_FALSE(worker.isDone());
     EXPECT_FALSE(worker.isActive());
 
-    worker.startAsync([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 1);
+    worker.startAsync(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        1);
     EXPECT_FALSE(worker.isDone());  // May still be running
     EXPECT_TRUE(worker.isActive());
 
@@ -125,14 +135,24 @@ TEST_F(AsyncWorkerTest, IsDoneAndIsActive) {
 
 TEST_F(AsyncWorkerTest, ValidateSuccess) {
     AsyncWorker<int> worker;
-    worker.startAsync([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 10);
+    worker.startAsync(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        10);
     [[maybe_unused]] auto result = worker.getResult();
     EXPECT_TRUE(worker.validate([](int result) { return result == 20; }));
 }
 
 TEST_F(AsyncWorkerTest, ValidateFailure) {
     AsyncWorker<int> worker;
-    worker.startAsync([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 10);
+    worker.startAsync(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        10);
     [[maybe_unused]] auto result = worker.getResult();
     EXPECT_FALSE(worker.validate([](int result) { return result == 19; }));
 }
@@ -155,7 +175,12 @@ TEST_F(AsyncWorkerTest, SetCallback) {
     AsyncWorker<int> worker;
     std::atomic<int> callbackResult = 0;
     worker.setCallback([&](int result) { callbackResult = result; });
-    worker.startAsync([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 8);
+    worker.startAsync(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        8);
     worker.waitForCompletion();
     EXPECT_EQ(callbackResult, 16);
 }
@@ -172,7 +197,12 @@ TEST_F(AsyncWorkerTest, SetCallbackVoid) {
 TEST_F(AsyncWorkerTest, SetTimeoutAndCompletion) {
     AsyncWorker<int> worker;
     worker.setTimeout(1s);
-    worker.startAsync([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 10);  // Should complete within 1s
+    worker.startAsync(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        10);  // Should complete within 1s
     EXPECT_NO_THROW(worker.waitForCompletion());
     EXPECT_TRUE(worker.isDone());
 }
@@ -181,7 +211,8 @@ TEST_F(AsyncWorkerTest, SetTimeoutAndCompletionTimeout) {
     AsyncWorker<int> worker;
     worker.setTimeout(std::chrono::seconds(1));  // 1 second timeout
     worker.startAsync([]() {
-        std::this_thread::sleep_for(std::chrono::seconds(2));  // Task takes 2 seconds
+        std::this_thread::sleep_for(
+            std::chrono::seconds(2));  // Task takes 2 seconds
         return 1;
     });
     EXPECT_THROW(worker.waitForCompletion(), TimeoutException);
@@ -194,10 +225,13 @@ TEST_F(AsyncWorkerTest, SetPriorityAndAffinity) {
     worker.setPreferredCPU(0);  // Assuming CPU 0 exists
 
     // Hard to test directly without mocking OS calls, but ensure no crash
-    EXPECT_NO_THROW(worker.startAsync([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 1));
-    EXPECT_NO_THROW({
-        [[maybe_unused]] auto result = worker.getResult();
-    });
+    EXPECT_NO_THROW(worker.startAsync(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        1));
+    EXPECT_NO_THROW({ [[maybe_unused]] auto result = worker.getResult(); });
 }
 
 // Additional tests for comprehensive coverage
@@ -230,9 +264,9 @@ TEST_F(AsyncWorkerTest, StartAsyncAlreadyStarted) {
 TEST_F(AsyncWorkerTest, GetResultInvalidTask) {
     AsyncWorker<int> worker;
     // No task started, should throw
-    EXPECT_THROW({
-        [[maybe_unused]] auto result = worker.getResult();
-    }, std::invalid_argument);
+    EXPECT_THROW(
+        { [[maybe_unused]] auto result = worker.getResult(); },
+        std::invalid_argument);
 }
 
 TEST_F(AsyncWorkerTest, SetCallbackNull) {
@@ -242,7 +276,8 @@ TEST_F(AsyncWorkerTest, SetCallbackNull) {
 
 TEST_F(AsyncWorkerTest, SetTimeoutNegative) {
     AsyncWorker<int> worker;
-    EXPECT_THROW(worker.setTimeout(std::chrono::seconds(-1)), std::invalid_argument);
+    EXPECT_THROW(worker.setTimeout(std::chrono::seconds(-1)),
+                 std::invalid_argument);
 }
 
 TEST_F(AsyncWorkerTest, ValidateNullValidator) {
@@ -274,7 +309,12 @@ TEST_F(AsyncWorkerTest, AllPriorityLevels) {
 // AsyncWorkerManager Tests
 
 TEST_F(AsyncWorkerManagerTest, CreateWorkerInt) {
-    auto worker = manager_int.createWorker([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 10);
+    auto worker = manager_int.createWorker(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        10);
     ASSERT_TRUE(worker != nullptr);
     EXPECT_EQ(manager_int.size(), 1);
     EXPECT_EQ(worker->getResult(), 20);
@@ -302,8 +342,18 @@ TEST_F(AsyncWorkerManagerTest, CancelAll) {
 }
 
 TEST_F(AsyncWorkerManagerTest, AllDone) {
-    auto worker1 = manager_int.createWorker([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 1);
-    auto worker2 = manager_int.createWorker([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 2);
+    auto worker1 = manager_int.createWorker(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        1);
+    auto worker2 = manager_int.createWorker(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        2);
     EXPECT_FALSE(manager_int.allDone());
     [[maybe_unused]] auto result1 = worker1->getResult();
     [[maybe_unused]] auto result2 = worker2->getResult();
@@ -311,8 +361,18 @@ TEST_F(AsyncWorkerManagerTest, AllDone) {
 }
 
 TEST_F(AsyncWorkerManagerTest, WaitForAll) {
-    [[maybe_unused]] auto worker1 = manager_int.createWorker([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 1);
-    [[maybe_unused]] auto worker2 = manager_int.createWorker([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 2);
+    [[maybe_unused]] auto worker1 = manager_int.createWorker(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        1);
+    [[maybe_unused]] auto worker2 = manager_int.createWorker(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        2);
     EXPECT_NO_THROW(manager_int.waitForAll());
     EXPECT_TRUE(manager_int.allDone());
 }
@@ -341,7 +401,12 @@ TEST_F(AsyncWorkerManagerTest, WaitForAllWithTimeoutFailure) {
 }
 
 TEST_F(AsyncWorkerManagerTest, IsDoneSpecificWorker) {
-    auto worker = manager_int.createWorker([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 1);
+    auto worker = manager_int.createWorker(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        1);
     EXPECT_FALSE(manager_int.isDone(worker));
     [[maybe_unused]] auto result = worker->getResult();
     EXPECT_TRUE(manager_int.isDone(worker));
@@ -359,14 +424,29 @@ TEST_F(AsyncWorkerManagerTest, CancelSpecificWorker) {
 
 TEST_F(AsyncWorkerManagerTest, Size) {
     EXPECT_EQ(manager_int.size(), 0);
-    [[maybe_unused]] auto worker1 = manager_int.createWorker([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 1);
+    [[maybe_unused]] auto worker1 = manager_int.createWorker(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        1);
     EXPECT_EQ(manager_int.size(), 1);
-    [[maybe_unused]] auto worker2 = manager_int.createWorker([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 2);
+    [[maybe_unused]] auto worker2 = manager_int.createWorker(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        2);
     EXPECT_EQ(manager_int.size(), 2);
 }
 
 TEST_F(AsyncWorkerManagerTest, PruneCompletedWorkers) {
-    auto worker1 = manager_int.createWorker([](int x) { std::this_thread::sleep_for(10ms); return x * 2; }, 1);
+    auto worker1 = manager_int.createWorker(
+        [](int x) {
+            std::this_thread::sleep_for(10ms);
+            return x * 2;
+        },
+        1);
     auto worker2 = manager_int.createWorker([]() {
         std::this_thread::sleep_for(50ms);
         return 2;
@@ -436,9 +516,7 @@ TEST_F(AsyncWorkerTest, AsyncRetryImplSuccess) {
         },
         3, 1ms, BackoffStrategy::FIXED, 100ms,
         [](int res) { EXPECT_EQ(res, 100); },
-        [](const std::exception&) { FAIL() << "Should not throw"; },
-        []() {}
-    );
+        [](const std::exception&) { FAIL() << "Should not throw"; }, []() {});
     EXPECT_EQ(result, 100);
     EXPECT_EQ(callCount, 1);
 }
@@ -456,27 +534,27 @@ TEST_F(AsyncWorkerTest, AsyncRetryImplFailureThenSuccess) {
         3, 1ms, BackoffStrategy::FIXED, 100ms,
         [](int res) { EXPECT_EQ(res, 200); },
         [](const std::exception&) { SUCCEED(); },  // Expect exception
-        []() {}
-    );
+        []() {});
     EXPECT_EQ(result, 200);
     EXPECT_EQ(callCount, 2);
 }
 
 TEST_F(AsyncWorkerTest, AsyncRetryImplAllAttemptsFail) {
     int callCount = 0;
-    EXPECT_THROW({
-        asyncRetryImpl(
-            [&]() -> int {
-                callCount++;
-                throw std::runtime_error("Always fails");
-                return 0;  // Never reached
-            },
-            3, 1ms, BackoffStrategy::FIXED, 100ms,
-            [](int) { FAIL() << "Should not succeed"; },
-            [](const std::exception&) { SUCCEED(); },  // Expect exception
-            []() {}
-        );
-    }, std::runtime_error);
+    EXPECT_THROW(
+        {
+            asyncRetryImpl(
+                [&]() -> int {
+                    callCount++;
+                    throw std::runtime_error("Always fails");
+                    return 0;  // Never reached
+                },
+                3, 1ms, BackoffStrategy::FIXED, 100ms,
+                [](int) { FAIL() << "Should not succeed"; },
+                [](const std::exception&) { SUCCEED(); },  // Expect exception
+                []() {});
+        },
+        std::runtime_error);
     EXPECT_EQ(callCount, 3);
 }
 
@@ -565,9 +643,7 @@ TEST_F(AsyncWorkerTest, AsyncRetryLinearBackoff) {
         },
         5, 1ms, BackoffStrategy::LINEAR, 100ms,
         [](int res) { EXPECT_EQ(res, 300); },
-        [](const std::exception&) { /* Expected */ },
-        []() {}
-    );
+        [](const std::exception&) { /* Expected */ }, []() {});
     EXPECT_EQ(result, 300);
     EXPECT_EQ(callCount, 3);
 }
@@ -584,9 +660,7 @@ TEST_F(AsyncWorkerTest, AsyncRetryExponentialBackoff) {
         },
         3, 1ms, BackoffStrategy::EXPONENTIAL, 100ms,
         [](int res) { EXPECT_EQ(res, 400); },
-        [](const std::exception&) { /* Expected */ },
-        []() {}
-    );
+        [](const std::exception&) { /* Expected */ }, []() {});
     EXPECT_EQ(result, 400);
     EXPECT_EQ(callCount, 2);
 }
@@ -644,7 +718,8 @@ TEST_F(AsyncWorkerTest, VoidWorkerSetCallbackNull) {
 
 TEST_F(AsyncWorkerTest, VoidWorkerSetTimeoutNegative) {
     AsyncWorker<void> worker;
-    EXPECT_THROW(worker.setTimeout(std::chrono::seconds(-1)), std::invalid_argument);
+    EXPECT_THROW(worker.setTimeout(std::chrono::seconds(-1)),
+                 std::invalid_argument);
 }
 
 TEST_F(AsyncWorkerTest, VoidWorkerValidateNullValidator) {
@@ -700,9 +775,7 @@ TEST_F(AsyncWorkerTest, VoidWorkerStartAsyncWithNullFunction) {
 
 TEST_F(AsyncWorkerTest, CallbackExecutionFailure) {
     AsyncWorker<int> worker;
-    worker.setCallback([](int) {
-        throw std::runtime_error("Callback error");
-    });
+    worker.setCallback([](int) { throw std::runtime_error("Callback error"); });
     worker.startAsync([]() { return 42; });
 
     // waitForCompletion should throw due to callback failure
@@ -711,9 +784,7 @@ TEST_F(AsyncWorkerTest, CallbackExecutionFailure) {
 
 TEST_F(AsyncWorkerTest, VoidWorkerCallbackExecutionFailure) {
     AsyncWorker<void> worker;
-    worker.setCallback([]() {
-        throw std::runtime_error("Callback error");
-    });
+    worker.setCallback([]() { throw std::runtime_error("Callback error"); });
     worker.startAsync(voidTask);
 
     // waitForCompletion should throw due to callback failure
@@ -722,32 +793,31 @@ TEST_F(AsyncWorkerTest, VoidWorkerCallbackExecutionFailure) {
 
 TEST_F(AsyncWorkerTest, AsyncRetryInvalidParameters) {
     // Test with zero attempts
-    EXPECT_THROW({
-        asyncRetryImpl(
-            []() { return 42; },
-            0, 1ms, BackoffStrategy::FIXED, 100ms,
-            [](int) {},
-            [](const std::exception&) {},
-            []() {}
-        );
-    }, std::invalid_argument);
+    EXPECT_THROW(
+        {
+            asyncRetryImpl([]() { return 42; }, 0, 1ms, BackoffStrategy::FIXED,
+                           100ms, [](int) {}, [](const std::exception&) {},
+                           []() {});
+        },
+        std::invalid_argument);
 }
 
 TEST_F(AsyncWorkerTest, AsyncRetryTaskInvalidParameters) {
     // Test with zero attempts
-    EXPECT_THROW({
-        auto task = asyncRetryTask(
-            []() { return 42; },
-            0, 1ms, BackoffStrategy::FIXED);
-        [[maybe_unused]] auto result = task.await_result();
-    }, std::invalid_argument);
+    EXPECT_THROW(
+        {
+            auto task = asyncRetryTask([]() { return 42; }, 0, 1ms,
+                                       BackoffStrategy::FIXED);
+            [[maybe_unused]] auto result = task.await_result();
+        },
+        std::invalid_argument);
 }
 
 TEST_F(AsyncWorkerManagerTest, IsDoneWithNullWorker) {
     std::shared_ptr<AsyncWorker<int>> nullWorker = nullptr;
-    EXPECT_THROW({
-        [[maybe_unused]] auto done = manager_int.isDone(nullWorker);
-    }, std::invalid_argument);
+    EXPECT_THROW(
+        { [[maybe_unused]] auto done = manager_int.isDone(nullWorker); },
+        std::invalid_argument);
 }
 
 TEST_F(AsyncWorkerManagerTest, CancelWithNullWorker) {
@@ -759,10 +829,12 @@ TEST_F(AsyncWorkerManagerTest, CancelWithNullWorker) {
 TEST_F(AsyncWorkerTest, DestructorCancelsRunningTask) {
     {
         AsyncWorker<int> worker;
-        worker.startAsync([](int x) {
-            std::this_thread::sleep_for(100ms);
-            return x * 2;
-        }, 21);
+        worker.startAsync(
+            [](int x) {
+                std::this_thread::sleep_for(100ms);
+                return x * 2;
+            },
+            21);
         // Worker goes out of scope, destructor should cancel the task
     }
     // If we reach here without hanging, the destructor worked correctly

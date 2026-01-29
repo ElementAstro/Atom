@@ -1,79 +1,96 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom-search
   VERSION 1.0.0
   LANGUAGES C CXX)
 
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
+
 # Sources
-set(SOURCES search.cpp sqlite.cpp)
+set(SOURCES
+    # Core search functionality (modular components)
+    core/document.cpp
+    core/tokenizer.cpp
+    core/scoring.cpp
+    core/search_engine.cpp
+    # Database backends
+    database/sqlite.cpp)
 
 # Headers
-set(HEADERS cache.hpp search.hpp sqlite.hpp)
+set(HEADERS
+    # Backwards compatibility headers (in root)
+    cache.hpp
+    lru.hpp
+    ttl.hpp
+    mysql.hpp
+    sqlite.hpp
+    search.hpp
+    # Core module headers (modular components)
+    core/types.hpp
+    core/exceptions.hpp
+    core/document.hpp
+    core/tokenizer.hpp
+    core/scoring.hpp
+    core/search_engine.hpp
+    core/search.hpp
+    # Database headers (modular components)
+    database/types.hpp
+    database/sqlite.hpp
+    # Cache headers (modular components)
+    cache/types.hpp
+    cache/exceptions.hpp
+    cache/resource_cache.hpp
+    cache/lru_cache.hpp
+    cache/ttl_cache.hpp
+    cache/cache.hpp)
 
 # Dependencies
-set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT} ${SQLite3_LIBRARIES})
+find_package(spdlog CONFIG REQUIRED)
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(MARIADB libmariadb)
+if(MSVC)
+  find_package(SQLite3 QUIET)
+  if(NOT SQLite3_FOUND)
+    message(
+      WARNING "SQLite3 not found for MSVC - database features will be disabled")
+  endif()
+else()
+  find_package(SQLite3 REQUIRED)
+endif()
+
+# Always use compiled spdlog library to avoid ODR violations
+set(LIBS spdlog::spdlog ${CMAKE_THREAD_LIBS_INIT})
+if(SQLite3_FOUND)
+  list(APPEND LIBS ${SQLite3_LIBRARIES})
+endif()
+
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+  pkg_check_modules(MARIADB libmariadb)
+endif()
 if(MARIADB_FOUND)
   message(STATUS "Found libmariadb: ${MARIADB_VERSION}")
-  list(APPEND SOURCES mysql.cpp)
-  list(APPEND HEADERS mysql.hpp)
+  list(APPEND SOURCES database/mysql.cpp)
+  list(APPEND HEADERS database/mysql.hpp)
   list(APPEND LIBS ${MARIADB_LIBRARIES})
   include_directories(${MARIADB_INCLUDE_DIRS})
 else()
   message(STATUS "libmariadb not found, mysql support will be disabled.")
 endif()
-pkg_check_modules(PostgreSQL libpq)
-if(PostgreSQL_FOUND)
-  message(STATUS "Found libpq: ${PostgreSQL_VERSION}")
-  list(APPEND SOURCES pgsql.cpp)
-  list(APPEND HEADERS pgsql.hpp)
-  list(APPEND LIBS ${PostgreSQL_LIBRARIES})
-  include_directories(${PostgreSQL_INCLUDE_DIRS})
-else()
-  message(STATUS "libpq not found, PostgreSQL support will be disabled.")
-endif()
 
-# Build Object Library
-pkg_check_modules(HIREDIS hiredis)
-if(HIREDIS_FOUND)
-  message(STATUS "Found hiredis: ${HIREDIS_VERSION}")
-  list(APPEND SOURCES redis.cpp)
-  list(APPEND HEADERS redis.hpp)
-  list(APPEND LIBS ${HIREDIS_LIBRARIES})
-  include_directories(${HIREDIS_INCLUDE_DIRS})
-else()
-  message(STATUS "hiredis not found, Redis support will be disabled.")
-endif()
-add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
-pkg_check_modules(MONGOCXX libmongocxx)
-if(MONGOCXX_FOUND)
-  message(STATUS "Found libmongocxx: ${MONGOCXX_VERSION}")
-  list(APPEND SOURCES mongodb.cpp)
-  list(APPEND HEADERS mongodb.hpp)
-  list(APPEND LIBS ${MONGOCXX_LIBRARIES})
-  include_directories(${MONGOCXX_INCLUDE_DIRS})
-else()
-  message(STATUS "libmongocxx not found, MongoDB support will be disabled.")
-endif()
+# Create library target
+add_library(atom-search STATIC ${SOURCES} ${HEADERS})
+add_library(atom::search ALIAS atom-search)
 
-target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
+# Configure module using standardized function
+atom_configure_module(atom-search)
 
-# Build Static Library
-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
-target_include_directories(${PROJECT_NAME} PUBLIC .)
+# Ensure spdlog is used as compiled library
+target_compile_definitions(atom-search PRIVATE SPDLOG_COMPILED_LIB
+                                               SPDLOG_FMT_EXTERNAL)
 
-set_target_properties(
-  ${PROJECT_NAME}
-  PROPERTIES VERSION ${PROJECT_VERSION}
-             SOVERSION ${PROJECT_VERSION_MAJOR}
-             OUTPUT_NAME ${PROJECT_NAME})
+# Link module-specific dependencies
+target_link_libraries(atom-search PRIVATE ${LIBS})
 
-# Install rules
-install(TARGETS ${PROJECT_NAME} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-
-# Register this module as an Atom module
-set_property(GLOBAL APPEND PROPERTY ATOM_MODULE_TARGETS ${PROJECT_NAME})
+# Install headers
+install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/search)

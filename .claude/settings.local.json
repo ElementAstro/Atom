@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv venv:*)",
+      "Bash(source .venv/Scripts/activate)",
+      "Bash(uv pip install:*)",
+      "Bash(echo:*)",
+      "Bash(where:*)",
+      "Bash(cmake --preset:*)",
+      "Bash(cmake --build:*)",
+      "Bash(tee:*)",
+      "Bash(cmake:*)",
+      "Bash(pacman -S:*)",
+      "Bash(test:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -347,8 +347,8 @@ auto StackTrace::processFrame(void* frame, int frameIndex) const -> FrameInfo {
     DWORD64 displacement = 0;
     frameInfo.functionName = "<unknown function>";
     if (SymFromAddr(GetCurrentProcess(), address, &displacement, symbol)) {
-        frameInfo.functionName =
-            atom::meta::DemangleHelper::demangle(std::string("_") + symbol->Name);
+        frameInfo.functionName = atom::meta::DemangleHelper::demangle(
+            std::string("_") + symbol->Name);
     }
 
     IMAGEHLP_LINE64 line;

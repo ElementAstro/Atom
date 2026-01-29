@@ -1,7 +1,7 @@
 #include "atom/extra/beast/http.hpp"
 
 #include <gtest/gtest.h>
-#include <nlohmann/json.hpp>
+#include <atomic>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
@@ -19,7 +19,6 @@ namespace http = beast::http;
 namespace net = boost::asio;
 using tcp = boost::asio::ip::tcp;
 namespace fs = std::filesystem;
-using json = nlohmann::json;
 
 class HttpClientTest : public ::testing::Test {
 protected:
@@ -66,69 +65,124 @@ protected:
         ioc_.reset();
     }
 
-    // Helper method to run a mock HTTP server
+    // Helper method to run a mock HTTP server with timeout protection
     void runMockServer() {
         try {
             auto const address = net::ip::make_address("127.0.0.1");
             tcp::acceptor acceptor(*ioc_, {address, 8080});
             server_running_ = true;
 
+            // Set acceptor to non-blocking mode
+            acceptor.non_blocking(true);
+
             while (server_running_) {
                 tcp::socket socket(*ioc_);
-                acceptor.accept(socket);
 
-                beast::flat_buffer buffer;
-                http::request<http::string_body> req;
-                http::read(socket, buffer, req);
+                // Use async_accept with timeout
+                std::atomic<bool> accept_completed{false};
+                beast::error_code accept_ec;
 
-                http::response<http::string_body> res{http::status::ok,
-                                                      req.version()};
-                res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-                res.set(http::field::content_type, "text/plain");
+                acceptor.async_accept(socket, [&](beast::error_code ec) {
+                    accept_ec = ec;
+                    accept_completed = true;
+                });
 
-                // Mock different endpoints
-                if (req.target() == "/get") {
-                    res.body() = "GET response";
-                } else if (req.target() == "/post") {
-                    res.body() = "POST response: " + req.body();
-                } else if (req.target() == "/json") {
-                    res.set(http::field::content_type, "application/json");
-                    res.body() =
-                        "{\"status\":\"success\",\"message\":\"JSON "
-                        "response\"}";
-                } else if (req.target() == "/upload") {
-                    res.body() = "File uploaded successfully";
-                } else if (req.target() == "/download") {
-                    res.body() = "This is content for download test";
-                } else if (req.target() == "/retry") {
-                    static int retry_count = 0;
-                    if (retry_count++ < 2) {
-                        res.result(http::status::service_unavailable);
-                        res.body() = "Service temporarily unavailable";
-                    } else {
-                        res.result(http::status::ok);
-                        res.body() = "Success after retries";
-                        retry_count = 0;
+                // Wait for accept with timeout
+                auto start_time = std::chrono::steady_clock::now();
+                while (!accept_completed && server_running_) {
+                    ioc_->poll();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+                    // Timeout after 1 second
+                    if (std::chrono::steady_clock::now() - start_time >
+                        std::chrono::seconds(1)) {
+                        break;
                     }
-                } else if (req.target() == "/timeout") {
-                    // Simulate timeout by delaying the response
-                    std::this_thread::sleep_for(std::chrono::seconds(2));
-                    res.body() = "Response after delay";
-                } else if (req.target() == "/error") {
-                    res.result(http::status::internal_server_error);
-                    res.body() = "Internal server error";
-                } else {
-                    res.result(http::status::not_found);
-                    res.body() = "Not found";
                 }
 
-                res.prepare_payload();
-                http::write(socket, res);
+                if (!accept_completed || accept_ec) {
+                    continue;
+                }
 
-                beast::error_code ec;
-                socket.shutdown(tcp::socket::shutdown_both, ec);
-                if (ec && ec != beast::errc::not_connected) {
-                    // Ignore this error
+                // Handle request with timeout protection
+                try {
+                    beast::flat_buffer buffer;
+                    http::request<http::string_body> req;
+
+                    // Note: Socket timeout handling will be done at higher
+                    // level
+
+                    beast::error_code read_ec;
+                    http::read(socket, buffer, req, read_ec);
+
+                    if (read_ec) {
+                        continue;
+                    }
+
+                    http::response<http::string_body> res{http::status::ok,
+                                                          req.version()};
+                    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+                    res.set(http::field::content_type, "text/plain");
+
+                    // Mock different endpoints
+                    if (req.target() == "/get") {
+                        res.body() = "GET response";
+                    } else if (req.target() == "/post") {
+                        res.body() = "POST response: " + req.body();
+                    } else if (req.target() == "/json") {
+                        res.set(http::field::content_type, "application/json");
+                        res.body() =
+                            "{\"status\":\"success\",\"message\":\"JSON "
+                            "response\"}";
+                    } else if (req.target() == "/upload") {
+                        res.body() = "File uploaded successfully";
+                    } else if (req.target() == "/download") {
+                        res.body() = "This is content for download test";
+                    } else if (req.target() == "/retry") {
+                        // Use a more robust counter that works across multiple
+                        // requests
+                        static std::atomic<int> retry_count{0};
+                        int current_count = retry_count.fetch_add(1);
+
+                        // Fail the first 2 attempts (attempts 0 and 1), succeed
+                        // on attempt 2
+                        if (current_count < 2) {
+                            res.result(http::status::service_unavailable);
+                            res.body() = "Service temporarily unavailable";
+                        } else {
+                            res.result(http::status::ok);
+                            res.body() = "Success after retries";
+                            // Reset counter for next test run
+                            retry_count.store(0);
+                        }
+                    } else if (req.target() == "/timeout") {
+                        // Simulate timeout with delay longer than client
+                        // timeout (1 second)
+                        std::this_thread::sleep_for(
+                            std::chrono::milliseconds(1500));
+                        res.body() = "Response after delay";
+                    } else if (req.target() == "/error") {
+                        res.result(http::status::internal_server_error);
+                        res.body() = "Internal server error";
+                    } else {
+                        res.result(http::status::not_found);
+                        res.body() = "Not found";
+                    }
+
+                    res.prepare_payload();
+                    http::write(socket, res);
+
+                    beast::error_code ec;
+                    socket.shutdown(tcp::socket::shutdown_both, ec);
+                    if (ec && ec != beast::errc::not_connected) {
+                        // Ignore this error
+                    }
+                } catch (const std::exception& e) {
+                    // Handle request processing errors gracefully
+                    if (server_running_) {
+                        std::cerr << "Request processing error: " << e.what()
+                                  << std::endl;
+                    }
                 }
             }
         } catch (const std::exception& e) {
@@ -139,6 +193,7 @@ protected:
         }
     }
 
+protected:
     std::unique_ptr<net::io_context> ioc_;
     std::unique_ptr<HttpClient> client_;
     std::thread server_thread_;
@@ -181,17 +236,12 @@ TEST_F(HttpClientTest, CustomHeaders) {
 // Test JSON request
 TEST_F(HttpClientTest, JsonRequest) {
     json req_body = {{"key1", "value1"}, {"key2", 42}};
-    std::string json_string = req_body.dump();
 
-    auto response = client_->request(http::verb::post, test_host, test_port,
-                                     "/json", 11, "application/json", json_string);
+    auto response = client_->jsonRequest(http::verb::post, test_host, test_port,
+                                         "/json", req_body);
 
-    EXPECT_EQ(response.result(), http::status::ok);
-
-    // Parse the response body as JSON
-    json response_json = json::parse(response.body());
-    EXPECT_EQ(response_json["status"], "success");
-    EXPECT_EQ(response_json["message"], "JSON response");
+    EXPECT_EQ(response["status"], "success");
+    EXPECT_EQ(response["message"], "JSON response");
 }
 
 // Test timeout setting
@@ -327,7 +377,4 @@ TEST_F(HttpClientTest, InvalidValues) {
     EXPECT_THROW(client_->setDefaultHeader("", "value"), std::invalid_argument);
 }
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+// Main function provided by GTest::Main

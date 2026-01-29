@@ -1,6 +1,7 @@
 #ifndef ATOM_MEMORY_SHORT_ALLOC_HPP
 #define ATOM_MEMORY_SHORT_ALLOC_HPP
 
+#include <immintrin.h>  // For memory prefetching
 #include <array>
 #include <atomic>
 #include <cassert>
@@ -18,7 +19,6 @@
 #include <string>
 #include <type_traits>
 #include <unordered_map>
-#include <immintrin.h>  // For memory prefetching
 
 // Cache line size for alignment optimizations
 #ifndef CACHE_LINE_SIZE
@@ -26,15 +26,7 @@
 #endif
 
 // 跨平台支持
-#if defined(_WIN32) || defined(_WIN64)
-#define ATOM_PLATFORM_WINDOWS
-#elif defined(__APPLE__)
-#define ATOM_PLATFORM_APPLE
-#elif defined(__linux__)
-#define ATOM_PLATFORM_LINUX
-#elif defined(__unix__)
-#define ATOM_PLATFORM_UNIX
-#endif
+#include "atom/macro.hpp"
 
 // 线程支持
 #ifdef ATOM_USE_BOOST
@@ -45,8 +37,6 @@
 #include <mutex>
 #include <shared_mutex>
 #endif
-
-#include "atom/macro.hpp"
 
 // 确定是否启用内存追踪
 #if !defined(ATOM_MEMORY_STATS_ENABLED)
@@ -137,7 +127,8 @@ enum class AllocationStrategy {
     WorstFit   // 最大的空闲块
 };
 
-// Enhanced memory statistics collector with advanced debugging and performance features
+// Enhanced memory statistics collector with advanced debugging and performance
+// features
 class MemoryStats {
 public:
     struct alignas(CACHE_LINE_SIZE) ArenaStats {
@@ -150,24 +141,34 @@ public:
         std::atomic<size_t> failedAllocations{0};
 
         // Advanced performance metrics
-        std::atomic<size_t> fragmentationEvents{0};    ///< Number of fragmentation events
-        std::atomic<size_t> coalescingOperations{0};   ///< Number of block coalescing operations
-        std::atomic<size_t> splitOperations{0};        ///< Number of block split operations
-        std::atomic<size_t> memoryLeaks{0};            ///< Detected memory leaks
-        std::atomic<size_t> corruptionDetections{0};   ///< Memory corruption detections
-        std::atomic<size_t> doubleFreesDetected{0};    ///< Double free detections
+        std::atomic<size_t> fragmentationEvents{
+            0};  ///< Number of fragmentation events
+        std::atomic<size_t> coalescingOperations{
+            0};  ///< Number of block coalescing operations
+        std::atomic<size_t> splitOperations{
+            0};  ///< Number of block split operations
+        std::atomic<size_t> memoryLeaks{0};  ///< Detected memory leaks
+        std::atomic<size_t> corruptionDetections{
+            0};  ///< Memory corruption detections
+        std::atomic<size_t> doubleFreesDetected{0};  ///< Double free detections
 
         // Timing statistics (in nanoseconds)
-        std::atomic<uint64_t> totalAllocationTime{0};  ///< Total allocation time
-        std::atomic<uint64_t> totalDeallocationTime{0}; ///< Total deallocation time
-        std::atomic<uint64_t> maxAllocationTime{0};    ///< Maximum allocation time
-        std::atomic<uint64_t> maxDeallocationTime{0};  ///< Maximum deallocation time
+        std::atomic<uint64_t> totalAllocationTime{
+            0};  ///< Total allocation time
+        std::atomic<uint64_t> totalDeallocationTime{
+            0};  ///< Total deallocation time
+        std::atomic<uint64_t> maxAllocationTime{
+            0};  ///< Maximum allocation time
+        std::atomic<uint64_t> maxDeallocationTime{
+            0};  ///< Maximum deallocation time
 
         // Strategy-specific metrics
-        std::atomic<size_t> firstFitAttempts{0};       ///< First-fit strategy attempts
-        std::atomic<size_t> bestFitAttempts{0};        ///< Best-fit strategy attempts
-        std::atomic<size_t> worstFitAttempts{0};       ///< Worst-fit strategy attempts
-        std::atomic<size_t> strategyMisses{0};         ///< Strategy allocation misses
+        std::atomic<size_t> firstFitAttempts{
+            0};  ///< First-fit strategy attempts
+        std::atomic<size_t> bestFitAttempts{0};  ///< Best-fit strategy attempts
+        std::atomic<size_t> worstFitAttempts{
+            0};                                 ///< Worst-fit strategy attempts
+        std::atomic<size_t> strategyMisses{0};  ///< Strategy allocation misses
 
         void recordAllocation(size_t bytes) {
             totalAllocations++;
@@ -224,21 +225,26 @@ public:
 
         void recordAllocationTime(uint64_t duration) {
             totalAllocationTime.fetch_add(duration, std::memory_order_relaxed);
-            uint64_t current_max = maxAllocationTime.load(std::memory_order_relaxed);
+            uint64_t current_max =
+                maxAllocationTime.load(std::memory_order_relaxed);
             while (duration > current_max &&
-                   !maxAllocationTime.compare_exchange_weak(current_max, duration,
-                                                           std::memory_order_relaxed)) {
-                // Keep trying until we successfully update or find a larger value
+                   !maxAllocationTime.compare_exchange_weak(
+                       current_max, duration, std::memory_order_relaxed)) {
+                // Keep trying until we successfully update or find a larger
+                // value
             }
         }
 
         void recordDeallocationTime(uint64_t duration) {
-            totalDeallocationTime.fetch_add(duration, std::memory_order_relaxed);
-            uint64_t current_max = maxDeallocationTime.load(std::memory_order_relaxed);
+            totalDeallocationTime.fetch_add(duration,
+                                            std::memory_order_relaxed);
+            uint64_t current_max =
+                maxDeallocationTime.load(std::memory_order_relaxed);
             while (duration > current_max &&
-                   !maxDeallocationTime.compare_exchange_weak(current_max, duration,
-                                                             std::memory_order_relaxed)) {
-                // Keep trying until we successfully update or find a larger value
+                   !maxDeallocationTime.compare_exchange_weak(
+                       current_max, duration, std::memory_order_relaxed)) {
+                // Keep trying until we successfully update or find a larger
+                // value
             }
         }
 
@@ -274,34 +280,59 @@ public:
         }
 
         void reset() {
-            totalAllocations = 0; currentAllocations = 0; totalBytesAllocated = 0;
-            peakBytesAllocated = 0; currentBytesAllocated = 0; failedAllocations = 0;
-            fragmentationEvents = 0; coalescingOperations = 0; splitOperations = 0;
-            memoryLeaks = 0; corruptionDetections = 0; doubleFreesDetected = 0;
-            totalAllocationTime = 0; totalDeallocationTime = 0; maxAllocationTime = 0;
-            maxDeallocationTime = 0; firstFitAttempts = 0; bestFitAttempts = 0;
-            worstFitAttempts = 0; strategyMisses = 0;
+            totalAllocations = 0;
+            currentAllocations = 0;
+            totalBytesAllocated = 0;
+            peakBytesAllocated = 0;
+            currentBytesAllocated = 0;
+            failedAllocations = 0;
+            fragmentationEvents = 0;
+            coalescingOperations = 0;
+            splitOperations = 0;
+            memoryLeaks = 0;
+            corruptionDetections = 0;
+            doubleFreesDetected = 0;
+            totalAllocationTime = 0;
+            totalDeallocationTime = 0;
+            maxAllocationTime = 0;
+            maxDeallocationTime = 0;
+            firstFitAttempts = 0;
+            bestFitAttempts = 0;
+            worstFitAttempts = 0;
+            strategyMisses = 0;
         }
 
         // Performance calculation helpers
         double getAverageAllocationTime() const noexcept {
             size_t count = totalAllocations.load(std::memory_order_relaxed);
-            return count > 0 ? static_cast<double>(totalAllocationTime.load()) / count : 0.0;
+            return count > 0
+                       ? static_cast<double>(totalAllocationTime.load()) / count
+                       : 0.0;
         }
 
         double getAverageDeallocationTime() const noexcept {
             size_t count = totalAllocations.load() - currentAllocations.load();
-            return count > 0 ? static_cast<double>(totalDeallocationTime.load()) / count : 0.0;
+            return count > 0
+                       ? static_cast<double>(totalDeallocationTime.load()) /
+                             count
+                       : 0.0;
         }
 
         double getFragmentationRatio() const noexcept {
             size_t total_ops = totalAllocations.load();
-            return total_ops > 0 ? static_cast<double>(fragmentationEvents.load()) / total_ops : 0.0;
+            return total_ops > 0
+                       ? static_cast<double>(fragmentationEvents.load()) /
+                             total_ops
+                       : 0.0;
         }
 
         double getFailureRatio() const noexcept {
-            size_t total_attempts = totalAllocations.load() + failedAllocations.load();
-            return total_attempts > 0 ? static_cast<double>(failedAllocations.load()) / total_attempts : 0.0;
+            size_t total_attempts =
+                totalAllocations.load() + failedAllocations.load();
+            return total_attempts > 0
+                       ? static_cast<double>(failedAllocations.load()) /
+                             total_attempts
+                       : 0.0;
         }
 
         double getMemoryEfficiency() const noexcept {
@@ -317,24 +348,24 @@ public:
     }
 };
 
-
-
 /**
  * @brief Configuration for Arena optimizations and debugging
  */
 struct ArenaConfig {
-    bool enable_stats{true};              ///< Enable performance statistics
-    bool enable_debugging{true};          ///< Enable debugging features
-    bool enable_prefetching{true};        ///< Enable memory prefetching
-    bool enable_coalescing{true};         ///< Enable automatic block coalescing
-    bool enable_leak_detection{true};     ///< Enable memory leak detection
-    bool enable_corruption_detection{true}; ///< Enable memory corruption detection
-    size_t coalescing_threshold{64};      ///< Minimum size for coalescing
-    size_t prefetch_distance{1};          ///< Number of blocks to prefetch ahead
+    bool enable_stats{true};           ///< Enable performance statistics
+    bool enable_debugging{true};       ///< Enable debugging features
+    bool enable_prefetching{true};     ///< Enable memory prefetching
+    bool enable_coalescing{true};      ///< Enable automatic block coalescing
+    bool enable_leak_detection{true};  ///< Enable memory leak detection
+    bool enable_corruption_detection{
+        true};                        ///< Enable memory corruption detection
+    size_t coalescing_threshold{64};  ///< Minimum size for coalescing
+    size_t prefetch_distance{1};      ///< Number of blocks to prefetch ahead
 };
 
 /**
- * @brief Enhanced fixed-size memory arena with advanced allocation strategies and debugging
+ * @brief Enhanced fixed-size memory arena with advanced allocation strategies
+ * and debugging
  *
  * Features:
  * - Multiple allocation strategies (FirstFit, BestFit, WorstFit)
@@ -408,8 +439,9 @@ private:
 #endif
 
     bool isInitialized_{false};
-    ArenaConfig config_;                                ///< Configuration options
-    std::unordered_map<void*, size_t> allocation_map_; ///< Track allocations for leak detection
+    ArenaConfig config_;  ///< Configuration options
+    std::unordered_map<void*, size_t>
+        allocation_map_;  ///< Track allocations for leak detection
 
 public:
     explicit Arena(const ArenaConfig& config = ArenaConfig{}) ATOM_NOEXCEPT
@@ -442,7 +474,8 @@ public:
     }
 
     /**
-     * @brief Enhanced memory allocation with performance monitoring and debugging
+     * @brief Enhanced memory allocation with performance monitoring and
+     * debugging
      *
      * @param size 要分配的字节数
      * @return void* 指向已分配内存的指针
@@ -452,9 +485,10 @@ public:
         if (size == 0)
             return nullptr;
 
-        auto start_time = config_.enable_stats ?
-            std::chrono::high_resolution_clock::now() :
-            std::chrono::high_resolution_clock::time_point{};
+        auto start_time =
+            config_.enable_stats
+                ? std::chrono::high_resolution_clock::now()
+                : std::chrono::high_resolution_clock::time_point{};
 
         const std::size_t alignedSize = alignSize(size);
 
@@ -469,8 +503,10 @@ public:
         // Record timing statistics
         if (config_.enable_stats && result != nullptr) {
             auto end_time = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                end_time - start_time).count();
+            auto duration =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(end_time -
+                                                                     start_time)
+                    .count();
 #if ATOM_MEMORY_STATS_ENABLED
             stats_.recordAllocationTime(static_cast<uint64_t>(duration));
             stats_.recordStrategyAttempt(Strategy);
@@ -636,31 +672,29 @@ public:
     /**
      * @brief Get enhanced performance metrics
      *
-     * @return Tuple of (avg_alloc_time, avg_dealloc_time, fragmentation_ratio, failure_ratio, efficiency)
+     * @return Tuple of (avg_alloc_time, avg_dealloc_time, fragmentation_ratio,
+     * failure_ratio, efficiency)
      */
-    [[nodiscard]] auto getPerformanceMetrics() const -> std::tuple<double, double, double, double, double> {
+    [[nodiscard]] auto getPerformanceMetrics() const
+        -> std::tuple<double, double, double, double, double> {
         if constexpr (ThreadSafe) {
             ReadLockGuard lock(mutex_);
 #if ATOM_MEMORY_STATS_ENABLED
-            return std::make_tuple(
-                stats_.getAverageAllocationTime(),
-                stats_.getAverageDeallocationTime(),
-                stats_.getFragmentationRatio(),
-                stats_.getFailureRatio(),
-                stats_.getMemoryEfficiency()
-            );
+            return std::make_tuple(stats_.getAverageAllocationTime(),
+                                   stats_.getAverageDeallocationTime(),
+                                   stats_.getFragmentationRatio(),
+                                   stats_.getFailureRatio(),
+                                   stats_.getMemoryEfficiency());
 #else
             return std::make_tuple(0.0, 0.0, 0.0, 0.0, 0.0);
 #endif
         } else {
 #if ATOM_MEMORY_STATS_ENABLED
-            return std::make_tuple(
-                stats_.getAverageAllocationTime(),
-                stats_.getAverageDeallocationTime(),
-                stats_.getFragmentationRatio(),
-                stats_.getFailureRatio(),
-                stats_.getMemoryEfficiency()
-            );
+            return std::make_tuple(stats_.getAverageAllocationTime(),
+                                   stats_.getAverageDeallocationTime(),
+                                   stats_.getFragmentationRatio(),
+                                   stats_.getFailureRatio(),
+                                   stats_.getMemoryEfficiency());
 #else
             return std::make_tuple(0.0, 0.0, 0.0, 0.0, 0.0);
 #endif
@@ -1138,12 +1172,16 @@ private:
      * @brief Prefetch memory region for better cache performance
      */
     void prefetchMemoryRegion(void* ptr, size_t size) const noexcept {
-        if (!config_.enable_prefetching || ptr == nullptr) return;
+        if (!config_.enable_prefetching || ptr == nullptr)
+            return;
 
         char* memory = static_cast<char*>(ptr);
-        size_t prefetch_size = std::min(size, static_cast<size_t>(CACHE_LINE_SIZE * config_.prefetch_distance));
+        size_t prefetch_size = std::min(
+            size,
+            static_cast<size_t>(CACHE_LINE_SIZE * config_.prefetch_distance));
 
-        for (size_t offset = 0; offset < prefetch_size; offset += CACHE_LINE_SIZE) {
+        for (size_t offset = 0; offset < prefetch_size;
+             offset += CACHE_LINE_SIZE) {
             _mm_prefetch(memory + offset, _MM_HINT_T0);
         }
     }
@@ -1152,7 +1190,8 @@ private:
      * @brief Detect and report memory leaks
      */
     void detectMemoryLeaks() const {
-        if (!config_.enable_leak_detection) return;
+        if (!config_.enable_leak_detection)
+            return;
 
         size_t leak_count = allocation_map_.size();
         if (leak_count > 0) {
@@ -1174,13 +1213,12 @@ private:
      * @brief Enhanced corruption detection with detailed reporting
      */
     void validateMemoryIntegrity() const {
-        if (!config_.enable_corruption_detection) return;
+        if (!config_.enable_corruption_detection)
+            return;
 
         // Walk through all blocks and validate checksums
         Block* current = firstBlock_;
-        while (current != nullptr &&
-               reinterpret_cast<char*>(current) < end_) {
-
+        while (current != nullptr && reinterpret_cast<char*>(current) < end_) {
             if (!current->isValid()) {
 #if ATOM_MEMORY_STATS_ENABLED
                 if (config_.enable_stats) {
@@ -1193,8 +1231,8 @@ private:
             }
 
             // Move to next block
-            char* nextPtr = reinterpret_cast<char*>(current) +
-                           sizeof(Block) + current->size;
+            char* nextPtr = reinterpret_cast<char*>(current) + sizeof(Block) +
+                            current->size;
             current = reinterpret_cast<Block*>(nextPtr);
         }
     }

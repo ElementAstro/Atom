@@ -1,9 +1,16 @@
 #include "client.hpp"
+
+// SSE client requires ASIO experimental as_tuple support for structured
+// bindings Skip compilation if not available
+#if defined(ASIO_HAS_EXPERIMENTAL_AS_TUPLE) || \
+    defined(BOOST_ASIO_HAS_EXPERIMENTAL_AS_TUPLE)
+
 #include <spdlog/spdlog.h>
 #include <chrono>
 #include <random>
 #include <regex>
-#include "event_store.hpp"
+#include "../event_store.hpp"
+#include "atom/algorithm/encoding/base.hpp"
 
 using namespace std::chrono_literals;
 
@@ -57,8 +64,7 @@ public:
     }
 
     void stop() {
-        error_code ec;
-        reconnect_timer_.cancel(ec);
+        reconnect_timer_.cancel();
 
 #ifdef USE_SSL
         if (ssl_socket_) {
@@ -248,8 +254,13 @@ private:
             std::string auth = config_.username + ":" + config_.password;
             // Note: Base64 encoding would be implemented here in a real
             // application
-            std::string encoded_auth = "TODO: Base64 encode here";
-            request += "Authorization: Basic " + encoded_auth + "\r\n";
+            auto encoded_result = atom::algorithm::base64Encode(auth);
+            if (encoded_result) {
+                const std::string& encoded_auth = encoded_result.value();
+                request += "Authorization: Basic " + encoded_auth + "\r\n";
+            } else {
+                spdlog::warn("Failed to Base64-encode basic auth credentials");
+            }
         }
 
         if (!config_.last_event_id.empty()) {
@@ -436,3 +447,6 @@ bool Client::is_connected() const { return pimpl_->is_connected(); }
 const ClientConfig& Client::config() const { return pimpl_->config(); }
 
 }  // namespace atom::extra::asio::sse
+
+#endif  // defined(ASIO_HAS_EXPERIMENTAL_AS_TUPLE) ||
+        // defined(BOOST_ASIO_HAS_EXPERIMENTAL_AS_TUPLE)

@@ -1,38 +1,19 @@
 /*!
  * \file bind_first.hpp
- * \brief An enhanced utility for binding functions to objects - OPTIMIZED VERSION
+ * \brief An enhanced utility for binding functions to objects
  * \author Max Qian <lightapt.com>
  * \date 2024-03-12
- * \optimized 2025-01-22 - Performance optimizations by AI Assistant
  * \copyright Copyright (C) 2023-2024 Max Qian
- *
- * ADVANCED META UTILITIES OPTIMIZATIONS:
- * - Reduced lambda capture overhead with perfect forwarding and move semantics
- * - Optimized pointer manipulation with compile-time checks and constexpr evaluation
- * - Enhanced function binding with noexcept specifications and exception safety
- * - Improved template instantiation with better constraints and concept validation
- * - Added fast-path optimizations for common binding patterns with SFINAE
- * - Enhanced memory efficiency with small object optimization for captures
- * - Compile-time binding validation with comprehensive type checking
- * - Lock-free thread-safe binding with atomic operations where applicable
  */
 
 #ifndef ATOM_META_BIND_FIRST_HPP
 #define ATOM_META_BIND_FIRST_HPP
 
-#include <atomic>
-#include <chrono>
-#include <concepts>
 #include <exception>
 #include <functional>
 #include <future>
 #include <memory>
-#include <mutex>
-#include <optional>
-#include <shared_mutex>
 #include <string>
-#include <type_traits>
-#include <unordered_map>
 #include <utility>
 
 #include "atom/meta/concept.hpp"
@@ -44,7 +25,7 @@ namespace atom::meta {
 //==============================================================================
 
 /*!
- * \brief Optimized pointer extraction with compile-time type checking
+ * \brief Get a pointer from a raw pointer
  * \tparam T The pointee type
  * \param ptr The input pointer
  * \return The same pointer
@@ -55,7 +36,7 @@ template <typename T>
 }
 
 /*!
- * \brief Optimized pointer extraction from reference_wrapper
+ * \brief Get a pointer from a reference_wrapper
  * \tparam T The reference type
  * \param ref The reference wrapper
  * \return Pointer to the referenced object
@@ -67,19 +48,7 @@ template <typename T>
 }
 
 /*!
- * \brief Optimized pointer extraction from smart pointers
- * \tparam T Smart pointer type
- * \param ptr Smart pointer
- * \return Raw pointer
- */
-template <typename T>
-    requires requires(T& t) { t.get(); }
-[[nodiscard]] constexpr auto getPointer(T& ptr) noexcept -> decltype(ptr.get()) {
-    return ptr.get();
-}
-
-/*!
- * \brief Optimized pointer extraction from objects
+ * \brief Get a pointer from an object
  * \tparam T The object type
  * \param ref The object
  * \return Pointer to the object
@@ -90,14 +59,13 @@ template <typename T>
 }
 
 /*!
- * \brief Optimized const removal with compile-time safety
+ * \brief Remove const from a pointer
  * \tparam T The pointee type
  * \param ptr Const pointer
  * \return Non-const pointer
  */
 template <typename T>
 [[nodiscard]] constexpr auto removeConstPointer(const T* ptr) noexcept -> T* {
-    static_assert(!std::is_const_v<T>, "Cannot remove const from inherently const type");
     return const_cast<T*>(ptr);
 }
 
@@ -106,22 +74,19 @@ template <typename T>
 //==============================================================================
 
 /*!
- * \brief Optimized binding of object to function pointer as first argument
+ * \brief Bind an object to a function pointer as first argument
  * \tparam O Object type
  * \tparam Ret Return type
  * \tparam P1 First parameter type
  * \tparam Param Remaining parameter types
  * \param func Function to bind
  * \param object Object to bind as first argument
- * \return Bound function with optimized capture
+ * \return Bound function
  */
 template <typename O, typename Ret, typename P1, typename... Param>
     requires Invocable<Ret (*)(P1, Param...), O, Param...>
-[[nodiscard]] constexpr auto bindFirst(Ret (*func)(P1, Param...), O&& object)
-    noexcept(std::is_nothrow_invocable_v<Ret (*)(P1, Param...), O, Param...>) {
-    // Optimized: Use perfect forwarding and noexcept specification
-    return [func, object = std::forward<O>(object)](Param... param)
-        noexcept(std::is_nothrow_invocable_v<Ret (*)(P1, Param...), O, Param...>) -> Ret {
+[[nodiscard]] constexpr auto bindFirst(Ret (*func)(P1, Param...), O&& object) {
+    return [func, object = std::forward<O>(object)](Param... param) -> Ret {
         return func(object, std::forward<Param>(param)...);
     };
 }
@@ -193,7 +158,6 @@ template <typename O, typename Ret, typename P1, typename... Param>
  * \return Bound function
  */
 template <typename F, typename O>
-    requires Invocable<F, O>
 [[nodiscard]] constexpr auto bindFirst(F&& func, O&& object) {
     return [func = std::forward<F>(func), object = std::forward<O>(object)](
                auto&&... param) -> decltype(auto) {
@@ -212,8 +176,7 @@ template <typename F, typename O>
  * \return Function that returns reference to the member variable
  */
 template <typename O, typename T, typename Class>
-[[nodiscard]] constexpr auto bindMember(T Class::* member,
-                                        O&& object) noexcept {
+[[nodiscard]] constexpr auto bindMember(T Class::*member, O&& object) noexcept {
     return [member, object = std::forward<O>(object)]() -> T& {
         return removeConstPointer(getPointer(object))->*member;
     };
@@ -335,144 +298,149 @@ auto bindFirstWithExceptionHandling(Callable&& callable, FirstArg&& first_arg,
 //==============================================================================
 
 /*!
- * \brief Enhanced thread-safe bindFirst using shared_ptr with weak_ptr fallback
+ * \brief Thread-safe bindFirst using shared_ptr
  * \tparam O Object type
  * \tparam Ret Return type
  * \tparam Param Parameter types
  * \param func Member function to bind
  * \param object Shared pointer to object
- * \return Thread-safe bound function with lifetime checking
+ * \return Thread-safe bound function
  */
 template <typename O, typename Ret, typename... Param>
 [[nodiscard]] auto bindFirstThreadSafe(Ret (O::*func)(Param...),
                                        std::shared_ptr<O> object) {
-    return [func, weak_obj = std::weak_ptr<O>(object)](Param... param) -> std::optional<Ret> {
-        if (auto shared_obj = weak_obj.lock()) {
-            return (shared_obj.get()->*func)(std::forward<Param>(param)...);
-        }
-        return std::nullopt; // Object has been destroyed
+    return [func, object](Param... param) -> Ret {
+        return (object.get()->*func)(std::forward<Param>(param)...);
     };
 }
 
 //==============================================================================
-// Advanced Binding Utilities with Enhanced Performance
+// C++23 Enhanced Binding Utilities
 //==============================================================================
 
-/*!
- * \brief High-performance binding cache for frequently used bindings
+/**
+ * @brief Concept for bindable callables
  */
-template<typename Signature>
-class BindingCache;
+template <typename F>
+concept Bindable =
+    std::is_invocable_v<F> || std::is_member_function_pointer_v<F>;
 
-template<typename Ret, typename... Args>
-class alignas(64) BindingCache<Ret(Args...)> {
-private:
-    using FunctionType = std::function<Ret(Args...)>;
-    using CacheKey = std::size_t;
+/**
+ * @brief Concept for member functions
+ */
+template <typename F, typename Class>
+concept MemberFunctionOf = std::is_member_function_pointer_v<F> &&
+                           requires { typename std::invoke_result<F, Class>; };
 
-    struct CacheEntry {
-        FunctionType function;
-        std::chrono::steady_clock::time_point last_used;
-        std::atomic<uint32_t> use_count{0};
+/**
+ * @brief Bind with automatic type deduction
+ */
+template <typename Callable, typename FirstArg>
+    requires Bindable<Callable>
+[[nodiscard]] auto autoBind(Callable&& callable, FirstArg&& first_arg) {
+    return bindFirst(std::forward<Callable>(callable),
+                     std::forward<FirstArg>(first_arg));
+}
 
-        CacheEntry() = default;
-        CacheEntry(FunctionType func)
-            : function(std::move(func)),
-              last_used(std::chrono::steady_clock::now()) {}
-    };
-
-    mutable std::shared_mutex cache_mutex_;
-    std::unordered_map<CacheKey, CacheEntry> cache_;
-    static constexpr std::size_t MAX_CACHE_SIZE = 1024;
-    static constexpr std::chrono::minutes CACHE_TTL{30};
-
-    CacheKey generateKey(const void* func_ptr, const void* obj_ptr) const noexcept {
-        std::size_t h1 = std::hash<const void*>{}(func_ptr);
-        std::size_t h2 = std::hash<const void*>{}(obj_ptr);
-        return h1 ^ (h2 << 1);
-    }
-
-    void cleanup() {
-        auto now = std::chrono::steady_clock::now();
-        auto it = cache_.begin();
-        while (it != cache_.end()) {
-            if ((now - it->second.last_used) > CACHE_TTL) {
-                it = cache_.erase(it);
-            } else {
-                ++it;
-            }
+/**
+ * @brief Bind with weak_ptr for safe lifetime management
+ */
+template <typename O, typename Ret, typename... Param>
+[[nodiscard]] auto bindFirstWeak(Ret (O::*func)(Param...),
+                                 std::weak_ptr<O> object) {
+    return [func, object](Param... param) -> std::optional<Ret> {
+        if (auto shared = object.lock()) {
+            return (shared.get()->*func)(std::forward<Param>(param)...);
         }
-    }
+        return std::nullopt;
+    };
+}
+
+/**
+ * @brief Bind returning optional for nullable first arg
+ */
+template <typename Callable, typename FirstArg>
+[[nodiscard]] auto bindFirstOptional(Callable&& callable,
+                                     std::optional<FirstArg> first_arg) {
+    return
+        [callable = std::forward<Callable>(callable),
+         first_arg = std::move(first_arg)](auto&&... args)
+            -> std::optional<
+                std::invoke_result_t<Callable, FirstArg, decltype(args)...>> {
+            if (first_arg) {
+                return std::invoke(callable, *first_arg,
+                                   std::forward<decltype(args)>(args)...);
+            }
+            return std::nullopt;
+        };
+}
+
+/**
+ * @brief Bind with lazy evaluation of first argument
+ */
+template <typename Callable, typename FirstArgFactory>
+    requires std::invocable<FirstArgFactory>
+[[nodiscard]] auto bindFirstLazy(Callable&& callable,
+                                 FirstArgFactory&& factory) {
+    return [callable = std::forward<Callable>(callable),
+            factory = std::forward<FirstArgFactory>(factory)](auto&&... args) {
+        return std::invoke(callable, factory(),
+                           std::forward<decltype(args)>(args)...);
+    };
+}
+
+/**
+ * @brief Bind multiple arguments at once
+ */
+template <typename Callable, typename... BoundArgs>
+[[nodiscard]] auto bindMultiple(Callable&& callable,
+                                BoundArgs&&... bound_args) {
+    return [callable = std::forward<Callable>(callable),
+            ... args = std::forward<BoundArgs>(bound_args)](auto&&... rest) {
+        return std::invoke(callable, args...,
+                           std::forward<decltype(rest)>(rest)...);
+    };
+}
+
+/**
+ * @brief Bind registry for named bindings
+ */
+class BindingRegistry {
+    std::unordered_map<std::string, std::function<void()>> bindings_;
+    mutable std::shared_mutex mutex_;
 
 public:
-    /*!
-     * \brief Get or create cached binding
-     */
-    template<typename F, typename O>
-    FunctionType getOrCreateBinding(F func, O&& obj) {
-        CacheKey key = generateKey(reinterpret_cast<const void*>(&func),
-                                  reinterpret_cast<const void*>(&obj));
-
-        // Try read-only access first
-        {
-            std::shared_lock lock(cache_mutex_);
-            auto it = cache_.find(key);
-            if (it != cache_.end()) {
-                it->second.last_used = std::chrono::steady_clock::now();
-                it->second.use_count.fetch_add(1, std::memory_order_relaxed);
-                return it->second.function;
-            }
-        }
-
-        // Create new binding
-        auto binding = bindFirst(func, std::forward<O>(obj));
-        FunctionType wrapped_binding = [binding](Args... args) -> Ret {
-            return binding(std::forward<Args>(args)...);
-        };
-
-        // Store in cache
-        {
-            std::unique_lock lock(cache_mutex_);
-            if (cache_.size() >= MAX_CACHE_SIZE) {
-                cleanup();
-            }
-            cache_[key] = CacheEntry(wrapped_binding);
-        }
-
-        return wrapped_binding;
+    template <typename Callable, typename... Args>
+    void registerBinding(std::string_view name, Callable&& callable,
+                         Args&&... args) {
+        auto bound = bindFirst(std::forward<Callable>(callable),
+                               std::forward<Args>(args)...);
+        std::unique_lock lock(mutex_);
+        bindings_[std::string(name)] = std::move(bound);
     }
 
-    /*!
-     * \brief Get cache statistics
-     */
-    struct CacheStats {
-        std::size_t size;
-        std::size_t total_uses;
-        double hit_rate;
-    };
-
-    CacheStats getStats() const {
-        std::shared_lock lock(cache_mutex_);
-        std::size_t total_uses = 0;
-        for (const auto& [key, entry] : cache_) {
-            total_uses += entry.use_count.load(std::memory_order_relaxed);
+    bool invoke(std::string_view name) const {
+        std::shared_lock lock(mutex_);
+        auto it = bindings_.find(std::string(name));
+        if (it != bindings_.end()) {
+            it->second();
+            return true;
         }
-        return {cache_.size(), total_uses, 0.0}; // Hit rate calculation would need more tracking
+        return false;
     }
 
-    /*!
-     * \brief Clear cache
-     */
-    void clear() {
-        std::unique_lock lock(cache_mutex_);
-        cache_.clear();
+    [[nodiscard]] std::vector<std::string> getBindingNames() const {
+        std::shared_lock lock(mutex_);
+        std::vector<std::string> result;
+        result.reserve(bindings_.size());
+        for (const auto& [name, _] : bindings_) {
+            result.push_back(name);
+        }
+        return result;
     }
 
-    /*!
-     * \brief Get singleton instance
-     */
-    static BindingCache& getInstance() {
-        static BindingCache instance;
+    static BindingRegistry& getInstance() {
+        static BindingRegistry instance;
         return instance;
     }
 };

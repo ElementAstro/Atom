@@ -98,7 +98,7 @@ int main() {
         // 设置不同函数的不同限制
         limiter.setFunctionLimit("high_frequency", 10, 1s);  // 高频率：每秒10次
         limiter.setFunctionLimit("medium_frequency", 5,
-                                 2s);                      // 中频率：每2秒5次
+                                 2s);  // 中频率：每2秒5次
         limiter.setFunctionLimit("low_frequency", 2, 5s);  // 低频率：每5秒2次
 
         LOG("设置了不同函数的不同限制:");

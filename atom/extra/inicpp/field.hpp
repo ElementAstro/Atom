@@ -124,7 +124,7 @@ public:
      * @param other The other field.
      * @return True if the fields are equal, false otherwise.
      */
-    bool operator==(const IniField& other) const noexcept {
+    bool operator==(const IniField &other) const noexcept {
         return value_ == other.value_;
     }
 
@@ -133,7 +133,7 @@ public:
      * @param other The other field.
      * @return True if the fields are not equal, false otherwise.
      */
-    bool operator!=(const IniField& other) const noexcept {
+    bool operator!=(const IniField &other) const noexcept {
         return !(*this == other);
     }
 
@@ -141,24 +141,18 @@ public:
      * @brief Check if field value is empty.
      * @return True if the field value is empty, false otherwise.
      */
-    [[nodiscard]] bool empty() const noexcept {
-        return value_.empty();
-    }
+    [[nodiscard]] bool empty() const noexcept { return value_.empty(); }
 
     /**
      * @brief Get the size of the field value.
      * @return The size of the field value.
      */
-    [[nodiscard]] size_t size() const noexcept {
-        return value_.size();
-    }
+    [[nodiscard]] size_t size() const noexcept { return value_.size(); }
 
     /**
      * @brief Clear the field value.
      */
-    void clear() noexcept {
-        value_.clear();
-    }
+    void clear() noexcept { value_.clear(); }
 };
 
 #if INICPP_CONFIG_USE_MEMORY_POOL
@@ -174,9 +168,7 @@ public:
      * @brief Allocate a new IniField from the pool.
      * @return A new IniField.
      */
-    static IniField* allocate() {
-        return pool_.construct();
-    }
+    static IniField *allocate() { return pool_.construct(); }
 
     /**
      * @brief Allocate a new IniField from the pool with an initial value.
@@ -185,7 +177,7 @@ public:
      */
     template <typename StringType>
         requires StringLike<StringType>
-    static IniField* allocate(StringType value) {
+    static IniField *allocate(StringType value) {
         return pool_.construct(value);
     }
 
@@ -193,9 +185,7 @@ public:
      * @brief Free an IniField back to the pool.
      * @param field The field to free.
      */
-    static void free(IniField* field) {
-        pool_.destroy(field);
-    }
+    static void free(IniField *field) { pool_.destroy(field); }
 };
 
 // 在cpp文件中定义

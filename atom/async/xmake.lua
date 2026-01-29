@@ -5,51 +5,50 @@ set_xmakever("2.8.0")
 set_project("atom-async")
 set_version("1.0.0", {build = "%Y%m%d%H%M"})
 
--- Set languages
-set_languages("c11", "cxx17")
+-- Set languages (match CMake C++20)
+set_languages("c11", "cxx20")
 
 -- Add build modes
-add_rules("mode.debug", "mode.release")
+add_rules("mode.debug", "mode.release", "mode.minsizerel")
 
--- Add required packages
-add_requires("loguru")
+-- Add required packages (use spdlog instead of loguru to match CMake)
+local use_system_packages = has_config("use_system_packages")
+add_requires("spdlog", {system = use_system_packages, configs = {fmt_external = true}})
+add_requires("fmt", {system = use_system_packages})
 
 -- Define the main target
 target("atom-async")
     -- Set target kind
     set_kind("static")
 
-    -- Add source files (explicitly specified)
-    add_files("limiter.cpp", "lock.cpp", "timer.cpp")
+    -- Add source files from new structure
+    add_files("core/*.cpp")
+    add_files("threading/*.cpp")
+    add_files("sync/*.cpp")
+    add_files("utils/*.cpp")
 
-    -- Add header files (explicitly specified)
-    add_headerfiles(
-        "async.hpp",
-        "daemon.hpp",
-        "eventstack.hpp",
-        "limiter.hpp",
-        "lock.hpp",
-        "message_bus.hpp",
-        "message_queue.hpp",
-        "pool.hpp",
-        "queue.hpp",
-        "safetype.hpp",
-        "thread_wrapper.hpp",
-        "timer.hpp",
-        "trigger.hpp"
-    )
+    -- Add header files from new structure
+    add_headerfiles("*.hpp")  -- Backwards compatibility headers
+    add_headerfiles("core/*.hpp")
+    add_headerfiles("threading/*.hpp")
+    add_headerfiles("messaging/*.hpp")
+    add_headerfiles("execution/*.hpp")
+    add_headerfiles("sync/*.hpp")
+    add_headerfiles("utils/*.hpp")
 
     -- Add include directories
     add_includedirs(".", {public = true})
 
-    -- Add packages
-    add_packages("loguru")
+    -- Add packages (use spdlog instead of loguru)
+    add_packages("spdlog", "fmt")
 
     -- Add dependencies (assuming atom-utils is another xmake target)
     add_deps("atom-utils")
 
     -- Add system libraries
-    add_syslinks("pthread")
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
 
     -- Enable position independent code for static library
     add_cxflags("-fPIC", {tools = {"gcc", "clang"}})
@@ -79,8 +78,29 @@ target("atom-async-object")
     set_kind("object")
 
     -- Add the same source files
-    add_files("limiter.cpp", "lock.cpp", "timer.cpp")
+    add_files("core/*.cpp")
+    add_files("threading/*.cpp")
+    add_files("sync/*.cpp")
+    add_files("utils/*.cpp")
     add_headerfiles(
-        "async.hpp",
-        "daemon.hpp",
-        "eventstack.hpp",
+        "*.hpp",  -- Backwards compatibility headers
+        "core/*.hpp",
+        "threading/*.hpp",
+        "messaging/*.hpp",
+        "execution/*.hpp",
+        "sync/*.hpp",
+        "utils/*.hpp")
+
+    add_includedirs(".", {public = true})
+    add_packages("spdlog", "fmt")
+    add_deps("atom-utils")
+
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
+
+    add_cxflags("-fPIC", {tools = {"gcc", "clang"}})
+    add_cflags("-fPIC", {tools = {"gcc", "clang"}})
+
+    set_objectdir("$(buildir)/obj")
+target_end()

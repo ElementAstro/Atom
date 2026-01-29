@@ -20,7 +20,8 @@
 namespace atom::meta::details {
 
 /**
- * \brief Optimized universal type that can convert to any other type for field counting
+ * \brief Optimized universal type that can convert to any other type for field
+ * counting
  */
 struct Any {
     constexpr Any(int) noexcept {}
@@ -39,11 +40,11 @@ struct Any {
     template <typename T>
         requires(!std::is_copy_constructible_v<T> &&
                  !std::is_move_constructible_v<T> &&
-                 !std::is_constructible_v<T, Empty> &&
-                 !std::is_same_v<T, Any>)
+                 !std::is_constructible_v<T, Empty> && !std::is_same_v<T, Any>)
     constexpr operator T() const noexcept;
 
-    // Optimized: Prevent conversion to fundamental types that might cause issues
+    // Optimized: Prevent conversion to fundamental types that might cause
+    // issues
     template <typename T>
         requires std::is_fundamental_v<T> && (!std::is_same_v<T, int>)
     constexpr operator T() const noexcept;
@@ -63,13 +64,12 @@ consteval auto canInitializeWithN() -> bool {
 }
 
 /**
- * \brief Optimized binary search to find the maximum number of fields with adaptive bounds
- * \tparam T Type to analyze
- * \tparam Low Lower bound
- * \tparam High Upper bound
- * \return Maximum number of fields that can initialize T
+ * \brief Optimized binary search to find the maximum number of fields with
+ * adaptive bounds \tparam T Type to analyze \tparam Low Lower bound \tparam
+ * High Upper bound \return Maximum number of fields that can initialize T
  */
-template <typename T, std::size_t Low = 0, std::size_t High = 32>  // Reduced default upper bound
+template <typename T, std::size_t Low = 0,
+          std::size_t High = 32>  // Reduced default upper bound
 consteval auto binarySearchFieldCount() -> std::size_t {
     // Optimized: Fast path for common cases
     if constexpr (std::is_fundamental_v<T> || std::is_pointer_v<T>) {
@@ -277,6 +277,69 @@ template <typename T>
 consteval auto fieldCountOf() -> std::size_t {
     return 0;
 }
+
+//==============================================================================
+// C++23 Enhanced Field Count Utilities
+//==============================================================================
+
+/**
+ * @brief Variable template for field count
+ */
+template <typename T>
+inline constexpr std::size_t field_count_v = fieldCountOf<T>();
+
+/**
+ * @brief Check if a type has fields
+ */
+template <typename T>
+inline constexpr bool has_fields_v = field_count_v<T> > 0;
+
+/**
+ * @brief Concept for types with specific field count
+ */
+template <typename T, std::size_t N>
+concept HasFieldCount = AggregateType<T> && (fieldCountOf<T>() == N);
+
+/**
+ * @brief Concept for types with at least N fields
+ */
+template <typename T, std::size_t N>
+concept HasAtLeastFields = AggregateType<T> && (fieldCountOf<T>() >= N);
+
+/**
+ * @brief Get field count as compile-time constant
+ */
+template <AggregateType T>
+struct FieldCountOf : std::integral_constant<std::size_t, fieldCountOf<T>()> {};
+
+/**
+ * @brief Compare field counts of two types
+ */
+template <typename T, typename U>
+inline constexpr bool same_field_count_v =
+    AggregateType<T> && AggregateType<U> &&
+    (fieldCountOf<T>() == fieldCountOf<U>());
+
+/**
+ * @brief Get the maximum field count among multiple types
+ */
+template <typename... Ts>
+inline constexpr std::size_t max_field_count_v =
+    std::max({fieldCountOf<Ts>()...});
+
+/**
+ * @brief Get the minimum field count among multiple types
+ */
+template <typename... Ts>
+    requires(sizeof...(Ts) > 0)
+inline constexpr std::size_t min_field_count_v =
+    std::min({fieldCountOf<Ts>()...});
+
+/**
+ * @brief Get total field count of multiple types
+ */
+template <typename... Ts>
+inline constexpr std::size_t total_field_count_v = (fieldCountOf<Ts>() + ...);
 
 }  // namespace atom::meta
 

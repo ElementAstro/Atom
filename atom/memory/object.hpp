@@ -1,24 +1,40 @@
-/*
- * object_pool.hpp
+/**
+ * @file object.hpp
+ * @brief Advanced object pool implementation with extensive features
  *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ * This file provides the ObjectPool class, which is an ADVANCED object pool
+ * with priority-based allocation, batch operations, validation, statistics,
+ * timeouts, and auto-cleanup capabilities.
+ *
+ * FEATURES:
+ * - Priority-based object allocation
+ * - Batch acquire/release operations
+ * - Object validation and health checks
+ * - Detailed statistics and monitoring
+ * - Timeout support for blocking operations
+ * - Automatic cleanup of idle objects
+ * - Optional Boost integration (enable with ATOM_USE_BOOST)
+ * - Thread-safe with shared_mutex
+ *
+ * COMPARISON WITH OTHER POOLS:
+ * - Use ObjectPool when you need advanced features like priorities, validation,
+ * statistics
+ * - Use SimpleObjectPool (memory_pool.hpp) for simpler object pooling with RAII
+ * - Use FixedBlockPool (memory_pool.hpp) for low-level fixed-size allocations
+ * - Use MemoryPool (memory.hpp) for variable-size allocations with PMR support
+ *
+ * For a complete overview of memory pool types, see documentation in
+ * memory.hpp.
+ *
+ * @author Max Qian
+ * @copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ * @date 2024-04-05
  */
-
-/*************************************************
-
-Date: 2024-04-05
-
-Description: An enhanced implementation of object pool with
-automatic object release, better exception handling, and additional
-functionalities. Optional Boost support can be enabled with ATOM_USE_BOOST.
-
-**************************************************/
 
 #ifndef ATOM_MEMORY_OBJECT_POOL_HPP
 #define ATOM_MEMORY_OBJECT_POOL_HPP
 
 #include <algorithm>
-#include <atomic>
 #include <cassert>
 #include <chrono>
 #include <condition_variable>
@@ -27,17 +43,10 @@ functionalities. Optional Boost support can be enabled with ATOM_USE_BOOST.
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
-#include <thread>
 #include <unordered_map>
 #include <vector>
-#include <immintrin.h>  // For memory prefetching
 
 #include "atom/error/exception.hpp"
-
-// Cache line size for alignment optimizations
-#ifndef CACHE_LINE_SIZE
-#define CACHE_LINE_SIZE 64
-#endif
 
 #ifdef ATOM_USE_BOOST
 #include <boost/pool/object_pool.hpp>
@@ -73,156 +82,40 @@ public:
     /**
      * @brief Statistics about the object pool's performance and usage
      */
-    struct alignas(CACHE_LINE_SIZE) PoolStats {
-        // Basic statistics (atomic for thread safety)
-        std::atomic<size_t> hits{0};  ///< Number of times an object was reused from the pool
-        std::atomic<size_t> misses{0};    ///< Number of times a new object had to be created
-        std::atomic<size_t> cleanups{0};  ///< Number of objects removed during cleanup
-        std::atomic<size_t> peak_usage{0};  ///< Maximum number of objects in use at once
-        std::atomic<size_t> wait_count{0};  ///< Number of times clients had to wait for an object
-        std::atomic<size_t> timeout_count{0};  ///< Number of times acquire operations timed out
+    struct PoolStats {
+        size_t hits{0};  ///< Number of times an object was reused from the pool
+        size_t misses{0};    ///< Number of times a new object had to be created
+        size_t cleanups{0};  ///< Number of objects removed during cleanup
+        size_t peak_usage{0};  ///< Maximum number of objects in use at once
+        size_t wait_count{
+            0};  ///< Number of times clients had to wait for an object
+        size_t timeout_count{
+            0};  ///< Number of times acquire operations timed out
 
-        // Advanced performance metrics
-        std::atomic<size_t> total_acquisitions{0};  ///< Total acquisition attempts
-        std::atomic<size_t> total_releases{0};      ///< Total object releases
-        std::atomic<size_t> validation_failures{0}; ///< Objects failed validation
-        std::atomic<size_t> cleanup_operations{0};  ///< Number of cleanup operations
-        std::atomic<size_t> batch_acquisitions{0};  ///< Number of batch acquisitions
-        std::atomic<size_t> memory_reuses{0};       ///< Objects reused from pool
-        std::atomic<size_t> memory_allocations{0};  ///< New objects created
-        std::atomic<size_t> lock_contentions{0};    ///< Number of lock contentions
-
-        // Timing statistics (in nanoseconds for precision)
-        std::atomic<uint64_t> total_wait_time{0};      ///< Total time spent waiting for objects
-        std::atomic<uint64_t> max_wait_time{0};        ///< Maximum time spent waiting for an object
-        std::atomic<uint64_t> total_acquisition_time{0}; ///< Total acquisition time
-        std::atomic<uint64_t> max_acquisition_time{0};   ///< Maximum acquisition time
-        std::atomic<uint64_t> total_validation_time{0};  ///< Total validation time
-        std::atomic<uint64_t> total_lock_wait_time{0};   ///< Total lock wait time
-
-        // Performance calculation helpers
-        double getHitRatio() const noexcept {
-            size_t total_requests = hits.load() + misses.load();
-            return total_requests > 0 ? static_cast<double>(hits.load()) / total_requests : 0.0;
-        }
-
-        double getAverageWaitTime() const noexcept {
-            size_t count = wait_count.load();
-            return count > 0 ? static_cast<double>(total_wait_time.load()) / count : 0.0;
-        }
-
-        double getAverageAcquisitionTime() const noexcept {
-            size_t count = total_acquisitions.load();
-            return count > 0 ? static_cast<double>(total_acquisition_time.load()) / count : 0.0;
-        }
-
-        double getMemoryReuseRatio() const noexcept {
-            size_t total_objects = memory_reuses.load() + memory_allocations.load();
-            return total_objects > 0 ? static_cast<double>(memory_reuses.load()) / total_objects : 0.0;
-        }
-
-        void reset() noexcept {
-            hits = 0; misses = 0; cleanups = 0; peak_usage = 0;
-            wait_count = 0; timeout_count = 0; total_acquisitions = 0;
-            total_releases = 0; validation_failures = 0; cleanup_operations = 0;
-            batch_acquisitions = 0; memory_reuses = 0; memory_allocations = 0;
-            lock_contentions = 0; total_wait_time = 0; max_wait_time = 0;
-            total_acquisition_time = 0; max_acquisition_time = 0;
-            total_validation_time = 0; total_lock_wait_time = 0;
-        }
-
-        // Custom copy constructor
-        PoolStats(const PoolStats& other) noexcept
-            : hits(other.hits.load()),
-              misses(other.misses.load()),
-              cleanups(other.cleanups.load()),
-              peak_usage(other.peak_usage.load()),
-              wait_count(other.wait_count.load()),
-              timeout_count(other.timeout_count.load()),
-              total_acquisitions(other.total_acquisitions.load()),
-              total_releases(other.total_releases.load()),
-              validation_failures(other.validation_failures.load()),
-              cleanup_operations(other.cleanup_operations.load()),
-              batch_acquisitions(other.batch_acquisitions.load()),
-              memory_reuses(other.memory_reuses.load()),
-              memory_allocations(other.memory_allocations.load()),
-              lock_contentions(other.lock_contentions.load()),
-              total_wait_time(other.total_wait_time.load()),
-              max_wait_time(other.max_wait_time.load()),
-              total_acquisition_time(other.total_acquisition_time.load()),
-              max_acquisition_time(other.max_acquisition_time.load()),
-              total_validation_time(other.total_validation_time.load()),
-              total_lock_wait_time(other.total_lock_wait_time.load()) {}
-
-        // Custom assignment operator
-        PoolStats& operator=(const PoolStats& other) noexcept {
-            if (this != &other) {
-                hits.store(other.hits.load());
-                misses.store(other.misses.load());
-                cleanups.store(other.cleanups.load());
-                peak_usage.store(other.peak_usage.load());
-                wait_count.store(other.wait_count.load());
-                timeout_count.store(other.timeout_count.load());
-                total_acquisitions.store(other.total_acquisitions.load());
-                total_releases.store(other.total_releases.load());
-                validation_failures.store(other.validation_failures.load());
-                cleanup_operations.store(other.cleanup_operations.load());
-                batch_acquisitions.store(other.batch_acquisitions.load());
-                memory_reuses.store(other.memory_reuses.load());
-                memory_allocations.store(other.memory_allocations.load());
-                lock_contentions.store(other.lock_contentions.load());
-                total_wait_time.store(other.total_wait_time.load());
-                max_wait_time.store(other.max_wait_time.load());
-                total_acquisition_time.store(other.total_acquisition_time.load());
-                max_acquisition_time.store(other.max_acquisition_time.load());
-                total_validation_time.store(other.total_validation_time.load());
-                total_lock_wait_time.store(other.total_lock_wait_time.load());
-            }
-            return *this;
-        }
-
-        // Default constructor
-        PoolStats() = default;
+        // Tracking for performance analysis
+        std::chrono::nanoseconds total_wait_time{
+            0};  ///< Total time spent waiting for objects
+        std::chrono::nanoseconds max_wait_time{
+            0};  ///< Maximum time spent waiting for an object
     };
 
     /**
-     * @brief Enhanced configuration options for the object pool
+     * @brief Configuration options for the object pool
      */
     struct PoolConfig {
-        // Basic configuration
         bool enable_stats{true};  ///< Whether to collect usage statistics
-        bool enable_auto_cleanup{true};  ///< Whether to automatically clean idle objects
-        bool validate_on_acquire{false};  ///< Whether to validate objects on acquisition
-        bool validate_on_release{true};  ///< Whether to validate objects on release
-
-        // Performance optimization settings
-        bool enable_prefetching{true};   ///< Enable memory prefetching for better cache performance
-        bool enable_batch_optimization{true}; ///< Enable batch operation optimizations
-        bool enable_priority_queue{true}; ///< Enable priority-based acquisition
-        bool enable_lock_free_stats{true}; ///< Use lock-free statistics updates
-
-        // Timing and cleanup configuration
-        std::chrono::minutes cleanup_interval{10};  ///< How often to run cleanup
-        std::chrono::minutes max_idle_time{30};     ///< Maximum time an object can remain idle
-        std::chrono::milliseconds acquisition_timeout{5000}; ///< Default acquisition timeout
-        std::chrono::milliseconds validation_timeout{100};   ///< Validation operation timeout
-
-        // Pool sizing and growth
-        size_t initial_pool_size{0};     ///< Initial number of objects to create
-        size_t max_pool_growth{100};     ///< Maximum objects to create in one growth operation
-        double growth_factor{1.5};       ///< Factor by which to grow the pool
-        size_t shrink_threshold{50};     ///< Percentage of unused objects before shrinking
-
-        // Validation and monitoring
-        std::function<bool(const T&)> validator{nullptr}; ///< Optional custom validator function
-        std::function<void(const T&)> object_initializer{nullptr}; ///< Optional object initializer
-        std::function<void(const PoolStats&)> stats_callback{nullptr}; ///< Optional stats callback
-
-        // Advanced features
-        bool enable_object_warming{false}; ///< Pre-warm objects during idle time
-        bool enable_adaptive_sizing{false}; ///< Automatically adjust pool size based on usage
-        bool enable_memory_pressure_handling{false}; ///< Handle memory pressure events
-        size_t memory_pressure_threshold{80}; ///< Memory usage percentage to trigger pressure handling
+        bool enable_auto_cleanup{
+            true};  ///< Whether to automatically clean idle objects
+        bool validate_on_acquire{
+            false};  ///< Whether to validate objects on acquisition
+        bool validate_on_release{
+            true};  ///< Whether to validate objects on release
+        std::chrono::minutes cleanup_interval{
+            10};  ///< How often to run cleanup
+        std::chrono::minutes max_idle_time{
+            30};  ///< Maximum time an object can remain idle
+        std::function<bool(const T&)> validator{
+            nullptr};  ///< Optional custom validator function
     };
 
     /**
@@ -266,13 +159,11 @@ public:
         prefill(initial_size);
     }
 
-    // Disable copy and assignment
-    ObjectPool(const ObjectPool&) = default;
-    ObjectPool& operator=(const ObjectPool&) = default;
-
-    // Allow move operations
-    ObjectPool(ObjectPool&&) noexcept = default;
-    ObjectPool& operator=(ObjectPool&&) noexcept = default;
+    // Disable copy and move operations
+    ObjectPool(const ObjectPool&) = delete;
+    ObjectPool& operator=(const ObjectPool&) = delete;
+    ObjectPool(ObjectPool&&) = delete;
+    ObjectPool& operator=(ObjectPool&&) = delete;
 
     /**
      * @brief Destructor - ensures all objects are properly cleaned up
@@ -293,81 +184,56 @@ public:
      */
     [[nodiscard]] std::shared_ptr<T> acquire(
         Priority priority = Priority::Normal) {
-        auto start_time = std::chrono::high_resolution_clock::now();
+        std::unique_lock lock(mutex_);
 
-        // Try fast path first - check for pre-warmed objects without full locking
-        if (config_.enable_object_warming) {
-            std::shared_lock<std::shared_mutex> read_lock(mutex_);
-            if (auto warmed_obj = tryGetWarmedObject()) {
-                fast_path_acquisitions_.fetch_add(1, std::memory_order_relaxed);
-                prefetchObject(warmed_obj);
-
-                if (config_.enable_stats) {
-                    stats_.total_acquisitions.fetch_add(1, std::memory_order_relaxed);
-                    stats_.memory_reuses.fetch_add(1, std::memory_order_relaxed);
-                    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::high_resolution_clock::now() - start_time).count();
-                    updateTimingStats(duration, stats_.total_acquisition_time, stats_.max_acquisition_time);
-                }
-
-                return wrapWithDeleter(std::move(warmed_obj));
-            }
-        }
-
-        std::unique_lock<std::shared_mutex> lock(mutex_);
         if (available_ == 0 && pool_.empty()) {
-            THROW_RUNTIME_ERROR("ObjectPool is full");
+            THROW_RUNTIME_ERROR("ObjectPool is full.");
         }
 
+        auto start_time = std::chrono::steady_clock::now();
         bool waited = false;
-        auto lock_acquired_time = std::chrono::high_resolution_clock::now();
 
+        // Wait for an object to become available
         if (pool_.empty() && available_ == 0) {
             if (config_.enable_stats) {
-                stats_.wait_count.fetch_add(1, std::memory_order_relaxed);
-                stats_.lock_contentions.fetch_add(1, std::memory_order_relaxed);
+                stats_.wait_count++;
             }
             waited = true;
+
+            // Higher priority requests will be serviced first when objects
+            // become available
             waiting_priorities_.push_back(priority);
+
             cv_.wait(lock, [this, priority] {
+                // Only wake if we have objects AND this is the highest waiting
+                // priority
                 return (!pool_.empty() || available_ > 0) &&
                        (waiting_priorities_.empty() ||
                         waiting_priorities_.front() <= priority);
             });
+
+            // Remove our priority from the waiting list
             waiting_priorities_.erase(
                 std::remove(waiting_priorities_.begin(),
                             waiting_priorities_.end(), priority),
                 waiting_priorities_.end());
         }
 
-        if (config_.enable_stats) {
-            stats_.total_acquisitions.fetch_add(1, std::memory_order_relaxed);
-
-            if (waited) {
-                auto wait_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::high_resolution_clock::now() - start_time).count();
-                updateTimingStats(wait_duration, stats_.total_wait_time, stats_.max_wait_time);
-            }
-
-            auto lock_wait_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                lock_acquired_time - start_time).count();
-            updateTimingStats(lock_wait_duration, stats_.total_lock_wait_time, stats_.max_acquisition_time);
+        // Calculate wait time if tracking stats
+        if (config_.enable_stats && waited) {
+            auto wait_duration = std::chrono::steady_clock::now() - start_time;
+            stats_.total_wait_time += wait_duration;
+            stats_.max_wait_time =
+                std::max(stats_.max_wait_time, wait_duration);
         }
 
-        // Track recent acquisition patterns for adaptive sizing
-        ++recent_acquisition_count_;
-
+        // Run cleanup if it's time
         if (config_.enable_auto_cleanup) {
             tryCleanupLocked();
         }
 
-        auto result = acquireImpl(lock);
-
-        // Prefetch the acquired object and track it
-        prefetchObject(result);
-        last_acquired_object_.store(result.get(), std::memory_order_relaxed);
-
-        return result;
+        // Acquire the object
+        return acquireImpl(lock);
     }
 
     /**
@@ -384,30 +250,37 @@ public:
     [[nodiscard]] std::optional<std::shared_ptr<T>> tryAcquireFor(
         const std::chrono::duration<Rep, Period>& timeout_duration,
         Priority priority = Priority::Normal) {
-        std::unique_lock<std::shared_mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
+
         if (available_ == 0 && pool_.empty()) {
-            THROW_RUNTIME_ERROR("ObjectPool is full");
+            THROW_RUNTIME_ERROR("ObjectPool is full.");
         }
 
         auto start_time = std::chrono::steady_clock::now();
         bool waited = false;
 
+        // Wait for an object to become available, respecting the timeout
         if (pool_.empty() && available_ == 0) {
             if (config_.enable_stats) {
                 stats_.wait_count++;
             }
             waited = true;
+
             waiting_priorities_.push_back(priority);
+
             bool success =
                 cv_.wait_for(lock, timeout_duration, [this, priority] {
                     return (!pool_.empty() || available_ > 0) &&
                            (waiting_priorities_.empty() ||
                             waiting_priorities_.front() <= priority);
                 });
+
+            // Remove our priority from the waiting list
             waiting_priorities_.erase(
                 std::remove(waiting_priorities_.begin(),
                             waiting_priorities_.end(), priority),
                 waiting_priorities_.end());
+
             if (!success) {
                 if (config_.enable_stats) {
                     stats_.timeout_count++;
@@ -416,17 +289,15 @@ public:
             }
         }
 
+        // Calculate wait time if tracking stats
         if (config_.enable_stats && waited) {
             auto wait_duration = std::chrono::steady_clock::now() - start_time;
-            auto wait_duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(wait_duration).count();
-            stats_.total_wait_time += wait_duration_ns;
-            auto current_max = stats_.max_wait_time.load();
-            while (wait_duration_ns > current_max &&
-                   !stats_.max_wait_time.compare_exchange_weak(current_max, wait_duration_ns)) {
-                // Retry if another thread updated max_wait_time
-            }
+            stats_.total_wait_time += wait_duration;
+            stats_.max_wait_time =
+                std::max(stats_.max_wait_time, wait_duration);
         }
 
+        // Run cleanup if it's time
         if (config_.enable_auto_cleanup) {
             tryCleanupLocked();
         }
@@ -487,13 +358,9 @@ public:
                         if (waited) {
                             auto wait_duration =
                                 std::chrono::steady_clock::now() - start_time;
-                            auto wait_duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(wait_duration).count();
-                            stats_.total_wait_time += wait_duration_ns;
-                            auto current_max = stats_.max_wait_time.load();
-                            while (wait_duration_ns > current_max &&
-                                   !stats_.max_wait_time.compare_exchange_weak(current_max, wait_duration_ns)) {
-                                // Retry if another thread updated max_wait_time
-                            }
+                            stats_.total_wait_time += wait_duration;
+                            stats_.max_wait_time =
+                                std::max(stats_.max_wait_time, wait_duration);
                         }
                     }
 
@@ -510,13 +377,9 @@ public:
                     if (waited) {
                         auto wait_duration =
                             std::chrono::steady_clock::now() - start_time;
-                        auto wait_duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(wait_duration).count();
-                        stats_.total_wait_time += wait_duration_ns;
-                        auto current_max = stats_.max_wait_time.load();
-                        while (wait_duration_ns > current_max &&
-                               !stats_.max_wait_time.compare_exchange_weak(current_max, wait_duration_ns)) {
-                            // Retry if another thread updated max_wait_time
-                        }
+                        stats_.total_wait_time += wait_duration;
+                        stats_.max_wait_time =
+                            std::max(stats_.max_wait_time, wait_duration);
                     }
                 }
 
@@ -580,13 +443,9 @@ public:
         // Calculate wait time if tracking stats
         if (config_.enable_stats && waited) {
             auto wait_duration = std::chrono::steady_clock::now() - start_time;
-            auto wait_duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(wait_duration).count();
-            stats_.total_wait_time += wait_duration_ns;
-            auto current_max = stats_.max_wait_time.load();
-            while (wait_duration_ns > current_max &&
-                   !stats_.max_wait_time.compare_exchange_weak(current_max, wait_duration_ns)) {
-                // Retry if another thread updated max_wait_time
-            }
+            stats_.total_wait_time += wait_duration;
+            stats_.max_wait_time =
+                std::max(stats_.max_wait_time, wait_duration);
         }
 
         // First take objects from the pool
@@ -765,7 +624,7 @@ public:
         }
 
         std::unique_lock lock(mutex_);
-        stats_.reset();
+        stats_ = PoolStats{};
     }
 
     /**
@@ -778,130 +637,54 @@ public:
         config_ = config;
     }
 
-    /**
-     * @brief Get detailed performance metrics
-     *
-     * @return Tuple containing (hit_ratio, avg_wait_time, avg_acquisition_time, memory_reuse_ratio)
-     */
-    [[nodiscard]] auto getPerformanceMetrics() const -> std::tuple<double, double, double, double> {
-        std::shared_lock lock(mutex_);
-        return std::make_tuple(
-            stats_.getHitRatio(),
-            stats_.getAverageWaitTime(),
-            stats_.getAverageAcquisitionTime(),
-            stats_.getMemoryReuseRatio()
-        );
-    }
-
-    /**
-     * @brief Get lock contention statistics
-     *
-     * @return Tuple containing (contentions, total_lock_wait_time, avg_lock_wait_time)
-     */
-    [[nodiscard]] auto getLockContentionStats() const -> std::tuple<size_t, uint64_t, double> {
-        std::shared_lock lock(mutex_);
-        size_t contentions = stats_.lock_contentions.load();
-        uint64_t total_wait = stats_.total_lock_wait_time.load();
-        double avg_wait = contentions > 0 ? static_cast<double>(total_wait) / contentions : 0.0;
-        return std::make_tuple(contentions, total_wait, avg_wait);
-    }
-
-    /**
-     * @brief Get memory efficiency statistics
-     *
-     * @return Tuple containing (memory_reuses, memory_allocations, reuse_ratio)
-     */
-    [[nodiscard]] auto getMemoryEfficiencyStats() const -> std::tuple<size_t, size_t, double> {
-        std::shared_lock lock(mutex_);
-        size_t reuses = stats_.memory_reuses.load();
-        size_t allocations = stats_.memory_allocations.load();
-        double ratio = stats_.getMemoryReuseRatio();
-        return std::make_tuple(reuses, allocations, ratio);
-    }
-
-    /**
-     * @brief Get fast path statistics
-     *
-     * @return Number of fast path acquisitions
-     */
-    [[nodiscard]] size_t getFastPathAcquisitions() const noexcept {
-        return fast_path_acquisitions_.load(std::memory_order_relaxed);
-    }
-
-    /**
-     * @brief Manually trigger object warming
-     *
-     * @param count Number of objects to pre-warm
-     */
-    void triggerObjectWarming(size_t count) {
-        std::unique_lock lock(mutex_);
-        warmObjects(count);
-    }
-
-    /**
-     * @brief Manually trigger adaptive sizing
-     */
-    void triggerAdaptiveSizing() {
-        std::unique_lock lock(mutex_);
-        performAdaptiveSizing();
-    }
-
-    /**
-     * @brief Get current pool utilization
-     *
-     * @return Tuple containing (current_usage, max_size, utilization_ratio)
-     */
-    [[nodiscard]] auto getUtilization() const -> std::tuple<size_t, size_t, double> {
-        std::shared_lock lock(mutex_);
-        size_t current_usage = max_size_ - available_;
-        double utilization = static_cast<double>(current_usage) / max_size_;
-        return std::make_tuple(current_usage, max_size_, utilization);
-    }
-
 private:
     /**
      * @brief Acquires an object from the pool without waiting (assumes lock is
-     * held)
-     * @param lock The unique lock that is already held
-     * @return A shared pointer to the acquired object
+     * held).
+     *
+     * @param lock The unique lock that is already held.
+     * @return A shared pointer to the acquired object.
      */
     std::shared_ptr<T> acquireImpl(std::unique_lock<std::shared_mutex>& lock) {
         std::shared_ptr<T> obj;
 
 #ifdef ATOM_USE_BOOST
+        // Use Boost's object pool if enabled
         T* raw_ptr = boost_pool_.construct();
         if (!raw_ptr) {
-            THROW_RUNTIME_ERROR("Boost pool allocation failed");
+            THROW_RUNTIME_ERROR("Boost pool allocation failed.");
         }
         obj = std::shared_ptr<T>(raw_ptr, [this](T* ptr) {
             boost_pool_.destroy(ptr);
-            std::unique_lock<std::shared_mutex> lock(mutex_);
+            std::unique_lock lock(mutex_);
             ++available_;
             cv_.notify_one();
         });
 #else
+        // Get from our custom pool or create new
         if (!pool_.empty()) {
             obj = std::move(pool_.back());
             pool_.pop_back();
+
             if (config_.enable_stats) {
-                stats_.hits.fetch_add(1, std::memory_order_relaxed);
-                stats_.memory_reuses.fetch_add(1, std::memory_order_relaxed);
+                stats_.hits++;
             }
         } else {
             --available_;
             obj = creator_();
-            ++recent_miss_count_;  // Track for adaptive sizing
+
             if (config_.enable_stats) {
-                stats_.misses.fetch_add(1, std::memory_order_relaxed);
-                stats_.memory_allocations.fetch_add(1, std::memory_order_relaxed);
+                stats_.misses++;
+
+                // Update peak usage
                 size_t current_usage = max_size_ - available_;
-                size_t current_peak = stats_.peak_usage.load();
-                while (current_usage > current_peak &&
-                       !stats_.peak_usage.compare_exchange_weak(current_peak, current_usage)) {
-                    // Keep trying until we successfully update or find a larger value
+                if (current_usage > stats_.peak_usage) {
+                    stats_.peak_usage = current_usage;
                 }
             }
         }
+
+        // Wrap the object with our custom deleter
         obj = wrapWithDeleter(std::move(obj));
 #endif
 
@@ -915,12 +698,12 @@ private:
      * @return A shared pointer with a custom deleter.
      */
     std::shared_ptr<T> wrapWithDeleter(std::shared_ptr<T> obj) {
-        // Store the original object to keep it alive
-        auto original_obj = obj;
-
         // Create a custom deleter to return the object to the pool
-        auto deleter = [this, original_obj, creation_time =
+        auto deleter = [this, creation_time =
                                   std::chrono::steady_clock::now()](T* ptr) {
+            // Create a new shared_ptr that owns the object but won't delete it
+            std::shared_ptr<T> sharedObj(ptr, [](T*) {});
+
             // Validate the object if configured
             bool is_valid = !config_.validate_on_release ||
                             !config_.validator || config_.validator(*ptr);
@@ -929,16 +712,16 @@ private:
 
             if (is_valid && pool_.size() < max_size_) {
                 // Reset the object to a clean state
-                original_obj->reset();
+                sharedObj->reset();
 
                 // Track idle time if auto-cleanup is enabled
                 if (config_.enable_auto_cleanup) {
                     idle_objects_.emplace_back(
-                        original_obj, std::chrono::steady_clock::now());
+                        sharedObj, std::chrono::steady_clock::now());
                 }
 
                 // Return to the pool
-                pool_.push_back(original_obj);
+                pool_.push_back(std::move(sharedObj));
             } else {
                 // If invalid or pool is full, just discard and increment
                 // available count
@@ -1026,21 +809,13 @@ private:
     // Core pool data
     size_t max_size_;
     size_t available_;
-    mutable std::shared_mutex mutex_;  // Shared mutex for better read concurrency
+    mutable std::shared_mutex mutex_;
     std::condition_variable_any cv_;
     std::vector<std::shared_ptr<T>> pool_;
-    std::vector<std::pair<std::shared_ptr<T>, std::chrono::steady_clock::time_point>> idle_objects_;
+    std::vector<
+        std::pair<std::shared_ptr<T>, std::chrono::steady_clock::time_point>>
+        idle_objects_;
     CreateFunc creator_;
-
-    // Performance optimization data
-    alignas(CACHE_LINE_SIZE) std::atomic<size_t> fast_path_acquisitions_{0};
-    alignas(CACHE_LINE_SIZE) std::atomic<void*> last_acquired_object_{nullptr};
-    std::vector<std::shared_ptr<T>> warm_objects_;  ///< Pre-warmed objects for fast allocation
-
-    // Adaptive sizing data
-    std::chrono::steady_clock::time_point last_resize_time_;
-    size_t recent_acquisition_count_{0};
-    size_t recent_miss_count_{0};
 
     // Priority handling
     std::vector<Priority> waiting_priorities_;
@@ -1055,106 +830,6 @@ private:
 #ifdef ATOM_USE_BOOST
     boost::object_pool<T> boost_pool_;
 #endif
-
-    /**
-     * @brief Prefetch memory for better cache performance
-     */
-    void prefetchObject(const std::shared_ptr<T>& obj) const noexcept {
-        if (config_.enable_prefetching && obj) {
-            _mm_prefetch(reinterpret_cast<const char*>(obj.get()), _MM_HINT_T0);
-        }
-    }
-
-    /**
-     * @brief Update timing statistics with lock-free optimization
-     */
-    void updateTimingStats(uint64_t duration, std::atomic<uint64_t>& total,
-                          std::atomic<uint64_t>& max_time) noexcept {
-        if (config_.enable_lock_free_stats) {
-            total.fetch_add(duration, std::memory_order_relaxed);
-            uint64_t current_max = max_time.load(std::memory_order_relaxed);
-            while (duration > current_max &&
-                   !max_time.compare_exchange_weak(current_max, duration,
-                                                  std::memory_order_relaxed)) {
-                // Keep trying until we successfully update or find a larger value
-            }
-        }
-    }
-
-    /**
-     * @brief Try to get a pre-warmed object for faster allocation
-     */
-    std::shared_ptr<T> tryGetWarmedObject() {
-        if (!warm_objects_.empty()) {
-            auto obj = std::move(warm_objects_.back());
-            warm_objects_.pop_back();
-            return obj;
-        }
-        return nullptr;
-    }
-
-    /**
-     * @brief Pre-warm objects for faster allocation
-     */
-    void warmObjects(size_t count) {
-        if (!config_.enable_object_warming || count == 0) return;
-
-        warm_objects_.reserve(warm_objects_.size() + count);
-        for (size_t i = 0; i < count && available_ > 0; ++i) {
-            try {
-                auto obj = creator_();
-                if (config_.object_initializer) {
-                    config_.object_initializer(*obj);
-                }
-                warm_objects_.push_back(std::move(obj));
-                --available_;
-            } catch (...) {
-                // Ignore warming failures
-                break;
-            }
-        }
-    }
-
-    /**
-     * @brief Perform adaptive pool sizing based on recent usage patterns
-     */
-    void performAdaptiveSizing() {
-        if (!config_.enable_adaptive_sizing) return;
-
-        auto now = std::chrono::steady_clock::now();
-        auto time_since_last_resize = now - last_resize_time_;
-
-        // Only resize every few minutes to avoid thrashing (except for testing)
-        if (time_since_last_resize < std::chrono::minutes(5) &&
-            last_resize_time_ != std::chrono::steady_clock::time_point{}) return;
-
-        double miss_ratio = recent_acquisition_count_ > 0 ?
-            static_cast<double>(recent_miss_count_) / recent_acquisition_count_ : 0.0;
-
-        // If miss ratio is high, consider growing the pool
-        if (miss_ratio > 0.3 && available_ < max_size_ / 4) {
-            size_t growth_amount = std::min(config_.max_pool_growth,
-                                          static_cast<size_t>(available_ * config_.growth_factor));
-            available_ += growth_amount;
-
-            // Pre-warm some objects if enabled
-            if (config_.enable_object_warming) {
-                warmObjects(growth_amount / 2);
-            }
-        }
-        // If miss ratio is very low, consider shrinking
-        else if (miss_ratio < 0.05 && pool_.size() > max_size_ * config_.shrink_threshold / 100) {
-            size_t shrink_amount = pool_.size() / 4;
-            for (size_t i = 0; i < shrink_amount && !pool_.empty(); ++i) {
-                pool_.pop_back();
-                ++available_;
-            }
-        }
-
-        last_resize_time_ = now;
-        recent_acquisition_count_ = 0;
-        recent_miss_count_ = 0;
-    }
 };
 
 }  // namespace atom::memory

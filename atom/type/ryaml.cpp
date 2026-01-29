@@ -473,13 +473,7 @@ auto YamlValue::operator[](const std::string& key) -> YamlValue& {
         throw YamlException("Not an object", {});
     }
 
-    auto& obj = std::get<YamlObject>(value_);
-    auto it = obj.find(key);
-    if (it == obj.end()) {
-        throw YamlException("Key not found: " + key, {});
-    }
-
-    return it->second;
+    return std::get<YamlObject>(value_)[key];
 }
 
 auto YamlValue::operator[](size_t index) const -> const YamlValue& {
@@ -650,15 +644,10 @@ std::string YamlDocument::to_yaml(const YamlSerializeOptions& options) const {
 
 // YamlParser implementation
 
-auto YamlParser::parse(const std::string& str, const YamlParseOptions& options)
-    -> YamlValue {
+auto YamlParser::parse(const std::string& str,
+                       const YamlParseOptions& options) -> YamlValue {
     ParseContext ctx{str, 0, {1, 1}, options, {}};
     skip_whitespace(ctx);
-
-    // Handle empty input - return null value
-    if (is_end(ctx)) {
-        return YamlValue();  // null value
-    }
 
     // Check for document start marker
     if (ctx.index + 3 <= ctx.str.size() &&
@@ -666,11 +655,6 @@ auto YamlParser::parse(const std::string& str, const YamlParseOptions& options)
         ctx.index += 3;
         ctx.position.column += 3;
         skip_whitespace(ctx);
-
-        // Check again after document start marker
-        if (is_end(ctx)) {
-            return YamlValue();  // null value
-        }
     }
 
     auto result = parse_value(ctx);
@@ -686,9 +670,8 @@ auto YamlParser::parse(const std::string& str, const YamlParseOptions& options)
     return result;
 }
 
-auto YamlParser::parse_document(const std::string& str,
-                                const YamlParseOptions& options)
-    -> YamlDocument {
+auto YamlParser::parse_document(
+    const std::string& str, const YamlParseOptions& options) -> YamlDocument {
     return YamlDocument(parse(str, options));
 }
 
@@ -761,17 +744,8 @@ auto YamlParser::parse_value(ParseContext& ctx) -> YamlValue {
 
     YamlValue result;
 
-    // Special handling for tagged null values
-    if (tag.tag() == "!!null") {
-        // For !!null tags, the value should be null regardless of what follows
-        result = YamlValue();
-        // Skip any remaining content on the line
-        while (!is_end(ctx) && ctx.str[ctx.index] != '\n' && ctx.str[ctx.index] != '\r') {
-            advance(ctx);
-        }
-    }
     // Parse the value
-    else if (ctx.str[ctx.index] == '*') {
+    if (ctx.str[ctx.index] == '*') {
         // Alias
         result = parse_alias(ctx);
     } else if (ctx.str[ctx.index] == '\'') {
@@ -822,20 +796,8 @@ auto YamlParser::parse_value(ParseContext& ctx) -> YamlValue {
         result = YamlValue(parse_block_scalar(ctx, style));
     } else if (std::isdigit(ctx.str[ctx.index]) ||
                (ctx.str[ctx.index] == '-' && ctx.index + 1 < ctx.str.size() &&
-                std::isdigit(ctx.str[ctx.index + 1])) ||
-               (ctx.str[ctx.index] == '.' &&
-                (ctx.str.substr(ctx.index, 4) == ".inf" ||
-                 ctx.str.substr(ctx.index, 4) == ".Inf" ||
-                 ctx.str.substr(ctx.index, 4) == ".INF" ||
-                 ctx.str.substr(ctx.index, 4) == ".nan" ||
-                 ctx.str.substr(ctx.index, 4) == ".NaN" ||
-                 ctx.str.substr(ctx.index, 4) == ".NAN")) ||
-               (ctx.str[ctx.index] == '-' && ctx.index + 1 < ctx.str.size() &&
-                ctx.str[ctx.index + 1] == '.' &&
-                (ctx.str.substr(ctx.index, 5) == "-.inf" ||
-                 ctx.str.substr(ctx.index, 5) == "-.Inf" ||
-                 ctx.str.substr(ctx.index, 5) == "-.INF"))) {
-        // Number (including special YAML numbers like .inf, .nan, -.inf)
+                std::isdigit(ctx.str[ctx.index + 1]))) {
+        // Number
         result = YamlValue(parse_number(ctx));
     } else if (ctx.str.substr(ctx.index, 4) == "true") {
         // Boolean true
@@ -861,17 +823,11 @@ auto YamlParser::parse_value(ParseContext& ctx) -> YamlValue {
             // Unquoted string
             std::string value;
             while (ctx.index < ctx.str.size() &&
-                   ctx.str[ctx.index] != '\n' && ctx.str[ctx.index] != '\r' &&
+                   !std::isspace(ctx.str[ctx.index]) &&
                    ctx.str[ctx.index] != ',' && ctx.str[ctx.index] != ']' &&
-                   ctx.str[ctx.index] != '}' && ctx.str[ctx.index] != ':' &&
-                   ctx.str[ctx.index] != '#') {  // Stop at comments
+                   ctx.str[ctx.index] != '}' && ctx.str[ctx.index] != ':') {
                 value += ctx.str[ctx.index];
                 advance(ctx);
-            }
-
-            // Trim trailing whitespace
-            while (!value.empty() && std::isspace(value.back())) {
-                value.pop_back();
             }
 
             result = YamlValue(value);
@@ -1034,22 +990,6 @@ auto YamlParser::parse_number(ParseContext& ctx) -> double {
     size_t start_index = ctx.index;
     YamlPosition start_position = ctx.position;
 
-    // Check for special YAML numbers first
-    std::string potential_special = ctx.str.substr(ctx.index, std::min(size_t(5), ctx.str.size() - ctx.index));
-    if (potential_special.substr(0, 4) == ".inf" || potential_special.substr(0, 4) == ".Inf" || potential_special.substr(0, 4) == ".INF") {
-        ctx.index += 4;
-        ctx.position.column += 4;
-        return std::numeric_limits<double>::infinity();
-    } else if (potential_special.substr(0, 4) == ".nan" || potential_special.substr(0, 4) == ".NaN" || potential_special.substr(0, 4) == ".NAN") {
-        ctx.index += 4;
-        ctx.position.column += 4;
-        return std::numeric_limits<double>::quiet_NaN();
-    } else if (potential_special == "-.inf" || potential_special == "-.Inf" || potential_special == "-.INF") {
-        ctx.index += 5;
-        ctx.position.column += 5;
-        return -std::numeric_limits<double>::infinity();
-    }
-
     // Parse sign
     if (ctx.str[ctx.index] == '-') {
         advance(ctx);
@@ -1057,7 +997,6 @@ auto YamlParser::parse_number(ParseContext& ctx) -> double {
 
     // Parse integer part
     bool has_digits = false;
-    bool has_decimal_point = false;
     while (!is_end(ctx) && std::isdigit(ctx.str[ctx.index])) {
         has_digits = true;
         advance(ctx);
@@ -1065,17 +1004,11 @@ auto YamlParser::parse_number(ParseContext& ctx) -> double {
 
     // Parse decimal part
     if (!is_end(ctx) && ctx.str[ctx.index] == '.') {
-        has_decimal_point = true;
         advance(ctx);
 
         while (!is_end(ctx) && std::isdigit(ctx.str[ctx.index])) {
             has_digits = true;
             advance(ctx);
-        }
-
-        // Check for second decimal point (invalid)
-        if (!is_end(ctx) && ctx.str[ctx.index] == '.') {
-            throw YamlException("Invalid number: multiple decimal points", start_position);
         }
     }
 
@@ -1105,8 +1038,16 @@ auto YamlParser::parse_number(ParseContext& ctx) -> double {
         throw YamlException("Invalid number: no digits", start_position);
     }
 
-    // Convert to double
+    // Special keywords
     std::string num_str = ctx.str.substr(start_index, ctx.index - start_index);
+    if (num_str == ".inf" || num_str == ".Inf" || num_str == ".INF") {
+        return std::numeric_limits<double>::infinity();
+    } else if (num_str == "-.inf" || num_str == "-.Inf" || num_str == "-.INF") {
+        return -std::numeric_limits<double>::infinity();
+    } else if (num_str == ".nan" || num_str == ".NaN" || num_str == ".NAN") {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
     try {
         return std::stod(num_str);
     } catch (const std::exception& e) {
@@ -1144,51 +1085,8 @@ auto YamlParser::parse_object(ParseContext& ctx) -> YamlObject {
     while (!is_end(ctx)) {
         skip_whitespace(ctx);
 
-        // For subsequent keys, check if we can find a valid key-value pair
-        if (!first) {
-            // Skip any whitespace and newlines
-            size_t saved_index = ctx.index;
-            YamlPosition saved_pos = ctx.position;
-
-            skip_whitespace(ctx);
-
-            // Check if we're at the end or if this doesn't look like a key
-            if (is_end(ctx) || !is_first_identifier_char(ctx.str[ctx.index])) {
-                // Restore position and break
-                ctx.index = saved_index;
-                ctx.position = saved_pos;
-                break;
-            }
-
-            // Look ahead to see if this looks like a key-value pair
-            size_t lookahead = ctx.index;
-            bool found_key = false;
-
-            // Skip any identifier characters
-            while (lookahead < ctx.str.size() && is_identifier_char(ctx.str[lookahead])) {
-                lookahead++;
-            }
-
-            // Skip whitespace after identifier
-            while (lookahead < ctx.str.size() && (ctx.str[lookahead] == ' ' || ctx.str[lookahead] == '\t')) {
-                lookahead++;
-            }
-
-            // Check if we found a colon after the identifier
-            if (lookahead < ctx.str.size() && ctx.str[lookahead] == ':') {
-                found_key = true;
-            }
-
-            if (!found_key) {
-                // Restore position and break
-                ctx.index = saved_index;
-                ctx.position = saved_pos;
-                break;
-            }
-
-            // Restore position for actual parsing
-            ctx.index = saved_index;
-            ctx.position = saved_pos;
+        if (!first && (is_end(ctx) || ctx.str[ctx.index] != '-')) {
+            break;
         }
 
         // Parse key
@@ -1418,8 +1316,8 @@ auto YamlParser::parse_flow_array(ParseContext& ctx) -> YamlArray {
     return arr;
 }
 
-auto YamlParser::parse_block_scalar(ParseContext& ctx, char style)
-    -> std::string {
+auto YamlParser::parse_block_scalar(ParseContext& ctx,
+                                    char /*style*/) -> std::string {
     if (ctx.str[ctx.index] != '|' && ctx.str[ctx.index] != '>') {
         throw YamlException("Expected '|' or '>'", ctx.position);
     }
@@ -1504,19 +1402,19 @@ auto YamlParser::parse_block_scalar(ParseContext& ctx, char style)
 
         // Add the line to the result
         if (block_style == '|') {
-            // Literal block scalar - preserve newlines
             result += line;
-            result += '\n';  // Always add newline for literal blocks
+            if (keep_newlines || !is_end(ctx)) {
+                result += '\n';
+            }
         } else if (block_style == '>') {
-            // Folded block scalar - fold newlines into spaces
             if (!line.empty()) {
                 if (!result.empty() && result.back() != '\n') {
                     result += ' ';
                 }
                 result += line;
             }
-            // Add final newline for folded blocks
-            if (is_end(ctx) || (current_indent < indent && ctx.str[ctx.index] != '\n')) {
+            if (keep_newlines || (current_indent < indent && !is_end(ctx) &&
+                                  ctx.str[ctx.index] != '\n')) {
                 result += '\n';
             }
         }

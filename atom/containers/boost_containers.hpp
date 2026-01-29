@@ -14,7 +14,7 @@ Description: Boost High-Performance Containers
 
 #pragma once
 
-#include "../macro.hpp"
+#include "../macro.hpp"  // IWYU pragma: keep
 
 // Enable only if ATOM_USE_BOOST_CONTAINER macro is defined and Boost container
 // library is available
@@ -27,6 +27,7 @@ Description: Boost High-Performance Containers
 #include <boost/container/stable_vector.hpp>
 #include <boost/container/static_vector.hpp>
 #include <boost/container/string.hpp>
+#include <boost/container/vector.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/unordered_set.hpp>
 

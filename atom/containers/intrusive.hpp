@@ -16,8 +16,7 @@ Description: Boost Intrusive Containers
 
 #include "../macro.hpp"
 
-// Enable only if ATOM_HAS_BOOST_INTRUSIVE is defined and Boost intrusive
-// library is available
+// 只有在定义了ATOM_USE_BOOST_INTRUSIVE宏且Boost侵入式容器库可用时才启用
 #if defined(ATOM_HAS_BOOST_INTRUSIVE)
 
 #include <boost/functional/hash.hpp>
@@ -31,68 +30,65 @@ namespace atom {
 namespace containers {
 namespace intrusive {
 
-// Define common list hooks
+// 定义常用链表钩子
 using list_base_hook = boost::intrusive::list_base_hook<>;
 using set_base_hook = boost::intrusive::set_base_hook<>;
 using unordered_set_base_hook = boost::intrusive::unordered_set_base_hook<>;
 using slist_base_hook = boost::intrusive::slist_base_hook<>;
 
 /**
- * @brief Intrusive list
+ * @brief 侵入式链表
  *
- * Intrusive list requires element types to contain a hook, avoiding additional
- * memory allocation. Very suitable for managing large numbers of objects,
- * reducing memory fragmentation and improving cache performance.
+ * 侵入式链表要求元素类型内包含钩子（hook），避免了额外的内存分配。
+ * 非常适合管理大量对象，减少内存碎片和提高缓存性能。
  *
- * Usage example:
+ * 使用示例:
  * class MyClass : public atom::containers::intrusive::list_base_hook {
- *   // Class members and methods
+ *   // 类成员和方法
  * };
  *
  * atom::containers::intrusive::list<MyClass> my_list;
  *
- * @tparam T Element type that must inherit from list_base_hook
+ * @tparam T 必须继承自list_base_hook的元素类型
  */
 template <typename T>
 using list = boost::intrusive::list<T>;
 
 /**
- * @brief Intrusive singly-linked list
+ * @brief 侵入式单向链表
  *
- * Lighter than doubly-linked list, but only supports forward traversal
+ * 比双向链表更轻量，但只支持单向遍历
  *
- * @tparam T Element type that must inherit from slist_base_hook
+ * @tparam T 必须继承自slist_base_hook的元素类型
  */
 template <typename T>
 using slist = boost::intrusive::slist<T>;
 
 /**
- * @brief Intrusive ordered set
+ * @brief 侵入式有序集合
  *
- * Elements are sorted by key, providing fast lookup while avoiding memory
- * allocation overhead
+ * 元素按键排序，提供快速查找，同时避免了内存分配开销
  *
- * @tparam T Element type that must inherit from set_base_hook
- * @tparam Compare Function object type for comparing elements
+ * @tparam T 必须继承自set_base_hook的元素类型
+ * @tparam Compare 比较元素的函数对象类型
  */
 template <typename T, typename Compare = std::less<T>>
 using set = boost::intrusive::set<T, boost::intrusive::compare<Compare>>;
 
 /**
- * @brief Intrusive unordered set
+ * @brief 侵入式无序集合
  *
- * Implements fast lookup through hashing, avoiding node allocation overhead of
- * standard unordered containers
+ * 通过哈希实现快速查找，避免了标准无序容器的节点分配开销
  *
- * @tparam T Element type that must inherit from unordered_set_base_hook
- * @tparam Hash Hash function object type
- * @tparam Equal Function object type for element equality comparison
+ * @tparam T 必须继承自unordered_set_base_hook的元素类型
+ * @tparam Hash 哈希函数对象类型
+ * @tparam Equal 判断元素相等的函数对象类型
  */
 template <typename T, typename Hash = boost::hash<T>,
           typename Equal = std::equal_to<T>>
 class unordered_set {
 private:
-    // Basic configuration for hash table buckets
+    // 哈希表桶的基本配置
     static constexpr std::size_t NumBuckets = 128;
     using bucket_type = boost::intrusive::unordered_set<T>::bucket_type;
     bucket_type buckets_[NumBuckets];
@@ -111,80 +107,81 @@ public:
         : set_(boost::intrusive::bucket_traits(buckets_, NumBuckets)) {}
 
     /**
-     * @brief Insert element into unordered set
+     * @brief 插入元素到无序集合
      *
-     * @param value Element to insert
+     * @param value 要插入的元素
      * @return std::pair<iterator, bool>
-     * Contains iterator to inserted element and flag indicating successful
-     * insertion
+     * 包含指向插入元素的迭代器和是否成功插入的标志
      */
-    std::pair<iterator, bool> insert(T& value) { return set_.insert(value); }
+    [[nodiscard]] std::pair<iterator, bool> insert(T& value) {
+        return set_.insert(value);
+    }
 
     /**
-     * @brief Remove element from unordered set
+     * @brief 从无序集合中移除元素
      *
-     * @param value Element to remove
-     * @return bool Returns true if element was removed
+     * @param value 要移除的元素
+     * @return bool 如果元素被移除则返回true
      */
-    bool remove(T& value) { return set_.erase(value) > 0; }
+    bool remove(T& value) noexcept { return set_.erase(value) > 0; }
 
     /**
-     * @brief Find element
+     * @brief 查找元素
      *
-     * @param value Element to find
-     * @return iterator Iterator to found element, returns end() if not found
+     * @param value 要查找的元素
+     * @return iterator 指向找到的元素，如果未找到则返回end()
      */
-    iterator find(const T& value) { return set_.find(value); }
+    [[nodiscard]] iterator find(const T& value) { return set_.find(value); }
 
     /**
-     * @brief Return begin iterator
+     * @brief 返回起始迭代器
      */
-    iterator begin() { return set_.begin(); }
+    [[nodiscard]] iterator begin() noexcept { return set_.begin(); }
 
     /**
-     * @brief Return end iterator
+     * @brief 返回终止迭代器
      */
-    iterator end() { return set_.end(); }
+    [[nodiscard]] iterator end() noexcept { return set_.end(); }
 
     /**
-     * @brief Check if container is empty
+     * @brief 检查容器是否为空
      */
-    bool empty() const { return set_.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return set_.empty(); }
 
     /**
-     * @brief Return number of elements in container
+     * @brief 返回容器中元素的数量
      */
-    std::size_t size() const { return set_.size(); }
+    [[nodiscard]] std::size_t size() const noexcept { return set_.size(); }
 
     /**
-     * @brief Clear container
+     * @brief 清空容器
      */
-    void clear() { set_.clear(); }
+    void clear() noexcept { set_.clear(); }
 };
 
 /**
- * @brief Helper base class for linkable types
+ * @brief 提供可链接类型的助手基类
  *
- * This class simplifies creating objects that support multiple intrusive
- * containers. If you need an object that can be placed in list, set, and
- * unordered_set simultaneously, you can inherit from this class.
+ * 这个类简化了创建支持多种侵入式容器的对象。
+ * 如果需要一个对象同时可以放入list、set和unordered_set，
+ * 可以继承这个类。
  */
 class intrusive_base : public list_base_hook,
                        public set_base_hook,
                        public unordered_set_base_hook,
                        public slist_base_hook {
 protected:
-    // Protected constructor to prevent direct instantiation
+    // 保护构造函数防止直接实例化
     intrusive_base() = default;
 
-    // Allow derived class destruction
+    // 允许派生类销毁
     virtual ~intrusive_base() = default;
 
-    // Disable copying
+    // 禁止复制
     intrusive_base(const intrusive_base&) = delete;
     intrusive_base& operator=(const intrusive_base&) = delete;
 
-    // Enable moving
+    // 允许移动
     intrusive_base(intrusive_base&&) = default;
     intrusive_base& operator=(intrusive_base&&) = default;
 };

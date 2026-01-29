@@ -1,271 +1,246 @@
 [build-system]
 requires = [
-    "setuptools>=68.0.0",
-    "wheel>=0.40.0",
-    "pybind11>=2.11.0",
-    "cmake>=3.21.0",
+    "setuptools>=45",
+    "wheel",
+    "pybind11>=2.10.0",
+    "cmake>=3.21",
     "ninja; platform_system!='Windows'",
-    "scikit-build-core>=0.5.0",
-    "pathspec",
-    "packaging",
 ]
-build-backend = "scikit_build_core.build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "atom"
-version = "1.0.0"
 description = "Foundational library for astronomical software"
 readme = "README.md"
-license = { text = "GPL-3.0" }
-authors = [{ name = "Max Qian", email = "your.email@example.com" }]
-maintainers = [{ name = "Max Qian", email = "your.email@example.com" }]
-keywords = ["astronomy", "science", "cpp", "python-bindings"]
+license = {text = "GPL-3.0"}
+authors = [
+    {name = "Max Qian", email = "max@example.com"},
+]
+maintainers = [
+    {name = "Max Qian", email = "max@example.com"},
+]
+keywords = ["astronomy", "astrophysics", "c++", "python", "bindings"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent",
     "Programming Language :: C++",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Astronomy",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.8"
 dependencies = [
-    "loguru>=0.7.3",
     "numpy>=1.20.0",
-    "psutil>=7.0.0",
-    "pybind11>=2.10.0",
-    "pyyaml>=6.0.2",
-    "rich>=14.0.0",
+    "typing-extensions>=4.0.0; python_version<'3.10'",
 ]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "black>=22.0.0",
-    "isort>=5.10.0",
-    "flake8>=5.0.0",
-    "mypy>=0.991",
-    "sphinx>=5.0.0",
-    "sphinx-rtd-theme>=1.0.0",
-]
-test = ["pytest>=7.0.0", "pytest-cov>=4.0.0", "pytest-benchmark>=4.0.0"]
-docs = ["sphinx>=5.0.0", "sphinx-rtd-theme>=1.0.0", "myst-parser>=0.18.0"]
+dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://github.com/ElementAstro/Atom"
-Documentation = "https://atom.readthedocs.io/"
-Repository = "https://github.com/ElementAstro/Atom.git"
+Documentation = "https://github.com/ElementAstro/Atom#readme"
+Repository = "https://github.com/ElementAstro/Atom"
 "Bug Tracker" = "https://github.com/ElementAstro/Atom/issues"
+Changelog = "https://github.com/ElementAstro/Atom/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
+    "black>=21.0",
+    "isort>=5.0",
+    "mypy>=0.900",
+    "sphinx>=4.0",
+    "sphinx-rtd-theme>=1.0",
+    "pre-commit>=2.15",
+    "ruff>=0.1.0",
+]
+test = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
+    "pytest-xdist>=2.0",
+    "numpy>=1.20.0",
+]
+docs = [
+    "sphinx>=4.0",
+    "sphinx-rtd-theme>=1.0",
+    "myst-parser>=0.15",
+    "sphinx-autodoc-typehints>=1.12",
+]
+benchmark = [
+    "pytest-benchmark>=3.4",
+    "matplotlib>=3.0",
+]
+
+[project.scripts]
+atom-info = "atom.cli:info_command"
 
 [tool.setuptools]
-packages = ["atom"]
+package-dir = {"" = "python"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["python"]
 
 [tool.setuptools.package-data]
-atom = ["py.typed", "*.pyi"]
+atom = ["*.pyi", "py.typed"]
 
+[tool.setuptools.dynamic]
+version = {attr = "atom.__version__"}
+
+# Black configuration
 [tool.black]
 line-length = 88
-target-version = ['py39', 'py310', 'py311', 'py312']
+target-version = ['py38', 'py39', 'py310', 'py311']
 include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
 
+# isort configuration
 [tool.isort]
 profile = "black"
 multi_line_output = 3
 line_length = 88
+known_first_party = ["atom"]
+known_third_party = ["numpy", "pybind11"]
 
+# Ruff configuration
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401", "F403", "F405"]
+"tests/**/*" = ["B011"]
+
+# MyPy configuration
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.8"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
 
+[[tool.mypy.overrides]]
+module = [
+    "numpy.*",
+    "pybind11.*",
+]
+ignore_missing_imports = true
+
+# Pytest configuration
 [tool.pytest.ini_options]
-minversion = "7.0"
+minversion = "6.0"
 addopts = [
     "-ra",
-    "-q",
     "--strict-markers",
     "--strict-config",
     "--cov=atom",
-    "--cov-report=html:coverage/python/html",
-    "--cov-report=xml:coverage/python/coverage.xml",
     "--cov-report=term-missing",
-    "--cov-branch",
-    "--cov-fail-under=75"
+    "--cov-report=html",
+    "--cov-report=xml",
 ]
-testpaths = ["tests", "python/tests"]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
-    "benchmark: marks tests as performance benchmarks",
     "unit: marks tests as unit tests",
-    "functional: marks tests as functional tests",
-]
-filterwarnings = [
-    "ignore::DeprecationWarning",
-    "ignore::PendingDeprecationWarning",
 ]
 
+# Coverage configuration
 [tool.coverage.run]
-source = ["atom", "python"]
+source = ["atom"]
 omit = [
     "*/tests/*",
     "*/test_*",
-    "*/__pycache__/*",
-    "*/build/*",
-    "*/dist/*",
-    "*/.venv/*",
-    "*/venv/*",
-    "*/env/*",
+    "setup.py",
 ]
-branch = true
-data_file = "coverage/python/.coverage"
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
-    "def __str__",
+    "if self.debug:",
+    "if settings.DEBUG",
     "raise AssertionError",
     "raise NotImplementedError",
+    "if 0:",
     "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
 ]
-show_missing = true
-skip_covered = false
-precision = 2
 
-[tool.coverage.html]
-directory = "coverage/python/html"
-title = "Atom Python Coverage Report"
+# Sphinx configuration
+[tool.sphinx]
+source-dir = "docs"
+build-dir = "docs/_build"
 
-[tool.coverage.xml]
-output = "coverage/python/coverage.xml"
+# Bandit security linter configuration
+[tool.bandit]
+exclude_dirs = ["tests", "build", "dist"]
+skips = ["B101", "B601"]
 
-# -----------------------------------------------------------------------------
-# Scikit-build-core configuration for optimized C++ extension building
-# -----------------------------------------------------------------------------
-[tool.scikit-build]
-# Minimum CMake version
-cmake.minimum-version = "3.21"
-
-# Build directory
-build-dir = "build/{wheel_tag}"
-
-# CMake configuration
-cmake.args = [
-    "-DCMAKE_BUILD_TYPE=Release",
-    "-DATOM_BUILD_PYTHON_BINDINGS=ON",
-    "-DATOM_ENABLE_CCACHE=ON",
-    "-DATOM_ENABLE_LTO=ON",
-    "-DATOM_ENABLE_PRECOMPILED_HEADERS=ON",
-    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+# Pylint configuration
+[tool.pylint.messages_control]
+disable = [
+    "C0103",  # invalid-name
+    "C0114",  # missing-module-docstring
+    "R0903",  # too-few-public-methods
+    "R0913",  # too-many-arguments
 ]
 
-# Platform-specific CMake arguments
-cmake.define = { "CMAKE_OSX_DEPLOYMENT_TARGET" = "10.15" }
+[tool.pylint.format]
+max-line-length = 88
 
-# Ninja generator preference
-cmake.build-type = "Release"
-ninja.make-fallback = true
-
-# Parallel build configuration
-cmake.build.parallel = true
-
-# Install configuration
-install.components = ["python"]
-install.strip = false
-
-# Wheel configuration
-wheel.expand-macos-universal-tags = true
-wheel.install-dir = "atom"
-wheel.packages = ["python/atom"]
-
-# Source distribution configuration
-sdist.include = [
-    "atom/**/*.hpp",
-    "atom/**/*.h",
-    "cmake/**/*.cmake",
-    "extra/**/*",
-    "python/**/*.cpp",
-    "python/**/*.hpp",
-    "python/**/*.py",
-    "CMakeLists.txt",
-    "pyproject.toml",
-    "README.md",
-    "LICENSE",
-]
-
-sdist.exclude = [
-    "build/**",
-    "dist/**",
-    "**/__pycache__/**",
-    "**/*.pyc",
-    "**/*.pyo",
-    ".git/**",
-    ".github/**",
-    "docs/**",
-    "tests/**",
-    "example/**",
-]
-
-# Metadata configuration
-metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
-
-# -----------------------------------------------------------------------------
-# Cross-platform wheel building configuration
-# -----------------------------------------------------------------------------
-[tool.cibuildwheel]
-# Build wheels for these Python versions
-build = ["cp39-*", "cp310-*", "cp311-*", "cp312-*"]
-
-# Skip 32-bit builds and PyPy
-skip = ["*-win32", "*-manylinux_i686", "pp*"]
-
-# Build configuration
-build-verbosity = 1
-
-# Environment variables for all platforms
-environment = { CMAKE_BUILD_PARALLEL_LEVEL = "4" }
-
-# Platform-specific configurations
-[tool.cibuildwheel.linux]
-before-all = [
-    "yum install -y cmake3 ninja-build ccache || apt-get update && apt-get install -y cmake ninja-build ccache",
-]
-
-[tool.cibuildwheel.linux.environment]
-CMAKE_BUILD_PARALLEL_LEVEL = "4"
-CCACHE_DIR = "/tmp/ccache"
-CC = "ccache gcc"
-CXX = "ccache g++"
-
-[tool.cibuildwheel.macos]
-before-all = [
-    "brew install cmake ninja ccache",
-]
-
-[tool.cibuildwheel.macos.environment]
-CMAKE_BUILD_PARALLEL_LEVEL = "4"
-CCACHE_DIR = "/tmp/ccache"
-CC = "ccache clang"
-CXX = "ccache clang++"
-MACOSX_DEPLOYMENT_TARGET = "10.15"
-
-[tool.cibuildwheel.windows]
-before-all = [
-    "choco install cmake ninja -y",
-]
-
-[tool.cibuildwheel.windows.environment]
-CMAKE_BUILD_PARALLEL_LEVEL = "4"
-CMAKE_GENERATOR = "Ninja"
+# Semantic versioning configuration
+[tool.semantic_release]
+version_variable = "atom/__init__.py:__version__"
+version_pattern = "VERSION:version = \"{version}\""
+build_command = "python -m build"
+upload_to_pypi = true
+upload_to_release = true
+hvcs = "github"

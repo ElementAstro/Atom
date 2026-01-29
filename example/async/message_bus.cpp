@@ -26,7 +26,8 @@ int main() {
     auto messageBus = MessageBus::createShared(io_context);
 
     // Subscribe to a message
-    auto token = messageBus->subscribe<ExampleMessage>("example.message", exampleHandler);
+    auto token = messageBus->subscribe<ExampleMessage>("example.message",
+                                                       exampleHandler);
 
     // Publish a message
     ExampleMessage message{"Hello, World!"};
@@ -42,7 +43,8 @@ int main() {
     messageBus->unsubscribe<ExampleMessage>(token);
 
     // Publish another message to demonstrate unsubscription
-    messageBus->publish("example.message", ExampleMessage{"This should not be received"});
+    messageBus->publish("example.message",
+                        ExampleMessage{"This should not be received"});
 
     // Wait for a short duration to ensure the message is processed
     std::this_thread::sleep_for(std::chrono::seconds(1));

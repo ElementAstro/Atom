@@ -27,20 +27,6 @@ public:
         : std::runtime_error(message) {}
 };
 
-// Forward declaration for type trait
-template <typename... Types>
-class VariantWrapper;
-
-// Type trait to detect VariantWrapper types
-template <typename T>
-struct is_variant_wrapper : std::false_type {};
-
-template <typename... Types>
-struct is_variant_wrapper<VariantWrapper<Types...>> : std::true_type {};
-
-template <typename T>
-inline constexpr bool is_variant_wrapper_v = is_variant_wrapper<T>::value;
-
 /**
  * @brief A thread-safe wrapper class for std::variant with additional utility
  * functions.
@@ -81,7 +67,7 @@ public:
     template <typename T>
     explicit VariantWrapper(T&& value) noexcept(
         std::is_nothrow_constructible_v<VariantType, T>)
-        requires (!is_variant_wrapper_v<std::decay_t<T>>);
+        requires(!std::is_same_v<std::decay_t<T>, VariantWrapper<Types...>>);
 
     /**
      * @brief Copy constructor with thread safety.
@@ -120,7 +106,7 @@ public:
     template <typename T>
     auto operator=(T&& value) noexcept(
         std::is_nothrow_assignable_v<VariantType, T>) -> VariantWrapper&
-        requires (!is_variant_wrapper_v<std::decay_t<T>>);
+        requires(!std::is_same_v<std::decay_t<T>, VariantWrapper>);
 
     /**
      * @brief Gets the name of the type currently held by the variant.
@@ -233,16 +219,8 @@ public:
     template <typename Func>
     auto withThreadSafety(Func&& func) const -> decltype(auto);
 
-    /**
-     * @brief Stream insertion operator for VariantWrapper.
-     * @param outputStream The output stream
-     * @param variantWrapper The VariantWrapper to output
-     * @return Reference to the output stream
-     */
-    template <typename... U>
-    friend auto operator<<(std::ostream& outputStream,
-                           const VariantWrapper<U...>& variantWrapper)
-        -> std::ostream&;
+    // Note: Stream operator is implemented as a non-friend template function
+    // below
 
     /**
      * @brief Default destructor.
@@ -250,9 +228,6 @@ public:
     ~VariantWrapper() = default;
 
 private:
-    // Friend declaration to allow access between different template instantiations
-    template <typename... OtherTypes>
-    friend class VariantWrapper;
     VariantType variant_{std::in_place_index<0>};
     mutable std::shared_mutex mutex_;
 
@@ -266,25 +241,15 @@ template <typename... OtherTypes>
 VariantWrapper<Types...>::
     VariantWrapper(const VariantWrapper<OtherTypes...>& other) noexcept(
         std::is_nothrow_copy_constructible_v<
-            std::variant<std::monostate, OtherTypes...>>) {
-    other.withThreadSafety([this, &other]() {
-        std::visit([this](const auto& value) {
-            using ValueType = std::decay_t<decltype(value)>;
-            if constexpr (is_valid_type_v<ValueType> || std::is_same_v<ValueType, std::monostate>) {
-                variant_ = value;
-            } else {
-                // Type not supported in target variant, use monostate
-                variant_ = std::monostate{};
-            }
-        }, other.variant_);
-    });
-}
+            std::variant<std::monostate, OtherTypes...>>)
+    : variant_(other.withThreadSafety([&other]() { return other.variant_; })) {}
 
 template <typename... Types>
 template <typename T>
 VariantWrapper<Types...>::VariantWrapper(T&& value) noexcept(
     std::is_nothrow_constructible_v<VariantType, T>)
-    requires (!is_variant_wrapper_v<std::decay_t<T>>) {
+    requires(!std::is_same_v<std::decay_t<T>, VariantWrapper<Types...>>)
+{
     static_assert(
         is_valid_type_v<T> || std::is_same_v<std::decay_t<T>, std::monostate>,
         "Type not supported by this VariantWrapper");
@@ -328,7 +293,8 @@ template <typename... Types>
 template <typename T>
 auto VariantWrapper<Types...>::operator=(T&& value) noexcept(
     std::is_nothrow_assignable_v<VariantType, T>) -> VariantWrapper&
-    requires (!is_variant_wrapper_v<std::decay_t<T>>) {
+    requires(!std::is_same_v<std::decay_t<T>, VariantWrapper>)
+{
     static_assert(
         is_valid_type_v<T> || std::is_same_v<std::decay_t<T>, std::monostate>,
         "Type not supported by this VariantWrapper");
@@ -572,6 +538,12 @@ auto VariantWrapper<Types...>::withThreadSafety(Func&& func) const
     return std::forward<Func>(func)();
 }
 
+/**
+ * @brief Stream insertion operator for VariantWrapper.
+ * @param outputStream The output stream
+ * @param variantWrapper The VariantWrapper to output
+ * @return Reference to the output stream
+ */
 template <typename... Types>
 auto operator<<(std::ostream& outputStream,
                 const VariantWrapper<Types...>& variantWrapper)

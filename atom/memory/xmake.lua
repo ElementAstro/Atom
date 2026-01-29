@@ -50,7 +50,7 @@ target(lib_name)
         add_headerfiles(headers)
 
         -- Add dependencies
-        add_deps("atom-error")
+        add_deps("atom-error", "atom-meta", "atom-type")
 
         -- Set include directories
         add_includedirs(".", {public = true})
@@ -65,7 +65,7 @@ target(lib_name)
         add_headerfiles(headers)
 
         -- Add dependencies for header-only library
-        add_deps("atom-error")
+        add_deps("atom-error", "atom-meta", "atom-type")
 
         -- Set include directories
         add_includedirs(".", {public = true})

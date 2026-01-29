@@ -1,6 +1,9 @@
 #include "loader.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <ctime>
+#include <fstream>
 #include <sstream>
 #include "exceptions.hpp"
 
@@ -10,7 +13,6 @@
 #include <windows.h>
 #else
 #include <unistd.h>
-#include <fstream>
 #endif
 
 namespace dotenv {

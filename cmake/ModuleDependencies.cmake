@@ -1,0 +1,546 @@
+# ModuleDependencies.cmake - Helper functions for module-specific dependency
+# management This file provides functions to configure module dependencies,
+# compile features, and platform-specific settings in a standardized way.
+#
+# Main functions: atom_configure_module()       - Configure a module with
+# standard settings atom_setup_module_dependencies() - Setup dependencies for a
+# module atom_auto_resolve_dependencies() - Auto-enable required dependencies
+# atom_validate_module_dependencies() - Validate dependencies are satisfied
+#
+# Dependency helper functions: atom_find_tbb()              - Find and link TBB
+# atom_setup_logging_deps()    - Setup logging (spdlog/loguru)
+# atom_setup_xml_deps()        - Setup XML (tinyxml2)
+# atom_setup_networking_deps() - Setup networking (asio, openssl)
+# atom_setup_crypto_deps()     - Setup crypto (openssl)
+# atom_setup_formatting_deps() - Setup formatting (fmt)
+
+include_guard(GLOBAL)
+
+# =============================================================================
+# Module Configuration Functions
+# =============================================================================
+
+# Function to setup common dependencies for a module
+function(atom_setup_module_dependencies module_name)
+  set(options)
+  set(oneValueArgs)
+  set(multiValueArgs REQUIRED_DEPS OPTIONAL_DEPS SYSTEM_LIBS)
+  cmake_parse_arguments(AMD "${options}" "${oneValueArgs}" "${multiValueArgs}"
+                        ${ARGN})
+
+  string(TOUPPER ${module_name} MODULE_UPPER)
+
+  # Link required dependencies
+  foreach(dep ${AMD_REQUIRED_DEPS})
+    if(TARGET ${dep})
+      target_link_libraries(${module_name} PUBLIC ${dep})
+    else()
+      message(
+        WARNING "Required dependency ${dep} not found for module ${module_name}"
+      )
+    endif()
+  endforeach()
+
+  # Link optional dependencies
+  foreach(dep ${AMD_OPTIONAL_DEPS})
+    if(TARGET ${dep})
+      target_link_libraries(${module_name} PUBLIC ${dep})
+      message(STATUS "Optional dependency ${dep} linked to ${module_name}")
+    else()
+      message(
+        STATUS "Optional dependency ${dep} not available for ${module_name}")
+    endif()
+  endforeach()
+
+  # Link system libraries
+  foreach(lib ${AMD_SYSTEM_LIBS})
+    target_link_libraries(${module_name} PUBLIC ${lib})
+  endforeach()
+endfunction()
+
+# Function to configure a module with standardized settings
+function(atom_configure_module module_name)
+  set(options HEADER_ONLY)
+  set(oneValueArgs)
+  set(multiValueArgs DEPENDENCIES OPTIONAL_DEPENDENCIES)
+  cmake_parse_arguments(ACM "${options}" "${oneValueArgs}" "${multiValueArgs}"
+                        ${ARGN})
+
+  set(is_header_only ${ACM_HEADER_ONLY})
+
+  if(is_header_only)
+    if(NOT TARGET ${module_name})
+      add_library(${module_name} INTERFACE)
+    endif()
+    set(include_scope INTERFACE)
+    set(link_scope INTERFACE)
+    set(feature_scope INTERFACE)
+    set(option_scope INTERFACE)
+  else()
+    if(NOT TARGET ${module_name})
+      message(
+        FATAL_ERROR
+          "atom_configure_module called for target ${module_name} before it was created"
+      )
+    endif()
+    set(include_scope PUBLIC)
+    set(link_scope PUBLIC)
+    set(feature_scope PUBLIC)
+    set(option_scope PRIVATE)
+  endif()
+
+  # Set standard include directories
+  target_include_directories(
+    ${module_name} ${include_scope}
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/atom/${module_name}>)
+
+  # Link required dependencies
+  foreach(dep ${ACM_DEPENDENCIES})
+    if(TARGET ${dep})
+      target_link_libraries(${module_name} ${link_scope} ${dep})
+    else()
+      message(
+        WARNING "Required dependency ${dep} not found for module ${module_name}"
+      )
+    endif()
+  endforeach()
+
+  # Link optional dependencies
+  foreach(dep ${ACM_OPTIONAL_DEPENDENCIES})
+    if(TARGET ${dep})
+      target_link_libraries(${module_name} ${link_scope} ${dep})
+      message(STATUS "Optional dependency ${dep} linked to ${module_name}")
+    else()
+      message(
+        STATUS "Optional dependency ${dep} not available for ${module_name}")
+    endif()
+  endforeach()
+
+  # All modules depend on error handling
+  if(TARGET atom-error AND NOT ${module_name} STREQUAL "atom-error")
+    target_link_libraries(${module_name} ${link_scope} atom-error)
+  endif()
+
+  # Most modules need threading
+  find_package(Threads REQUIRED)
+  target_link_libraries(${module_name} ${link_scope} Threads::Threads)
+
+  # Platform-specific libraries
+  if(WIN32)
+    target_link_libraries(${module_name} ${link_scope} ws2_32 wsock32)
+  endif()
+
+  # Apply common compile features/options
+  target_compile_features(${module_name} ${feature_scope} cxx_std_20)
+
+  if(MSVC)
+    target_compile_options(${module_name} ${option_scope} /W4)
+  else()
+    target_compile_options(${module_name} ${option_scope} -Wall -Wextra
+                           -Wpedantic)
+  endif()
+
+  # Set common include directories for installation for non-header-only targets
+  # are already handled above
+
+  # Add to global module registry (ensure uniqueness)
+  get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
+  if(NOT ATOM_MODULE_TARGETS)
+    set(ATOM_MODULE_TARGETS)
+  endif()
+  list(APPEND ATOM_MODULE_TARGETS ${module_name})
+  list(REMOVE_DUPLICATES ATOM_MODULE_TARGETS)
+  set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")
+endfunction()
+
+# NOTE: atom_setup_standard_dependencies has been deprecated. Use
+# atom_configure_module() instead which provides the same functionality plus
+# additional features like header-only support and optional dependencies.
+
+# Function to automatically resolve and enable module dependencies
+function(atom_auto_resolve_dependencies MODULE_NAME)
+  # Get the dependency list for this module
+  string(TOUPPER ${MODULE_NAME} MODULE_UPPER)
+  string(REPLACE "-" "_" MODULE_UPPER ${MODULE_UPPER})
+
+  if(DEFINED ATOM_${MODULE_UPPER}_DEPENDS)
+    foreach(dep ${ATOM_${MODULE_UPPER}_DEPENDS})
+      string(REPLACE "atom-" "ATOM_BUILD_" dep_var_name ${dep})
+      string(TOUPPER ${dep_var_name} dep_var_name)
+
+      if(NOT DEFINED ${dep_var_name} OR NOT ${dep_var_name})
+        message(STATUS "Auto-enabling dependency ${dep} for ${MODULE_NAME}")
+        set(${dep_var_name}
+            ON
+            CACHE BOOL "Auto-enabled dependency for ${MODULE_NAME}" FORCE)
+
+        # Recursively resolve dependencies of dependencies
+        atom_auto_resolve_dependencies(${dep})
+      endif()
+    endforeach()
+  endif()
+endfunction()
+
+# Function to validate module dependencies are satisfied
+function(atom_validate_module_dependencies MODULE_NAME)
+  string(TOUPPER ${MODULE_NAME} MODULE_UPPER)
+  string(REPLACE "-" "_" MODULE_UPPER ${MODULE_UPPER})
+
+  if(DEFINED ATOM_${MODULE_UPPER}_DEPENDS)
+    foreach(dep ${ATOM_${MODULE_UPPER}_DEPENDS})
+      string(REPLACE "atom-" "ATOM_BUILD_" dep_var_name ${dep})
+      string(TOUPPER ${dep_var_name} dep_var_name)
+
+      if(NOT DEFINED ${dep_var_name} OR NOT ${dep_var_name})
+        message(
+          FATAL_ERROR
+            "Module ${MODULE_NAME} depends on ${dep}, but that module is not enabled for building. Enable it with -D${dep_var_name}=ON"
+        )
+      endif()
+    endforeach()
+  endif()
+endfunction()
+
+# =============================================================================
+# Unified Dependency Setup Function
+# =============================================================================
+# This function provides a single entry point for setting up common dependencies
+# Usage: atom_setup_dependencies(target_name LOGGING XML NETWORKING CRYPTO TBB)
+
+function(atom_setup_dependencies target_name)
+  set(options
+      LOGGING
+      XML
+      NETWORKING
+      CRYPTO
+      TBB
+      FORMATTING
+      COMPRESSION
+      DATABASE)
+  cmake_parse_arguments(ASD "${options}" "" "" ${ARGN})
+
+  if(ASD_LOGGING)
+    atom_setup_logging_deps(${target_name})
+  endif()
+
+  if(ASD_XML)
+    atom_setup_xml_deps(${target_name})
+  endif()
+
+  if(ASD_NETWORKING)
+    atom_setup_networking_deps(${target_name})
+  endif()
+
+  if(ASD_CRYPTO)
+    atom_setup_crypto_deps(${target_name})
+  endif()
+
+  if(ASD_TBB)
+    atom_find_tbb(${target_name})
+  endif()
+
+  if(ASD_FORMATTING)
+    atom_setup_formatting_deps(${target_name})
+  endif()
+
+  if(ASD_COMPRESSION)
+    atom_setup_compression_deps(${target_name})
+  endif()
+
+  if(ASD_DATABASE)
+    atom_setup_database_deps(${target_name})
+  endif()
+endfunction()
+
+# =============================================================================
+# Individual Dependency Setup Functions
+# =============================================================================
+
+# Function to find and setup TBB (Intel Threading Building Blocks)
+function(atom_find_tbb module_name)
+  find_package(TBB QUIET)
+  if(TBB_FOUND)
+    target_link_libraries(${module_name} PUBLIC TBB::tbb)
+    message(STATUS "TBB linked to ${module_name}")
+  else()
+    message(
+      STATUS
+        "TBB not found for ${module_name} - parallel algorithms may be limited")
+  endif()
+endfunction()
+
+# Function to setup logging dependencies
+function(atom_setup_logging_deps module_name)
+  # Prefer spdlog (header-only) if available via CMake config (vcpkg)
+  find_package(spdlog CONFIG QUIET)
+  if(spdlog_FOUND)
+    if(TARGET spdlog::spdlog_header_only)
+      target_link_libraries(${module_name} PUBLIC spdlog::spdlog_header_only)
+    else()
+      target_link_libraries(${module_name} PUBLIC spdlog::spdlog)
+    endif()
+    message(STATUS "spdlog linked to ${module_name}")
+  else()
+    # Try to find loguru as a fallback
+    find_library(
+      LOGURU_LIBRARY
+      NAMES loguru
+      PATHS /usr/lib /usr/local/lib /mingw64/lib ${CMAKE_PREFIX_PATH}/lib)
+
+    if(LOGURU_LIBRARY)
+      target_link_libraries(${module_name} PUBLIC ${LOGURU_LIBRARY})
+      message(STATUS "Loguru linked to ${module_name}")
+    else()
+      message(
+        STATUS
+          "No logging library found for ${module_name} - using fallback logging"
+      )
+    endif()
+  endif()
+endfunction()
+
+# Function to setup XML dependencies
+function(atom_setup_xml_deps module_name)
+  find_package(PkgConfig QUIET)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(TINYXML2 QUIET tinyxml2)
+    if(TINYXML2_FOUND)
+      target_include_directories(${module_name}
+                                 PRIVATE ${TINYXML2_INCLUDE_DIRS})
+      target_link_libraries(${module_name} PUBLIC ${TINYXML2_LIBRARIES})
+      message(STATUS "TinyXML2 linked to ${module_name}")
+      return()
+    endif()
+  endif()
+
+  # Fallback to find_package
+  find_package(tinyxml2 QUIET)
+  if(tinyxml2_FOUND)
+    target_link_libraries(${module_name} PUBLIC tinyxml2::tinyxml2)
+    message(STATUS "TinyXML2 (via find_package) linked to ${module_name}")
+  else()
+    message(
+      STATUS
+        "TinyXML2 not found for ${module_name} - XML features may be limited")
+  endif()
+endfunction()
+
+# Function to setup compression dependencies
+function(atom_setup_compression_deps module_name)
+  if(ZLIB_FOUND)
+    target_link_libraries(${module_name} PUBLIC ZLIB::ZLIB)
+  endif()
+
+  # Try to find additional compression libraries
+  find_package(PkgConfig QUIET)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(LIBZIPPP QUIET libzippp)
+    if(LIBZIPPP_FOUND)
+      target_include_directories(${module_name}
+                                 PRIVATE ${LIBZIPPP_INCLUDE_DIRS})
+      target_link_libraries(${module_name} PUBLIC ${LIBZIPPP_LIBRARIES})
+      message(STATUS "libzippp linked to ${module_name}")
+    endif()
+  endif()
+endfunction()
+
+# Function to setup database dependencies
+function(atom_setup_database_deps module_name)
+  if(SQLite3_FOUND)
+    target_link_libraries(${module_name} PUBLIC SQLite::SQLite3)
+    message(STATUS "SQLite3 linked to ${module_name}")
+  else()
+    message(
+      STATUS
+        "SQLite3 not available for ${module_name} - database features limited")
+  endif()
+endfunction()
+
+# Function to setup networking dependencies
+function(atom_setup_networking_deps module_name)
+  if(ASIO_FOUND)
+    target_include_directories(${module_name} PRIVATE ${ASIO_INCLUDE_DIR})
+    target_compile_definitions(${module_name} PRIVATE ASIO_STANDALONE)
+    message(STATUS "Asio linked to ${module_name}")
+  endif()
+
+  if(OpenSSL_FOUND)
+    target_link_libraries(${module_name} PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+    message(STATUS "OpenSSL linked to ${module_name}")
+  endif()
+
+  # Platform-specific networking libraries
+  if(WIN32)
+    target_link_libraries(${module_name} PUBLIC ws2_32 wsock32 iphlpapi)
+  endif()
+endfunction()
+
+# Function to setup formatting dependencies
+function(atom_setup_formatting_deps module_name)
+  if(fmt_FOUND)
+    target_link_libraries(${module_name} PUBLIC fmt::fmt)
+    message(STATUS "fmt linked to ${module_name}")
+  else()
+    message(
+      STATUS "fmt not available for ${module_name} - using standard formatting")
+  endif()
+endfunction()
+
+# Function to setup crypto dependencies
+function(atom_setup_crypto_deps module_name)
+  # Be resilient: try both modern and legacy variables, and attempt a quiet find
+  # if unknown
+  if(NOT OpenSSL_FOUND
+     AND NOT OPENSSL_FOUND
+     AND NOT TARGET OpenSSL::Crypto)
+    find_package(OpenSSL QUIET)
+  endif()
+
+  if(OpenSSL_FOUND
+     OR OPENSSL_FOUND
+     OR TARGET OpenSSL::Crypto)
+    # Prefer modern imported targets when available
+    if(TARGET OpenSSL::SSL AND TARGET OpenSSL::Crypto)
+      target_link_libraries(${module_name} PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+    elseif(TARGET OpenSSL::Crypto)
+      target_link_libraries(${module_name} PUBLIC OpenSSL::Crypto)
+    endif()
+    message(STATUS "OpenSSL crypto linked to ${module_name}")
+  else()
+    message(
+      STATUS
+        "OpenSSL not found at this stage for ${module_name} (will continue without crypto)"
+    )
+  endif()
+endfunction()
+
+# Function to setup test dependencies with static linking
+function(atom_setup_test_deps test_name)
+  if(ATOM_BUILD_TESTS)
+    if(GTEST_FOUND)
+      if(TARGET GTest::gtest)
+        target_link_libraries(${test_name} PRIVATE GTest::gtest
+                                                   GTest::gtest_main)
+        # Force static linking if possible
+        set_target_properties(
+          ${test_name}
+          PROPERTIES MSVC_RUNTIME_LIBRARY
+                     "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+                     LINK_SEARCH_START_STATIC ON
+                     LINK_SEARCH_END_STATIC ON)
+      elseif(GTEST_LIBRARIES)
+        target_include_directories(${test_name} PRIVATE ${GTEST_INCLUDE_DIRS})
+        target_link_libraries(${test_name} PRIVATE ${GTEST_LIBRARIES})
+      endif()
+      message(STATUS "GTest linked to ${test_name} (static)")
+    else()
+      message(WARNING "GTest not available - ${test_name} may not build")
+    endif()
+  endif()
+endfunction()
+
+# =============================================================================
+# Configuration Validation Functions
+# =============================================================================
+
+# Function to validate cmake configuration
+function(atom_validate_cmake_config)
+  set(validation_passed TRUE)
+  set(validation_messages "")
+
+  # Check CMake version
+  if(CMAKE_VERSION VERSION_LESS "3.16")
+    list(APPEND validation_messages
+         "CMake 3.16+ recommended for PCH and Unity Build support")
+  endif()
+
+  # Check C++ standard
+  if(NOT CMAKE_CXX_STANDARD OR CMAKE_CXX_STANDARD LESS 20)
+    list(APPEND validation_messages "C++20 or higher is recommended")
+  endif()
+
+  # Check required dependencies
+  if(NOT spdlog_FOUND AND NOT SPDLOG_FOUND)
+    list(APPEND validation_messages "spdlog not found - logging may be limited")
+  endif()
+
+  if(NOT fmt_FOUND)
+    list(APPEND validation_messages "fmt not found - formatting may be limited")
+  endif()
+
+  # Print validation results
+  if(validation_messages)
+    message(STATUS "")
+    message(STATUS "=== Configuration Warnings ===")
+    foreach(msg ${validation_messages})
+      message(STATUS "  - ${msg}")
+    endforeach()
+    message(STATUS "==============================")
+    message(STATUS "")
+  endif()
+endfunction()
+
+# Function to print build configuration summary
+function(atom_print_build_summary)
+  message(STATUS "")
+  message(STATUS "=== Atom Build Configuration ===")
+  message(STATUS "Platform: ${ATOM_PLATFORM} (${ATOM_ARCH})")
+  message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
+  message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+  message(
+    STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+
+  # Build optimizations
+  message(STATUS "")
+  message(STATUS "Build Optimizations:")
+  if(ATOM_ENABLE_CCACHE)
+    message(STATUS "  [x] Compiler Cache (ccache/sccache)")
+  else()
+    message(STATUS "  [ ] Compiler Cache")
+  endif()
+  if(ATOM_ENABLE_PCH)
+    message(STATUS "  [x] Precompiled Headers")
+  else()
+    message(STATUS "  [ ] Precompiled Headers")
+  endif()
+  if(ATOM_ENABLE_UNITY_BUILD)
+    message(STATUS "  [x] Unity Build")
+  else()
+    message(STATUS "  [ ] Unity Build")
+  endif()
+  if(ATOM_ENABLE_FAST_LINK)
+    message(STATUS "  [x] Fast Linking")
+  else()
+    message(STATUS "  [ ] Fast Linking")
+  endif()
+
+  # Enabled modules
+  get_property(enabled_modules GLOBAL PROPERTY ATOM_ENABLED_MODULES)
+  list(LENGTH enabled_modules module_count)
+  message(STATUS "")
+  message(STATUS "Enabled Modules: ${module_count}")
+
+  message(STATUS "================================")
+  message(STATUS "")
+endfunction()
+
+# Function to check if all required targets exist
+function(atom_check_targets)
+  set(missing_targets "")
+
+  foreach(module ${ATOM_ALL_MODULES})
+    string(REPLACE "atom-" "" module_name "${module}")
+    string(TOUPPER "${module_name}" module_upper)
+
+    if(ATOM_BUILD_${module_upper} AND NOT TARGET ${module})
+      list(APPEND missing_targets ${module})
+    endif()
+  endforeach()
+
+  if(missing_targets)
+    message(
+      WARNING
+        "The following targets are enabled but not created: ${missing_targets}")
+  endif()
+endfunction()

@@ -53,7 +53,11 @@ auto createAddrInfoNode(const struct addrinfo* src) -> struct addrinfo* {
     newNode->ai_addrlen = src->ai_addrlen;
 
     if (src->ai_canonname) {
+#if defined(_WIN32)
+        newNode->ai_canonname = _strdup(src->ai_canonname);
+#else
         newNode->ai_canonname = strdup(src->ai_canonname);
+#endif
         if (!newNode->ai_canonname) {
             delete newNode;
             throw std::runtime_error("Failed to allocate memory for canonname");
@@ -112,8 +116,8 @@ auto dumpAddrInfo(
     }
 }
 
-auto addrInfoToString(const struct addrinfo* addrInfo, bool jsonFormat)
-    -> std::string {
+auto addrInfoToString(const struct addrinfo* addrInfo,
+                      bool jsonFormat) -> std::string {
     if (!addrInfo) {
         throw std::invalid_argument("addrInfo is null");
     }
@@ -129,9 +133,17 @@ auto addrInfoToString(const struct addrinfo* addrInfo, bool jsonFormat)
         std::array<char, MAX_HOST_SIZE> host{};
         std::array<char, MAX_SERV_SIZE> serv{};
 
-        int ret = getnameinfo(current->ai_addr, current->ai_addrlen,
-                              host.data(), host.size(), serv.data(),
-                              serv.size(), NI_NUMERICHOST | NI_NUMERICSERV);
+        int ret = 0;
+#if defined(_WIN32)
+        ret = getnameinfo(
+            current->ai_addr, static_cast<socklen_t>(current->ai_addrlen),
+            host.data(), static_cast<DWORD>(host.size()), serv.data(),
+            static_cast<DWORD>(serv.size()), NI_NUMERICHOST | NI_NUMERICSERV);
+#else
+        ret = getnameinfo(current->ai_addr, current->ai_addrlen, host.data(),
+                          host.size(), serv.data(), serv.size(),
+                          NI_NUMERICHOST | NI_NUMERICSERV);
+#endif
 
         if (jsonFormat) {
             if (count > 0)
@@ -172,7 +184,7 @@ auto getAddrInfo(const std::string& hostname, const std::string& service)
         throw std::invalid_argument("Hostname cannot be empty");
     }
 
-    struct addrinfo hints{};
+    struct addrinfo hints {};
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_CANONNAME;
@@ -234,7 +246,8 @@ auto filterAddrInfo(const struct addrinfo* addrInfo, int family)
         }
 
         return std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>(
-            head, ::freeaddrinfo);
+            head,
+            [](struct addrinfo* ptr) noexcept { freeAddrInfoChain(ptr); });
 
     } catch (const std::exception& e) {
         spdlog::error("Failed to filter addrinfo: {}", e.what());
@@ -275,7 +288,8 @@ auto sortAddrInfo(const struct addrinfo* addrInfo)
         }
 
         return std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>(
-            head, ::freeaddrinfo);
+            head,
+            [](struct addrinfo* ptr) noexcept { freeAddrInfoChain(ptr); });
 
     } catch (const std::exception& e) {
         spdlog::error("Failed to sort addrinfo: {}", e.what());

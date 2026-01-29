@@ -53,7 +53,8 @@ int main() {
     size_t length = sizeof(input) - 1;
 
     // Compute keccak256 hash using span
-    std::array<uint8_t, K_HASH_SIZE> hash = keccak256(std::span<const uint8_t>(input, length));
+    std::array<uint8_t, K_HASH_SIZE> hash =
+        keccak256(std::span<const uint8_t>(input, length));
 
     // Print keccak256 hash
     std::cout << "Keccak256 Hash: ";
