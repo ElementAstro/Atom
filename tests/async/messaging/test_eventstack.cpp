@@ -2,7 +2,7 @@
 #include <atomic>
 #include <thread>
 #include <vector>
-#include "atom/async/eventstack.hpp"
+#include "atom/async/messaging/eventstack.hpp"
 
 TEST(EventStackTest, PushEvent) {
     atom::async::EventStack<int> stack;

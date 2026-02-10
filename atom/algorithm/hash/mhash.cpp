@@ -72,7 +72,7 @@ using StateArray = std::array<std::array<u64, K_STATE_SIZE>, K_STATE_SIZE>;
 thread_local std::pmr::synchronized_pool_resource tls_memory_pool{};
 
 namespace {
-#if USE_OPENCL
+#ifdef ATOM_USE_OPENCL
 // Using template string to simplify OpenCL kernel code
 constexpr const char *minhashKernelSource = R"CLC(
 __kernel void minhash_kernel(
@@ -189,7 +189,7 @@ std::optional<std::array<u8, K_HASH_SIZE>> HashContext::finalize() noexcept {
 }
 
 MinHash::MinHash(usize num_hashes) noexcept(false)
-#if USE_OPENCL
+#ifdef ATOM_USE_OPENCL
     : opencl_available_(false)
 #endif
 {
@@ -208,14 +208,14 @@ MinHash::MinHash(usize num_hashes) noexcept(false)
             std::string("Failed to initialize hash functions: ") + e.what());
     }
 
-#if USE_OPENCL
+#ifdef ATOM_USE_OPENCL
     initializeOpenCL();
 #endif
 }
 
 MinHash::~MinHash() noexcept = default;
 
-#if USE_OPENCL
+#ifdef ATOM_USE_OPENCL
 void MinHash::initializeOpenCL() noexcept {
     try {
         cl_int err;

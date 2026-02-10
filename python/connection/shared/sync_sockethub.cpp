@@ -1,4 +1,4 @@
-#include "atom/connection/sockethub.hpp"
+#include "atom/connection/shared/sockethub.hpp"
 
 #include <pybind11/chrono.h>
 #include <pybind11/functional.h>
@@ -82,13 +82,22 @@ Examples:
         .def_readonly("address", &atom::connection::ClientInfo::address,
                       "Client IP address")
         .def_readonly("connected_time",
-                      &atom::connection::ClientInfo::connectedTime,
+                      &atom::connection::ClientInfo::connected_time,
                       "Time when client connected")
         .def_readonly("bytes_received",
-                      &atom::connection::ClientInfo::bytesReceived,
+                      &atom::connection::ClientInfo::bytes_received,
                       "Total bytes received from this client")
-        .def_readonly("bytes_sent", &atom::connection::ClientInfo::bytesSent,
-                      "Total bytes sent to this client");
+        .def_readonly("bytes_sent", &atom::connection::ClientInfo::bytes_sent,
+                      "Total bytes sent to this client")
+        .def_readonly("messages_received",
+                      &atom::connection::ClientInfo::messages_received,
+                      "Total messages received from this client")
+        .def_readonly("messages_sent",
+                      &atom::connection::ClientInfo::messages_sent,
+                      "Total messages sent to this client")
+        .def_readonly("is_authenticated",
+                      &atom::connection::ClientInfo::is_authenticated,
+                      "Whether client is authenticated");
 
     // SocketHub class
     py::class_<atom::connection::SocketHub>(

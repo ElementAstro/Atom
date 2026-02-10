@@ -132,6 +132,46 @@ TEST_F(ThreadWrapperTest, ThreadTimeout) {
     EXPECT_TRUE(timedOut);
 }
 
+// Test optimized tryJoinFor with condition variable
+TEST_F(ThreadWrapperTest, OptimizedTryJoinFor) {
+    Thread thread;
+    std::atomic<bool> completed{false};
+
+    // Test immediate join when thread completes quickly
+    thread.start([&completed] {
+        std::this_thread::sleep_for(20ms);
+        completed = true;
+    });
+
+    auto start = std::chrono::steady_clock::now();
+    bool joined = thread.tryJoinFor(500ms);
+    auto elapsed = std::chrono::steady_clock::now() - start;
+
+    EXPECT_TRUE(joined);
+    EXPECT_TRUE(completed);
+    // Should complete well before timeout
+    EXPECT_LT(elapsed, 200ms);
+}
+
+// Test tryJoinFor timeout efficiency
+TEST_F(ThreadWrapperTest, TryJoinForTimeoutEfficiency) {
+    Thread thread;
+
+    thread.start([] { std::this_thread::sleep_for(500ms); });
+
+    auto start = std::chrono::steady_clock::now();
+    bool joined = thread.tryJoinFor(50ms);
+    auto elapsed = std::chrono::steady_clock::now() - start;
+
+    EXPECT_FALSE(joined);
+    // Should timeout close to requested duration (not spin-waiting excessively)
+    EXPECT_GE(elapsed, 45ms);
+    EXPECT_LT(elapsed, 150ms);
+
+    // Clean up
+    thread.join();
+}
+
 TEST_F(ThreadWrapperTest, ThreadPriority) {
     Thread thread;
 

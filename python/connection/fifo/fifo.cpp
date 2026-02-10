@@ -1,4 +1,4 @@
-#include "atom/connection/async_fifoclient.hpp"
+#include "atom/connection/fifo/async_fifoclient.hpp"
 
 #include <pybind11/chrono.h>
 #include <pybind11/pybind11.h>
@@ -24,7 +24,7 @@ PYBIND11_MODULE(fifo, m) {
     });
 
     // FifoClient class binding
-    py::class_<atom::async::connection::FifoClient>(
+    py::class_<atom::connection::AsyncFifoClient>(
         m, "FifoClient",
         R"(A class for asynchronous interaction with a FIFO (First In, First Out) pipe.
 
@@ -43,7 +43,7 @@ Examples:
 )")
         .def(py::init<std::string>(), py::arg("fifo_path"),
              "Constructs a FifoClient with the specified FIFO path.")
-        .def("write", &atom::async::connection::FifoClient::write,
+        .def("write", &atom::connection::AsyncFifoClient::write,
              py::arg("data"),
              py::arg("timeout") = std::optional<std::chrono::milliseconds>(),
              R"(Writes data to the FIFO.
@@ -59,7 +59,7 @@ Examples:
     >>> client.write("Hello", 1000)  # 1 second timeout
     True
 )")
-        .def("read", &atom::async::connection::FifoClient::read,
+        .def("read", &atom::connection::AsyncFifoClient::read,
              py::arg("timeout") = std::optional<std::chrono::milliseconds>(),
              R"(Reads data from the FIFO.
 
@@ -74,33 +74,33 @@ Examples:
     >>> if data:
     ...     print(f"Received: {data}")
 )")
-        .def("is_open", &atom::async::connection::FifoClient::isOpen,
+        .def("is_open", &atom::connection::AsyncFifoClient::isOpen,
              R"(Checks if the FIFO is currently open.
 
 Returns:
     True if the FIFO is open, False otherwise.
 )")
-        .def("close", &atom::async::connection::FifoClient::close,
+        .def("close", &atom::connection::AsyncFifoClient::close,
              R"(Closes the FIFO.
 
 This will release any resources associated with the FIFO.
 )")
         .def(
             "__enter__",
-            [](atom::async::connection::FifoClient& self)
-                -> atom::async::connection::FifoClient& { return self; },
+            [](atom::connection::AsyncFifoClient& self)
+                -> atom::connection::AsyncFifoClient& { return self; },
             "Support for context manager protocol (with statement).")
         .def(
             "__exit__",
-            [](atom::async::connection::FifoClient& self, py::object,
-               py::object, py::object) { self.close(); },
+            [](atom::connection::AsyncFifoClient& self, py::object, py::object,
+               py::object) { self.close(); },
             "Ensures FIFO is closed when exiting context manager.");
 
     // Factory function for easier creation
     m.def(
         "create_fifo_client",
         [](const std::string& path) {
-            return std::make_unique<atom::async::connection::FifoClient>(path);
+            return std::make_unique<atom::connection::AsyncFifoClient>(path);
         },
         py::arg("path"),
         R"(Factory function to create a FIFO client.

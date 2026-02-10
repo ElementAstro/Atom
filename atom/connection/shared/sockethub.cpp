@@ -136,7 +136,8 @@ private:
     asio::io_context io_context_;
     asio::ip::tcp::acceptor acceptor_;
     std::vector<std::jthread> thread_pool_;
-    std::optional<asio::io_context::work> work_;
+    std::optional<asio::executor_work_guard<asio::io_context::executor_type>>
+        work_;
 
     std::unordered_map<int, std::shared_ptr<ClientConnection>> clients_;
     mutable std::shared_mutex clientsMutex_;
@@ -185,7 +186,7 @@ void ClientConnection::disconnect(bool notifyHub) {
     }
 
     asio::error_code ec;
-    timer_.cancel(ec);
+    timer_.cancel();
     if (socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec)) {
         spdlog::warn("Socket shutdown failed: {}", ec.message());
     }
@@ -340,7 +341,7 @@ void SocketHubImpl::start(int port) {
 
     do_accept();
 
-    work_.emplace(io_context_);
+    work_.emplace(asio::make_work_guard(io_context_));
     const auto thread_count = std::max(1u, std::thread::hardware_concurrency());
     thread_pool_.reserve(thread_count);
     for (unsigned i = 0; i < thread_count; ++i) {
@@ -386,7 +387,7 @@ void SocketHubImpl::stop() noexcept {
     thread_pool_.clear();
 
     if (io_context_.stopped()) {
-        io_context_.reset();
+        io_context_.restart();
     }
 
     serverPort_ = 0;
@@ -537,9 +538,9 @@ std::vector<ClientInfo> SocketHubImpl::getConnectedClients() const {
             result.emplace_back(
                 ClientInfo{.id = client->getId(),
                            .address = client->getAddress(),
-                           .connectedTime = client->getConnectedTime(),
-                           .bytesReceived = client->getBytesReceived(),
-                           .bytesSent = client->getBytesSent()});
+                           .connected_time = client->getConnectedTime(),
+                           .bytes_received = client->getBytesReceived(),
+                           .bytes_sent = client->getBytesSent()});
         }
     }
     return result;

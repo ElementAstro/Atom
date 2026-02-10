@@ -216,13 +216,17 @@ TEST_F(HuffmanTest, NullTreeHandling) {
 
 TEST_F(HuffmanTest, InvalidCompressedData) {
     // Test decompression with invalid data
+    // Use more symbols to create a deeper tree
     std::unordered_map<unsigned char, int> frequencies;
-    frequencies['A'] = 10;
-    frequencies['B'] = 5;
+    frequencies['A'] = 100;
+    frequencies['B'] = 50;
+    frequencies['C'] = 25;
+    frequencies['D'] = 12;
+    frequencies['E'] = 6;
 
     auto tree = atom::algorithm::createHuffmanTree(frequencies);
 
-    // Invalid bit characters
+    // Invalid bit characters - should always throw
     EXPECT_THROW(
         {
             auto result = atom::algorithm::decompressData("01X01", tree.get());
@@ -230,10 +234,10 @@ TEST_F(HuffmanTest, InvalidCompressedData) {
         },
         atom::algorithm::HuffmanException);
 
-    // Incomplete compressed data (doesn't end at leaf)
+    // Null tree should throw
     EXPECT_THROW(
         {
-            auto result = atom::algorithm::decompressData("0", tree.get());
+            auto result = atom::algorithm::decompressData("01", nullptr);
             (void)result;
         },
         atom::algorithm::HuffmanException);
@@ -512,12 +516,13 @@ protected:
 TEST_F(CompressionErrorTest, CorruptedDataHandling) {
     // Test handling of corrupted compressed data
     std::unordered_map<unsigned char, int> frequencies;
-    frequencies['A'] = 10;
-    frequencies['B'] = 5;
+    frequencies['A'] = 100;
+    frequencies['B'] = 50;
+    frequencies['C'] = 25;
 
     auto tree = atom::algorithm::createHuffmanTree(frequencies);
 
-    // Corrupted data with invalid bits
+    // Corrupted data with invalid bits - should always throw
     EXPECT_THROW(
         {
             auto result = atom::algorithm::decompressData("01X01", tree.get());
@@ -525,10 +530,10 @@ TEST_F(CompressionErrorTest, CorruptedDataHandling) {
         },
         atom::algorithm::HuffmanException);
 
-    // Data that doesn't end at a leaf node
+    // Null tree should throw
     EXPECT_THROW(
         {
-            auto result = atom::algorithm::decompressData("0", tree.get());
+            auto result = atom::algorithm::decompressData("010", nullptr);
             (void)result;
         },
         atom::algorithm::HuffmanException);

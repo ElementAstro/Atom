@@ -225,9 +225,11 @@ int main(int argc, char** argv) {
                PROPERTY FOLDER "Tests/${MODULE_NAME}")
 
   # =============================================================================
-  # Code Coverage (Optional)
+  # Code Coverage (Optional) - Disabled on Windows due to executable size issues
   # =============================================================================
-  if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_COMPILER_IS_GNUCXX)
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug"
+     AND CMAKE_COMPILER_IS_GNUCXX
+     AND NOT WIN32)
     target_compile_options(${STANDARD_TEST_TEST_TARGET_NAME} PRIVATE --coverage)
     target_link_options(${STANDARD_TEST_TEST_TARGET_NAME} PRIVATE --coverage)
 

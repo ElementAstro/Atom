@@ -18,21 +18,7 @@
 
 // Platform-specific optimizations
 #include "atom/macro.hpp"
-
-#if defined(ATOM_PLATFORM_WINDOWS)
-// clang-format off
-#include "../../../cmake/WindowsCompat.hpp"
-#include <processthreadsapi.h>
-// clang-format on
-#elif defined(ATOM_PLATFORM_APPLE)
-#include <dispatch/dispatch.h>
-#include <mach/thread_policy.h>
-#include <pthread.h>
-#elif defined(ATOM_PLATFORM_LINUX)
-#include <pthread.h>
-#include <sched.h>
-#include <sys/sysinfo.h>
-#endif
+#include "thread_utils.hpp"
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
 #include <boost/lockfree/queue.hpp>
@@ -1495,136 +1481,68 @@ private:
     }
 
     /**
-     * @brief Set thread priority
+     * @brief Set thread priority - uses unified ThreadUtils
      * @param priority Priority level
      */
     void setPriority(Options::ThreadPriority priority) {
-#if defined(ATOM_PLATFORM_WINDOWS)
-        int winPriority;
+        // Map Options::ThreadPriority to ThreadUtils::Priority
+        ThreadUtils::Priority utilsPriority;
         switch (priority) {
             case Options::ThreadPriority::Lowest:
-                winPriority = THREAD_PRIORITY_LOWEST;
+                utilsPriority = ThreadUtils::Priority::Lowest;
                 break;
             case Options::ThreadPriority::BelowNormal:
-                winPriority = THREAD_PRIORITY_BELOW_NORMAL;
+                utilsPriority = ThreadUtils::Priority::BelowNormal;
                 break;
             case Options::ThreadPriority::Normal:
-                winPriority = THREAD_PRIORITY_NORMAL;
+                utilsPriority = ThreadUtils::Priority::Normal;
                 break;
             case Options::ThreadPriority::AboveNormal:
-                winPriority = THREAD_PRIORITY_ABOVE_NORMAL;
+                utilsPriority = ThreadUtils::Priority::AboveNormal;
                 break;
             case Options::ThreadPriority::Highest:
-                winPriority = THREAD_PRIORITY_HIGHEST;
+                utilsPriority = ThreadUtils::Priority::Highest;
                 break;
             case Options::ThreadPriority::TimeCritical:
-                winPriority = THREAD_PRIORITY_TIME_CRITICAL;
+                utilsPriority = ThreadUtils::Priority::TimeCritical;
                 break;
             default:
-                winPriority = THREAD_PRIORITY_NORMAL;
+                utilsPriority = ThreadUtils::Priority::Normal;
         }
-        SetThreadPriority(GetCurrentThread(), winPriority);
-#elif defined(ATOM_PLATFORM_LINUX) || defined(ATOM_PLATFORM_MACOS)
-        int policy;
-        struct sched_param param;
-        pthread_getschedparam(pthread_self(), &policy, &param);
-
-        switch (priority) {
-            case Options::ThreadPriority::Lowest:
-                param.sched_priority = sched_get_priority_min(policy);
-                break;
-            case Options::ThreadPriority::BelowNormal:
-                param.sched_priority = sched_get_priority_min(policy) +
-                                       (sched_get_priority_max(policy) -
-                                        sched_get_priority_min(policy)) /
-                                           4;
-                break;
-            case Options::ThreadPriority::Normal:
-                param.sched_priority = sched_get_priority_min(policy) +
-                                       (sched_get_priority_max(policy) -
-                                        sched_get_priority_min(policy)) /
-                                           2;
-                break;
-            case Options::ThreadPriority::AboveNormal:
-                param.sched_priority = sched_get_priority_max(policy) -
-                                       (sched_get_priority_max(policy) -
-                                        sched_get_priority_min(policy)) /
-                                           4;
-                break;
-            case Options::ThreadPriority::Highest:
-            case Options::ThreadPriority::TimeCritical:
-                param.sched_priority = sched_get_priority_max(policy);
-                break;
-            default:
-                param.sched_priority = sched_get_priority_min(policy) +
-                                       (sched_get_priority_max(policy) -
-                                        sched_get_priority_min(policy)) /
-                                           2;
-        }
-
-        pthread_setschedparam(pthread_self(), policy, &param);
-#endif
+        ThreadUtils::setThreadPriority(utilsPriority);
     }
 
     /**
-     * @brief Set CPU affinity
+     * @brief Set CPU affinity - uses unified ThreadUtils
      * @param threadId Thread ID
      */
     void setCpuAffinity(size_t threadId) {
-        if (options_.cpuAffinityMode == Options::CpuAffinityMode::None) {
-            return;
-        }
-
-        const unsigned int numCores = std::thread::hardware_concurrency();
-        if (numCores <= 1) {
-            return;  // No need for affinity on single-core systems
-        }
-
-        unsigned int coreId = 0;
-
+        // Map Options::CpuAffinityMode to ThreadUtils::AffinityMode
+        ThreadUtils::AffinityMode mode;
         switch (options_.cpuAffinityMode) {
+            case Options::CpuAffinityMode::None:
+                mode = ThreadUtils::AffinityMode::None;
+                break;
             case Options::CpuAffinityMode::Sequential:
-                coreId = threadId % numCores;
+                mode = ThreadUtils::AffinityMode::Sequential;
                 break;
-
             case Options::CpuAffinityMode::Spread:
-                // Try to spread threads across different physical cores
-                coreId = (threadId * 2) % numCores;
+                mode = ThreadUtils::AffinityMode::Spread;
                 break;
-
             case Options::CpuAffinityMode::CorePinned:
-                if (!options_.pinnedCores.empty()) {
-                    coreId = options_.pinnedCores[threadId %
-                                                  options_.pinnedCores.size()];
-                } else {
-                    coreId = threadId % numCores;
-                }
+                mode = ThreadUtils::AffinityMode::CorePinned;
                 break;
-
             case Options::CpuAffinityMode::Automatic:
-                // Automatic mode relies on OS scheduling
-                return;
-
+                mode = ThreadUtils::AffinityMode::Automatic;
+                break;
             default:
-                return;
+                mode = ThreadUtils::AffinityMode::None;
         }
 
-            // Set CPU affinity
-#if defined(ATOM_PLATFORM_WINDOWS)
-        DWORD_PTR mask = (static_cast<DWORD_PTR>(1) << coreId);
-        SetThreadAffinityMask(GetCurrentThread(), mask);
-#elif defined(ATOM_PLATFORM_LINUX)
-        cpu_set_t cpuset;
-        CPU_ZERO(&cpuset);
-        CPU_SET(coreId, &cpuset);
-        pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-#elif defined(ATOM_PLATFORM_MACOS)
-        // macOS only supports soft affinity through thread policy
-        thread_affinity_policy_data_t policy = {static_cast<integer_t>(coreId)};
-        thread_policy_set(pthread_mach_thread_np(pthread_self()),
-                          THREAD_AFFINITY_POLICY, (thread_policy_t)&policy,
-                          THREAD_AFFINITY_POLICY_COUNT);
-#endif
+        // Convert pinnedCores to int vector for ThreadUtils
+        std::vector<int> pinnedCoresInt(options_.pinnedCores.begin(),
+                                        options_.pinnedCores.end());
+        ThreadUtils::setThreadAffinityByMode(threadId, mode, pinnedCoresInt);
     }
 
 private:

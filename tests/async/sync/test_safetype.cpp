@@ -975,4 +975,340 @@ TEST_F(LockFreeHashTableTest, StringKeys) {
     EXPECT_FALSE(notFound.has_value());
 }
 
+// ============================================================================
+// ThreadSafeVector Tests
+// ============================================================================
+
+class ThreadSafeVectorTest
+    : public atom::async::test::SynchronizationTestFixture {
+protected:
+    void SetUp() override { SynchronizationTestFixture::SetUp(); }
+    void TearDown() override { SynchronizationTestFixture::TearDown(); }
+};
+
+TEST_F(ThreadSafeVectorTest, BasicOperations) {
+    ThreadSafeVector<int> vec;
+
+    EXPECT_TRUE(vec.empty());
+    EXPECT_EQ(vec.getSize(), 0u);
+
+    vec.pushBack(1);
+    vec.pushBack(2);
+    vec.pushBack(3);
+
+    EXPECT_FALSE(vec.empty());
+    EXPECT_EQ(vec.getSize(), 3u);
+
+    EXPECT_EQ(vec.at(0), 1);
+    EXPECT_EQ(vec.at(1), 2);
+    EXPECT_EQ(vec.at(2), 3);
+}
+
+TEST_F(ThreadSafeVectorTest, SnapshotMethod) {
+    ThreadSafeVector<int> vec;
+
+    vec.pushBack(10);
+    vec.pushBack(20);
+    vec.pushBack(30);
+    vec.pushBack(40);
+
+    // Get snapshot - returns a copy
+    auto snapshot = vec.snapshot();
+
+    EXPECT_EQ(snapshot.size(), 4u);
+    EXPECT_EQ(snapshot[0], 10);
+    EXPECT_EQ(snapshot[1], 20);
+    EXPECT_EQ(snapshot[2], 30);
+    EXPECT_EQ(snapshot[3], 40);
+
+    // Modifying snapshot doesn't affect original
+    snapshot[0] = 999;
+    EXPECT_EQ(vec.at(0), 10);  // Original unchanged
+}
+
+TEST_F(ThreadSafeVectorTest, WithDataMethod) {
+    ThreadSafeVector<int> vec;
+
+    vec.pushBack(1);
+    vec.pushBack(2);
+    vec.pushBack(3);
+    vec.pushBack(4);
+    vec.pushBack(5);
+
+    // Use withData to compute sum
+    int sum = vec.withData([](const std::vector<int>& data) {
+        int total = 0;
+        for (int val : data) {
+            total += val;
+        }
+        return total;
+    });
+
+    EXPECT_EQ(sum, 15);  // 1+2+3+4+5
+
+    // Use withData to find max
+    int maxVal = vec.withData([](const std::vector<int>& data) {
+        return *std::max_element(data.begin(), data.end());
+    });
+
+    EXPECT_EQ(maxVal, 5);
+}
+
+TEST_F(ThreadSafeVectorTest, ConcurrentSnapshot) {
+    ThreadSafeVector<int> vec(100);
+    std::atomic<int> snapshotCount{0};
+
+    // Populate vector
+    for (int i = 0; i < 50; ++i) {
+        vec.pushBack(i);
+    }
+
+    std::vector<std::thread> threads;
+    const int numThreads = 10;
+
+    // Concurrent snapshot operations
+    for (int t = 0; t < numThreads; ++t) {
+        threads.emplace_back([&vec, &snapshotCount]() {
+            for (int i = 0; i < 10; ++i) {
+                auto snapshot = vec.snapshot();
+                EXPECT_GE(snapshot.size(), 0u);
+                snapshotCount.fetch_add(1);
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_EQ(snapshotCount.load(), numThreads * 10);
+}
+
+TEST_F(ThreadSafeVectorTest, ConcurrentWithData) {
+    ThreadSafeVector<int> vec(100);
+    std::atomic<int> operationCount{0};
+
+    // Populate vector
+    for (int i = 1; i <= 100; ++i) {
+        vec.pushBack(i);
+    }
+
+    std::vector<std::thread> threads;
+    const int numThreads = 8;
+
+    // Concurrent withData operations
+    for (int t = 0; t < numThreads; ++t) {
+        threads.emplace_back([&vec, &operationCount]() {
+            for (int i = 0; i < 20; ++i) {
+                int sum = vec.withData([](const std::vector<int>& data) {
+                    int total = 0;
+                    for (int val : data) {
+                        total += val;
+                    }
+                    return total;
+                });
+                EXPECT_EQ(sum, 5050);  // Sum of 1 to 100
+                operationCount.fetch_add(1);
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_EQ(operationCount.load(), numThreads * 20);
+}
+
+TEST_F(ThreadSafeVectorTest, FrontAndBack) {
+    ThreadSafeVector<int> vec;
+
+    vec.pushBack(10);
+    vec.pushBack(20);
+    vec.pushBack(30);
+
+    EXPECT_EQ(vec.front(), 10);
+    EXPECT_EQ(vec.back(), 30);
+
+    auto tryFront = vec.try_front();
+    EXPECT_TRUE(tryFront.has_value());
+    EXPECT_EQ(tryFront.value(), 10);
+
+    auto tryBack = vec.try_back();
+    EXPECT_TRUE(tryBack.has_value());
+    EXPECT_EQ(tryBack.value(), 30);
+}
+
+TEST_F(ThreadSafeVectorTest, PopBack) {
+    ThreadSafeVector<int> vec;
+
+    vec.pushBack(1);
+    vec.pushBack(2);
+    vec.pushBack(3);
+
+    auto popped = vec.popBack();
+    EXPECT_TRUE(popped.has_value());
+    EXPECT_EQ(popped.value(), 3);
+    EXPECT_EQ(vec.getSize(), 2u);
+
+    popped = vec.popBack();
+    EXPECT_TRUE(popped.has_value());
+    EXPECT_EQ(popped.value(), 2);
+
+    popped = vec.popBack();
+    EXPECT_TRUE(popped.has_value());
+    EXPECT_EQ(popped.value(), 1);
+
+    popped = vec.popBack();
+    EXPECT_FALSE(popped.has_value());  // Empty now
+}
+
+TEST_F(ThreadSafeVectorTest, ClearAndShrink) {
+    ThreadSafeVector<int> vec(100);
+
+    for (int i = 0; i < 50; ++i) {
+        vec.pushBack(i);
+    }
+
+    EXPECT_EQ(vec.getSize(), 50u);
+    EXPECT_GE(vec.getCapacity(), 50u);
+
+    vec.clear();
+    EXPECT_EQ(vec.getSize(), 0u);
+    EXPECT_TRUE(vec.empty());
+
+    // Capacity may still be high after clear
+    size_t oldCapacity = vec.getCapacity();
+
+    vec.shrinkToFit();
+    // Capacity should be reduced
+    EXPECT_LE(vec.getCapacity(), oldCapacity);
+}
+
+// ============================================================================
+// LockFreeList Tests
+// ============================================================================
+
+class LockFreeListTest : public atom::async::test::SynchronizationTestFixture {
+protected:
+    void SetUp() override { SynchronizationTestFixture::SetUp(); }
+    void TearDown() override { SynchronizationTestFixture::TearDown(); }
+};
+
+TEST_F(LockFreeListTest, BasicOperations) {
+    LockFreeList<int> list;
+
+    EXPECT_TRUE(list.empty());
+    EXPECT_EQ(list.size(), 0u);
+
+    list.pushFront(1);
+    list.pushFront(2);
+    list.pushFront(3);
+
+    EXPECT_FALSE(list.empty());
+    EXPECT_EQ(list.size(), 3u);
+
+    auto front = list.front();
+    EXPECT_TRUE(front.has_value());
+    EXPECT_EQ(front.value(), 3);  // LIFO order
+}
+
+TEST_F(LockFreeListTest, PopFront) {
+    LockFreeList<int> list;
+
+    list.pushFront(1);
+    list.pushFront(2);
+    list.pushFront(3);
+
+    auto popped = list.popFront();
+    EXPECT_TRUE(popped.has_value());
+    EXPECT_EQ(popped.value(), 3);
+
+    popped = list.popFront();
+    EXPECT_TRUE(popped.has_value());
+    EXPECT_EQ(popped.value(), 2);
+
+    popped = list.popFront();
+    EXPECT_TRUE(popped.has_value());
+    EXPECT_EQ(popped.value(), 1);
+
+    popped = list.popFront();
+    EXPECT_FALSE(popped.has_value());
+}
+
+TEST_F(LockFreeListTest, ConcurrentPushPop) {
+    LockFreeList<int> list;
+    std::atomic<int> pushCount{0};
+    std::atomic<int> popCount{0};
+
+    std::vector<std::thread> threads;
+    const int numThreads = 10;
+    const int opsPerThread = 100;
+
+    // Push threads
+    for (int t = 0; t < numThreads / 2; ++t) {
+        threads.emplace_back([&list, &pushCount, opsPerThread]() {
+            for (int i = 0; i < opsPerThread; ++i) {
+                list.pushFront(i);
+                pushCount.fetch_add(1);
+            }
+        });
+    }
+
+    // Pop threads
+    for (int t = 0; t < numThreads / 2; ++t) {
+        threads.emplace_back([&list, &popCount, opsPerThread]() {
+            for (int i = 0; i < opsPerThread; ++i) {
+                if (list.popFront().has_value()) {
+                    popCount.fetch_add(1);
+                }
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    // Drain remaining items
+    while (list.popFront().has_value()) {
+        popCount.fetch_add(1);
+    }
+
+    EXPECT_EQ(pushCount.load(), popCount.load());
+}
+
+TEST_F(LockFreeListTest, Iterator) {
+    LockFreeList<int> list;
+
+    list.pushFront(1);
+    list.pushFront(2);
+    list.pushFront(3);
+
+    std::vector<int> values;
+    for (const auto& val : list) {
+        values.push_back(val);
+    }
+
+    EXPECT_EQ(values.size(), 3u);
+    EXPECT_EQ(values[0], 3);  // First pushed is last in LIFO
+    EXPECT_EQ(values[1], 2);
+    EXPECT_EQ(values[2], 1);
+}
+
+TEST_F(LockFreeListTest, Clear) {
+    LockFreeList<int> list;
+
+    for (int i = 0; i < 10; ++i) {
+        list.pushFront(i);
+    }
+
+    EXPECT_EQ(list.size(), 10u);
+
+    list.clear();
+
+    EXPECT_TRUE(list.empty());
+    EXPECT_EQ(list.size(), 0u);
+}
+
 }  // namespace atom::async::sync::test

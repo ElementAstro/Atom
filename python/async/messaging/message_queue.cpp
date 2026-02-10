@@ -1,4 +1,4 @@
-#include "atom/async/message_queue.hpp"
+#include "atom/async/messaging/message_queue.hpp"
 
 #include <Python.h>
 #include <pybind11/chrono.h>

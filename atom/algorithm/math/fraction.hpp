@@ -47,28 +47,6 @@ private:
     int numerator;   /**< The numerator of the fraction. */
     int denominator; /**< The denominator of the fraction. */
 
-    /**
-     * @brief Computes the greatest common divisor (GCD) of two numbers.
-     * @param a The first number.
-     * @param b The second number.
-     * @return The GCD of the two numbers.
-     */
-    static constexpr int gcd(int a, int b) noexcept {
-        if (a == 0)
-            return std::abs(b);
-        if (b == 0)
-            return std::abs(a);
-
-        if (a == std::numeric_limits<int>::min()) {
-            a = std::numeric_limits<int>::min() + 1;
-        }
-        if (b == std::numeric_limits<int>::min()) {
-            b = std::numeric_limits<int>::min() + 1;
-        }
-
-        return std::abs(std::gcd(a, b));
-    }
-
     constexpr void reduce() noexcept {
         if (denominator == 0) {
             return;
@@ -79,7 +57,7 @@ private:
             denominator = -denominator;
         }
 
-        int divisor = gcd(numerator, denominator);
+        int divisor = std::abs(std::gcd(numerator, denominator));
         if (divisor > 1) {
             numerator /= divisor;
             denominator /= divisor;
@@ -406,8 +384,8 @@ public:
      * @param f The fraction to output.
      * @return Reference to the output stream.
      */
-    friend auto operator<<(std::ostream& os,
-                           const Fraction& f) -> std::ostream&;
+    friend auto operator<<(std::ostream& os, const Fraction& f)
+        -> std::ostream&;
 
     /**
      * @brief Inputs the fraction from the input stream.

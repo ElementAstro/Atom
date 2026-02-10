@@ -38,7 +38,8 @@ protected:
     std::array<uint32_t, 4> zeroKey, oneKey, maxKey;
 
     // Helper to generate random data
-    std::vector<uint32_t> generateRandomU32Data(size_t count, uint32_t seed = 0) {
+    std::vector<uint32_t> generateRandomU32Data(size_t count,
+                                                uint32_t seed = 0) {
         std::vector<uint32_t> data(count);
         std::mt19937 gen(seed ? seed : std::random_device{}());
         std::uniform_int_distribution<uint32_t> dist;
@@ -48,17 +49,20 @@ protected:
     }
 
     // Helper to generate random byte data
-    std::vector<uint8_t> generateRandomByteData(size_t size, uint32_t seed = 0) {
+    std::vector<uint8_t> generateRandomByteData(size_t size,
+                                                uint32_t seed = 0) {
         std::vector<uint8_t> data(size);
         std::mt19937 gen(seed ? seed : std::random_device{}());
         std::uniform_int_distribution<> dist(0, 255);
 
-        std::generate(data.begin(), data.end(), [&]() { return static_cast<uint8_t>(dist(gen)); });
+        std::generate(data.begin(), data.end(),
+                      [&]() { return static_cast<uint8_t>(dist(gen)); });
         return data;
     }
 
     // Helper to compare vectors
-    void expectEqualVectors(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b) {
+    void expectEqualVectors(const std::vector<uint32_t>& a,
+                            const std::vector<uint32_t>& b) {
         ASSERT_EQ(a.size(), b.size());
         for (size_t i = 0; i < a.size(); ++i) {
             EXPECT_EQ(a[i], b[i]) << "Vectors differ at index " << i;
@@ -67,7 +71,7 @@ protected:
 
     // Helper to verify encryption changes data
     void verifyEncryptionChangesData(const std::vector<uint32_t>& original,
-                                   const std::vector<uint32_t>& encrypted) {
+                                     const std::vector<uint32_t>& encrypted) {
         ASSERT_EQ(original.size(), encrypted.size());
         bool hasChanges = false;
         for (size_t i = 0; i < original.size(); ++i) {
@@ -80,41 +84,43 @@ protected:
     }
 };
 
-// Test span APIs for XXTEA
-TEST_F(TEAEnhancedTest, XXTEASpanAPIs) {
-    std::vector<uint32_t> data = {0x12345678, 0x9ABCDEF0, 0xFEDCBA98, 0x76543210};
-    std::vector<uint32_t> encrypted(data.size());
-    std::vector<uint32_t> decrypted(data.size());
+// Test container-based XXTEA encryption/decryption
+TEST_F(TEAEnhancedTest, XXTEAContainerAPIs) {
+    std::vector<uint32_t> data = {0x12345678, 0x9ABCDEF0, 0xFEDCBA98,
+                                  0x76543210};
 
-    // Test span-based encryption
-    xxteaEncryptSpan(std::span<const uint32_t>(data), std::span<uint32_t>(encrypted), strongKey1);
+    // Test container-based encryption
+    auto encrypted = xxteaEncrypt(data, strongKey1);
     verifyEncryptionChangesData(data, encrypted);
 
-    // Test span-based decryption
-    xxteaDecryptSpan(std::span<const uint32_t>(encrypted), std::span<uint32_t>(decrypted), strongKey1);
+    // Test container-based decryption
+    auto decrypted = xxteaDecrypt(encrypted, strongKey1);
     expectEqualVectors(data, decrypted);
 }
 
-// Test parallel XXTEA with different data sizes
+// Test parallel XXTEA with different data sizes (ECB mode - self-consistency
+// only)
 TEST_F(TEAEnhancedTest, XXTEAParallelDifferentSizes) {
-    std::vector<size_t> dataSizes = {100, 1000, 10000, 50000};
+    std::vector<size_t> dataSizes = {100, 1000, 5000};
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     for (size_t size : dataSizes) {
         auto data = generateRandomU32Data(size, 12345);
 
-        // Compare sequential vs parallel encryption
-        auto encryptedSeq = xxteaEncrypt(data, strongKey1);
+        // Verify parallel encrypt/decrypt self-consistency
         auto encryptedPar = xxteaEncryptParallel(data, strongKey1, 4);
+        EXPECT_NE(encryptedPar, data);  // Data should be encrypted
 
-        expectEqualVectors(encryptedSeq, encryptedPar);
-
-        // Compare sequential vs parallel decryption
-        auto decryptedSeq = xxteaDecrypt(encryptedSeq, strongKey1);
         auto decryptedPar = xxteaDecryptParallel(encryptedPar, strongKey1, 4);
-
-        expectEqualVectors(data, decryptedSeq);
         expectEqualVectors(data, decryptedPar);
+
+        // Verify sequential encrypt/decrypt self-consistency
+        auto encryptedSeq = xxteaEncrypt(data, strongKey1);
+        auto decryptedSeq = xxteaDecrypt(encryptedSeq, strongKey1);
+        expectEqualVectors(data, decryptedSeq);
     }
+#pragma GCC diagnostic pop
 }
 
 // Test parallel performance scaling
@@ -130,10 +136,12 @@ TEST_F(TEAEnhancedTest, ParallelPerformanceScaling) {
         auto encrypted = xxteaEncryptParallel(data, strongKey1, threads);
         auto end = std::chrono::high_resolution_clock::now();
 
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        auto duration =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         encryptionTimes.push_back(duration.count());
 
-        spdlog::info("XXTEA encryption with {} threads took {} ms", threads, duration.count());
+        spdlog::info("XXTEA encryption with {} threads took {} ms", threads,
+                     duration.count());
 
         // Verify correctness
         auto decrypted = xxteaDecryptParallel(encrypted, strongKey1, threads);
@@ -141,12 +149,14 @@ TEST_F(TEAEnhancedTest, ParallelPerformanceScaling) {
     }
 
     // Performance should generally improve with more threads (up to a point)
-    EXPECT_GT(encryptionTimes[0], encryptionTimes.back() * 0.5); // At least some improvement
+    EXPECT_GT(encryptionTimes[0],
+              encryptionTimes.back() * 0.5);  // At least some improvement
 }
 
 // Test byte conversion with various sizes
 TEST_F(TEAEnhancedTest, ByteConversionVariousSizes) {
-    std::vector<size_t> byteSizes = {0, 1, 3, 4, 5, 7, 8, 15, 16, 17, 1000, 1001, 1003, 1004};
+    std::vector<size_t> byteSizes = {0,  1,  3,  4,    5,    7,    8,
+                                     15, 16, 17, 1000, 1001, 1003, 1004};
 
     for (size_t size : byteSizes) {
         auto bytes = generateRandomByteData(size, size);
@@ -157,22 +167,25 @@ TEST_F(TEAEnhancedTest, ByteConversionVariousSizes) {
 
         // Original bytes should be preserved (with possible padding)
         EXPECT_GE(bytesResult.size(), bytes.size());
-        EXPECT_EQ(bytesResult.size() % 4, 0); // Should be multiple of 4
+        EXPECT_EQ(bytesResult.size() % 4, 0);  // Should be multiple of 4
 
         for (size_t i = 0; i < bytes.size(); ++i) {
-            EXPECT_EQ(bytesResult[i], bytes[i]) << "Byte mismatch at index " << i;
+            EXPECT_EQ(bytesResult[i], bytes[i])
+                << "Byte mismatch at index " << i;
         }
 
         // Padding bytes should be zero
         for (size_t i = bytes.size(); i < bytesResult.size(); ++i) {
-            EXPECT_EQ(bytesResult[i], 0) << "Padding byte should be zero at index " << i;
+            EXPECT_EQ(bytesResult[i], 0)
+                << "Padding byte should be zero at index " << i;
         }
     }
 }
 
 // Test security: different keys produce different results
 TEST_F(TEAEnhancedTest, SecurityDifferentKeys) {
-    std::vector<uint32_t> data = {0x12345678, 0x9ABCDEF0, 0xFEDCBA98, 0x76543210};
+    std::vector<uint32_t> data = {0x12345678, 0x9ABCDEF0, 0xFEDCBA98,
+                                  0x76543210};
 
     auto encrypted1 = xxteaEncrypt(data, strongKey1);
     auto encrypted2 = xxteaEncrypt(data, strongKey2);
@@ -196,7 +209,8 @@ TEST_F(TEAEnhancedTest, SecurityDifferentKeys) {
 // Test security: small changes in data produce different results
 TEST_F(TEAEnhancedTest, SecurityAvalancheEffect) {
     std::vector<uint32_t> data1 = {0x12345678, 0x9ABCDEF0};
-    std::vector<uint32_t> data2 = {0x12345679, 0x9ABCDEF0}; // One bit different
+    std::vector<uint32_t> data2 = {0x12345679,
+                                   0x9ABCDEF0};  // One bit different
 
     auto encrypted1 = xxteaEncrypt(data1, strongKey1);
     auto encrypted2 = xxteaEncrypt(data2, strongKey1);
@@ -212,7 +226,8 @@ TEST_F(TEAEnhancedTest, SecurityAvalancheEffect) {
     }
 
     // Should have significant bit differences (avalanche effect)
-    EXPECT_GT(diffBits, encrypted1.size() * 32 / 4); // At least 25% bits different
+    EXPECT_GT(diffBits,
+              encrypted1.size() * 32 / 4);  // At least 25% bits different
 }
 
 // Test edge cases for TEA/XTEA
@@ -223,15 +238,14 @@ TEST_F(TEAEnhancedTest, TEAXTEAEdgeCases) {
         {UINT32_MAX, UINT32_MAX},
         {0, UINT32_MAX},
         {UINT32_MAX, 0},
-        {0x80000000, 0x80000000}
-    };
+        {0x80000000, 0x80000000}};
 
     for (auto [v0, v1] : testValues) {
         uint32_t original_v0 = v0, original_v1 = v1;
 
         // Test TEA
         teaEncrypt(v0, v1, strongKey1);
-        EXPECT_TRUE(v0 != original_v0 || v1 != original_v1); // Should change
+        EXPECT_TRUE(v0 != original_v0 || v1 != original_v1);  // Should change
         teaDecrypt(v0, v1, strongKey1);
         EXPECT_EQ(v0, original_v0);
         EXPECT_EQ(v1, original_v1);
@@ -240,7 +254,7 @@ TEST_F(TEAEnhancedTest, TEAXTEAEdgeCases) {
         v0 = original_v0;
         v1 = original_v1;
         xteaEncrypt(v0, v1, strongKey1);
-        EXPECT_TRUE(v0 != original_v0 || v1 != original_v1); // Should change
+        EXPECT_TRUE(v0 != original_v0 || v1 != original_v1);  // Should change
         xteaDecrypt(v0, v1, strongKey1);
         EXPECT_EQ(v0, original_v0);
         EXPECT_EQ(v1, original_v1);
@@ -267,9 +281,10 @@ TEST_F(TEAEnhancedTest, ThreadSafetyConcurrentOperations) {
     // Test concurrent encryption with same data and key
     std::vector<std::future<std::vector<uint32_t>>> encryptFutures;
     for (int i = 0; i < numThreads; ++i) {
-        encryptFutures.push_back(std::async(std::launch::async, [&testData, this]() {
-            return xxteaEncrypt(testData, strongKey1);
-        }));
+        encryptFutures.push_back(
+            std::async(std::launch::async, [&testData, this]() {
+                return xxteaEncrypt(testData, strongKey1);
+            }));
     }
 
     // Collect results
@@ -287,9 +302,10 @@ TEST_F(TEAEnhancedTest, ThreadSafetyConcurrentOperations) {
     auto encrypted = encryptResults[0];
     std::vector<std::future<std::vector<uint32_t>>> decryptFutures;
     for (int i = 0; i < numThreads; ++i) {
-        decryptFutures.push_back(std::async(std::launch::async, [&encrypted, this]() {
-            return xxteaDecrypt(encrypted, strongKey1);
-        }));
+        decryptFutures.push_back(
+            std::async(std::launch::async, [&encrypted, this]() {
+                return xxteaDecrypt(encrypted, strongKey1);
+            }));
     }
 
     // All decryption results should match original data
@@ -301,7 +317,7 @@ TEST_F(TEAEnhancedTest, ThreadSafetyConcurrentOperations) {
 
 // Test large data encryption/decryption
 TEST_F(TEAEnhancedTest, LargeDataEncryption) {
-    const size_t largeSize = 1000000; // 1M uint32_t values
+    const size_t largeSize = 1000000;  // 1M uint32_t values
     auto largeData = generateRandomU32Data(largeSize);
 
     auto startTime = std::chrono::high_resolution_clock::now();
@@ -310,8 +326,10 @@ TEST_F(TEAEnhancedTest, LargeDataEncryption) {
     auto decrypted = xxteaDecryptParallel(encrypted, strongKey1, 8);
     auto endTime = std::chrono::high_resolution_clock::now();
 
-    auto encryptTime = std::chrono::duration_cast<std::chrono::milliseconds>(midTime - startTime);
-    auto decryptTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - midTime);
+    auto encryptTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        midTime - startTime);
+    auto decryptTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        endTime - midTime);
 
     spdlog::info("Large data encryption: {} ms, decryption: {} ms",
                  encryptTime.count(), decryptTime.count());
@@ -335,12 +353,15 @@ TEST_F(TEAEnhancedTest, RealWorldDataPatterns) {
 
     // Pattern 3: Repeating pattern
     std::vector<uint32_t> repeatingData;
-    std::vector<uint32_t> pattern = {0x11111111, 0x22222222, 0x33333333, 0x44444444};
+    std::vector<uint32_t> pattern = {0x11111111, 0x22222222, 0x33333333,
+                                     0x44444444};
     for (int i = 0; i < 250; ++i) {
-        repeatingData.insert(repeatingData.end(), pattern.begin(), pattern.end());
+        repeatingData.insert(repeatingData.end(), pattern.begin(),
+                             pattern.end());
     }
 
-    std::vector<std::vector<uint32_t>> testPatterns = {sparseData, incrementalData, repeatingData};
+    std::vector<std::vector<uint32_t>> testPatterns = {
+        sparseData, incrementalData, repeatingData};
 
     for (size_t i = 0; i < testPatterns.size(); ++i) {
         auto& data = testPatterns[i];

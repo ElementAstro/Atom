@@ -13,15 +13,12 @@
 #include <stop_token>
 #include <vector>
 
-// Platform-specific optimizations
 #include "atom/macro.hpp"
+#include "detail/callback_queue.hpp"
+#include "detail/platform_dispatch.hpp"
 
 #if defined(ATOM_PLATFORM_WINDOWS)
 #include "../../../cmake/WindowsCompat.hpp"
-#elif defined(ATOM_PLATFORM_APPLE)
-#include <dispatch/dispatch.h>
-#elif defined(ATOM_PLATFORM_LINUX)
-#include <pthread.h>
 #endif
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
@@ -461,80 +458,20 @@ private:
     std::optional<std::jthread> cancellationThread_;
 };
 
-// New: Coroutine awaiter implementation for Promise
+// Coroutine awaiter implementation for Promise - uses unified platform dispatch
 template <typename T>
 class PromiseAwaiter {
 public:
     explicit PromiseAwaiter(std::shared_future<T> future) noexcept
         : future_(std::move(future)) {}
 
-    bool await_ready() const noexcept {
+    [[nodiscard]] bool await_ready() const noexcept {
         return future_.wait_for(std::chrono::seconds(0)) ==
                std::future_status::ready;
     }
 
     void await_suspend(std::coroutine_handle<> handle) const {
-        // Platform-specific optimized implementation
-#if defined(ATOM_PLATFORM_WINDOWS)
-        // Windows optimized version
-        auto thread = [](void* data) -> unsigned long {
-            auto* params = static_cast<
-                std::pair<std::shared_future<T>, std::coroutine_handle<>>*>(
-                data);
-            params->first.wait();
-            params->second.resume();
-            delete params;
-            return 0;
-        };
-
-        auto* params =
-            new std::pair<std::shared_future<T>, std::coroutine_handle<>>(
-                future_, handle);
-        HANDLE threadHandle =
-            CreateThread(nullptr, 0, thread, params, 0, nullptr);
-        if (threadHandle)
-            CloseHandle(threadHandle);
-#elif defined(ATOM_PLATFORM_MACOS)
-        // macOS GCD optimized version
-        auto* params =
-            new std::pair<std::shared_future<T>, std::coroutine_handle<>>(
-                future_, handle);
-        dispatch_async_f(
-            dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
-            params, [](void* ctx) {
-                auto* p = static_cast<
-                    std::pair<std::shared_future<T>, std::coroutine_handle<>>*>(
-                    ctx);
-                p->first.wait();
-                p->second.resume();
-                delete p;
-            });
-#elif defined(ATOM_PLATFORM_LINUX)
-        // Linux optimized version
-        pthread_t thread;
-        auto* params =
-            new std::pair<std::shared_future<T>, std::coroutine_handle<>>(
-                future_, handle);
-        pthread_create(
-            &thread, nullptr,
-            [](void* data) -> void* {
-                auto* p = static_cast<
-                    std::pair<std::shared_future<T>, std::coroutine_handle<>>*>(
-                    data);
-                p->first.wait();
-                p->second.resume();
-                delete p;
-                return nullptr;
-            },
-            params);
-        pthread_detach(thread);
-#else
-        // Standard C++20 version
-        std::jthread([future = future_, h = handle]() mutable {
-            future.wait();
-            h.resume();
-        }).detach();
-#endif
+        detail::dispatchAwaitSuspend(future_, handle);
     }
 
     T await_resume() const { return future_.get(); }
@@ -550,68 +487,13 @@ public:
     explicit PromiseAwaiter(std::shared_future<void> future) noexcept
         : future_(std::move(future)) {}
 
-    bool await_ready() const noexcept {
+    [[nodiscard]] bool await_ready() const noexcept {
         return future_.wait_for(std::chrono::seconds(0)) ==
                std::future_status::ready;
     }
 
     void await_suspend(std::coroutine_handle<> handle) const {
-        // Platform-specific implementation similar to non-void version, omitted
-#if defined(ATOM_PLATFORM_WINDOWS)
-        auto thread = [](void* data) -> unsigned long {
-            auto* params = static_cast<
-                std::pair<std::shared_future<void>, std::coroutine_handle<>>*>(
-                data);
-            params->first.wait();
-            params->second.resume();
-            delete params;
-            return 0;
-        };
-
-        auto* params =
-            new std::pair<std::shared_future<void>, std::coroutine_handle<>>(
-                future_, handle);
-        HANDLE threadHandle =
-            CreateThread(nullptr, 0, thread, params, 0, nullptr);
-        if (threadHandle)
-            CloseHandle(threadHandle);
-#elif defined(ATOM_PLATFORM_MACOS)
-        auto* params =
-            new std::pair<std::shared_future<void>, std::coroutine_handle<>>(
-                future_, handle);
-        dispatch_async_f(
-            dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
-            params, [](void* ctx) {
-                auto* p = static_cast<std::pair<std::shared_future<void>,
-                                                std::coroutine_handle<>>*>(ctx);
-                p->first.wait();
-                p->second.resume();
-                delete p;
-            });
-#elif defined(ATOM_PLATFORM_LINUX)
-        pthread_t thread;
-        auto* params =
-            new std::pair<std::shared_future<void>, std::coroutine_handle<>>(
-                future_, handle);
-        pthread_create(
-            &thread, nullptr,
-            [](void* data) -> void* {
-                auto* p =
-                    static_cast<std::pair<std::shared_future<void>,
-                                          std::coroutine_handle<>>*>(data);
-                p->first.wait();
-                p->second.resume();
-                delete p;
-                return nullptr;
-            },
-            params);
-        pthread_detach(thread);
-#else
-        std::jthread([future = future_, h = handle]() mutable {
-            future.wait();
-            h.resume();
-        }).detach();
-#endif
+        detail::dispatchAwaitSuspend(future_, handle);
     }
 
     void await_resume() const { future_.get(); }
@@ -979,134 +861,18 @@ void Promise<T>::runAsync(F&& func, Args&&... args) {
         return;
     }
 
-    // Use platform-specific thread optimization for asynchronous execution
-#if defined(ATOM_PLATFORM_WINDOWS)
-    // Windows thread pool optimization
-    struct ThreadData {
-        Promise<T>* promise;
-        std::tuple<std::decay_t<F>, std::decay_t<Args>...> func_and_args;
-
-        ThreadData(Promise<T>* p, F&& f, Args&&... a)
-            : promise(p),
-              func_and_args(std::forward<F>(f), std::forward<Args>(a)...) {}
-
-        static unsigned long WINAPI ThreadProc(void* param) {
-            auto* data = static_cast<ThreadData*>(param);
-            try {
-                if constexpr (std::is_void_v<
-                                  std::invoke_result_t<F, Args...>>) {
-                    // Handle void return function
-                    std::apply(
-                        [](auto&&... args) {
-                            std::invoke(std::forward<decltype(args)>(args)...);
-                        },
-                        data->func_and_args);
-
-                    // For void return type functions, need special handling for
-                    // Promise<T> type
-                    if constexpr (std::is_void_v<T>) {
-                        data->promise->setValue();
-                    } else {
-                        // This case is actually a type mismatch, should cause
-                        // compile error Handle runtime case here only
-                    }
-                } else {
-                    // Handle function with return value
-                    auto result = std::apply(
-                        [](auto&&... args) {
-                            return std::invoke(
-                                std::forward<decltype(args)>(args)...);
-                        },
-                        data->func_and_args);
-
-                    if constexpr (std::is_convertible_v<
-                                      std::invoke_result_t<F, Args...>, T>) {
-                        data->promise->setValue(std::move(result));
-                    }
-                }
-            } catch (...) {
-                data->promise->setException(std::current_exception());
-            }
-            delete data;
-            return 0;
-        }
-    };
-
-    auto* threadData = new ThreadData(this, std::forward<F>(func),
-                                      std::forward<Args>(args)...);
-    HANDLE threadHandle = CreateThread(nullptr, 0, ThreadData::ThreadProc,
-                                       threadData, 0, nullptr);
-    if (threadHandle) {
-        CloseHandle(threadHandle);
-    } else {
-        // Failed to create thread, clean up resources
-        delete threadData;
-        setException(std::make_exception_ptr(
-            std::runtime_error("Failed to create thread")));
-    }
-#elif defined(ATOM_PLATFORM_MACOS)
-    // macOS GCD optimization
-    struct DispatchData {
-        Promise<T>* promise;
-        std::tuple<std::decay_t<F>, std::decay_t<Args>...> func_and_args;
-
-        DispatchData(Promise<T>* p, F&& f, Args&&... a)
-            : promise(p),
-              func_and_args(std::forward<F>(f), std::forward<Args>(a)...) {}
-
-        static void Execute(void* context) {
-            auto* data = static_cast<DispatchData*>(context);
-            try {
-                if constexpr (std::is_void_v<
-                                  std::invoke_result_t<F, Args...>>) {
-                    std::apply(
-                        [](auto&&... args) {
-                            std::invoke(std::forward<decltype(args)>(args)...);
-                        },
-                        data->func_and_args);
-
-                    if constexpr (std::is_void_v<T>) {
-                        data->promise->setValue();
-                    }
-                } else {
-                    auto result = std::apply(
-                        [](auto&&... args) {
-                            return std::invoke(
-                                std::forward<decltype(args)>(args)...);
-                        },
-                        data->func_and_args);
-
-                    if constexpr (std::is_convertible_v<
-                                      std::invoke_result_t<F, Args...>, T>) {
-                        data->promise->setValue(std::move(result));
-                    }
-                }
-            } catch (...) {
-                data->promise->setException(std::current_exception());
-            }
-            delete data;
-        }
-    };
-
-    auto* dispatchData = new DispatchData(this, std::forward<F>(func),
-                                          std::forward<Args>(args)...);
-    dispatch_async_f(
-        dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
-        dispatchData, DispatchData::Execute);
-#else
-    // Standard C++20 implementation
-    std::jthread([this, func = std::forward<F>(func),
-                  ... args = std::forward<Args>(args)]() mutable {
+    // Use unified platform dispatch for async execution
+    detail::dispatchAsync([this, func = std::decay_t<F>(std::forward<F>(func)),
+                           ... captured_args = std::decay_t<Args>(
+                               std::forward<Args>(args))]() mutable {
         try {
             if constexpr (std::is_void_v<std::invoke_result_t<F, Args...>>) {
-                std::invoke(func, args...);
-
+                std::invoke(func, captured_args...);
                 if constexpr (std::is_void_v<T>) {
                     this->setValue();
                 }
             } else {
-                auto result = std::invoke(func, args...);
-
+                auto result = std::invoke(func, captured_args...);
                 if constexpr (std::is_convertible_v<
                                   std::invoke_result_t<F, Args...>, T>) {
                     this->setValue(std::move(result));
@@ -1115,8 +881,7 @@ void Promise<T>::runAsync(F&& func, Args&&... args) {
         } catch (...) {
             this->setException(std::current_exception());
         }
-    }).detach();
-#endif
+    });
 }
 
 template <typename F, typename... Args>
@@ -1126,86 +891,17 @@ void Promise<void>::runAsync(F&& func, Args&&... args) {
         return;
     }
 
-    // Use platform-specific thread optimization for asynchronous execution,
-    // similar to non-void version
-#if defined(ATOM_PLATFORM_WINDOWS)
-    struct ThreadData {
-        Promise<void>* promise;
-        std::tuple<std::decay_t<F>, std::decay_t<Args>...> func_and_args;
-
-        ThreadData(Promise<void>* p, F&& f, Args&&... a)
-            : promise(p),
-              func_and_args(std::forward<F>(f), std::forward<Args>(a)...) {}
-
-        static unsigned long WINAPI ThreadProc(void* param) {
-            auto* data = static_cast<ThreadData*>(param);
-            try {
-                std::apply(
-                    [](auto&&... args) {
-                        std::invoke(std::forward<decltype(args)>(args)...);
-                    },
-                    data->func_and_args);
-                data->promise->setValue();
-            } catch (...) {
-                data->promise->setException(std::current_exception());
-            }
-            delete data;
-            return 0;
-        }
-    };
-
-    auto* threadData = new ThreadData(this, std::forward<F>(func),
-                                      std::forward<Args>(args)...);
-    HANDLE threadHandle = CreateThread(nullptr, 0, ThreadData::ThreadProc,
-                                       threadData, 0, nullptr);
-    if (threadHandle) {
-        CloseHandle(threadHandle);
-    } else {
-        delete threadData;
-        setException(std::make_exception_ptr(
-            std::runtime_error("Failed to create thread")));
-    }
-#elif defined(ATOM_PLATFORM_MACOS)
-    struct DispatchData {
-        Promise<void>* promise;
-        std::tuple<std::decay_t<F>, std::decay_t<Args>...> func_and_args;
-
-        DispatchData(Promise<void>* p, F&& f, Args&&... a)
-            : promise(p),
-              func_and_args(std::forward<F>(f), std::forward<Args>(a)...) {}
-
-        static void Execute(void* context) {
-            auto* data = static_cast<DispatchData*>(context);
-            try {
-                std::apply(
-                    [](auto&&... args) {
-                        std::invoke(std::forward<decltype(args)>(args)...);
-                    },
-                    data->func_and_args);
-                data->promise->setValue();
-            } catch (...) {
-                data->promise->setException(std::current_exception());
-            }
-            delete data;
-        }
-    };
-
-    auto* dispatchData = new DispatchData(this, std::forward<F>(func),
-                                          std::forward<Args>(args)...);
-    dispatch_async_f(
-        dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
-        dispatchData, DispatchData::Execute);
-#else
-    std::jthread([this, func = std::forward<F>(func),
-                  ... args = std::forward<Args>(args)]() mutable {
+    // Use unified platform dispatch for async execution
+    detail::dispatchAsync([this, func = std::decay_t<F>(std::forward<F>(func)),
+                           ... captured_args = std::decay_t<Args>(
+                               std::forward<Args>(args))]() mutable {
         try {
-            std::invoke(func, args...);
+            std::invoke(func, captured_args...);
             this->setValue();
         } catch (...) {
             this->setException(std::current_exception());
         }
-    }).detach();
-#endif
+    });
 }
 
 // New: Helper function to create a completed Promise

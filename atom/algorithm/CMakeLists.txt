@@ -85,6 +85,7 @@ set(HEADERS
     core/rust_numeric.hpp
     core/simd_utils.hpp
     core/opencl_utils.hpp
+    core/hex_utils.hpp
     crypto/md5.hpp
     crypto/sha1.hpp
     crypto/blowfish.hpp
@@ -105,6 +106,7 @@ set(HEADERS
     optimization/pathfinding.hpp
     encoding/base.hpp
     graphics/flood.hpp
+    graphics/noise_base.hpp
     graphics/perlin.hpp
     graphics/simplex.hpp
     graphics/image_ops.hpp
@@ -112,7 +114,12 @@ set(HEADERS
     utils/fnmatch.hpp
     utils/snowflake.hpp
     utils/weight.hpp
-    utils/uuid.hpp)
+    utils/uuid.hpp
+    # Common utilities
+    common/concepts.hpp
+    common/endian.hpp
+    common/hex.hpp
+    common/parallel.hpp)
 
 set(LIBS ${ATOM_ALGORITHM_DEPENDS})
 

@@ -8,7 +8,7 @@
 
 Date: 2024-5-24
 
-Description: TCP Client Class
+Description: TCP Client Class with native socket backend
 
 *************************************************/
 
@@ -18,8 +18,6 @@ Description: TCP Client Class
 #include <chrono>
 #include <concepts>
 #include <coroutine>
-#include <expected>
-#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -29,11 +27,9 @@ Description: TCP Client Class
 
 #include "atom/type/expected.hpp"
 #include "atom/type/noncopyable.hpp"
+#include "tcp_common.hpp"
 
 namespace atom::connection {
-
-// Forward declarations
-class Error;
 
 /**
  * @brief Task type for coroutine-based asynchronous operations
@@ -57,7 +53,7 @@ public:
         void return_value(T value) { result = std::move(value); }
     };
 
-    Task(handle_type h) : handle_(h) {}
+    explicit Task(handle_type h) : handle_(h) {}
     ~Task() {
         if (handle_)
             handle_.destroy();
@@ -78,14 +74,14 @@ public:
         return *this;
     }
 
-    T result() const {
+    [[nodiscard]] T result() const {
         if (handle_.promise().exception) {
             std::rethrow_exception(handle_.promise().exception);
         }
         return handle_.promise().result;
     }
 
-    bool done() const { return handle_.done(); }
+    [[nodiscard]] bool done() const { return handle_.done(); }
 
     bool await_ready() const { return false; }
     void await_suspend([[maybe_unused]] std::coroutine_handle<> awaiting) {
@@ -122,50 +118,51 @@ struct Task<void>::promise_type {
  */
 template <typename T>
 concept CallbackInvocable =
-    std::invocable<T> || std::invocable<T, const std::vector<char>&> ||
-    std::invocable<T, const std::string&> ||
+    std::invocable<T> || std::invocable<T, std::span<const char>> ||
     std::invocable<T, const std::system_error&>;
 
 /**
  * @class TcpClient
- * @brief Represents a TCP client for connecting to a server and
- * sending/receiving data with modern C++20 features.
+ * @brief TCP client using native socket API with C++20 coroutines
+ *
+ * Features:
+ * - Cross-platform (Windows/Linux/macOS)
+ * - Platform-specific optimizations (epoll/kqueue)
+ * - Coroutine-based async operations
  */
 class TcpClient : public NonCopyable {
 public:
-    using OnConnectedCallback = std::function<void()>;
-    using OnDisconnectedCallback = std::function<void()>;
-    using OnDataReceivedCallback = std::function<void(std::span<const char>)>;
-    using OnErrorCallback = std::function<void(const std::system_error&)>;
+    using OnConnectedCallback = TcpCallbacks::OnConnected;
+    using OnDisconnectedCallback = TcpCallbacks::OnDisconnected;
+    using OnDataReceivedCallback = TcpCallbacks::OnDataReceived;
+    using OnErrorCallback = TcpCallbacks::OnError;
 
     /**
      * @brief Configuration options for TCP client
      */
     struct Options {
-        bool ipv6_enabled{false};         /**< Enable IPv6 support */
-        bool keep_alive{true};            /**< Enable TCP keepalive */
-        bool no_delay{true};              /**< Disable Nagle's algorithm */
-        size_t receive_buffer_size{8192}; /**< Size of receive buffer */
-        size_t send_buffer_size{8192};    /**< Size of send buffer */
+        bool ipv6_enabled{false};
+        bool keep_alive{true};
+        bool no_delay{true};
+        size_t receive_buffer_size{8192};
+        size_t send_buffer_size{8192};
+
+        // Conversion from unified config
+        static Options fromConfig(const TcpClientConfig& config) {
+            return Options{.ipv6_enabled = config.ipv6_enabled,
+                           .keep_alive = config.keep_alive,
+                           .no_delay = config.no_delay,
+                           .receive_buffer_size = config.receive_buffer_size,
+                           .send_buffer_size = config.send_buffer_size};
+        }
     };
 
-    /**
-     * @brief Constructor.
-     * @param options Configuration options for the TCP client
-     */
     explicit TcpClient(Options options);
-
-    /**
-     * @brief Destructor.
-     */
+    explicit TcpClient(const TcpClientConfig& config);
     ~TcpClient() override;
 
     /**
-     * @brief Connects to a TCP server.
-     * @param host The hostname or IP address of the server.
-     * @param port The port number of the server.
-     * @param timeout The connection timeout duration.
-     * @return type::expected with void on success or error on failure
+     * @brief Connects to a TCP server
      */
     auto connect(
         std::string_view host, uint16_t port,
@@ -173,11 +170,7 @@ public:
         -> type::expected<void, std::system_error>;
 
     /**
-     * @brief Asynchronously connects to a TCP server.
-     * @param host The hostname or IP address of the server.
-     * @param port The port number of the server.
-     * @param timeout The connection timeout duration.
-     * @return Task that completes when connection succeeds or fails
+     * @brief Asynchronously connects to a TCP server
      */
     auto connect_async(
         std::string_view host, uint16_t port,
@@ -185,113 +178,66 @@ public:
         -> Task<type::expected<void, std::system_error>>;
 
     /**
-     * @brief Disconnects from the server.
+     * @brief Disconnects from the server
      */
     void disconnect();
 
     /**
-     * @brief Sends data to the server.
-     * @param data The data to be sent.
-     * @return type::expected with bytes sent on success or error on failure
+     * @brief Sends data to the server
      */
     auto send(std::span<const char> data)
         -> type::expected<size_t, std::system_error>;
 
     /**
-     * @brief Sends data to the server asynchronously.
-     * @param data The data to be sent.
-     * @return Task that completes when send succeeds or fails
+     * @brief Sends data to the server asynchronously
      */
     auto send_async(std::span<const char> data)
         -> Task<type::expected<size_t, std::system_error>>;
 
     /**
-     * @brief Receives data from the server.
-     * @param max_size The maximum number of bytes to receive.
-     * @param timeout The receive timeout duration.
-     * @return type::expected with received data or error on failure
+     * @brief Receives data from the server
      */
     auto receive(size_t max_size, std::chrono::milliseconds timeout =
                                       std::chrono::milliseconds::zero())
         -> type::expected<std::vector<char>, std::system_error>;
 
     /**
-     * @brief Receives data from the server asynchronously.
-     * @param max_size The maximum number of bytes to receive.
-     * @param timeout The receive timeout duration.
-     * @return Task that completes when receive succeeds or fails
+     * @brief Receives data asynchronously
      */
     auto receive_async(size_t max_size, std::chrono::milliseconds timeout =
                                             std::chrono::milliseconds::zero())
         -> Task<type::expected<std::vector<char>, std::system_error>>;
 
-    /**
-     * @brief Checks if the client is connected to the server.
-     * @return True if connected, false otherwise.
-     */
     [[nodiscard]] auto isConnected() const -> bool;
+    [[nodiscard]] auto getLastError() const -> const std::system_error&;
 
-    /**
-     * @brief Sets the callback function to be called when connected to the
-     * server.
-     * @param callback The callback function.
-     */
     template <CallbackInvocable Callback>
     void setOnConnectedCallback(Callback&& callback) {
         onConnectedCallback_ = std::forward<Callback>(callback);
     }
 
-    /**
-     * @brief Sets the callback function to be called when disconnected from the
-     * server.
-     * @param callback The callback function.
-     */
     template <CallbackInvocable Callback>
     void setOnDisconnectedCallback(Callback&& callback) {
         onDisconnectedCallback_ = std::forward<Callback>(callback);
     }
 
-    /**
-     * @brief Sets the callback function to be called when data is received from
-     * the server.
-     * @param callback The callback function.
-     */
     template <CallbackInvocable Callback>
     void setOnDataReceivedCallback(Callback&& callback) {
         onDataReceivedCallback_ = std::forward<Callback>(callback);
     }
 
-    /**
-     * @brief Sets the callback function to be called when an error occurs.
-     * @param callback The callback function.
-     */
     template <CallbackInvocable Callback>
     void setOnErrorCallback(Callback&& callback) {
         onErrorCallback_ = std::forward<Callback>(callback);
     }
 
-    /**
-     * @brief Starts receiving data from the server.
-     * @param buffer_size The size of the receive buffer.
-     */
     void startReceiving(size_t buffer_size);
-
-    /**
-     * @brief Stops receiving data from the server.
-     */
     void stopReceiving();
 
-    /**
-     * @brief Gets the last error that occurred
-     * @return The last error
-     */
-    [[nodiscard]] auto getLastError() const -> const std::system_error&;
-
 private:
-    class Impl; /**< Forward declaration of the implementation class. */
-    std::unique_ptr<Impl> impl_; /**< Pointer to the implementation object. */
+    class Impl;
+    std::unique_ptr<Impl> impl_;
 
-    // Callbacks stored in the main class to avoid exposing them in the impl
     OnConnectedCallback onConnectedCallback_;
     OnDisconnectedCallback onDisconnectedCallback_;
     OnDataReceivedCallback onDataReceivedCallback_;

@@ -22,14 +22,14 @@ Description: Enhanced ThreadLocal with C++20 features
 #include <optional>
 #include <shared_mutex>
 #include <source_location>  // For enhanced exception information
-#include <stdexcept>
-#include <string_view>  // For more efficient string handling
+#include <string_view>      // For more efficient string handling
 #include <thread>
 #include <type_traits>  // For enhanced type traits checking
 #include <unordered_map>
 #include <utility>
 
 #include "atom/type/noncopyable.hpp"
+#include "lock.hpp"  // For AsyncException base class
 
 namespace atom::async {
 
@@ -51,27 +51,17 @@ enum class ThreadLocalError {
 };
 
 // Error information wrapper class
-class ThreadLocalException : public std::runtime_error {
+class ThreadLocalException : public AsyncException {
 public:
     ThreadLocalException(
         ThreadLocalError error, std::string_view message,
         const std::source_location& location = std::source_location::current())
-        : std::runtime_error(std::string(message)),
-          error_(error),
-          function_(location.function_name()),
-          file_(location.file_name()),
-          line_(location.line()) {}
+        : AsyncException(std::string(message), location), error_(error) {}
 
     [[nodiscard]] ThreadLocalError error() const noexcept { return error_; }
-    [[nodiscard]] const char* function() const noexcept { return function_; }
-    [[nodiscard]] const char* file() const noexcept { return file_; }
-    [[nodiscard]] int line() const noexcept { return line_; }
 
 private:
     ThreadLocalError error_;
-    const char* function_;
-    const char* file_;
-    int line_;
 };
 
 /**
@@ -210,8 +200,8 @@ public:
     EnhancedThreadLocal(EnhancedThreadLocal&&) noexcept = default;
 
     // Move assignment operator
-    auto operator=(EnhancedThreadLocal&&) noexcept -> EnhancedThreadLocal& =
-                                                          default;
+    auto operator=(EnhancedThreadLocal&&) noexcept
+        -> EnhancedThreadLocal& = default;
 
     /**
      * @brief Destructor, responsible for cleaning up all thread values
@@ -236,6 +226,8 @@ public:
      * @brief Gets the value for the current thread
      *
      * If the value is not yet initialized, the initializer function is called.
+     * Uses a fast path with shared_lock for reads, upgrading to unique_lock
+     * only when initialization is needed.
      *
      * @return Reference to the thread-local value
      * @throws ThreadLocalException If no initializer is available and the value
@@ -243,54 +235,66 @@ public:
      */
     auto get() -> T& {
         auto tid = std::this_thread::get_id();
+
+        // Fast path: try to get existing value with shared lock
+        {
+            std::shared_lock shared_lock(mutex_);
+            auto it = values_.find(tid);
+            if (it != values_.end() && it->second.has_value()) {
+                return it->second.value();
+            }
+        }
+
+        // Slow path: need to initialize, acquire exclusive lock
         std::unique_lock lock(mutex_);
 
-        // Try to get or create the value
+        // Double-check after acquiring exclusive lock (another thread may have
+        // initialized)
         auto [it, inserted] = values_.try_emplace(tid);
-        if (inserted || !it->second.has_value()) {
-            if (initializer_) {
-                try {
-                    it->second = std::make_optional(initializer_());
-                } catch (const std::exception& e) {
-                    values_.erase(tid);
-                    throw ThreadLocalException(
-                        ThreadLocalError::InitializationFailed,
-                        std::string(
-                            "Failed to initialize thread-local value: ") +
-                            e.what());
-                }
-            } else if (conditionalInitializer_) {
-                try {
-                    it->second = conditionalInitializer_();
-                    if (!it->second.has_value()) {
-                        values_.erase(tid);
-                        throw ThreadLocalException(
-                            ThreadLocalError::InitializationFailed,
-                            "Conditional initializer returned no value");
-                    }
-                } catch (const std::exception& e) {
-                    values_.erase(tid);
-                    throw ThreadLocalException(
-                        ThreadLocalError::InitializationFailed,
-                        std::string("Conditional initializer failed: ") +
-                            e.what());
-                }
-            } else if (threadIdInitializer_) {
-                try {
-                    it->second = std::make_optional(threadIdInitializer_(tid));
-                } catch (const std::exception& e) {
-                    values_.erase(tid);
-                    throw ThreadLocalException(
-                        ThreadLocalError::InitializationFailed,
-                        std::string("Thread ID initializer failed: ") +
-                            e.what());
-                }
-            } else {
+        if (!inserted && it->second.has_value()) {
+            return it->second.value();
+        }
+
+        // Initialize the value
+        if (initializer_) {
+            try {
+                it->second = std::make_optional(initializer_());
+            } catch (const std::exception& e) {
                 values_.erase(tid);
-                throw ThreadLocalException(ThreadLocalError::NoInitializer,
-                                           "No initializer available for "
-                                           "uninitialized thread-local value");
+                throw ThreadLocalException(
+                    ThreadLocalError::InitializationFailed,
+                    std::string("Failed to initialize thread-local value: ") +
+                        e.what());
             }
+        } else if (conditionalInitializer_) {
+            try {
+                it->second = conditionalInitializer_();
+                if (!it->second.has_value()) {
+                    values_.erase(tid);
+                    throw ThreadLocalException(
+                        ThreadLocalError::InitializationFailed,
+                        "Conditional initializer returned no value");
+                }
+            } catch (const std::exception& e) {
+                values_.erase(tid);
+                throw ThreadLocalException(
+                    ThreadLocalError::InitializationFailed,
+                    std::string("Conditional initializer failed: ") + e.what());
+            }
+        } else if (threadIdInitializer_) {
+            try {
+                it->second = std::make_optional(threadIdInitializer_(tid));
+            } catch (const std::exception& e) {
+                values_.erase(tid);
+                throw ThreadLocalException(
+                    ThreadLocalError::InitializationFailed,
+                    std::string("Thread ID initializer failed: ") + e.what());
+            }
+        } else {
+            values_.erase(tid);
+            throw ThreadLocalException(ThreadLocalError::NoInitializer,
+                                       "No initializer available for "
+                                       "uninitialized thread-local value");
         }
 
         return it->second.value();
@@ -352,7 +356,7 @@ public:
      */
     template <typename Factory>
         requires std::invocable<Factory> &&
-                     std::convertible_to<std::invoke_result_t<Factory>, T>
+                 std::convertible_to<std::invoke_result_t<Factory>, T>
     auto getOrCreate(Factory&& factory) -> T& {
         auto tid = std::this_thread::get_id();
         std::unique_lock lock(mutex_);

@@ -209,7 +209,7 @@ TEST_F(ConvolveTest, DiscreteFourierTransform) {
                                                {0.0, 1.0, 0.0, 1.0},
                                                {1.0, 0.0, 1.0, 0.0},
                                                {0.0, 1.0, 0.0, 1.0}};
-    auto frequency = dfT2D(signal);
+    auto frequency = dft2D(signal);
     double sum = 0.0;
     for (const auto& row : signal) {
         for (const auto& val : row) {
@@ -218,7 +218,7 @@ TEST_F(ConvolveTest, DiscreteFourierTransform) {
     }
     EXPECT_NEAR(frequency[0][0].real(), sum, 1e-6);
     EXPECT_NEAR(frequency[0][0].imag(), 0.0, 1e-6);
-    auto reconstructed = idfT2D(frequency);
+    auto reconstructed = idft2D(frequency);
     ASSERT_EQ(reconstructed.size(), signal.size());
     ASSERT_EQ(reconstructed[0].size(), signal[0].size());
     for (size_t i = 0; i < signal.size(); ++i) {
@@ -230,8 +230,8 @@ TEST_F(ConvolveTest, DiscreteFourierTransform) {
 
 TEST_F(ConvolveTest, DFTRoundtrip) {
     auto original = generateRandomMatrix(8, 8, 0.0, 10.0);
-    auto frequency = dfT2D(original);
-    auto reconstructed = idfT2D(frequency);
+    auto frequency = dft2D(original);
+    auto reconstructed = idft2D(frequency);
     ASSERT_EQ(reconstructed.size(), original.size());
     ASSERT_EQ(reconstructed[0].size(), original[0].size());
     for (size_t i = 0; i < original.size(); ++i) {
@@ -269,8 +269,8 @@ TEST_F(ConvolveTest, EndToEndConvolutionDeconvolution) {
 
 TEST_F(ConvolveTest, MultithreadedDFT) {
     auto signal = generateRandomMatrix(16, 16);
-    auto freq_single = dfT2D(signal, 1);
-    auto freq_multi = dfT2D(signal, 4);
+    auto freq_single = dft2D(signal, 1);
+    auto freq_multi = dft2D(signal, 4);
     for (size_t i = 0; i < freq_single.size(); ++i) {
         for (size_t j = 0; j < freq_single[0].size(); ++j) {
             EXPECT_NEAR(freq_single[i][j].real(), freq_multi[i][j].real(),
@@ -283,9 +283,9 @@ TEST_F(ConvolveTest, MultithreadedDFT) {
 
 TEST_F(ConvolveTest, MultithreadedIDFT) {
     auto signal = generateRandomMatrix(16, 16);
-    auto frequency = dfT2D(signal);
-    auto recon_single = idfT2D(frequency, 1);
-    auto recon_multi = idfT2D(frequency, 4);
+    auto frequency = dft2D(signal);
+    auto recon_single = idft2D(frequency, 1);
+    auto recon_multi = idft2D(frequency, 4);
     EXPECT_TRUE(matricesNearlyEqual(recon_single, recon_multi, 1e-5));
 }
 
@@ -427,9 +427,9 @@ TEST_F(ConvolveTest, DFTLinearity) {
         }
     }
 
-    auto dft_combined = dfT2D(combined);
-    auto dft_x = dfT2D(x);
-    auto dft_y = dfT2D(y);
+    auto dft_combined = dft2D(combined);
+    auto dft_x = dft2D(x);
+    auto dft_y = dft2D(y);
 
     // Verify linearity
     for (size_t i = 0; i < 8; ++i) {

@@ -394,6 +394,57 @@ void RateLimiter::cleanup(std::string_view function_name_sv,
 #endif
 }
 
+auto RateLimiter::collectResumableWaiters()
+    -> std::vector<std::pair<std::string, std::coroutine_handle<>>> {
+    std::vector<std::pair<std::string, std::coroutine_handle<>>> result;
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    for (auto& [function_name, wait_queue] : waiters_) {
+        auto settings_it = settings_.find(function_name);
+        if (settings_it == settings_.end())
+            continue;
+
+        auto& current_settings = settings_it->second;
+        auto& req_queue = requests_[function_name];
+
+        std::coroutine_handle<> handle;
+        while (wait_queue.pop(handle) &&
+               req_queue.size_approx() < current_settings.maxRequests) {
+            req_queue.push(std::chrono::steady_clock::now());
+            result.emplace_back(function_name, handle);
+#if defined(ATOM_PLATFORM_LINUX) && !defined(ATOM_USE_ASIO)
+            waitersReady_.fetch_sub(1, std::memory_order_relaxed);
+#endif
+        }
+    }
+#else
+    for (auto& [function_name, wait_queue] : waiters_) {
+        if (wait_queue.empty())
+            continue;
+
+        auto settings_it = settings_.find(function_name);
+        if (settings_it == settings_.end())
+            continue;
+
+        auto& current_settings = settings_it->second;
+        auto& req_list = requests_[function_name];
+
+        while (!wait_queue.empty() &&
+               req_list.size() < current_settings.maxRequests) {
+            auto waiter = wait_queue.front();
+            wait_queue.pop_front();
+            req_list.emplace_back(std::chrono::steady_clock::now());
+            result.emplace_back(function_name, waiter.handle);
+#if defined(ATOM_PLATFORM_LINUX) && !defined(ATOM_USE_ASIO)
+            waitersReady_.fetch_sub(1, std::memory_order_relaxed);
+#endif
+        }
+    }
+#endif
+
+    return result;
+}
+
 void RateLimiter::processWaiters() {
     spdlog::debug("Processing waiters (generic)");
 
@@ -402,44 +453,7 @@ void RateLimiter::processWaiters() {
 
     {
         std::unique_lock<std::shared_mutex> lock(mutex_);
-
-#ifdef ATOM_USE_BOOST_LOCKFREE
-        for (auto& [function_name, wait_queue] : waiters_) {
-            auto settings_it = settings_.find(function_name);
-            if (settings_it == settings_.end())
-                continue;
-
-            auto& current_settings = settings_it->second;
-            auto& req_queue = requests_[function_name];
-
-            std::coroutine_handle<> handle;
-            while (wait_queue.pop(handle) &&
-                   req_queue.size_approx() < current_settings.maxRequests) {
-                req_queue.push(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, handle);
-            }
-        }
-#else
-        for (auto& [function_name, wait_queue] : waiters_) {
-            if (wait_queue.empty())
-                continue;
-
-            auto settings_it = settings_.find(function_name);
-            if (settings_it == settings_.end())
-                continue;
-
-            auto& current_settings = settings_it->second;
-            auto& req_list = requests_[function_name];
-
-            while (!wait_queue.empty() &&
-                   req_list.size() < current_settings.maxRequests) {
-                auto waiter = wait_queue.front();
-                wait_queue.pop_front();
-                req_list.emplace_back(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, waiter.handle);
-            }
-        }
-#endif
+        waiters_to_process = collectResumableWaiters();
     }
 
     if (!waiters_to_process.empty()) {
@@ -461,44 +475,7 @@ void RateLimiter::asioProcessWaiters() {
 
     {
         std::unique_lock<std::shared_mutex> lock(mutex_);
-
-#ifdef ATOM_USE_BOOST_LOCKFREE
-        for (auto& [function_name, wait_queue] : waiters_) {
-            auto settings_it = settings_.find(function_name);
-            if (settings_it == settings_.end())
-                continue;
-
-            auto& current_settings = settings_it->second;
-            auto& req_queue = requests_[function_name];
-
-            std::coroutine_handle<> handle;
-            while (wait_queue.pop(handle) &&
-                   req_queue.size_approx() < current_settings.maxRequests) {
-                req_queue.push(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, handle);
-            }
-        }
-#else
-        for (auto& [function_name, wait_queue] : waiters_) {
-            if (wait_queue.empty())
-                continue;
-
-            auto settings_it = settings_.find(function_name);
-            if (settings_it == settings_.end())
-                continue;
-
-            auto& current_settings = settings_it->second;
-            auto& req_list = requests_[function_name];
-
-            while (!wait_queue.empty() &&
-                   req_list.size() < current_settings.maxRequests) {
-                auto waiter = wait_queue.front();
-                wait_queue.pop_front();
-                req_list.emplace_back(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, waiter.handle);
-            }
-        }
-#endif
+        waiters_to_process = collectResumableWaiters();
     }
 
     if (!waiters_to_process.empty()) {
@@ -524,44 +501,7 @@ void RateLimiter::optimizedProcessWaiters() {
 
     {
         std::unique_lock<std::shared_mutex> lock(mutex_);
-
-#ifdef ATOM_USE_BOOST_LOCKFREE
-        for (auto& [function_name, wait_queue] : waiters_) {
-            auto settings_it = settings_.find(function_name);
-            if (settings_it == settings_.end())
-                continue;
-
-            auto& current_settings = settings_it->second;
-            auto& req_queue = requests_[function_name];
-
-            std::coroutine_handle<> handle;
-            while (wait_queue.pop(handle) &&
-                   req_queue.size_approx() < current_settings.maxRequests) {
-                req_queue.push(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, handle);
-            }
-        }
-#else
-        for (auto& [function_name, wait_queue] : waiters_) {
-            if (wait_queue.empty())
-                continue;
-
-            auto settings_it = settings_.find(function_name);
-            if (settings_it == settings_.end())
-                continue;
-
-            auto& current_settings = settings_it->second;
-            auto& req_list = requests_[function_name];
-
-            while (!wait_queue.empty() &&
-                   req_list.size() < current_settings.maxRequests) {
-                auto waiter = wait_queue.front();
-                wait_queue.pop_front();
-                req_list.emplace_back(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, waiter.handle);
-            }
-        }
-#endif
+        waiters_to_process = collectResumableWaiters();
     }
 
     if (!waiters_to_process.empty()) {
@@ -606,44 +546,7 @@ void RateLimiter::optimizedProcessWaiters() {
 
     {
         std::unique_lock<std::shared_mutex> lock(mutex_);
-
-#ifdef ATOM_USE_BOOST_LOCKFREE
-        for (auto& [function_name, wait_queue] : waiters_) {
-            auto settings_it = settings_.find(function_name);
-            if (settings_it == settings_.end())
-                continue;
-
-            auto& current_settings = settings_it->second;
-            auto& req_queue = requests_[function_name];
-
-            std::coroutine_handle<> handle;
-            while (wait_queue.pop(handle) &&
-                   req_queue.size_approx() < current_settings.maxRequests) {
-                req_queue.push(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, handle);
-            }
-        }
-#else
-        for (auto& [function_name, wait_queue] : waiters_) {
-            if (wait_queue.empty())
-                continue;
-
-            auto settings_it = settings_.find(function_name);
-            if (settings_it == settings_.end())
-                continue;
-
-            auto& current_settings = settings_it->second;
-            auto& req_list = requests_[function_name];
-
-            while (!wait_queue.empty() &&
-                   req_list.size() < current_settings.maxRequests) {
-                auto waiter = wait_queue.front();
-                wait_queue.pop_front();
-                req_list.emplace_back(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, waiter.handle);
-            }
-        }
-#endif
+        waiters_to_process = collectResumableWaiters();
     }
 
     if (!waiters_to_process.empty()) {
@@ -679,50 +582,7 @@ void RateLimiter::optimizedProcessWaiters() {
 
     {
         std::unique_lock<std::shared_mutex> lock(mutex_);
-
-#ifdef ATOM_USE_BOOST_LOCKFREE
-        for (auto& [function_name, wait_queue] : waiters_) {
-            auto settings_it = settings_.find(function_name);
-            if (settings_it == settings_.end())
-                continue;
-
-            auto& current_settings = settings_it->second;
-            auto& req_queue = requests_[function_name];
-
-            std::coroutine_handle<> handle;
-            while (wait_queue.pop(handle) &&
-                   req_queue.size_approx() < current_settings.maxRequests) {
-                req_queue.push(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, handle);
-#if !defined(ATOM_USE_ASIO)
-                waitersReady_.fetch_sub(1, std::memory_order_relaxed);
-#endif
-            }
-        }
-#else
-        for (auto& [function_name, wait_queue] : waiters_) {
-            if (wait_queue.empty())
-                continue;
-
-            auto settings_it = settings_.find(function_name);
-            if (settings_it == settings_.end())
-                continue;
-
-            auto& current_settings = settings_it->second;
-            auto& req_list = requests_[function_name];
-
-            while (!wait_queue.empty() &&
-                   req_list.size() < current_settings.maxRequests) {
-                auto waiter = wait_queue.front();
-                wait_queue.pop_front();
-                req_list.emplace_back(std::chrono::steady_clock::now());
-                waiters_to_process.emplace_back(function_name, waiter.handle);
-#if !defined(ATOM_USE_ASIO)
-                waitersReady_.fetch_sub(1, std::memory_order_relaxed);
-#endif
-            }
-        }
-#endif
+        waiters_to_process = collectResumableWaiters();
     }
 
     if (!waiters_to_process.empty()) {

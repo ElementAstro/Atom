@@ -26,71 +26,13 @@ Description: FIFO Client
 #include <unordered_map>
 #include <vector>
 
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <fcntl.h>
-#include <poll.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <cstring>
-#endif
-
-#ifdef ENABLE_COMPRESSION
-#include <zlib.h>
-#endif
-
-#ifdef ENABLE_ENCRYPTION
-#include <openssl/evp.h>
-#include <openssl/rand.h>
-#endif
+#include "fifo_codec.hpp"
+#include "fifo_platform.hpp"
+#include "fifo_threadpool.hpp"
 
 #include "spdlog/spdlog.h"
 
 namespace atom::connection {
-
-class FifoErrorCategory : public std::error_category {
-public:
-    [[nodiscard]] const char* name() const noexcept override {
-        return "fifo_client";
-    }
-
-    [[nodiscard]] std::string message(int ev) const override {
-        switch (static_cast<FifoError>(ev)) {
-            case FifoError::OpenFailed:
-                return "Failed to open FIFO";
-            case FifoError::ReadFailed:
-                return "Failed to read from FIFO";
-            case FifoError::WriteFailed:
-                return "Failed to write to FIFO";
-            case FifoError::Timeout:
-                return "Operation timed out";
-            case FifoError::InvalidOperation:
-                return "Invalid operation";
-            case FifoError::NotOpen:
-                return "FIFO is not open";
-            case FifoError::ConnectionLost:
-                return "Connection lost";
-            case FifoError::MessageTooLarge:
-                return "Message too large";
-            case FifoError::CompressionFailed:
-                return "Compression failed";
-            case FifoError::EncryptionFailed:
-                return "Encryption failed";
-            case FifoError::DecryptionFailed:
-                return "Decryption failed";
-            default:
-                return "Unknown FIFO error";
-        }
-    }
-};
-
-const FifoErrorCategory theFifoErrorCategory{};
-
-[[nodiscard]] std::error_code make_error_code(FifoError e) {
-    return {static_cast<int>(e), theFifoErrorCategory};
-}
 
 struct AsyncOperation {
     enum class Type { Read, Write };
@@ -469,7 +411,8 @@ struct FifoClient::Impl {
 
         pendingOperations[id] = std::move(operation);
 
-        std::thread([this, id, dataCopy = std::move(dataCopy)]() {
+        // Use thread pool instead of detached thread
+        submitVoidToPool([this, id, dataCopy = std::move(dataCopy)]() {
             auto result = write(dataCopy);
 
             std::lock_guard<std::mutex> asyncLock(asyncMutex);
@@ -482,7 +425,7 @@ struct FifoClient::Impl {
                 }
                 pendingOperations.erase(it);
             }
-        }).detach();
+        });
 
         return id;
     }
@@ -620,7 +563,8 @@ struct FifoClient::Impl {
 
         pendingOperations[id] = std::move(operation);
 
-        std::thread([this, id, maxSize]() {
+        // Use thread pool instead of detached thread
+        submitVoidToPool([this, id, maxSize]() {
             auto result = read(maxSize);
 
             std::lock_guard<std::mutex> asyncLock(asyncMutex);
@@ -633,7 +577,7 @@ struct FifoClient::Impl {
                 }
                 pendingOperations.erase(it);
             }
-        }).detach();
+        });
 
         return id;
     }
@@ -642,22 +586,9 @@ struct FifoClient::Impl {
     readAsyncWithFuture(
         std::size_t maxSize = 0,
         std::optional<std::chrono::milliseconds> timeout = std::nullopt) {
-        auto promise = std::make_shared<
-            std::promise<type::expected<std::string, std::error_code>>>();
-        auto future = promise->get_future();
-
-        readAsync(
-            [promise](bool success, std::error_code ec, size_t) {
-                if (success) {
-                    promise->set_value(
-                        std::string{});  // Would need to store actual data
-                } else {
-                    promise->set_value(type::unexpected(ec));
-                }
-            },
-            maxSize, timeout);
-
-        return future;
+        // Use thread pool with proper future return
+        return submitToPool(
+            [this, maxSize, timeout]() { return read(maxSize, timeout); });
     }
 
     bool cancelOperation(int id) {
@@ -738,81 +669,35 @@ struct FifoClient::Impl {
     }
 
     std::string compressData(const std::string& data) {
-#ifdef ENABLE_COMPRESSION
-        std::string compressed;
-        compressed.resize(compressBound(data.size()));
-
-        uLongf compressedSize = compressed.size();
-        int result = compress(
-            reinterpret_cast<Bytef*>(compressed.data()), &compressedSize,
-            reinterpret_cast<const Bytef*>(data.data()), data.size());
-
-        if (result != Z_OK) {
+        auto result = FifoCodec::compress(data, config.compression_threshold);
+        if (!result) {
             throw std::runtime_error("Compression failed");
         }
-
-        compressed.resize(compressedSize);
-        return compressed;
-#else
-        return data;
-#endif
+        return *result;
     }
 
     std::string decompressData(const std::string& data) {
-#ifdef ENABLE_COMPRESSION
-        std::string decompressed;
-        decompressed.resize(data.size() * 4);  // Initial guess
-
-        uLongf decompressedSize = decompressed.size();
-        int result = uncompress(
-            reinterpret_cast<Bytef*>(decompressed.data()), &decompressedSize,
-            reinterpret_cast<const Bytef*>(data.data()), data.size());
-
-        if (result != Z_OK) {
+        auto result = FifoCodec::decompress(data);
+        if (!result) {
             throw std::runtime_error("Decompression failed");
         }
-
-        decompressed.resize(decompressedSize);
-        return decompressed;
-#else
-        return data;
-#endif
+        return *result;
     }
 
     std::string encryptData(const std::string& data) {
-#ifdef ENABLE_ENCRYPTION
-        // XOR-based encryption with a simple key
-        // Note: For production use, implement proper encryption (AES, etc.)
-        if (data.empty()) {
-            return data;
+        auto result = FifoCodec::encrypt(data);
+        if (!result) {
+            throw std::runtime_error("Encryption failed");
         }
-        const std::string key = "atom_fifo_key_2024";
-        std::string encrypted = data;
-        for (size_t i = 0; i < encrypted.size(); ++i) {
-            encrypted[i] ^= key[i % key.size()];
-        }
-        return encrypted;
-#else
-        return data;
-#endif
+        return *result;
     }
 
     std::string decryptData(const std::string& data) {
-#ifdef ENABLE_ENCRYPTION
-        // XOR decryption (same as encryption for XOR cipher)
-        // Note: For production use, implement proper decryption (AES, etc.)
-        if (data.empty()) {
-            return data;
+        auto result = FifoCodec::decrypt(data);
+        if (!result) {
+            throw std::runtime_error("Decryption failed");
         }
-        const std::string key = "atom_fifo_key_2024";
-        std::string decrypted = data;
-        for (size_t i = 0; i < decrypted.size(); ++i) {
-            decrypted[i] ^= key[i % key.size()];
-        }
-        return decrypted;
-#else
-        return data;
-#endif
+        return *result;
     }
 
     void startAsyncThread() {
@@ -964,9 +849,9 @@ FifoClient::readAsyncWithFuture(
     return m_impl->readAsyncWithFuture(maxSize, timeout);
 }
 
-auto FifoClient::open(
-    std::optional<std::chrono::milliseconds> timeout
-    [[maybe_unused]]) -> type::expected<void, std::error_code> {
+auto FifoClient::open(std::optional<std::chrono::milliseconds> timeout
+                      [[maybe_unused]])
+    -> type::expected<void, std::error_code> {
     if (!m_impl) {
         return type::unexpected(make_error_code(FifoError::NotOpen));
     }

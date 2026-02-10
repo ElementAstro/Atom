@@ -18,6 +18,8 @@ set(SOURCES
     # FIFO/Named Pipe connections
     fifo/fifoclient.cpp
     fifo/fifoserver.cpp
+    fifo/fifo_codec.cpp
+    fifo/fifo_platform.cpp
     # TCP connections
     tcp/tcpclient.cpp
     # UDP connections
@@ -70,14 +72,26 @@ set(HEADERS
     # FIFO/Named Pipe connections
     fifo/fifoclient.hpp
     fifo/fifoserver.hpp
+    fifo/fifo_common.hpp
+    fifo/fifo_codec.hpp
+    fifo/fifo_platform.hpp
+    fifo/fifo_threadpool.hpp
+    fifo/fifo_logger.hpp
     # TCP connections
+    tcp/tcp_common.hpp
     tcp/tcpclient.hpp
     # UDP connections
+    udp/udp_common.hpp
+    udp/udp_platform.hpp
+    udp/multicast_helper.hpp
     udp/udpclient.hpp
     udp/udpserver.hpp
     # Serial/TTY connections
     serial/ttybase.hpp
-    # Shared utilities
+    # Shared utilities - common types and components
+    shared/socket_types.hpp
+    shared/socket_client_base.hpp
+    shared/rate_limiter.hpp
     shared/sockethub.hpp)
 
 # Add async headers if ASIO is available
@@ -132,7 +146,7 @@ add_library(atom::connection ALIAS atom-connection)
 atom_configure_module(atom-connection)
 
 # Link module-specific dependencies
-target_link_libraries(atom-connection PRIVATE ${LIBS})
+target_link_libraries(atom-connection PRIVATE ${LIBS} atom-log)
 
 # Install library target
 install(

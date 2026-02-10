@@ -21,6 +21,8 @@ Description: Self implemented MD5 algorithm.
 #include <span>
 #include <sstream>
 
+#include "atom/algorithm/common/endian.hpp"
+
 // SIMD and parallel support
 #ifdef __AVX2__
 #include <immintrin.h>
@@ -106,16 +108,13 @@ auto MD5::finalize() -> std::string {
         std::stringstream ss;
         ss << std::hex << std::setfill('0');
 
-        // Manual byte swapping for little-endian conversion
-        auto byteswap32 = [](uint32_t val) -> uint32_t {
-            return ((val & 0xFF000000) >> 24) | ((val & 0x00FF0000) >> 8) |
-                   ((val & 0x0000FF00) << 8) | ((val & 0x000000FF) << 24);
-        };
+        // Use common endian utilities for byte swapping
+        using atom::algorithm::endian::byteSwap32;
 
-        ss << std::setw(8) << byteswap32(a_);
-        ss << std::setw(8) << byteswap32(b_);
-        ss << std::setw(8) << byteswap32(c_);
-        ss << std::setw(8) << byteswap32(d_);
+        ss << std::setw(8) << byteSwap32(a_);
+        ss << std::setw(8) << byteSwap32(b_);
+        ss << std::setw(8) << byteSwap32(c_);
+        ss << std::setw(8) << byteSwap32(d_);
 
         return ss.str();
     } catch (const std::exception& e) {

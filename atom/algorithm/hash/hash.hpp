@@ -44,32 +44,6 @@ Description: A collection of optimized and enhanced hash algorithms
 #include <immintrin.h>
 #endif
 
-constexpr auto hash(const char* str,
-                    atom::algorithm::usize basis = 2166136261u) noexcept
-    -> atom::algorithm::usize {
-#if defined(__AVX2__)
-    __m256i hash_vec = _mm256_set1_epi64x(basis);
-    const __m256i prime = _mm256_set1_epi64x(16777619u);
-
-    while (*str != '\0') {
-        __m256i char_vec = _mm256_set1_epi64x(static_cast<i64>(*str));
-        hash_vec = _mm256_xor_si256(hash_vec, char_vec);
-        hash_vec = _mm256_mullo_epi64(hash_vec, prime);
-        ++str;
-    }
-
-    return _mm256_extract_epi64(hash_vec, 0);
-#else
-    atom::algorithm::usize hash = basis;
-    while (*str != '\0') {
-        hash ^= static_cast<atom::algorithm::usize>(*str);
-        hash *= 16777619u;
-        ++str;
-    }
-    return hash;
-#endif
-}
-
 namespace atom::algorithm {
 
 // Thread-safe hash cache
@@ -112,14 +86,74 @@ concept Hashable = requires(T a) {
 
 /**
  * @brief Enumeration of available hash algorithms
+ *
+ * Currently implemented:
+ * - STD: Standard library std::hash
+ * - FNV1A: FNV-1a hash algorithm
+ *
+ * Reserved for future implementation:
+ * - XXHASH: xxHash (fast non-cryptographic hash)
+ * - CITYHASH: CityHash (Google's string hashing)
+ * - MURMUR3: MurmurHash3 (fast non-cryptographic hash)
  */
 enum class HashAlgorithm {
-    STD,       // Standard library hash
-    FNV1A,     // FNV-1a
-    XXHASH,    // xxHash
-    CITYHASH,  // CityHash
-    MURMUR3    // MurmurHash3
+    STD,       // Standard library hash (implemented)
+    FNV1A,     // FNV-1a (implemented)
+    XXHASH,    // xxHash (reserved)
+    CITYHASH,  // CityHash (reserved)
+    MURMUR3    // MurmurHash3 (reserved)
 };
+
+/**
+ * @brief Computes a hash value for a null-terminated string using FNV-1a
+ * algorithm. Optimized with SIMD instructions when available.
+ *
+ * @param str Pointer to the null-terminated string to hash.
+ * @param basis Initial basis value for hashing.
+ * @return constexpr usize Hash value of the string.
+ */
+constexpr auto hash(const char* str, usize basis = 2166136261u) noexcept
+    -> usize {
+#if defined(__AVX2__)
+    __m256i hash_vec = _mm256_set1_epi64x(basis);
+    const __m256i prime = _mm256_set1_epi64x(16777619u);
+
+    while (*str != '\0') {
+        __m256i char_vec = _mm256_set1_epi64x(*str);
+        hash_vec = _mm256_xor_si256(hash_vec, char_vec);
+        hash_vec = _mm256_mullo_epi64(hash_vec, prime);
+        ++str;
+    }
+
+    return _mm256_extract_epi64(hash_vec, 0);
+#else
+    usize hash_val = basis;
+    while (*str != '\0') {
+        hash_val ^= static_cast<usize>(*str);
+        hash_val *= 16777619u;
+        ++str;
+    }
+    return hash_val;
+#endif
+}
+
+/**
+ * @brief Computes a hash value for data with specified length using FNV-1a.
+ *
+ * @param data Pointer to the data to hash.
+ * @param length Length of data in bytes.
+ * @param basis Initial basis value for hashing.
+ * @return usize Hash value of the data.
+ */
+inline auto hash(const char* data, usize length,
+                 usize basis = 2166136261u) noexcept -> usize {
+    usize hash_val = basis;
+    for (usize i = 0; i < length; ++i) {
+        hash_val ^= static_cast<usize>(static_cast<unsigned char>(data[i]));
+        hash_val *= 16777619u;
+    }
+    return hash_val;
+}
 
 #ifdef ATOM_USE_BOOST
 /**
@@ -192,9 +226,10 @@ inline auto computeHash(const T& value,
             // For string types, hash the actual content
             if constexpr (std::is_same_v<T, std::string> ||
                           std::is_same_v<T, std::string_view>) {
-                result = hash(value.data(), value.size());
+                result = hash(value.data(), value.size(), 2166136261u);
             } else {
-                result = hash(reinterpret_cast<const char*>(&value), sizeof(T));
+                result = hash(reinterpret_cast<const char*>(&value), sizeof(T),
+                              2166136261u);
             }
             break;
         // Other algorithms would be implemented here
@@ -234,20 +269,30 @@ inline auto computeHash(const std::vector<T>& values,
     }
 
     // Parallel implementation for large vectors
-    const usize num_threads = std::thread::hardware_concurrency();
+    usize hw_threads = std::thread::hardware_concurrency();
+    if (hw_threads == 0) {
+        hw_threads = 4;  // Default fallback
+    }
+    // Limit to reasonable number of threads (max 8 or hardware threads)
+    const usize num_threads = std::min(hw_threads, static_cast<usize>(8));
+
     std::vector<usize> partial_results(num_threads, 0);
     std::vector<std::thread> threads;
+    threads.reserve(num_threads);
 
     const usize chunk_size = values.size() / num_threads;
     for (usize i = 0; i < num_threads; ++i) {
-        threads.emplace_back([&, i] {
-            auto start = values.begin() + i * chunk_size;
-            auto end =
-                (i == num_threads - 1) ? values.end() : start + chunk_size;
-            for (auto it = start; it != end; ++it) {
-                hashCombine(partial_results[i], computeHash(*it));
-            }
-        });
+        const usize start_idx = i * chunk_size;
+        const usize end_idx =
+            (i == num_threads - 1) ? values.size() : (i + 1) * chunk_size;
+        threads.emplace_back(
+            [&values, &partial_results, i, start_idx, end_idx] {
+                usize local_result = 0;
+                for (usize idx = start_idx; idx < end_idx; ++idx) {
+                    hashCombine(local_result, computeHash(values[idx]));
+                }
+                partial_results[i] = local_result;
+            });
     }
 
     for (auto& t : threads) {
@@ -399,45 +444,13 @@ inline auto computeHash(const std::any& value) noexcept -> usize {
  * @param tolerance Allowed difference (for fuzzy matching)
  * @return bool True if hashes match within tolerance
  */
-inline auto verifyHash(usize hash1, usize hash2,
-                       usize tolerance = 0) noexcept -> bool {
+inline auto verifyHash(usize hash1, usize hash2, usize tolerance = 0) noexcept
+    -> bool {
     return (hash1 == hash2) ||
            (tolerance > 0 &&
             (hash1 >= hash2 ? hash1 - hash2 : hash2 - hash1) <= tolerance);
 }
 
-/**
- * @brief Computes a hash value for a null-terminated string using FNV-1a
- * algorithm. Optimized with SIMD instructions when available.
- *
- * @param str Pointer to the null-terminated string to hash.
- * @param basis Initial basis value for hashing.
- * @return constexpr usize Hash value of the string.
- */
-constexpr auto hash(const char* str,
-                    usize basis = 2166136261u) noexcept -> usize {
-#if defined(__AVX2__)
-    __m256i hash_vec = _mm256_set1_epi64x(basis);
-    const __m256i prime = _mm256_set1_epi64x(16777619u);
-
-    while (*str != '\0') {
-        __m256i char_vec = _mm256_set1_epi64x(*str);
-        hash_vec = _mm256_xor_si256(hash_vec, char_vec);
-        hash_vec = _mm256_mullo_epi64(hash_vec, prime);
-        ++str;
-    }
-
-    return _mm256_extract_epi64(hash_vec, 0);
-#else
-    usize hash = basis;
-    while (*str != '\0') {
-        hash ^= static_cast<usize>(*str);
-        hash *= 16777619u;
-        ++str;
-    }
-    return hash;
-#endif
-}
 }  // namespace atom::algorithm
 
 /**

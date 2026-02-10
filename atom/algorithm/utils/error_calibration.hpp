@@ -46,8 +46,11 @@ private:
     T intercept_ = 0.0;
     std::optional<T> r_squared_;
     std::vector<T> residuals_;
-    T mse_ = 0.0;  // Mean Squared Error
-    T mae_ = 0.0;  // Mean Absolute Error
+    T mse_ = 0.0;                 // Mean Squared Error
+    T mae_ = 0.0;                 // Mean Absolute Error
+    std::vector<T> poly_coeffs_;  // Polynomial coefficients for non-linear fits
+    i32 calibration_type_ =
+        0;  // 0=linear, 1=polynomial, 2=exponential, 3=logarithmic, 4=power
 
     std::mutex metrics_mutex_;
     std::unique_ptr<atom::async::ThreadPool> thread_pool_;
@@ -87,6 +90,20 @@ private:
     }
 
     /**
+     * Apply polynomial transformation
+     */
+    [[nodiscard]] auto applyPolynomial(T value) const -> T {
+        if (poly_coeffs_.empty()) {
+            return apply(value);
+        }
+        T result = 0;
+        for (usize i = 0; i < poly_coeffs_.size(); ++i) {
+            result += poly_coeffs_[i] * std::pow(value, static_cast<T>(i));
+        }
+        return result;
+    }
+
+    /**
      * Calculate calibration metrics
      * @param measured Vector of measured values
      * @param actual Vector of actual values
@@ -110,9 +127,16 @@ private:
         // Using more advanced SIMD instructions
         // ...
 #else
-        std::transform(std::execution::par_unseq, measured.begin(),
-                       measured.end(), actual.begin(), residuals_.begin(),
-                       [this](T m, T a) { return a - apply(m); });
+        // Use polynomial apply if coefficients are available, otherwise linear
+        if (!poly_coeffs_.empty()) {
+            std::transform(std::execution::par_unseq, measured.begin(),
+                           measured.end(), actual.begin(), residuals_.begin(),
+                           [this](T m, T a) { return a - applyPolynomial(m); });
+        } else {
+            std::transform(std::execution::par_unseq, measured.begin(),
+                           measured.end(), actual.begin(), residuals_.begin(),
+                           [this](T m, T a) { return a - apply(m); });
+        }
 
         mse_ = std::transform_reduce(
                    std::execution::par_unseq, residuals_.begin(),
@@ -420,6 +444,10 @@ public:
                     "Insufficient parameters returned from calibration.");
             }
 
+            // Store all polynomial coefficients for accurate metrics
+            // calculation
+            poly_coeffs_ = params;
+            calibration_type_ = 1;   // polynomial
             slope_ = params[1];      // First-order coefficient as slope
             intercept_ = params[0];  // Constant term as intercept
 
@@ -578,10 +606,11 @@ public:
      * @param confidence_level Confidence level for the interval
      * @return Pair of lower and upper bounds of the confidence interval
      */
-    auto bootstrapConfidenceInterval(
-        const std::vector<T>& measured, const std::vector<T>& actual,
-        i32 n_iterations = 1000,
-        f64 confidence_level = 0.95) -> std::pair<T, T> {
+    auto bootstrapConfidenceInterval(const std::vector<T>& measured,
+                                     const std::vector<T>& actual,
+                                     i32 n_iterations = 1000,
+                                     f64 confidence_level = 0.95)
+        -> std::pair<T, T> {
         if (n_iterations <= 0) {
             THROW_INVALID_ARGUMENT("Number of iterations must be positive.");
         }
@@ -647,8 +676,8 @@ public:
      * @return Tuple of mean residual, standard deviation, and threshold
      */
     auto outlierDetection(const std::vector<T>& measured,
-                          const std::vector<T>& actual,
-                          T threshold = 2.0) -> std::tuple<T, T, T> {
+                          const std::vector<T>& actual, T threshold = 2.0)
+        -> std::tuple<T, T, T> {
         if (residuals_.empty()) {
             calculateMetrics(measured, actual);
         }

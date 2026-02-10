@@ -5,7 +5,7 @@
 #include <thread>
 #include <vector>
 
-#include "atom/async/message_queue.hpp"
+#include "atom/async/messaging/message_queue.hpp"
 
 #ifdef ATOM_USE_ASIO
 #include <asio.hpp>

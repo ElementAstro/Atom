@@ -7,7 +7,7 @@
 #include <string>
 #include <thread>
 
-#include "atom/async/message_bus.hpp"
+#include "atom/async/messaging/message_bus.hpp"
 
 using namespace atom::async;
 using namespace std::chrono_literals;

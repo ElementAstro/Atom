@@ -1,5 +1,5 @@
 /*
- * udp_server.hpp
+ * async_udpserver.hpp
  *
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
@@ -17,38 +17,32 @@ Description: A high-performance, Asio-based asynchronous
 #ifndef ATOM_CONNECTION_ASYNC_UDPSERVER_HPP
 #define ATOM_CONNECTION_ASYNC_UDPSERVER_HPP
 
-#include <atomic>
 #include <chrono>
 #include <functional>
 #include <memory>
 #include <string>
 #include <system_error>
 
+#include "udp_common.hpp"
+
 namespace atom::async::connection {
 
-/**
- * @enum SocketOption
- * @brief Defines socket options that can be configured for the UDP server.
- * @note Timeout options are handled by dedicated methods due to type
- * differences.
- */
-enum class SocketOption {
-    Broadcast,
-    ReuseAddress,
-    ReceiveBufferSize,
-    SendBufferSize
-};
+// Import common types from udp namespace
+using atom::connection::udp::SocketOption;
+using atom::connection::udp::UdpError;
+using atom::connection::udp::UdpResult;
+using atom::connection::udp::UdpStatistics;
 
 /**
- * @class UdpSocketHub
- * @brief Represents a high-performance, asynchronous UDP server hub.
+ * @class AsyncUdpServer
+ * @brief Represents a high-performance, asynchronous UDP server.
  *
  * This class provides a robust and scalable interface for UDP communication,
  * supporting asynchronous operations, multicast, broadcast, and fine-grained
  * configuration. It leverages modern C++ concurrency primitives for lock-free
  * reads and high throughput in multi-core environments.
  */
-class UdpSocketHub {
+class AsyncUdpServer {
 public:
     /**
      * @brief Callback function for handling incoming messages.
@@ -68,77 +62,30 @@ public:
     using ErrorHandler = std::function<void(const std::string& errorMessage,
                                             const std::error_code& errorCode)>;
 
+    /// Backward compatibility alias for Statistics
+    using Statistics = UdpStatistics;
+
     /**
-     * @struct Statistics
-     * @brief Holds performance and usage statistics for the UDP server.
-     * All counters are atomic to ensure thread-safe, lock-free updates.
+     * @brief Constructs an async UDP server with a single worker thread.
      */
-    struct Statistics {
-        std::atomic<std::size_t> bytesReceived{0};
-        std::atomic<std::size_t> bytesSent{0};
-        std::atomic<std::size_t> messagesReceived{0};
-        std::atomic<std::size_t> messagesSent{0};
-        std::atomic<std::size_t> errors{0};
-
-        Statistics() = default;
-
-        Statistics(const Statistics& other)
-            : bytesReceived(
-                  other.bytesReceived.load(std::memory_order_relaxed)),
-              bytesSent(other.bytesSent.load(std::memory_order_relaxed)),
-              messagesReceived(
-                  other.messagesReceived.load(std::memory_order_relaxed)),
-              messagesSent(other.messagesSent.load(std::memory_order_relaxed)),
-              errors(other.errors.load(std::memory_order_relaxed)) {}
-
-        Statistics& operator=(const Statistics& other) {
-            if (this != &other) {
-                bytesReceived.store(
-                    other.bytesReceived.load(std::memory_order_relaxed));
-                bytesSent.store(
-                    other.bytesSent.load(std::memory_order_relaxed));
-                messagesReceived.store(
-                    other.messagesReceived.load(std::memory_order_relaxed));
-                messagesSent.store(
-                    other.messagesSent.load(std::memory_order_relaxed));
-                errors.store(other.errors.load(std::memory_order_relaxed));
-            }
-            return *this;
-        }
-
-        /**
-         * @brief Resets all statistical counters to zero.
-         */
-        void reset() {
-            bytesReceived.store(0, std::memory_order_relaxed);
-            bytesSent.store(0, std::memory_order_relaxed);
-            messagesReceived.store(0, std::memory_order_relaxed);
-            messagesSent.store(0, std::memory_order_relaxed);
-            errors.store(0, std::memory_order_relaxed);
-        }
-    };
+    AsyncUdpServer();
 
     /**
-     * @brief Constructs a UDP socket hub with a single worker thread.
-     */
-    UdpSocketHub();
-
-    /**
-     * @brief Constructs a UDP socket hub with a specific number of worker
+     * @brief Constructs an async UDP server with a specific number of worker
      * threads.
      * @param numThreads The number of worker threads for processing I/O events.
      */
-    explicit UdpSocketHub(unsigned int numThreads);
+    explicit AsyncUdpServer(unsigned int numThreads);
 
     /**
      * @brief Destructor. Stops the server if it is running.
      */
-    ~UdpSocketHub();
+    ~AsyncUdpServer();
 
-    UdpSocketHub(const UdpSocketHub&) = delete;
-    UdpSocketHub& operator=(const UdpSocketHub&) = delete;
-    UdpSocketHub(UdpSocketHub&&) = delete;
-    UdpSocketHub& operator=(UdpSocketHub&&) = delete;
+    AsyncUdpServer(const AsyncUdpServer&) = delete;
+    AsyncUdpServer& operator=(const AsyncUdpServer&) = delete;
+    AsyncUdpServer(AsyncUdpServer&&) = delete;
+    AsyncUdpServer& operator=(AsyncUdpServer&&) = delete;
 
     /**
      * @brief Starts the UDP server on a specified port.
@@ -146,7 +93,7 @@ public:
      * @param ipv6 Set to true to use IPv6, false for IPv4 (default).
      * @return true if the server started successfully, false otherwise.
      */
-    bool start(unsigned short port, bool ipv6 = false);
+    [[nodiscard]] bool start(unsigned short port, bool ipv6 = false);
 
     /**
      * @brief Stops the UDP server gracefully.
@@ -196,8 +143,9 @@ public:
      * @return true if the message was successfully queued for sending, false
      * otherwise.
      */
-    bool sendTo(const std::string& message, const std::string& ipAddress,
-                unsigned short port);
+    [[nodiscard]] bool sendTo(const std::string& message,
+                              const std::string& ipAddress,
+                              unsigned short port);
 
     /**
      * @brief Broadcasts a message to all devices on the local network.
@@ -206,21 +154,22 @@ public:
      * @return true if the message was successfully queued for broadcasting,
      * false otherwise.
      */
-    bool broadcast(const std::string& message, unsigned short port);
+    [[nodiscard]] bool broadcast(const std::string& message,
+                                 unsigned short port);
 
     /**
      * @brief Joins a multicast group to receive messages sent to that group.
      * @param multicastAddress The IP address of the multicast group.
      * @return true if the group was joined successfully, false otherwise.
      */
-    bool joinMulticastGroup(const std::string& multicastAddress);
+    [[nodiscard]] bool joinMulticastGroup(const std::string& multicastAddress);
 
     /**
      * @brief Leaves a multicast group.
      * @param multicastAddress The IP address of the multicast group.
      * @return true if the group was left successfully, false otherwise.
      */
-    bool leaveMulticastGroup(const std::string& multicastAddress);
+    [[nodiscard]] bool leaveMulticastGroup(const std::string& multicastAddress);
 
     /**
      * @brief Sends a message to a specific multicast group.
@@ -230,9 +179,9 @@ public:
      * @return true if the message was successfully queued for sending, false
      * otherwise.
      */
-    bool sendToMulticast(const std::string& message,
-                         const std::string& multicastAddress,
-                         unsigned short port);
+    [[nodiscard]] bool sendToMulticast(const std::string& message,
+                                       const std::string& multicastAddress,
+                                       unsigned short port);
 
     /**
      * @brief Sets a low-level socket option.
@@ -244,27 +193,28 @@ public:
      * @return true if the option was set successfully, false otherwise.
      */
     template <typename T>
-    bool setSocketOption(SocketOption option, const T& value);
+    [[nodiscard]] bool setSocketOption(SocketOption option, const T& value);
 
     /**
      * @brief Sets the size of the kernel's receive buffer for the socket.
      * @param size The desired buffer size in bytes.
      * @return true if the buffer size was set successfully, false otherwise.
      */
-    bool setReceiveBufferSize(std::size_t size);
+    [[nodiscard]] bool setReceiveBufferSize(std::size_t size);
 
     /**
      * @brief Sets a timeout for synchronous receive operations on the socket.
      * @param timeout The timeout duration.
      * @return true if the timeout was set successfully, false otherwise.
      */
-    bool setReceiveTimeout(const std::chrono::milliseconds& timeout);
+    [[nodiscard]] bool setReceiveTimeout(
+        const std::chrono::milliseconds& timeout);
 
     /**
      * @brief Retrieves the current communication statistics.
      * @return A copy of the Statistics struct.
      */
-    Statistics getStatistics() const;
+    [[nodiscard]] Statistics getStatistics() const;
 
     /**
      * @brief Resets all communication statistics to zero.
@@ -295,6 +245,9 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
+/// Backward compatibility alias
+using UdpSocketHub = AsyncUdpServer;
+
 }  // namespace atom::async::connection
 
-#endif
+#endif  // ATOM_CONNECTION_ASYNC_UDPSERVER_HPP

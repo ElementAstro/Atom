@@ -1,87 +1,22 @@
 #ifndef ATOM_CONNECTION_ASYNC_SOCKETHUB_HPP
 #define ATOM_CONNECTION_ASYNC_SOCKETHUB_HPP
 
-#include <asio.hpp>
-#include <asio/ssl.hpp>
-#include <chrono>
 #include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "socket_types.hpp"
+
 #undef ERROR
 
 namespace atom::async::connection {
 
-// Forward declarations
-class Client;
-struct Message;
-
-enum class LogLevel {
-    DEBUG_LEVEL,
-    INFO_LEVEL,
-    WARNING_LEVEL,
-    ERROR_LEVEL,
-    FATAL_LEVEL
-};
-
-// Configuration structure for the SocketHub
-struct SocketHubConfig {
-    bool use_ssl = false;
-    int backlog_size = 10;
-    std::chrono::seconds connection_timeout{30};
-    bool keep_alive = true;
-    std::string ssl_cert_file;
-    std::string ssl_key_file;
-    std::string ssl_dh_file;
-    std::string ssl_password;
-    bool enable_rate_limiting = false;
-    int max_connections_per_ip = 10;
-    int max_messages_per_minute = 100;
-    LogLevel log_level = LogLevel::INFO_LEVEL;
-};
-
-// Message structure for more structured data exchange
-struct Message {
-    enum class Type { TEXT, BINARY, PING, PONG, CLOSE };
-
-    Type type = Type::TEXT;
-    std::vector<char> data;
-    size_t sender_id = 0;
-
-    static Message createText(std::string text, size_t sender = 0) {
-        Message msg;
-        msg.type = Type::TEXT;
-        msg.data = std::vector<char>(text.begin(), text.end());
-        msg.sender_id = sender;
-        return msg;
-    }
-
-    static Message createBinary(const std::vector<char>& data,
-                                size_t sender = 0) {
-        Message msg;
-        msg.type = Type::BINARY;
-        msg.data = data;
-        msg.sender_id = sender;
-        return msg;
-    }
-
-    std::string asString() const {
-        return std::string(data.begin(), data.end());
-    }
-};
-
-// Statistics for monitoring
-struct SocketHubStats {
-    size_t total_connections = 0;
-    size_t active_connections = 0;
-    size_t messages_received = 0;
-    size_t messages_sent = 0;
-    size_t bytes_received = 0;
-    size_t bytes_sent = 0;
-    std::chrono::system_clock::time_point start_time =
-        std::chrono::system_clock::now();
-};
+// Re-export common types for backward compatibility
+using atom::connection::LogLevel;
+using atom::connection::Message;
+using atom::connection::SocketHubConfig;
+using atom::connection::SocketHubStats;
 
 // Enhanced SocketHub class
 class SocketHub {

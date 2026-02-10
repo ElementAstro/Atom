@@ -38,10 +38,11 @@ Description: A simple wrapper of std::jthread
 #include <vector>  // Used by ThreadPool and parallel_for_each
 
 #include "atom/type/noncopyable.hpp"
+#include "lock.hpp"  // For AsyncException base class
 
 // Platform-specific includes
 #if defined(_WIN32)
-#include "../../../cmake/WindowsCompat.hpp"
+#include "atom/platform/windows_compat.hpp"
 #elif defined(__linux__) || defined(__APPLE__)
 #include <pthread.h>
 #include <sched.h>  // For sched_param, SCHED_RR etc. in ThreadPool::setThreadPriority
@@ -51,8 +52,10 @@ namespace atom::async {
 
 /**
  * @brief Exception class for thread-related errors.
+ *
+ * Inherits from AsyncException for unified exception hierarchy.
  */
-class ThreadException : public std::runtime_error {
+class ThreadException : public AsyncException {
 public:
     /**
      * @brief Constructor to create a thread exception with source location
@@ -63,22 +66,7 @@ public:
     explicit ThreadException(
         const std::string& message,
         const std::source_location& loc = std::source_location::current())
-        : std::runtime_error(formatMessage(message, loc)) {}
-
-private:
-    /**
-     * @brief Formats the error message to include source code location.
-     * @param message Original error message.
-     * @param loc Source code location.
-     * @return Formatted error message string.
-     */
-    static std::string formatMessage(const std::string& message,
-                                     const std::source_location& loc) {
-        std::stringstream ss;
-        ss << message << " (at " << loc.file_name() << ":" << loc.line()
-           << " in " << loc.function_name() << ")";
-        return ss.str();
-    }
+        : AsyncException(message, loc) {}
 };
 
 // Concept for thread callable objects
@@ -226,8 +214,8 @@ public:
      */
     template <typename R, typename Callable, typename... Args>
         requires ThreadCallable<Callable, Args...>
-    [[nodiscard]] auto startWithResult(Callable&& func,
-                                       Args&&... args) -> std::future<R> {
+    [[nodiscard]] auto startWithResult(Callable&& func, Args&&... args)
+        -> std::future<R> {
         auto task = std::make_shared<std::packaged_task<R()>>(
             [func = std::forward<Callable>(func),
              ... args = std::forward<Args>(args)]() mutable -> R {
@@ -416,45 +404,42 @@ public:
     /**
      * @brief Tries to join the thread with a timeout.
      *
+     * Uses condition variable for efficient waiting instead of polling.
+     *
      * @tparam Rep Clock tick representation.
      * @tparam Period Clock tick period.
      * @param timeout_duration The maximum time to wait.
      * @return true if joined successfully, false if timed out.
      */
     template <typename Rep, typename Period>
-    [[nodiscard]] auto tryJoinFor(const std::chrono::duration<Rep, Period>&
-                                      timeout_duration) noexcept -> bool {
+    [[nodiscard]] auto tryJoinFor(
+        const std::chrono::duration<Rep, Period>& timeout_duration) noexcept
+        -> bool {
         if (!running()) {
             return true;  // Thread is not running, so join succeeded
         }
 
-        // Implement spin-based timeout wait, as jthread lacks join_for
-        const auto start_time = std::chrono::steady_clock::now();
+        // Use stop_token and condition_variable_any for efficient waiting
+        std::mutex wait_mutex;
+        std::condition_variable_any wait_cv;
 
-        // Use a more efficient adaptive sleep strategy
-        const auto sleep_time_base = std::chrono::microseconds(100);
-        auto sleep_time = sleep_time_base;
-        const auto max_sleep_time = std::chrono::milliseconds(10);
+        // Wait for either: thread completion (stop_requested) or timeout
+        std::unique_lock lock(wait_mutex);
+        bool completed = wait_cv.wait_for(lock, timeout_duration, [this]() {
+            return !thread_.joinable() || shouldStop();
+        });
 
-        while (running()) {
-            std::this_thread::sleep_for(sleep_time);
-
-            // Adaptively increase sleep time, but not beyond max
-            sleep_time =
-                std::min(sleep_time * 2,
-                         std::chrono::duration_cast<std::chrono::microseconds>(
-                             max_sleep_time));
-
-            // Check for timeout
-            if (std::chrono::steady_clock::now() - start_time >
-                timeout_duration) {
-                return false;  // Timed out
+        if (!running()) {
+            // Thread has ended, ensure resource cleanup
+            try {
+                join();
+            } catch (...) {
+                // Ignore exceptions during cleanup
             }
+            return true;
         }
 
-        // Thread has ended, ensure resource cleanup
-        join();  // Call regular join to clean up
-        return true;
+        return completed;
     }
 
     /**
@@ -577,18 +562,14 @@ private:
         return ss.str();
     }
 
-    /**
-     * @brief Sets the current thread name (platform-specific).
-     * @param name Thread name.
-     */
-    static void setCurrentThreadName(const std::string& name) {
 #if defined(_WIN32)
-        // Set thread name on Windows (for debugging only)
+    /**
+     * @brief Gets the SetThreadDescription function pointer (Windows only).
+     * @return Function pointer or nullptr if not available.
+     */
+    static auto getSetThreadDescriptionFunc() noexcept {
         using SetThreadDescriptionFunc = HRESULT(WINAPI*)(HANDLE, PCWSTR);
-
-        // Get function pointer
-        static const auto setThreadDescriptionFunc =
-            []() -> SetThreadDescriptionFunc {
+        static const auto func = []() -> SetThreadDescriptionFunc {
             HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
             if (kernel32) {
                 return reinterpret_cast<SetThreadDescriptionFunc>(
@@ -596,17 +577,34 @@ private:
             }
             return nullptr;
         }();
+        return func;
+    }
 
-        if (setThreadDescriptionFunc) {
-            // Convert to wide characters
+    /**
+     * @brief Applies thread name to a Windows thread handle.
+     * @param hThread Windows thread handle.
+     * @param name Thread name.
+     */
+    static void applyThreadNameWindows(HANDLE hThread,
+                                       const std::string& name) {
+        auto func = getSetThreadDescriptionFunc();
+        if (func && hThread) {
             std::wstring wname(name.begin(), name.end());
-            setThreadDescriptionFunc(GetCurrentThread(), wname.c_str());
+            func(hThread, wname.c_str());
         }
+    }
+#endif
+
+    /**
+     * @brief Sets the current thread name (platform-specific).
+     * @param name Thread name.
+     */
+    static void setCurrentThreadName(const std::string& name) {
+#if defined(_WIN32)
+        applyThreadNameWindows(GetCurrentThread(), name);
 #elif defined(__linux__)
-        // Set thread name on Linux
         pthread_setname_np(pthread_self(), name.substr(0, 15).c_str());
 #elif defined(__APPLE__)
-        // Set thread name on MacOS
         pthread_setname_np(name.substr(0, 63).c_str());
 #endif
     }
@@ -619,40 +617,17 @@ private:
     static void setThreadName(std::thread::native_handle_type handle,
                               const std::string& name) {
 #if defined(_WIN32)
-        // Set thread name on Windows (for debugging only)
-        using SetThreadDescriptionFunc = HRESULT(WINAPI*)(HANDLE, PCWSTR);
-
-        // Get function pointer
-        static const auto setThreadDescriptionFunc =
-            []() -> SetThreadDescriptionFunc {
-            HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
-            if (kernel32) {
-                return reinterpret_cast<SetThreadDescriptionFunc>(
-                    GetProcAddress(kernel32, "SetThreadDescription"));
-            }
-            return nullptr;
-        }();
-
-        if (setThreadDescriptionFunc) {
-            // Convert to wide characters
-            std::wstring wname(name.begin(), name.end());
-            // Assuming 'handle' (native_handle_type as unsigned long long) is a
-            // Thread ID
-            HANDLE hThread = OpenThread(THREAD_SET_LIMITED_INFORMATION, FALSE,
-                                        static_cast<DWORD>(handle));
-            if (hThread) {
-                setThreadDescriptionFunc(hThread, wname.c_str());
-                CloseHandle(hThread);
-            }
+        HANDLE hThread = OpenThread(THREAD_SET_LIMITED_INFORMATION, FALSE,
+                                    static_cast<DWORD>(handle));
+        if (hThread) {
+            applyThreadNameWindows(hThread, name);
+            CloseHandle(hThread);
         }
 #elif defined(__linux__)
-        // Set thread name on Linux
-        // Note: handle is pthread_t here
         pthread_setname_np(handle, name.substr(0, 15).c_str());
 #elif defined(__APPLE__)
-        // Cannot set name for other threads on MacOS, ignore
-        (void)handle;  // Suppress unused parameter warning
-        (void)name;    // Suppress unused parameter warning
+        (void)handle;
+        (void)name;
 #endif
     }
 };
@@ -700,7 +675,7 @@ public:
          * @brief Whether to suspend when the coroutine ends.
          * @return Suspend object.
          */
-        std::suspend_never final_suspend() noexcept { return {}; }
+        std::suspend_always final_suspend() noexcept { return {}; }
 
         /**
          * @brief Handles unhandled exceptions within the coroutine.

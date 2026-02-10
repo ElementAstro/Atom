@@ -934,4 +934,142 @@ Examples:
     >>> result = promise.wait()
     >>> print(result)  # "async result"
 )");
+
+    // ========================================================================
+    // Promise Utils Functions
+    // ========================================================================
+
+    m.def(
+        "delay",
+        [](int milliseconds) {
+            auto promise = std::make_shared<atom::async::Promise<void>>();
+            promise->runAsync([milliseconds]() {
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(milliseconds));
+            });
+            return promise;
+        },
+        py::arg("milliseconds"),
+        R"(Creates a promise that resolves after a specified delay.
+
+Args:
+    milliseconds: The delay duration in milliseconds.
+
+Returns:
+    Promise: A void promise that resolves after the delay.
+
+Examples:
+    >>> promise = delay(100)  # Wait 100ms
+    >>> promise.wait()
+    >>> print("Delay completed!")
+)");
+
+    m.def(
+        "retry",
+        [](py::function func, size_t max_retries, int initial_delay_ms) {
+            auto promise = std::make_shared<atom::async::Promise<py::object>>();
+            promise->runAsync([func, max_retries,
+                               initial_delay_ms]() -> py::object {
+                std::chrono::milliseconds currentDelay(initial_delay_ms);
+
+                for (size_t attempt = 0; attempt <= max_retries; ++attempt) {
+                    try {
+                        py::gil_scoped_acquire acquire;
+                        return func();
+                    } catch (const py::error_already_set& e) {
+                        if (attempt == max_retries) {
+                            throw;
+                        }
+                        py::gil_scoped_release release;
+                        std::this_thread::sleep_for(currentDelay);
+                        currentDelay = std::chrono::milliseconds(
+                            static_cast<long long>(currentDelay.count() * 2));
+                    }
+                }
+                throw std::runtime_error("Retry exhausted");
+            });
+            return promise;
+        },
+        py::arg("func"), py::arg("max_retries") = 3,
+        py::arg("initial_delay_ms") = 100,
+        R"(Retries a function with exponential backoff.
+
+Args:
+    func: Function to retry.
+    max_retries: Maximum number of retry attempts (default: 3).
+    initial_delay_ms: Initial delay between retries in milliseconds (default: 100).
+
+Returns:
+    Promise: A promise that resolves with the function's result.
+
+Examples:
+    >>> def flaky_operation():
+    ...     # May fail sometimes
+    ...     return "success"
+    >>> promise = retry(flaky_operation, max_retries=5, initial_delay_ms=50)
+    >>> result = promise.wait()
+)");
+
+    m.def(
+        "with_timeout",
+        [](std::shared_ptr<atom::async::Promise<py::object>> promise,
+           int timeout_ms) {
+            auto resultPromise =
+                std::make_shared<atom::async::Promise<py::object>>();
+
+            struct SharedState {
+                std::mutex mutex;
+                bool resolved = false;
+                std::shared_ptr<atom::async::Promise<py::object>> resultPromise;
+
+                explicit SharedState(
+                    std::shared_ptr<atom::async::Promise<py::object>> p)
+                    : resultPromise(std::move(p)) {}
+            };
+
+            auto state = std::make_shared<SharedState>(resultPromise);
+
+            // Set up timeout
+            std::thread([state, timeout_ms]() {
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(timeout_ms));
+                std::unique_lock lock(state->mutex);
+                if (!state->resolved) {
+                    state->resolved = true;
+                    state->resultPromise->setException(std::make_exception_ptr(
+                        std::runtime_error("Promise timed out")));
+                }
+            }).detach();
+
+            // Set up value callback
+            promise->onComplete([state](py::object value) {
+                py::gil_scoped_acquire acquire;
+                std::unique_lock lock(state->mutex);
+                if (!state->resolved) {
+                    state->resolved = true;
+                    state->resultPromise->setValue(value);
+                }
+            });
+
+            return resultPromise;
+        },
+        py::arg("promise"), py::arg("timeout_ms"),
+        R"(Wraps a promise with a timeout.
+
+Args:
+    promise: The promise to wrap.
+    timeout_ms: Timeout duration in milliseconds.
+
+Returns:
+    Promise: A new promise that resolves with the original value or
+             raises an exception on timeout.
+
+Examples:
+    >>> promise = make_promise_from_function(slow_operation)
+    >>> timed_promise = with_timeout(promise, 1000)  # 1 second timeout
+    >>> try:
+    ...     result = timed_promise.wait()
+    ... except RuntimeError as e:
+    ...     print("Timed out!")
+)");
 }

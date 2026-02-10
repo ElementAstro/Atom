@@ -293,8 +293,8 @@ TEST_F(AsyncUdpServerTest, Statistics) {
     ASSERT_TRUE(server_->start(12410));
 
     auto initialStats = server_->getStatistics();
-    EXPECT_EQ(initialStats.messagesReceived, 0);
-    EXPECT_EQ(initialStats.messagesSent, 0);
+    EXPECT_EQ(initialStats.packetsReceived, 0);
+    EXPECT_EQ(initialStats.packetsSent, 0);
     EXPECT_EQ(initialStats.bytesReceived, 0);
     EXPECT_EQ(initialStats.bytesSent, 0);
 
@@ -331,7 +331,7 @@ TEST_F(AsyncUdpServerTest, Statistics) {
     std::this_thread::sleep_for(200ms);
 
     auto updatedStats = server_->getStatistics();
-    EXPECT_GT(updatedStats.messagesReceived, 0);
+    EXPECT_GT(updatedStats.packetsReceived, 0);
     EXPECT_GT(updatedStats.bytesReceived, 0);
 }
 
@@ -371,11 +371,11 @@ TEST_F(AsyncUdpServerTest, ResetStatistics) {
     std::this_thread::sleep_for(200ms);
 
     auto stats = server_->getStatistics();
-    EXPECT_GT(stats.messagesReceived, 0);
+    EXPECT_GT(stats.packetsReceived, 0);
 
     server_->resetStatistics();
     auto resetStats = server_->getStatistics();
-    EXPECT_EQ(resetStats.messagesReceived, 0);
+    EXPECT_EQ(resetStats.packetsReceived, 0);
     EXPECT_EQ(resetStats.bytesReceived, 0);
 }
 

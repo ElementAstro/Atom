@@ -23,7 +23,7 @@
 #include <unistd.h>
 #endif
 
-namespace atom::async::connection {
+namespace atom::connection {
 
 // Mock classes for handlers
 class MockMessageHandler {
@@ -33,7 +33,7 @@ public:
 
 class MockClientHandler {
 public:
-    MOCK_METHOD(void, handle, (FifoServer::ClientEvent event), ());
+    MOCK_METHOD(void, handle, (AsyncFifoServer::ClientEvent event), ());
 };
 
 class MockErrorHandler {
@@ -41,13 +41,13 @@ public:
     MOCK_METHOD(void, handle, (const asio::error_code& ec), ());
 };
 
-// Test fixture for FifoServer
-class FifoServerTest : public ::testing::Test {
+// Test fixture for AsyncFifoServer
+class AsyncFifoServerTest : public ::testing::Test {
 public:
     // Unique path for the FIFO for each test
     std::string fifo_path;
     // Unique pointer to the server instance
-    std::unique_ptr<FifoServer> server;
+    std::unique_ptr<AsyncFifoServer> server;
 
     // Setup method: Create a unique FIFO path
     void SetUp() override {
@@ -65,7 +65,7 @@ public:
                       std::to_string(distrib(gen))))
                         .string();
 
-        // The FIFO file itself is created by FifoServer::start on Unix
+        // The FIFO file itself is created by AsyncFifoServer::start on Unix
         // On Windows, named pipes are created differently, but the current
         // server impl is Unix-only. If Windows support is added, this setup
         // might need conditional compilation.
@@ -113,19 +113,19 @@ public:
 };
 
 // Test case: Constructor and Destructor
-TEST_F(FifoServerTest, ConstructorDestructor) {
+TEST_F(AsyncFifoServerTest, ConstructorDestructor) {
     // Server is created and destroyed within the fixture
     // Check that no exceptions are thrown and cleanup happens (FIFO file
     // removed)
-    server = std::make_unique<FifoServer>(fifo_path);
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     EXPECT_FALSE(server->isRunning());
     EXPECT_EQ(server->getPath(), fifo_path);
     // Server is destroyed by fixture TearDown
 }
 
 // Test case: Start and Stop cycle
-TEST_F(FifoServerTest, StartStopCycle) {
-    server = std::make_unique<FifoServer>(fifo_path);
+TEST_F(AsyncFifoServerTest, StartStopCycle) {
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     EXPECT_FALSE(server->isRunning());
 
     // Start the server
@@ -150,8 +150,8 @@ TEST_F(FifoServerTest, StartStopCycle) {
 }
 
 // Test case: Start when already running
-TEST_F(FifoServerTest, StartWhenAlreadyRunning) {
-    server = std::make_unique<FifoServer>(fifo_path);
+TEST_F(AsyncFifoServerTest, StartWhenAlreadyRunning) {
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     server->start([](std::string_view) {});
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
     EXPECT_TRUE(server->isRunning());
@@ -163,8 +163,8 @@ TEST_F(FifoServerTest, StartWhenAlreadyRunning) {
 }
 
 // Test case: Stop when not running
-TEST_F(FifoServerTest, StopWhenNotRunning) {
-    server = std::make_unique<FifoServer>(fifo_path);
+TEST_F(AsyncFifoServerTest, StopWhenNotRunning) {
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     EXPECT_FALSE(server->isRunning());
 
     // Call stop
@@ -173,8 +173,8 @@ TEST_F(FifoServerTest, StopWhenNotRunning) {
 }
 
 // Test case: isRunning state check
-TEST_F(FifoServerTest, IsRunningState) {
-    server = std::make_unique<FifoServer>(fifo_path);
+TEST_F(AsyncFifoServerTest, IsRunningState) {
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     EXPECT_FALSE(server->isRunning());
 
     server->start([](std::string_view) {});
@@ -187,14 +187,14 @@ TEST_F(FifoServerTest, IsRunningState) {
 }
 
 // Test case: getPath returns correct path
-TEST_F(FifoServerTest, GetPath) {
-    server = std::make_unique<FifoServer>(fifo_path);
+TEST_F(AsyncFifoServerTest, GetPath) {
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     EXPECT_EQ(server->getPath(), fifo_path);
 }
 
 // Test case: Receive a single message
-TEST_F(FifoServerTest, ReceiveSingleMessage) {
-    server = std::make_unique<FifoServer>(fifo_path);
+TEST_F(AsyncFifoServerTest, ReceiveSingleMessage) {
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     MockMessageHandler mock_handler;
     std::string received_data;
     bool handler_called = false;
@@ -215,8 +215,8 @@ TEST_F(FifoServerTest, ReceiveSingleMessage) {
 
     // Simulate a client writing a message
     std::string test_message = "Hello, FIFO!";
-    std::thread client_thread(&FifoServerTest::clientWrite, this, fifo_path,
-                              test_message);
+    std::thread client_thread(&AsyncFifoServerTest::clientWrite, this,
+                              fifo_path, test_message);
 
     // Wait for the handler to be called (or a timeout)
     // Using a simple sleep here; a more robust test would use a condition
@@ -235,8 +235,8 @@ TEST_F(FifoServerTest, ReceiveSingleMessage) {
 }
 
 // Test case: Receive multiple messages
-TEST_F(FifoServerTest, ReceiveMultipleMessages) {
-    server = std::make_unique<FifoServer>(fifo_path);
+TEST_F(AsyncFifoServerTest, ReceiveMultipleMessages) {
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     MockMessageHandler mock_handler;
     std::vector<std::string> received_messages;
 
@@ -284,20 +284,23 @@ TEST_F(FifoServerTest, ReceiveMultipleMessages) {
 }
 
 // Test case: Client connection and disconnection events
-TEST_F(FifoServerTest, ClientConnectionDisconnectionEvents) {
-    server = std::make_unique<FifoServer>(fifo_path);
+TEST_F(AsyncFifoServerTest, ClientConnectionDisconnectionEvents) {
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     MockClientHandler mock_client_handler;
-    std::vector<FifoServer::ClientEvent> events;
+    std::vector<AsyncFifoServer::ClientEvent> events;
 
-    EXPECT_CALL(mock_client_handler, handle(FifoServer::ClientEvent::Connected))
-        .Times(1)
-        .WillOnce(testing::Invoke(
-            [&](FifoServer::ClientEvent event) { events.push_back(event); }));
     EXPECT_CALL(mock_client_handler,
-                handle(FifoServer::ClientEvent::Disconnected))
+                handle(AsyncFifoServer::ClientEvent::Connected))
         .Times(1)
-        .WillOnce(testing::Invoke(
-            [&](FifoServer::ClientEvent event) { events.push_back(event); }));
+        .WillOnce(testing::Invoke([&](AsyncFifoServer::ClientEvent event) {
+            events.push_back(event);
+        }));
+    EXPECT_CALL(mock_client_handler,
+                handle(AsyncFifoServer::ClientEvent::Disconnected))
+        .Times(1)
+        .WillOnce(testing::Invoke([&](AsyncFifoServer::ClientEvent event) {
+            events.push_back(event);
+        }));
 
     server->setClientHandler(std::bind(&MockClientHandler::handle,
                                        &mock_client_handler,
@@ -319,8 +322,8 @@ TEST_F(FifoServerTest, ClientConnectionDisconnectionEvents) {
 
     EXPECT_EQ(events.size(), 2);
     if (events.size() == 2) {
-        EXPECT_EQ(events[0], FifoServer::ClientEvent::Connected);
-        EXPECT_EQ(events[1], FifoServer::ClientEvent::Disconnected);
+        EXPECT_EQ(events[0], AsyncFifoServer::ClientEvent::Connected);
+        EXPECT_EQ(events[1], AsyncFifoServer::ClientEvent::Disconnected);
     }
 
     server->stop();
@@ -329,7 +332,7 @@ TEST_F(FifoServerTest, ClientConnectionDisconnectionEvents) {
 // Test case: Error handling (e.g., writing to a closed pipe)
 // This is tricky with FIFOs and asio. A common error is writing after the
 // reader has closed.
-TEST_F(FifoServerTest, ErrorHandlingWriteAfterClientClose) {
+TEST_F(AsyncFifoServerTest, ErrorHandlingWriteAfterClientClose) {
 #ifdef _WIN32
     // This test relies on Unix FIFO behavior (broken pipe on write after reader
     // closes) Skip on Windows where named pipe behavior might differ or the
@@ -337,7 +340,7 @@ TEST_F(FifoServerTest, ErrorHandlingWriteAfterClientClose) {
     GTEST_SKIP() << "Skipping on Windows due to Unix-specific FIFO behavior";
 #endif
 
-    server = std::make_unique<FifoServer>(fifo_path);
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     MockErrorHandler mock_error_handler;
     asio::error_code received_ec;
     bool error_handled = false;
@@ -383,8 +386,8 @@ TEST_F(FifoServerTest, ErrorHandlingWriteAfterClientClose) {
 }
 
 // Test case: Asynchronous write operation
-TEST_F(FifoServerTest, AsyncWrite) {
-    server = std::make_unique<FifoServer>(fifo_path);
+TEST_F(AsyncFifoServerTest, AsyncWrite) {
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     std::string received_by_client;
     std::string test_message =
         "Async write test message";  // Client reads until newline
@@ -434,8 +437,8 @@ TEST_F(FifoServerTest, AsyncWrite) {
 }
 
 // Test case: Synchronous write operation
-TEST_F(FifoServerTest, SyncWrite) {
-    server = std::make_unique<FifoServer>(fifo_path);
+TEST_F(AsyncFifoServerTest, SyncWrite) {
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     std::string received_by_client;
     std::string test_message =
         "Sync write test message";  // Client reads until newline
@@ -474,7 +477,7 @@ TEST_F(FifoServerTest, SyncWrite) {
 }
 
 // Test case: Write when no client is connected
-TEST_F(FifoServerTest, WriteWhenNoClient) {
+TEST_F(AsyncFifoServerTest, WriteWhenNoClient) {
 #ifdef _WIN32
     // This test relies on Unix FIFO behavior (write fails without a reader)
     // Skip on Windows where named pipe behavior might differ or the server impl
@@ -482,7 +485,7 @@ TEST_F(FifoServerTest, WriteWhenNoClient) {
     GTEST_SKIP() << "Skipping on Windows due to Unix-specific FIFO behavior";
 #endif
 
-    server = std::make_unique<FifoServer>(fifo_path);
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     MockErrorHandler mock_error_handler;
     bool error_handled = false;
 
@@ -519,8 +522,8 @@ TEST_F(FifoServerTest, WriteWhenNoClient) {
 }
 
 // Test case: Write after server is stopped
-TEST_F(FifoServerTest, WriteAfterStop) {
-    server = std::make_unique<FifoServer>(fifo_path);
+TEST_F(AsyncFifoServerTest, WriteAfterStop) {
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     server->start([](std::string_view) {});
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
     EXPECT_TRUE(server->isRunning());
@@ -566,8 +569,8 @@ TEST_F(FifoServerTest, WriteAfterStop) {
 }
 
 // Test case: Cancel pending operations
-TEST_F(FifoServerTest, CancelOperations) {
-    server = std::make_unique<FifoServer>(fifo_path);
+TEST_F(AsyncFifoServerTest, CancelOperations) {
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     MockErrorHandler mock_error_handler;
     bool cancel_error_received = false;
 
@@ -618,8 +621,8 @@ TEST_F(FifoServerTest, CancelOperations) {
 }
 
 // Test case: Handler removal prevents calls
-TEST_F(FifoServerTest, RemoveHandlerPreventsCall) {
-    server = std::make_unique<FifoServer>(fifo_path);
+TEST_F(AsyncFifoServerTest, RemoveHandlerPreventsCall) {
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     MockMessageHandler handler1, handler2;
     std::vector<std::string> received_messages_handler2;
 
@@ -671,10 +674,10 @@ TEST_F(FifoServerTest, RemoveHandlerPreventsCall) {
 }
 
 // Test case: Setting client handler replaces previous one
-TEST_F(FifoServerTest, SetClientHandlerReplaces) {
-    server = std::make_unique<FifoServer>(fifo_path);
+TEST_F(AsyncFifoServerTest, SetClientHandlerReplaces) {
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     MockClientHandler handler1, handler2;
-    std::vector<FifoServer::ClientEvent> events;
+    std::vector<AsyncFifoServer::ClientEvent> events;
 
     server->setClientHandler(std::bind(&MockClientHandler::handle, &handler1,
                                        std::placeholders::_1));
@@ -683,14 +686,16 @@ TEST_F(FifoServerTest, SetClientHandlerReplaces) {
     server->setClientHandler(std::bind(&MockClientHandler::handle, &handler2,
                                        std::placeholders::_1));
 
-    EXPECT_CALL(handler2, handle(FifoServer::ClientEvent::Connected))
+    EXPECT_CALL(handler2, handle(AsyncFifoServer::ClientEvent::Connected))
         .Times(1)
-        .WillOnce(testing::Invoke(
-            [&](FifoServer::ClientEvent event) { events.push_back(event); }));
-    EXPECT_CALL(handler2, handle(FifoServer::ClientEvent::Disconnected))
+        .WillOnce(testing::Invoke([&](AsyncFifoServer::ClientEvent event) {
+            events.push_back(event);
+        }));
+    EXPECT_CALL(handler2, handle(AsyncFifoServer::ClientEvent::Disconnected))
         .Times(1)
-        .WillOnce(testing::Invoke(
-            [&](FifoServer::ClientEvent event) { events.push_back(event); }));
+        .WillOnce(testing::Invoke([&](AsyncFifoServer::ClientEvent event) {
+            events.push_back(event);
+        }));
 
     server->start([](std::string_view) {});
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -707,15 +712,15 @@ TEST_F(FifoServerTest, SetClientHandlerReplaces) {
 
     EXPECT_EQ(events.size(), 2);
     if (events.size() == 2) {
-        EXPECT_EQ(events[0], FifoServer::ClientEvent::Connected);
-        EXPECT_EQ(events[1], FifoServer::ClientEvent::Disconnected);
+        EXPECT_EQ(events[0], AsyncFifoServer::ClientEvent::Connected);
+        EXPECT_EQ(events[1], AsyncFifoServer::ClientEvent::Disconnected);
     }
 
     server->stop();
 }
 
 // Test case: Setting error handler replaces previous one
-TEST_F(FifoServerTest, SetErrorHandlerReplaces) {
+TEST_F(AsyncFifoServerTest, SetErrorHandlerReplaces) {
 #ifdef _WIN32
     // This test relies on Unix FIFO behavior (write fails without a reader)
     // Skip on Windows where named pipe behavior might differ or the server impl
@@ -723,7 +728,7 @@ TEST_F(FifoServerTest, SetErrorHandlerReplaces) {
     GTEST_SKIP() << "Skipping on Windows due to Unix-specific FIFO behavior";
 #endif
 
-    server = std::make_unique<FifoServer>(fifo_path);
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     MockErrorHandler handler1, handler2;
     bool handler2_called = false;
 
@@ -773,15 +778,15 @@ TEST_F(FifoServerTest, SetErrorHandlerReplaces) {
 // ============================================================================
 
 // Test multi-client scenario with concurrent connections
-TEST_F(FifoServerTest, MultiClientConcurrentConnections) {
+TEST_F(AsyncFifoServerTest, MultiClientConcurrentConnections) {
 #ifdef _WIN32
     GTEST_SKIP() << "Skipping on Windows due to Unix-specific FIFO behavior";
 #endif
 
-    server = std::make_unique<FifoServer>(fifo_path);
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     std::vector<std::string> received_messages;
     std::mutex messages_mutex;
-    std::vector<FifoServer::ClientEvent> client_events;
+    std::vector<AsyncFifoServer::ClientEvent> client_events;
     std::mutex events_mutex;
 
     // Set up message handler
@@ -791,7 +796,7 @@ TEST_F(FifoServerTest, MultiClientConcurrentConnections) {
     });
 
     // Set up client handler
-    server->setClientHandler([&](FifoServer::ClientEvent event) {
+    server->setClientHandler([&](AsyncFifoServer::ClientEvent event) {
         std::lock_guard<std::mutex> lock(events_mutex);
         client_events.push_back(event);
     });
@@ -807,7 +812,8 @@ TEST_F(FifoServerTest, MultiClientConcurrentConnections) {
     // Start multiple clients concurrently
     for (int i = 0; i < num_clients; ++i) {
         client_threads.emplace_back([this, i]() {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10 * i)); // Stagger connections
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(10 * i));  // Stagger connections
             std::string message = "Message from client " + std::to_string(i);
             clientWrite(fifo_path, message);
         });
@@ -825,35 +831,33 @@ TEST_F(FifoServerTest, MultiClientConcurrentConnections) {
     EXPECT_EQ(received_messages.size(), num_clients);
     for (int i = 0; i < num_clients; ++i) {
         std::string expected = "Message from client " + std::to_string(i);
-        EXPECT_TRUE(std::find(received_messages.begin(), received_messages.end(), expected) != received_messages.end());
+        EXPECT_TRUE(std::find(received_messages.begin(),
+                              received_messages.end(),
+                              expected) != received_messages.end());
     }
 
     server->stop();
 }
 
 // Test server performance under load
-TEST_F(FifoServerTest, PerformanceUnderLoad) {
+TEST_F(AsyncFifoServerTest, PerformanceUnderLoad) {
 #ifdef _WIN32
     GTEST_SKIP() << "Skipping on Windows due to Unix-specific FIFO behavior";
 #endif
 
-    server = std::make_unique<FifoServer>(fifo_path);
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     std::atomic<int> message_count{0};
     std::atomic<int> error_count{0};
 
     // Set up message handler
-    server->setMessageHandler([&](std::string_view data) {
-        message_count.fetch_add(1);
-    });
+    server->setMessageHandler(
+        [&](std::string_view data) { message_count.fetch_add(1); });
 
     // Set up error handler
-    server->setErrorHandler([&](const asio::error_code& ec) {
-        error_count.fetch_add(1);
-    });
+    server->setErrorHandler(
+        [&](const asio::error_code& ec) { error_count.fetch_add(1); });
 
-    server->start([&](std::string_view data) {
-        message_count.fetch_add(1);
-    });
+    server->start([&](std::string_view data) { message_count.fetch_add(1); });
 
     const int num_messages = 100;
     const int num_threads = 10;
@@ -865,9 +869,11 @@ TEST_F(FifoServerTest, PerformanceUnderLoad) {
     for (int t = 0; t < num_threads; ++t) {
         client_threads.emplace_back([this, t, num_messages, num_threads]() {
             for (int i = 0; i < num_messages / num_threads; ++i) {
-                std::string message = "Load test message " + std::to_string(t) + "_" + std::to_string(i);
+                std::string message = "Load test message " + std::to_string(t) +
+                                      "_" + std::to_string(i);
                 clientWrite(fifo_path, message);
-                std::this_thread::sleep_for(std::chrono::microseconds(100)); // Small delay
+                std::this_thread::sleep_for(
+                    std::chrono::microseconds(100));  // Small delay
             }
         });
     }
@@ -878,28 +884,31 @@ TEST_F(FifoServerTest, PerformanceUnderLoad) {
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        end_time - start_time);
 
     // Give server time to process remaining messages
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     // Verify performance metrics
-    EXPECT_GT(message_count.load(), num_messages / 2); // At least half should succeed
-    EXPECT_LT(duration.count(), 5000); // Should complete within 5 seconds
+    EXPECT_GT(message_count.load(),
+              num_messages / 2);        // At least half should succeed
+    EXPECT_LT(duration.count(), 5000);  // Should complete within 5 seconds
 
     // Error count should be reasonable (some errors expected under load)
-    EXPECT_LT(error_count.load(), num_messages / 4); // Less than 25% error rate
+    EXPECT_LT(error_count.load(),
+              num_messages / 4);  // Less than 25% error rate
 
     server->stop();
 }
 
 // Test error handling and recovery
-TEST_F(FifoServerTest, ErrorHandlingAndRecovery) {
+TEST_F(AsyncFifoServerTest, ErrorHandlingAndRecovery) {
 #ifdef _WIN32
     GTEST_SKIP() << "Skipping on Windows due to Unix-specific FIFO behavior";
 #endif
 
-    server = std::make_unique<FifoServer>(fifo_path);
+    server = std::make_unique<AsyncFifoServer>(fifo_path);
     std::vector<asio::error_code> errors;
     std::mutex errors_mutex;
     std::atomic<int> message_count{0};
@@ -911,19 +920,16 @@ TEST_F(FifoServerTest, ErrorHandlingAndRecovery) {
     });
 
     // Set up message handler
-    server->setMessageHandler([&](std::string_view data) {
-        message_count.fetch_add(1);
-    });
+    server->setMessageHandler(
+        [&](std::string_view data) { message_count.fetch_add(1); });
 
-    server->start([&](std::string_view data) {
-        message_count.fetch_add(1);
-    });
+    server->start([&](std::string_view data) { message_count.fetch_add(1); });
 
     // First, cause some errors by writing without readers
     for (int i = 0; i < 3; ++i) {
         auto future = server->write("Error message " + std::to_string(i));
         future.wait_for(std::chrono::milliseconds(100));
-        EXPECT_FALSE(future.get()); // Should fail
+        EXPECT_FALSE(future.get());  // Should fail
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -941,12 +947,13 @@ TEST_F(FifoServerTest, ErrorHandlingAndRecovery) {
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
     // Verify error handling
-    EXPECT_GT(errors.size(), 0); // Should have captured some errors
+    EXPECT_GT(errors.size(), 0);  // Should have captured some errors
 
     // Verify recovery
-    EXPECT_EQ(message_count.load(), 3); // Should have received recovery messages
+    EXPECT_EQ(message_count.load(),
+              3);  // Should have received recovery messages
 
     server->stop();
 }
 
-}  // namespace atom::async::connection
+}  // namespace atom::connection

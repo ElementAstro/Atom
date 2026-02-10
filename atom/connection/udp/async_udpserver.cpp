@@ -25,7 +25,12 @@ Description: A simple Asio-based UDP server.
 #include <set>
 #include <thread>
 
+#include "atom/log/loguru.hpp"
+
 namespace atom::async::connection {
+
+using atom::connection::udp::SocketOption;
+using atom::connection::udp::UdpStatistics;
 
 // Default buffer size increased for better performance with larger messages
 constexpr std::size_t DEFAULT_BUFFER_SIZE = 8192;
@@ -34,7 +39,7 @@ constexpr unsigned int DEFAULT_THREAD_COUNT = 1;
 // Maximum queue size for outgoing messages
 constexpr std::size_t MAX_QUEUE_SIZE = 1000;
 
-class UdpSocketHub::Impl {
+class AsyncUdpServer::Impl {
 public:
     Impl(unsigned int numThreads = DEFAULT_THREAD_COUNT)
         : socket_(io_context_),
@@ -507,7 +512,7 @@ private:
                     {
                         std::lock_guard<std::mutex> lock(statsMutex_);
                         stats_.bytesReceived += bytesReceived;
-                        stats_.messagesReceived++;
+                        stats_.packetsReceived++;
                     }
 
                     // Check IP filter if enabled
@@ -561,7 +566,7 @@ private:
         // Update statistics
         {
             std::lock_guard<std::mutex> lock(statsMutex_);
-            stats_.errors++;
+            stats_.totalErrors++;
         }
 
         // Output to stderr for debugging
@@ -646,7 +651,7 @@ private:
                             // Update statistics
                             std::lock_guard<std::mutex> statsLock(statsMutex_);
                             stats_.bytesSent += bytesSent;
-                            stats_.messagesSent++;
+                            stats_.packetsSent++;
                         }
 
                         if (msg.isBroadcast) {
@@ -706,97 +711,99 @@ private:
     Statistics stats_;
 };
 
-// UdpSocketHub implementation
+// AsyncUdpServer implementation
 
-UdpSocketHub::UdpSocketHub() : impl_(std::make_unique<Impl>()) {}
+AsyncUdpServer::AsyncUdpServer() : impl_(std::make_unique<Impl>()) {}
 
-UdpSocketHub::UdpSocketHub(unsigned int numThreads)
+AsyncUdpServer::AsyncUdpServer(unsigned int numThreads)
     : impl_(std::make_unique<Impl>(numThreads)) {}
 
-UdpSocketHub::~UdpSocketHub() = default;
+AsyncUdpServer::~AsyncUdpServer() = default;
 
-bool UdpSocketHub::start(unsigned short port, bool ipv6) {
+bool AsyncUdpServer::start(unsigned short port, bool ipv6) {
     return impl_->start(port, ipv6);
 }
 
-void UdpSocketHub::stop() { impl_->stop(); }
+void AsyncUdpServer::stop() { impl_->stop(); }
 
-auto UdpSocketHub::isRunning() const -> bool { return impl_->isRunning(); }
+bool AsyncUdpServer::isRunning() const noexcept { return impl_->isRunning(); }
 
-void UdpSocketHub::addMessageHandler(MessageHandler handler) {
+void AsyncUdpServer::addMessageHandler(MessageHandler handler) {
     impl_->addMessageHandler(std::move(handler));
 }
 
-void UdpSocketHub::removeMessageHandler(MessageHandler handler) {
+void AsyncUdpServer::removeMessageHandler(MessageHandler handler) {
     impl_->removeMessageHandler(std::move(handler));
 }
 
-void UdpSocketHub::addErrorHandler(ErrorHandler handler) {
+void AsyncUdpServer::addErrorHandler(ErrorHandler handler) {
     impl_->addErrorHandler(std::move(handler));
 }
 
-void UdpSocketHub::removeErrorHandler(ErrorHandler handler) {
+void AsyncUdpServer::removeErrorHandler(ErrorHandler handler) {
     impl_->removeErrorHandler(std::move(handler));
 }
 
-bool UdpSocketHub::sendTo(const std::string& message,
-                          const std::string& ipAddress, unsigned short port) {
+bool AsyncUdpServer::sendTo(const std::string& message,
+                            const std::string& ipAddress, unsigned short port) {
     return impl_->sendTo(message, ipAddress, port);
 }
 
-bool UdpSocketHub::broadcast(const std::string& message, unsigned short port) {
+bool AsyncUdpServer::broadcast(const std::string& message,
+                               unsigned short port) {
     return impl_->broadcast(message, port);
 }
 
-bool UdpSocketHub::joinMulticastGroup(const std::string& multicastAddress) {
+bool AsyncUdpServer::joinMulticastGroup(const std::string& multicastAddress) {
     return impl_->joinMulticastGroup(multicastAddress);
 }
 
-bool UdpSocketHub::leaveMulticastGroup(const std::string& multicastAddress) {
+bool AsyncUdpServer::leaveMulticastGroup(const std::string& multicastAddress) {
     return impl_->leaveMulticastGroup(multicastAddress);
 }
 
-bool UdpSocketHub::sendToMulticast(const std::string& message,
-                                   const std::string& multicastAddress,
-                                   unsigned short port) {
+bool AsyncUdpServer::sendToMulticast(const std::string& message,
+                                     const std::string& multicastAddress,
+                                     unsigned short port) {
     return impl_->sendToMulticast(message, multicastAddress, port);
 }
 
 template <typename T>
-bool UdpSocketHub::setSocketOption(SocketOption option, const T& value) {
+bool AsyncUdpServer::setSocketOption(SocketOption option, const T& value) {
     return impl_->setSocketOption(option, value);
 }
 
-bool UdpSocketHub::setReceiveBufferSize(std::size_t size) {
+bool AsyncUdpServer::setReceiveBufferSize(std::size_t size) {
     return impl_->setReceiveBufferSize(size);
 }
 
-bool UdpSocketHub::setReceiveTimeout(const std::chrono::milliseconds& timeout) {
+bool AsyncUdpServer::setReceiveTimeout(
+    const std::chrono::milliseconds& timeout) {
     return impl_->setReceiveTimeout(timeout);
 }
 
-UdpSocketHub::Statistics UdpSocketHub::getStatistics() const {
+AsyncUdpServer::Statistics AsyncUdpServer::getStatistics() const {
     return impl_->getStatistics();
 }
 
-void UdpSocketHub::resetStatistics() { impl_->resetStatistics(); }
+void AsyncUdpServer::resetStatistics() { impl_->resetStatistics(); }
 
-void UdpSocketHub::addAllowedIp(const std::string& ip) {
+void AsyncUdpServer::addAllowedIp(const std::string& ip) {
     impl_->addAllowedIp(ip);
 }
 
-void UdpSocketHub::removeAllowedIp(const std::string& ip) {
+void AsyncUdpServer::removeAllowedIp(const std::string& ip) {
     impl_->removeAllowedIp(ip);
 }
 
-void UdpSocketHub::clearIpFilters() { impl_->clearIpFilters(); }
+void AsyncUdpServer::clearIpFilters() { impl_->clearIpFilters(); }
 
 // Explicit template instantiations for common socket options
-template bool UdpSocketHub::setSocketOption<bool>(SocketOption option,
-                                                  const bool& value);
-template bool UdpSocketHub::setSocketOption<int>(SocketOption option,
-                                                 const int& value);
-template bool UdpSocketHub::setSocketOption<unsigned int>(
+template bool AsyncUdpServer::setSocketOption<bool>(SocketOption option,
+                                                    const bool& value);
+template bool AsyncUdpServer::setSocketOption<int>(SocketOption option,
+                                                   const int& value);
+template bool AsyncUdpServer::setSocketOption<unsigned int>(
     SocketOption option, const unsigned int& value);
 
 }  // namespace atom::async::connection

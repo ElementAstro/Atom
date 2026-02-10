@@ -1,4 +1,6 @@
-#include "atom/connection/ttybase.hpp"
+#include "atom/connection/serial/ttybase.hpp"
+
+using namespace atom::connection;
 
 #include <pybind11/chrono.h>
 #include <pybind11/functional.h>

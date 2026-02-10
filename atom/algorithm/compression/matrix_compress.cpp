@@ -104,8 +104,8 @@ auto MatrixCompressor::compress(const Matrix& matrix) -> CompressedData {
     }
 }
 
-auto MatrixCompressor::compressParallel(const Matrix& matrix,
-                                        i32 thread_count) -> CompressedData {
+auto MatrixCompressor::compressParallel(const Matrix& matrix, i32 thread_count)
+    -> CompressedData {
     if (matrix.empty() || matrix[0].empty()) {
         return {};
     }
@@ -158,28 +158,31 @@ auto MatrixCompressor::compressParallel(const Matrix& matrix,
                 }));
         }
 
-        // Parallel merging of results
-        while (futures.size() > 1) {
-            std::vector<std::future<CompressedData>> next_futures;
-            for (size_t i = 0; i < futures.size(); i += 2) {
-                if (i + 1 < futures.size()) {
-                    // Merge two results
-                    next_futures.push_back(
-                        std::async(std::launch::async, [&futures, i]() {
-                            CompressedData data1 = futures[i].get();
-                            CompressedData data2 = futures[i + 1].get();
-                            return mergeCompressedData(data1, data2);
-                        }));
-                } else {
-                    // Move the last result if there's an odd number
-                    next_futures.push_back(std::move(futures[i]));
-                }
-            }
-            futures = std::move(next_futures);
+        // Sequential merging of results to avoid deadlock
+        // First, collect all results
+        std::vector<CompressedData> results;
+        results.reserve(futures.size());
+        for (auto& future : futures) {
+            results.push_back(future.get());
         }
 
-        // Get the final result
-        return futures[0].get();
+        // Merge results sequentially
+        while (results.size() > 1) {
+            std::vector<CompressedData> merged_results;
+            merged_results.reserve((results.size() + 1) / 2);
+            for (size_t i = 0; i < results.size(); i += 2) {
+                if (i + 1 < results.size()) {
+                    merged_results.push_back(
+                        mergeCompressedData(results[i], results[i + 1]));
+                } else {
+                    merged_results.push_back(std::move(results[i]));
+                }
+            }
+            results = std::move(merged_results);
+        }
+
+        // Return the final result
+        return results.empty() ? CompressedData{} : std::move(results[0]);
 
     } catch (const std::exception& e) {
         THROW_MATRIX_COMPRESS_EXCEPTION(
@@ -190,6 +193,11 @@ auto MatrixCompressor::compressParallel(const Matrix& matrix,
 
 auto MatrixCompressor::decompress(const CompressedData& compressed, i32 rows,
                                   i32 cols) -> Matrix {
+    // Handle empty matrix case
+    if (rows == 0 && cols == 0 && compressed.empty()) {
+        return Matrix{};
+    }
+
     if (rows <= 0 || cols <= 0) {
         THROW_MATRIX_DECOMPRESS_EXCEPTION(
             "Invalid dimensions: rows and cols must be positive");
@@ -245,8 +253,8 @@ auto MatrixCompressor::decompress(const CompressedData& compressed, i32 rows,
 }
 
 auto MatrixCompressor::decompressParallel(const CompressedData& compressed,
-                                          i32 rows, i32 cols,
-                                          i32 thread_count) -> Matrix {
+                                          i32 rows, i32 cols, i32 thread_count)
+    -> Matrix {
     if (rows <= 0 || cols <= 0) {
         THROW_MATRIX_DECOMPRESS_EXCEPTION(
             "Invalid dimensions: rows and cols must be positive");
@@ -517,8 +525,9 @@ auto MatrixCompressor::decompressWithSIMD(const CompressedData& compressed,
     return matrix;
 }
 
-auto MatrixCompressor::generateRandomMatrix(
-    i32 rows, i32 cols, std::string_view charset) -> Matrix {
+auto MatrixCompressor::generateRandomMatrix(i32 rows, i32 cols,
+                                            std::string_view charset)
+    -> Matrix {
     std::random_device randomDevice;
     std::mt19937 generator(randomDevice());
     std::uniform_int_distribution<i32> distribution(

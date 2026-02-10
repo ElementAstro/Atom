@@ -156,42 +156,52 @@ public:
 template <typename T, typename... Args>
 concept SlotInvocable = std::invocable<T, Args...>;
 
+namespace detail {
+
 /**
- * @brief A signal class that allows connecting, disconnecting, and emitting
- * slots.
+ * @brief Base class providing common signal functionality.
+ *
+ * This class encapsulates the common slot storage and thread-safe operations
+ * shared by all Signal variants, reducing code duplication.
  *
  * @tparam Args The argument types for the slots.
+ * @tparam MutexType The mutex type to use (std::mutex or std::shared_mutex).
  */
-template <typename... Args>
-class Signal {
+template <typename MutexType, typename... Args>
+class SignalBase {
 public:
     using SlotType = std::function<void(Args...)>;
 
+    SignalBase() = default;
+    virtual ~SignalBase() = default;
+
+    SignalBase(const SignalBase&) = delete;
+    SignalBase& operator=(const SignalBase&) = delete;
+    SignalBase(SignalBase&&) = default;
+    SignalBase& operator=(SignalBase&&) = default;
+
     /**
      * @brief Connect a slot to the signal.
-     *
      * @param slot The slot to connect.
-     * @throws SlotConnectionError if the slot is invalid
+     * @throws SlotConnectionError if the slot is invalid.
      */
-    void connect(SlotType slot) noexcept(false) {
+    void connect(SlotType slot) {
         if (!slot) {
             throw SlotConnectionError("Cannot connect invalid slot");
         }
-
         std::lock_guard lock(mutex_);
         slots_.push_back(std::move(slot));
     }
 
     /**
-     * @brief Disconnect a slot from the signal.
-     *
+     * @brief Disconnect a slot from the signal by target type comparison.
      * @param slot The slot to disconnect.
+     * @note This uses target_type() comparison which may not work for lambdas.
      */
     void disconnect(const SlotType& slot) noexcept {
         if (!slot) {
             return;
         }
-
         std::lock_guard lock(mutex_);
         slots_.erase(std::remove_if(slots_.begin(), slots_.end(),
                                     [&](const SlotType& s) {
@@ -202,11 +212,47 @@ public:
     }
 
     /**
-     * @brief Emit the signal, calling all connected slots.
-     *
-     * @param args The arguments to pass to the slots.
+     * @brief Clear all slots connected to this signal.
      */
-    void emit(Args... args) {
+    void clear() noexcept {
+        std::lock_guard lock(mutex_);
+        slots_.clear();
+    }
+
+    /**
+     * @brief Get the number of connected slots.
+     * @return size_t The number of slots.
+     */
+    [[nodiscard]] size_t size() const noexcept {
+        std::lock_guard lock(mutex_);
+        return slots_.size();
+    }
+
+    /**
+     * @brief Check if the signal has no connected slots.
+     * @return bool True if the signal has no slots, false otherwise.
+     */
+    [[nodiscard]] bool empty() const noexcept {
+        std::lock_guard lock(mutex_);
+        return slots_.empty();
+    }
+
+protected:
+    /**
+     * @brief Get a copy of slots for iteration outside lock.
+     * @return std::vector<SlotType> Copy of all slots.
+     */
+    [[nodiscard]] std::vector<SlotType> getSlotsCopy() const {
+        std::lock_guard lock(mutex_);
+        return slots_;
+    }
+
+    /**
+     * @brief Execute all slots with the given arguments.
+     * @param args The arguments to pass to slots.
+     * @throws SlotEmissionError if any slot throws.
+     */
+    void executeSlots(Args... args) {
         try {
             std::lock_guard lock(mutex_);
             for (const auto& slot : slots_) {
@@ -220,37 +266,35 @@ public:
         }
     }
 
-    /**
-     * @brief Clear all slots connected to this signal.
-     */
-    void clear() noexcept {
-        std::lock_guard lock(mutex_);
-        slots_.clear();
-    }
-
-    /**
-     * @brief Get the number of connected slots.
-     *
-     * @return size_t The number of slots.
-     */
-    [[nodiscard]] size_t size() const noexcept {
-        std::lock_guard lock(mutex_);
-        return slots_.size();
-    }
-
-    /**
-     * @brief Check if the signal has no connected slots.
-     *
-     * @return bool True if the signal has no slots, false otherwise.
-     */
-    [[nodiscard]] bool empty() const noexcept {
-        std::lock_guard lock(mutex_);
-        return slots_.empty();
-    }
-
-private:
     std::vector<SlotType> slots_;
-    mutable std::mutex mutex_;
+    mutable MutexType mutex_;
+};
+
+}  // namespace detail
+
+/**
+ * @brief A signal class that allows connecting, disconnecting, and emitting
+ * slots.
+ *
+ * @tparam Args The argument types for the slots.
+ */
+template <typename... Args>
+class Signal : public detail::SignalBase<std::mutex, Args...> {
+public:
+    using Base = detail::SignalBase<std::mutex, Args...>;
+    using SlotType = typename Base::SlotType;
+
+    using Base::clear;
+    using Base::connect;
+    using Base::disconnect;
+    using Base::empty;
+    using Base::size;
+
+    /**
+     * @brief Emit the signal, calling all connected slots.
+     * @param args The arguments to pass to the slots.
+     */
+    void emit(Args... args) { Base::executeSlots(args...); }
 };
 
 /**
@@ -259,43 +303,16 @@ private:
  * @tparam Args The argument types for the slots.
  */
 template <typename... Args>
-class AsyncSignal {
+class AsyncSignal : public detail::SignalBase<std::mutex, Args...> {
 public:
-    using SlotType = std::function<void(Args...)>;
+    using Base = detail::SignalBase<std::mutex, Args...>;
+    using SlotType = typename Base::SlotType;
 
-    /**
-     * @brief Connect a slot to the signal.
-     *
-     * @param slot The slot to connect.
-     * @throws SlotConnectionError if the slot is invalid
-     */
-    void connect(SlotType slot) noexcept(false) {
-        if (!slot) {
-            throw SlotConnectionError("Cannot connect invalid slot");
-        }
-
-        std::lock_guard lock(mutex_);
-        slots_.push_back(std::move(slot));
-    }
-
-    /**
-     * @brief Disconnect a slot from the signal.
-     *
-     * @param slot The slot to disconnect.
-     */
-    void disconnect(const SlotType& slot) noexcept {
-        if (!slot) {
-            return;
-        }
-
-        std::lock_guard lock(mutex_);
-        slots_.erase(std::remove_if(slots_.begin(), slots_.end(),
-                                    [&](const SlotType& s) {
-                                        return s.target_type() ==
-                                               slot.target_type();
-                                    }),
-                     slots_.end());
-    }
+    using Base::clear;
+    using Base::connect;
+    using Base::disconnect;
+    using Base::empty;
+    using Base::size;
 
     /**
      * @brief Emit the signal asynchronously, calling all connected slots.
@@ -304,24 +321,22 @@ public:
      * @throws SlotEmissionError if any asynchronous execution fails
      */
     void emit(Args... args) {
+        auto slots_copy = Base::getSlotsCopy();
         std::vector<std::future<void>> futures;
-        {
-            std::lock_guard lock(mutex_);
-            futures.reserve(slots_.size());
-            for (const auto& slot : slots_) {
-                if (slot) {
-                    futures.push_back(
-                        std::async(std::launch::async, [slot, args...]() {
-                            try {
-                                slot(args...);
-                            } catch (const std::exception& e) {
-                                throw SlotEmissionError(
-                                    std::string(
-                                        "Async slot execution failed: ") +
-                                    e.what());
-                            }
-                        }));
-                }
+        futures.reserve(slots_copy.size());
+
+        for (const auto& slot : slots_copy) {
+            if (slot) {
+                futures.push_back(
+                    std::async(std::launch::async, [slot, args...]() {
+                        try {
+                            slot(args...);
+                        } catch (const std::exception& e) {
+                            throw SlotEmissionError(
+                                std::string("Async slot execution failed: ") +
+                                e.what());
+                        }
+                    }));
             }
         }
 
@@ -342,22 +357,12 @@ public:
     void waitForCompletion() noexcept {
         // Purposefully empty - futures are waited for in emit
     }
-
-    /**
-     * @brief Clear all slots connected to this signal.
-     */
-    void clear() noexcept {
-        std::lock_guard lock(mutex_);
-        slots_.clear();
-    }
-
-private:
-    std::vector<SlotType> slots_;
-    mutable std::mutex mutex_;
 };
 
 /**
  * @brief A signal class that allows automatic disconnection of slots.
+ *
+ * Uses ID-based slot management for reliable disconnection.
  *
  * @tparam Args The argument types for the slots.
  */
@@ -374,7 +379,7 @@ public:
      * @return ConnectionId The unique ID of the connected slot.
      * @throws SlotConnectionError if the slot is invalid
      */
-    auto connect(SlotType slot) noexcept(false) -> ConnectionId {
+    auto connect(SlotType slot) -> ConnectionId {
         if (!slot) {
             throw SlotConnectionError("Cannot connect invalid slot");
         }
@@ -426,12 +431,20 @@ public:
 
     /**
      * @brief Get the number of connected slots.
-     *
      * @return size_t The number of slots.
      */
     [[nodiscard]] size_t size() const noexcept {
         std::lock_guard lock(mutex_);
         return slots_.size();
+    }
+
+    /**
+     * @brief Check if the signal has no connected slots.
+     * @return bool True if the signal has no slots, false otherwise.
+     */
+    [[nodiscard]] bool empty() const noexcept {
+        std::lock_guard lock(mutex_);
+        return slots_.empty();
     }
 
 private:
@@ -561,64 +574,38 @@ private:
  * @brief A template for signals with advanced thread-safety for readers and
  * writers.
  *
+ * Uses shared_mutex for better read concurrency and parallel execution
+ * for emitting to multiple slots.
+ *
  * @tparam Args The argument types for the slots.
  */
 template <typename... Args>
-class ThreadSafeSignal {
+class ThreadSafeSignal : public detail::SignalBase<std::shared_mutex, Args...> {
 public:
-    using SlotType = std::function<void(Args...)>;
+    using Base = detail::SignalBase<std::shared_mutex, Args...>;
+    using SlotType = typename Base::SlotType;
+
+    using Base::clear;
+    using Base::connect;
+    using Base::disconnect;
+    using Base::empty;
+    using Base::size;
+
+    /// Threshold for parallel execution
+    static constexpr size_t PARALLEL_THRESHOLD = 4;
 
     /**
-     * @brief Connect a slot to the signal.
-     *
-     * @param slot The slot to connect.
-     * @throws SlotConnectionError if the slot is invalid
-     */
-    void connect(SlotType slot) noexcept(false) {
-        if (!slot) {
-            throw SlotConnectionError("Cannot connect invalid slot");
-        }
-
-        std::unique_lock lock(mutex_);
-        slots_.push_back(std::move(slot));
-    }
-
-    /**
-     * @brief Disconnect a slot from the signal.
-     *
-     * @param slot The slot to disconnect.
-     */
-    void disconnect(const SlotType& slot) noexcept {
-        if (!slot) {
-            return;
-        }
-
-        std::unique_lock lock(mutex_);
-        slots_.erase(std::remove_if(slots_.begin(), slots_.end(),
-                                    [&](const SlotType& s) {
-                                        return s.target_type() ==
-                                               slot.target_type();
-                                    }),
-                     slots_.end());
-    }
-
-    /**
-     * @brief Emit the signal using a strand execution policy for parallel
-     * execution.
+     * @brief Emit the signal using parallel execution for multiple slots.
      *
      * @param args The arguments to pass to the slots.
      * @throws SlotEmissionError if any slot execution fails
      */
     void emit(Args... args) {
         try {
-            std::vector<SlotType> slots_copy;
-            {
-                std::shared_lock lock(mutex_);  // Read-only lock for copying
-                slots_copy = slots_;
-            }
+            auto slots_copy = Base::getSlotsCopy();
 
             // Use C++17 parallel execution if there are enough slots
-            if (slots_copy.size() > 4) {
+            if (slots_copy.size() > PARALLEL_THRESHOLD) {
                 std::for_each(std::execution::par_unseq, slots_copy.begin(),
                               slots_copy.end(),
                               [&args...](const SlotType& slot) {
@@ -639,29 +626,6 @@ public:
                 e.what());
         }
     }
-
-    /**
-     * @brief Get the number of connected slots.
-     *
-     * @return size_t The number of slots.
-     */
-    [[nodiscard]] size_t size() const noexcept {
-        std::shared_lock lock(mutex_);
-        return slots_.size();
-    }
-
-    /**
-     * @brief Clear all slots connected to this signal.
-     */
-    void clear() noexcept {
-        std::unique_lock lock(mutex_);
-        slots_.clear();
-    }
-
-private:
-    std::vector<SlotType> slots_;
-    mutable std::shared_mutex
-        mutex_;  // Allows multiple readers or single writer
 };
 
 /**
@@ -670,9 +634,16 @@ private:
  * @tparam Args The argument types for the slots.
  */
 template <typename... Args>
-class LimitedSignal {
+class LimitedSignal : public detail::SignalBase<std::mutex, Args...> {
 public:
-    using SlotType = std::function<void(Args...)>;
+    using Base = detail::SignalBase<std::mutex, Args...>;
+    using SlotType = typename Base::SlotType;
+
+    using Base::clear;
+    using Base::connect;
+    using Base::disconnect;
+    using Base::empty;
+    using Base::size;
 
     /**
      * @brief Construct a new Limited Signal object.
@@ -688,40 +659,6 @@ public:
     }
 
     /**
-     * @brief Connect a slot to the signal.
-     *
-     * @param slot The slot to connect.
-     * @throws SlotConnectionError if the slot is invalid
-     */
-    void connect(SlotType slot) noexcept(false) {
-        if (!slot) {
-            throw SlotConnectionError("Cannot connect invalid slot");
-        }
-
-        std::lock_guard lock(mutex_);
-        slots_.push_back(std::move(slot));
-    }
-
-    /**
-     * @brief Disconnect a slot from the signal.
-     *
-     * @param slot The slot to disconnect.
-     */
-    void disconnect(const SlotType& slot) noexcept {
-        if (!slot) {
-            return;
-        }
-
-        std::lock_guard lock(mutex_);
-        slots_.erase(std::remove_if(slots_.begin(), slots_.end(),
-                                    [&](const SlotType& s) {
-                                        return s.target_type() ==
-                                               slot.target_type();
-                                    }),
-                     slots_.end());
-    }
-
-    /**
      * @brief Emit the signal, calling all connected slots up to the maximum
      * number of calls.
      *
@@ -732,12 +669,12 @@ public:
      */
     [[nodiscard]] bool emit(Args... args) {
         try {
-            std::lock_guard lock(mutex_);
+            std::lock_guard lock(Base::mutex_);
             if (callCount_ >= maxCalls_) {
                 return false;
             }
 
-            for (const auto& slot : slots_) {
+            for (const auto& slot : Base::slots_) {
                 if (slot) {
                     slot(args...);
                 }
@@ -753,21 +690,19 @@ public:
 
     /**
      * @brief Check if the signal has reached its call limit.
-     *
      * @return bool True if the call limit has been reached
      */
     [[nodiscard]] bool isExhausted() const noexcept {
-        std::lock_guard lock(mutex_);
+        std::lock_guard lock(Base::mutex_);
         return callCount_ >= maxCalls_;
     }
 
     /**
      * @brief Get remaining call count before limit is reached.
-     *
      * @return size_t Number of remaining emissions
      */
     [[nodiscard]] size_t remainingCalls() const noexcept {
-        std::lock_guard lock(mutex_);
+        std::lock_guard lock(Base::mutex_);
         return (callCount_ < maxCalls_) ? (maxCalls_ - callCount_) : 0;
     }
 
@@ -775,15 +710,13 @@ public:
      * @brief Reset the call counter.
      */
     void reset() noexcept {
-        std::lock_guard lock(mutex_);
+        std::lock_guard lock(Base::mutex_);
         callCount_ = 0;
     }
 
 private:
-    std::vector<SlotType> slots_;
     const size_t maxCalls_;
     size_t callCount_{0};
-    mutable std::mutex mutex_;
 };
 
 /**

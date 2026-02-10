@@ -12,8 +12,8 @@ Description: Daemon process implementation (Header-Only Library)
 
 **************************************************/
 
-#ifndef ATOM_SERVER_DAEMON_HPP
-#define ATOM_SERVER_DAEMON_HPP
+#ifndef ATOM_ASYNC_UTILS_DAEMON_HPP
+#define ATOM_ASYNC_UTILS_DAEMON_HPP
 
 // Standard C++ Includes
 #include <atomic>
@@ -136,7 +136,68 @@ struct ProcessId {
     }
 };
 
-// Global daemon-related configurations, inline for header-only
+/**
+ * @brief Singleton class for daemon configuration management
+ *
+ * Encapsulates all global daemon-related state to provide better
+ * encapsulation and testability.
+ */
+class DaemonConfig {
+public:
+    static DaemonConfig& instance() noexcept {
+        static DaemonConfig instance;
+        return instance;
+    }
+
+    // Non-copyable, non-movable
+    DaemonConfig(const DaemonConfig&) = delete;
+    DaemonConfig& operator=(const DaemonConfig&) = delete;
+    DaemonConfig(DaemonConfig&&) = delete;
+    DaemonConfig& operator=(DaemonConfig&&) = delete;
+
+    void setRestartInterval(int seconds) {
+        if (seconds <= 0) {
+            throw std::invalid_argument(
+                "Restart interval must be greater than zero");
+        }
+        std::lock_guard<std::mutex> lock(mutex_);
+        restart_interval_ = seconds;
+    }
+
+    [[nodiscard]] int getRestartInterval() const noexcept {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return restart_interval_;
+    }
+
+    void setPidFilePath(const std::filesystem::path& path) noexcept {
+        std::lock_guard<std::mutex> lock(mutex_);
+        pid_file_path_ = path;
+    }
+
+    [[nodiscard]] std::filesystem::path getPidFilePath() const noexcept {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return pid_file_path_;
+    }
+
+    void setDaemonMode(bool is_daemon) noexcept {
+        is_daemon_.store(is_daemon, std::memory_order_relaxed);
+    }
+
+    [[nodiscard]] bool isDaemonMode() const noexcept {
+        return is_daemon_.load(std::memory_order_relaxed);
+    }
+
+private:
+    DaemonConfig() = default;
+
+    mutable std::mutex mutex_;
+    int restart_interval_{10};  // seconds
+    std::filesystem::path pid_file_path_{"lithium-daemon"};
+    std::atomic<bool> is_daemon_{false};
+};
+
+// Legacy global variables (deprecated, use DaemonConfig::instance() instead)
+// Kept for backward compatibility
 inline int g_daemon_restart_interval = 10;  // seconds
 inline std::filesystem::path g_pid_file_path =
     "lithium-daemon";              // Default PID file name
@@ -326,6 +387,37 @@ private:
 
 }  // namespace
 
+// Internal helper struct to unify argument handling
+namespace internal {
+
+// Argument wrapper to unify argc/argv and std::span interfaces
+struct ArgsWrapper {
+    int argc;
+    char** argv;
+    std::span<char*> span_args;
+    bool is_modern;
+
+    // Legacy constructor
+    ArgsWrapper(int c, char** v)
+        : argc(c), argv(v), span_args(), is_modern(false) {}
+
+    // Modern constructor
+    explicit ArgsWrapper(std::span<char*> args)
+        : argc(static_cast<int>(args.size())),
+          argv(args.empty() ? nullptr : args.data()),
+          span_args(args),
+          is_modern(true) {}
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (is_modern) {
+            return !span_args.empty() && span_args[0] != nullptr;
+        }
+        return !(argv == nullptr && argc > 0);
+    }
+};
+
+}  // namespace internal
+
 // Class for managing process information
 class DaemonGuard {
 public:
@@ -373,6 +465,24 @@ public:
     }
 
 private:
+    // Internal unified implementation helpers
+    template <typename Callback>
+    auto realStartImpl(const internal::ArgsWrapper& args,
+                       const Callback& mainCb) -> int;
+
+    template <typename Callback>
+    auto realDaemonImpl(const internal::ArgsWrapper& args,
+                        const Callback& mainCb) -> int;
+
+    template <typename Callback>
+    auto startDaemonImpl(const internal::ArgsWrapper& args,
+                         const Callback& mainCb, bool isDaemon) -> int;
+
+    // Unified callback invocation
+    template <typename Callback>
+    int invokeCallback(const internal::ArgsWrapper& args,
+                       const Callback& mainCb);
+
     ProcessId m_parentId;
     ProcessId m_mainId;
     time_t m_parentStartTime = 0;
@@ -425,13 +535,24 @@ inline auto DaemonGuard::toString() const noexcept -> std::string {
     }
 }
 
-template <ProcessCallback Callback>
-auto DaemonGuard::realStart(int argc, char** argv,
-                            const Callback& mainCb) -> int {
+// Unified callback invocation helper
+template <typename Callback>
+int DaemonGuard::invokeCallback(const internal::ArgsWrapper& args,
+                                const Callback& mainCb) {
+    if constexpr (ModernProcessCallback<Callback>) {
+        return mainCb(args.span_args);
+    } else {
+        return mainCb(args.argc, args.argv);
+    }
+}
+
+// Unified realStart implementation
+template <typename Callback>
+auto DaemonGuard::realStartImpl(const internal::ArgsWrapper& args,
+                                const Callback& mainCb) -> int {
     try {
-        if (argv == nullptr && argc > 0) {
-            throw DaemonException(
-                "Invalid argument vector (nullptr with argc > 0)");
+        if (!args.valid()) {
+            throw DaemonException("Invalid argument vector");
         }
         m_mainId = ProcessId::current();
         m_mainStartTime = time(nullptr);
@@ -444,7 +565,7 @@ auto DaemonGuard::realStart(int argc, char** argv,
                               m_pidFilePath->string(), e.what());
             }
         }
-        return mainCb(argc, argv);
+        return invokeCallback(args, mainCb);
     } catch (const DaemonException&) {
         throw;
     } catch (const std::exception& e) {
@@ -458,48 +579,27 @@ auto DaemonGuard::realStart(int argc, char** argv,
     return -1;
 }
 
-template <ModernProcessCallback Callback>
-auto DaemonGuard::realStartModern(std::span<char*> args,
-                                  const Callback& mainCb) -> int {
-    try {
-        if (args.empty() || args[0] == nullptr) {
-            throw DaemonException(
-                "args must not be empty and args[0] not null in "
-                "realStartModern");
-        }
-        m_mainId = ProcessId::current();
-        m_mainStartTime = time(nullptr);
-
-        if (m_pidFilePath.has_value()) {
-            try {
-                writePidFile(*m_pidFilePath);
-            } catch (const std::exception& e) {
-                spdlog::error(
-                    "Failed to write PID file {} in realStartModern: {}",
-                    m_pidFilePath->string(), e.what());
-            }
-        }
-        return mainCb(args);
-    } catch (const DaemonException&) {
-        throw;
-    } catch (const std::exception& e) {
-        spdlog::error("Exception in realStartModern: {}", e.what());
-        throw DaemonException(std::string("Exception in realStartModern: ") +
-                              e.what());
-    } catch (...) {
-        spdlog::error("Unknown exception in realStartModern");
-        throw DaemonException("Unknown exception in realStartModern");
-    }
-    return -1;
+// Public wrappers delegate to unified implementation
+template <ProcessCallback Callback>
+auto DaemonGuard::realStart(int argc, char** argv, const Callback& mainCb)
+    -> int {
+    return realStartImpl(internal::ArgsWrapper(argc, argv), mainCb);
 }
 
-template <ProcessCallback Callback>
-auto DaemonGuard::realDaemon(int argc, char** argv,
-                             [[maybe_unused]] const Callback& mainCb) -> int {
+template <ModernProcessCallback Callback>
+auto DaemonGuard::realStartModern(std::span<char*> args, const Callback& mainCb)
+    -> int {
+    return realStartImpl(internal::ArgsWrapper(args), mainCb);
+}
+
+// Unified realDaemon implementation
+template <typename Callback>
+auto DaemonGuard::realDaemonImpl(const internal::ArgsWrapper& args,
+                                 [[maybe_unused]] const Callback& mainCb)
+    -> int {
     try {
-        if (argv == nullptr && argc > 0) {
-            throw DaemonException(
-                "Invalid argument vector (nullptr with argc > 0)");
+        if (!args.valid()) {
+            throw DaemonException("Invalid argument vector");
         }
         spdlog::info("Attempting to start daemon process...");
         m_parentId = ProcessId::current();
@@ -519,12 +619,11 @@ auto DaemonGuard::realDaemon(int argc, char** argv,
                 "GetModuleFileNameA failed in realDaemon: {}", GetLastError()));
         }
         cmdLine = "\"" + std::string(exePath) + "\"";
-        for (int i = 1; i < argc; ++i) {
-            if (argv[i] != nullptr) {
-                cmdLine += " \"" + std::string(argv[i]) + "\"";
+        for (int i = 1; i < args.argc; ++i) {
+            if (args.argv[i] != nullptr) {
+                cmdLine += " \"" + std::string(args.argv[i]) + "\"";
             }
         }
-        // cmdLine += " --daemon-worker"; // Example flag
 
         if (!CreateProcessA(NULL, const_cast<char*>(cmdLine.c_str()), NULL,
                             NULL, FALSE, DETACHED_PROCESS, NULL, NULL, &si,
@@ -615,7 +714,7 @@ auto DaemonGuard::realDaemon(int argc, char** argv,
         spdlog::info(
             "Daemon process (PID {}) initialized. Calling main callback.",
             m_mainId.id);
-        return mainCb(argc, argv);
+        return invokeCallback(args, mainCb);
 #else
         spdlog::error("Daemon mode is not supported on this platform.");
         throw DaemonException("Daemon mode not supported on this platform.");
@@ -633,170 +732,50 @@ auto DaemonGuard::realDaemon(int argc, char** argv,
     return -1;
 }
 
-template <ModernProcessCallback Callback>
-auto DaemonGuard::realDaemonModern(
-    std::span<char*> args, [[maybe_unused]] const Callback& mainCb) -> int {
-    try {
-        if (args.empty() || args[0] == nullptr) {
-            throw DaemonException(
-                "args must not be empty and args[0] not null in "
-                "realDaemonModern");
-        }
-        spdlog::info(
-            "Attempting to start daemon process (modern interface)...");
-        m_parentId = ProcessId::current();
-        m_parentStartTime = time(nullptr);
-
-#ifdef _WIN32
-        STARTUPINFOA si;
-        PROCESS_INFORMATION pi;
-        ZeroMemory(&si, sizeof(si));
-        si.cb = sizeof(si);
-        ZeroMemory(&pi, sizeof(pi));
-
-        std::string cmdLine;
-        char exePath[MAX_PATH];
-        if (!GetModuleFileNameA(NULL, exePath, MAX_PATH)) {
-            throw DaemonException(
-                std::format("GetModuleFileNameA failed in realDaemonModern: {}",
-                            GetLastError()));
-        }
-        cmdLine = "\"" + std::string(exePath) + "\"";
-        for (size_t i = 1; i < args.size(); ++i) {
-            if (args[i] != nullptr) {
-                cmdLine += " \"" + std::string(args[i]) + "\"";
-            }
-        }
-        // cmdLine += " --daemon-worker";
-
-        if (!CreateProcessA(NULL, const_cast<char*>(cmdLine.c_str()), NULL,
-                            NULL, FALSE, DETACHED_PROCESS, NULL, NULL, &si,
-                            &pi)) {
-            throw DaemonException(
-                std::format("CreateProcessA failed in realDaemonModern: {}",
-                            GetLastError()));
-        }
-        spdlog::info(
-            "Windows: Parent (PID {}) launched detached process (PID {}). "
-            "Parent will exit (modern).",
-            GetProcessId(m_parentId.id), pi.dwProcessId);
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-        return 0;
-
-#elif defined(__APPLE__) || defined(__linux__)
-        pid_t pid = fork();
-        if (pid < 0) {
-            throw DaemonException(std::format(
-                "fork failed in realDaemonModern: {}", strerror(errno)));
-        }
-        if (pid > 0) {
-            spdlog::info(
-                "Parent process (PID {}) forked child (PID {}). Parent exiting "
-                "(modern).",
-                getpid(), pid);
-            return 0;
-        }
-
-        m_parentId.reset();
-        m_mainId = ProcessId::current();
-        m_mainStartTime = time(nullptr);
-        std::atomic_store_explicit(&g_is_daemon, true,
-                                   std::memory_order_relaxed);
-
-        spdlog::info("Child process (PID {}) starting as daemon (modern).",
-                     m_mainId.id);
-        if (setsid() < 0) {
-            throw DaemonException(
-                std::format("setsid failed in realDaemonModern child: {}",
-                            strerror(errno)));
-        }
-
-        pid = fork();
-        if (pid < 0) {
-            throw DaemonException(std::format(
-                "Second fork failed in realDaemonModern: {}", strerror(errno)));
-        }
-        if (pid > 0) {
-            spdlog::info(
-                "First child (PID {}) forked second child (PID {}). First "
-                "child exiting (modern).",
-                getpid(), pid);
-            exit(0);
-        }
-
-        m_mainId = ProcessId::current();
-        m_mainStartTime = time(nullptr);
-        spdlog::info("Actual daemon process (PID {}) starting (modern).",
-                     m_mainId.id);
-
-        if (chdir("/") < 0) {
-            spdlog::warn(
-                "chdir(\"/\") failed in realDaemonModern: {}. Continuing...",
-                strerror(errno));
-        }
-        umask(0);
-
-        close(STDIN_FILENO);
-        close(STDOUT_FILENO);
-        close(STDERR_FILENO);
-        int fd_dev_null = open("/dev/null", O_RDWR);
-        if (fd_dev_null != -1) {
-            dup2(fd_dev_null, STDIN_FILENO);
-            dup2(fd_dev_null, STDOUT_FILENO);
-            dup2(fd_dev_null, STDERR_FILENO);
-            if (fd_dev_null > STDERR_FILENO)
-                close(fd_dev_null);
-        } else {
-            spdlog::warn(
-                "Failed to open /dev/null for redirecting stdio in modern "
-                "daemon.");
-        }
-
-        if (m_pidFilePath.has_value()) {
-            try {
-                writePidFile(*m_pidFilePath);
-            } catch (const std::exception& e) {
-                spdlog::error(
-                    "Failed to write PID file {} in modern daemon: {}",
-                    m_pidFilePath->string(), e.what());
-            }
-        }
-        spdlog::info(
-            "Daemon process (PID {}) initialized. Calling main callback "
-            "(modern).",
-            m_mainId.id);
-        return mainCb(args);
-#else
-        spdlog::error(
-            "Daemon mode is not supported on this platform (modern).");
-        throw DaemonException(
-            "Daemon mode not supported on this platform (modern).");
-#endif
-    } catch (const DaemonException&) {
-        throw;
-    } catch (const std::exception& e) {
-        spdlog::error("Exception in realDaemonModern: {}", e.what());
-        throw DaemonException(std::string("Exception in realDaemonModern: ") +
-                              e.what());
-    } catch (...) {
-        spdlog::error("Unknown exception in realDaemonModern");
-        throw DaemonException("Unknown exception in realDaemonModern");
-    }
-    return -1;
+// Public wrappers for realDaemon
+template <ProcessCallback Callback>
+auto DaemonGuard::realDaemon(int argc, char** argv, const Callback& mainCb)
+    -> int {
+    return realDaemonImpl(internal::ArgsWrapper(argc, argv), mainCb);
 }
 
-template <ProcessCallback Callback>
-auto DaemonGuard::startDaemon(int argc, char** argv, const Callback& mainCb,
-                              bool isDaemonParam) -> int {
-    try {
-        if (argv == nullptr && argc > 0) {
-            throw DaemonException(
-                "Invalid argument vector (nullptr with argc > 0)");
+template <ModernProcessCallback Callback>
+auto DaemonGuard::realDaemonModern(std::span<char*> args,
+                                   const Callback& mainCb) -> int {
+    return realDaemonImpl(internal::ArgsWrapper(args), mainCb);
+}
+
+// Windows console setup helper (extracted to reduce duplication)
+#ifdef _WIN32
+inline void setupDaemonConsole() noexcept {
+    if (g_is_daemon.load(std::memory_order_relaxed)) {
+        if (GetConsoleWindow() == NULL) {
+            if (!AllocConsole()) {
+                spdlog::warn("Failed to allocate console for daemon, error: {}",
+                             GetLastError());
+            } else {
+                FILE* fpstdout = nullptr;
+                FILE* fpstderr = nullptr;
+                if (freopen_s(&fpstdout, "CONOUT$", "w", stdout) != 0) {
+                    spdlog::error("Failed to redirect stdout to new console");
+                }
+                if (freopen_s(&fpstderr, "CONOUT$", "w", stderr) != 0) {
+                    spdlog::error("Failed to redirect stderr to new console");
+                }
+            }
         }
-        if (argc < 0) {
-            spdlog::warn("Invalid argc value: {}, using 0 instead", argc);
-            argc = 0;
+    }
+}
+#endif
+
+// Unified startDaemon implementation
+template <typename Callback>
+auto DaemonGuard::startDaemonImpl(const internal::ArgsWrapper& args,
+                                  const Callback& mainCb, bool isDaemonParam)
+    -> int {
+    try {
+        if (!args.valid()) {
+            throw DaemonException("Invalid argument vector");
         }
 
         std::atomic_store_explicit(&g_is_daemon, isDaemonParam,
@@ -804,34 +783,15 @@ auto DaemonGuard::startDaemon(int argc, char** argv, const Callback& mainCb,
         m_pidFilePath = g_pid_file_path;
 
 #ifdef _WIN32
-        if (g_is_daemon.load(std::memory_order_relaxed)) {
-            if (GetConsoleWindow() == NULL) {
-                if (!AllocConsole()) {
-                    spdlog::warn(
-                        "Failed to allocate console for daemon, error: {}",
-                        GetLastError());
-                } else {
-                    FILE* fpstdout = nullptr;
-                    FILE* fpstderr = nullptr;
-                    if (freopen_s(&fpstdout, "CONOUT$", "w", stdout) != 0) {
-                        spdlog::error(
-                            "Failed to redirect stdout to new console");
-                    }
-                    if (freopen_s(&fpstderr, "CONOUT$", "w", stderr) != 0) {
-                        spdlog::error(
-                            "Failed to redirect stderr to new console");
-                    }
-                }
-            }
-        }
+        setupDaemonConsole();
 #endif
 
         if (!g_is_daemon.load(std::memory_order_relaxed)) {
             m_parentId = ProcessId::current();
             m_parentStartTime = time(nullptr);
-            return realStart(argc, argv, mainCb);
+            return realStartImpl(args, mainCb);
         } else {
-            return realDaemon(argc, argv, mainCb);
+            return realDaemonImpl(args, mainCb);
         }
     } catch (const DaemonException&) {
         throw;
@@ -846,64 +806,19 @@ auto DaemonGuard::startDaemon(int argc, char** argv, const Callback& mainCb,
     return -1;
 }
 
+// Public wrappers for startDaemon
+template <ProcessCallback Callback>
+auto DaemonGuard::startDaemon(int argc, char** argv, const Callback& mainCb,
+                              bool isDaemonParam) -> int {
+    return startDaemonImpl(internal::ArgsWrapper(argc, argv), mainCb,
+                           isDaemonParam);
+}
+
 template <ModernProcessCallback Callback>
 auto DaemonGuard::startDaemonModern(std::span<char*> args,
-                                    const Callback& mainCb,
-                                    bool isDaemonParam) -> int {
-    try {
-        if (args.empty() || args[0] == nullptr) {
-            throw DaemonException(
-                "Empty or invalid argument vector in startDaemonModern");
-        }
-
-        std::atomic_store_explicit(&g_is_daemon, isDaemonParam,
-                                   std::memory_order_relaxed);
-        m_pidFilePath = g_pid_file_path;
-
-#ifdef _WIN32
-        if (g_is_daemon.load(std::memory_order_relaxed)) {
-            if (GetConsoleWindow() == NULL) {
-                if (!AllocConsole()) {
-                    spdlog::warn(
-                        "Failed to allocate console for modern daemon, error: "
-                        "{}",
-                        GetLastError());
-                } else {
-                    FILE* fpstdout = nullptr;
-                    FILE* fpstderr = nullptr;
-                    if (freopen_s(&fpstdout, "CONOUT$", "w", stdout) != 0) {
-                        spdlog::error(
-                            "Failed to redirect stdout to new console "
-                            "(modern)");
-                    }
-                    if (freopen_s(&fpstderr, "CONOUT$", "w", stderr) != 0) {
-                        spdlog::error(
-                            "Failed to redirect stderr to new console "
-                            "(modern)");
-                    }
-                }
-            }
-        }
-#endif
-
-        if (!g_is_daemon.load(std::memory_order_relaxed)) {
-            m_parentId = ProcessId::current();
-            m_parentStartTime = time(nullptr);
-            return realStartModern(args, mainCb);
-        } else {
-            return realDaemonModern(args, mainCb);
-        }
-    } catch (const DaemonException&) {
-        throw;
-    } catch (const std::exception& e) {
-        spdlog::error("Exception in startDaemonModern: {}", e.what());
-        throw DaemonException(std::string("Exception in startDaemonModern: ") +
-                              e.what());
-    } catch (...) {
-        spdlog::error("Unknown exception in startDaemonModern");
-        throw DaemonException("Unknown exception in startDaemonModern");
-    }
-    return -1;
+                                    const Callback& mainCb, bool isDaemonParam)
+    -> int {
+    return startDaemonImpl(internal::ArgsWrapper(args), mainCb, isDaemonParam);
 }
 
 inline auto DaemonGuard::isRunning() const noexcept -> bool {
@@ -1213,4 +1128,4 @@ inline int getDaemonRestartInterval() noexcept {
 
 }  // namespace atom::async
 
-#endif  // ATOM_SERVER_DAEMON_HPP
+#endif  // ATOM_ASYNC_UTILS_DAEMON_HPP

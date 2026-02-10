@@ -29,25 +29,9 @@ Description: FIFO Server
 #include <thread>
 #include <unordered_map>
 
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <errno.h>
-#include <fcntl.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-#endif
-
-#ifdef ENABLE_COMPRESSION
-#include <zlib.h>
-#endif
-
-#ifdef ENABLE_ENCRYPTION
-#include <openssl/evp.h>
-#include <openssl/rand.h>
-#endif
+#include "fifo_codec.hpp"
+#include "fifo_platform.hpp"
+#include "fifo_threadpool.hpp"
 
 namespace atom::connection {
 
@@ -289,17 +273,11 @@ public:
 
     std::future<bool> sendMessageAsync(std::string message,
                                        MessagePriority priority) {
-        auto promise = std::make_shared<std::promise<bool>>();
-        auto future = promise->get_future();
-
-        // Use a separate thread to send the message
-        std::thread([this, message = std::move(message), priority,
-                     promise]() mutable {
-            bool result = this->sendMessage(std::move(message), priority);
-            promise->set_value(result);
-        }).detach();
-
-        return future;
+        // Use thread pool instead of detached thread
+        return submitToPool(
+            [this, message = std::move(message), priority]() mutable {
+                return this->sendMessage(std::move(message), priority);
+            });
     }
 
     template <std::ranges::input_range R>
@@ -769,70 +747,21 @@ private:
     }
 
     std::string compressMessage(const std::string& message) {
-#ifdef ENABLE_COMPRESSION
-        // Skip compression for small messages
-        if (message.size() < 128) {
-            // Add a marker to indicate not compressed
-            return "NC:" + message;
-        }
-
-        z_stream zs{};
-        if (deflateInit(&zs, Z_DEFAULT_COMPRESSION) != Z_OK) {
-            logger_.error("Failed to initialize zlib");
+        auto result = FifoCodec::compress(message, 128);
+        if (!result) {
+            logger_.error("Compression failed");
             return message;
         }
-
-        zs.next_in =
-            reinterpret_cast<Bytef*>(const_cast<char*>(message.data()));
-        zs.avail_in = static_cast<uInt>(message.size());
-
-        // Estimate the size needed for compressed data
-        size_t outsize = message.size() * 1.1 + 12;
-        std::string outstring(outsize, '\0');
-
-        zs.next_out = reinterpret_cast<Bytef*>(outstring.data());
-        zs.avail_out = static_cast<uInt>(outsize);
-
-        int result = deflate(&zs, Z_FINISH);
-        deflateEnd(&zs);
-
-        if (result != Z_STREAM_END) {
-            logger_.error("Error during compression: {}", result);
-            return message;
-        }
-
-        // Resize to actual compressed size
-        outstring.resize(zs.total_out);
-
-        // Add a marker to indicate compressed
-        return "C:" + outstring;
-#else
-        // Compression not enabled
-        return message;
-#endif
+        return *result;
     }
 
     std::string encryptMessage(const std::string& message) {
-#ifdef ENABLE_ENCRYPTION
-        // XOR encryption with random key (using OpenSSL for key generation)
-        // Note: For production use, consider AES or other standard algorithms
-
-        // Generate a random key
-        std::string key(16, '\0');
-        RAND_bytes(reinterpret_cast<unsigned char*>(key.data()), key.size());
-
-        // Encrypt the message
-        std::string encrypted(message.size(), '\0');
-        for (size_t i = 0; i < message.size(); ++i) {
-            encrypted[i] = message[i] ^ key[i % key.size()];
+        auto result = FifoCodec::encrypt(message);
+        if (!result) {
+            logger_.error("Encryption failed");
+            return message;
         }
-
-        // Prepend the key to the encrypted message
-        return "E:" + key + encrypted;
-#else
-        // Encryption not enabled
-        return message;
-#endif
+        return *result;
     }
 
     std::string fifo_path_;

@@ -518,3 +518,71 @@ TEST_F(SshServerThreadSafetyTest, ConcurrentConfigurationChanges) {
     // At least some operations should succeed
     EXPECT_GT(successCount.load(), 0);
 }
+
+TEST_F(SshServerThreadSafetyTest, ConcurrentIpAddressOperations) {
+    const int numThreads = 5;
+    std::vector<std::thread> threads;
+    std::atomic<int> successCount{0};
+
+    // Test concurrent IP allow/deny operations (now O(1) with unordered_set)
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([this, i, &successCount]() {
+            try {
+                std::string ip = "192.168.1." + std::to_string(i * 10);
+                server_->allowIpAddress(ip);
+                bool allowed = server_->isIpAddressAllowed(ip);
+                EXPECT_TRUE(allowed);
+
+                server_->denyIpAddress(ip);
+                allowed = server_->isIpAddressAllowed(ip);
+                EXPECT_FALSE(allowed);
+
+                successCount++;
+            } catch (...) {
+                // Ignore exceptions for this test
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_EQ(successCount.load(), numThreads);
+}
+
+TEST_F(SshServerThreadSafetyTest, ConcurrentStartStopOperations) {
+    const int numIterations = 3;
+    std::atomic<int> operationCount{0};
+
+    // Test that concurrent start/stop doesn't crash (atomic isRunning_)
+    std::thread starter([this, &operationCount, numIterations]() {
+        for (int i = 0; i < numIterations; ++i) {
+            try {
+                server_->start();
+                operationCount++;
+            } catch (...) {
+                // Expected - server may already be running
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    });
+
+    std::thread stopper([this, &operationCount, numIterations]() {
+        for (int i = 0; i < numIterations; ++i) {
+            try {
+                server_->stop(true);
+                operationCount++;
+            } catch (...) {
+                // Expected - server may not be running
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    });
+
+    starter.join();
+    stopper.join();
+
+    // Should have completed without deadlock
+    EXPECT_GT(operationCount.load(), 0);
+}

@@ -184,50 +184,50 @@ TEST_F(TEATest, XXTEADifferentSizes) {
     expectEqualVectors(decrypted_large, large);
 }
 
-// Test parallel XXTEA implementation
+// Test parallel XXTEA implementation (ECB mode - deprecated but still
+// functional)
 TEST_F(TEATest, XXTEAParallel) {
     // Create large data for parallel processing
     std::vector<uint32_t> large_data(10000);
     std::iota(large_data.begin(), large_data.end(), 0);
 
-    // Encrypt using both regular and parallel versions
-    auto encrypted_regular = xxteaEncrypt(large_data, defaultKey);
+// Note: Parallel version uses ECB mode (different from sequential)
+// Only test self-consistency: parallel encrypt then parallel decrypt
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     auto encrypted_parallel = xxteaEncryptParallel(large_data, defaultKey);
 
-    // Results should match regardless of implementation
-    expectEqualVectors(encrypted_parallel, encrypted_regular);
+    // Verify encryption changed the data
+    EXPECT_NE(encrypted_parallel, large_data);
 
-    // Decrypt using both regular and parallel versions
-    auto decrypted_regular = xxteaDecrypt(encrypted_regular, defaultKey);
+    // Decrypt using parallel version - should recover original data
     auto decrypted_parallel =
         xxteaDecryptParallel(encrypted_parallel, defaultKey);
+#pragma GCC diagnostic pop
 
-    // Decrypted results should match the original data
-    expectEqualVectors(decrypted_regular, large_data);
+    // Decrypted result should match original data
     expectEqualVectors(decrypted_parallel, large_data);
 }
 
-// Test with custom thread count
+// Test with custom thread count (ECB mode - deprecated)
 TEST_F(TEATest, XXTEACustomThreadCount) {
     std::vector<uint32_t> data(5000);
     std::iota(data.begin(), data.end(), 0);
 
-    // Try with different thread counts
-    auto encrypted_2threads = xxteaEncryptParallel(data, defaultKey, 2);
-    auto encrypted_4threads = xxteaEncryptParallel(data, defaultKey, 4);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    // Encrypt with 4 threads
+    auto encrypted = xxteaEncryptParallel(data, defaultKey, 4);
 
-    // Results should match regardless of thread count
-    expectEqualVectors(encrypted_2threads, encrypted_4threads);
+    // Verify encryption changed the data
+    EXPECT_NE(encrypted, data);
 
-    // Decrypt with different thread counts
-    auto decrypted_2threads =
-        xxteaDecryptParallel(encrypted_2threads, defaultKey, 2);
-    auto decrypted_4threads =
-        xxteaDecryptParallel(encrypted_4threads, defaultKey, 4);
+    // Decrypt with same thread count - should recover original
+    auto decrypted = xxteaDecryptParallel(encrypted, defaultKey, 4);
+#pragma GCC diagnostic pop
 
-    // Decrypted results should match the original data
-    expectEqualVectors(decrypted_2threads, data);
-    expectEqualVectors(decrypted_4threads, data);
+    // Decrypted result should match original data
+    expectEqualVectors(decrypted, data);
 }
 
 // Test byte conversion functions
@@ -353,23 +353,13 @@ TEST_F(TEATest, PerformanceTest) {
     spdlog::info("Regular XXTEA encryption of 100,000 integers took {} ms",
                  duration);
 
-    // Measure time for parallel XXTEA
-    start = std::chrono::high_resolution_clock::now();
-    auto encrypted_parallel = xxteaEncryptParallel(large_data, defaultKey);
-    end = std::chrono::high_resolution_clock::now();
-    auto duration_parallel =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-            .count();
+    // Verify regular encryption/decryption works
+    auto decrypted = xxteaDecrypt(encrypted, defaultKey);
+    expectEqualVectors(decrypted, large_data);
 
-    spdlog::info("Parallel XXTEA encryption of 100,000 integers took {} ms",
-                 duration_parallel);
-
-    spdlog::info(
-        "Speedup factor: {}x",
-        (duration > 0 ? static_cast<double>(duration) / duration_parallel : 0));
-
-    // Verify results match
-    expectEqualVectors(encrypted, encrypted_parallel);
+    // Performance test only - no comparison between parallel and sequential
+    // as they use different modes (ECB vs standard)
+    spdlog::info("XXTEA encryption/decryption verified successfully");
 }
 
 // Test with large keys (edge of uint32_t range)
@@ -480,6 +470,58 @@ TEST_F(TEATest, RandomData) {
 
         expectEqualVectors(decrypted_parallel, data);
     }
+}
+
+// Test enhanced key validation with low entropy warning
+TEST_F(TEATest, KeyValidationLowEntropy) {
+    // All same values - should warn but still work
+    std::array<uint32_t, 4> low_entropy_key = {0x11111111, 0x11111111,
+                                               0x11111111, 0x11111111};
+
+    uint32_t v0 = 0x12345678;
+    uint32_t v1 = 0x9ABCDEF0;
+    uint32_t original_v0 = v0;
+    uint32_t original_v1 = v1;
+
+    // Should not throw, just warn
+    EXPECT_NO_THROW(teaEncrypt(v0, v1, low_entropy_key));
+    EXPECT_NO_THROW(teaDecrypt(v0, v1, low_entropy_key));
+
+    // Should still decrypt correctly
+    EXPECT_EQ(v0, original_v0);
+    EXPECT_EQ(v1, original_v1);
+}
+
+// Test that zero key is still rejected
+TEST_F(TEATest, ZeroKeyRejection) {
+    uint32_t v0 = 0x12345678;
+    uint32_t v1 = 0x9ABCDEF0;
+
+    // Zero key should be rejected
+    EXPECT_THROW(teaEncrypt(v0, v1, zeroKey), TEAException);
+    EXPECT_THROW(teaDecrypt(v0, v1, zeroKey), TEAException);
+    EXPECT_THROW(xteaEncrypt(v0, v1, zeroKey), TEAException);
+    EXPECT_THROW(xteaDecrypt(v0, v1, zeroKey), TEAException);
+}
+
+// Test key with good entropy
+TEST_F(TEATest, GoodEntropyKey) {
+    // Key with high entropy (all different bytes)
+    std::array<uint32_t, 4> good_key = {0x12345678, 0x9ABCDEF0, 0xFEDCBA98,
+                                        0x76543210};
+
+    uint32_t v0 = 0xAAAAAAAA;
+    uint32_t v1 = 0xBBBBBBBB;
+    uint32_t original_v0 = v0;
+    uint32_t original_v1 = v1;
+
+    EXPECT_NO_THROW({
+        teaEncrypt(v0, v1, good_key);
+        teaDecrypt(v0, v1, good_key);
+    });
+
+    EXPECT_EQ(v0, original_v0);
+    EXPECT_EQ(v1, original_v1);
 }
 
 // Main function to run all tests

@@ -23,6 +23,58 @@ Description: C++20 coroutine-based generator implementation
 #include <stdexcept>
 #include <type_traits>
 
+namespace atom::async {
+
+/**
+ * @brief CRTP mixin for coroutine handle management
+ *
+ * Provides common destructor, move constructor, and move assignment
+ * for classes that manage a coroutine handle.
+ *
+ * @tparam Derived The derived class (CRTP pattern)
+ * @tparam Handle The coroutine handle type
+ */
+template <typename Derived, typename Handle>
+class CoroutineHandleMixin {
+protected:
+    Handle handle_{nullptr};
+
+    explicit CoroutineHandleMixin(Handle h) noexcept : handle_(h) {}
+    CoroutineHandleMixin() noexcept = default;
+
+    ~CoroutineHandleMixin() {
+        if (handle_) {
+            handle_.destroy();
+        }
+    }
+
+    // Non-copyable
+    CoroutineHandleMixin(const CoroutineHandleMixin&) = delete;
+    CoroutineHandleMixin& operator=(const CoroutineHandleMixin&) = delete;
+
+    // Movable
+    CoroutineHandleMixin(CoroutineHandleMixin&& other) noexcept
+        : handle_(other.handle_) {
+        other.handle_ = nullptr;
+    }
+
+    CoroutineHandleMixin& operator=(CoroutineHandleMixin&& other) noexcept {
+        if (this != &other) {
+            if (handle_) {
+                handle_.destroy();
+            }
+            handle_ = other.handle_;
+            other.handle_ = nullptr;
+        }
+        return *this;
+    }
+
+    [[nodiscard]] Handle& handle() noexcept { return handle_; }
+    [[nodiscard]] const Handle& handle() const noexcept { return handle_; }
+};
+
+}  // namespace atom::async
+
 #ifdef ATOM_USE_BOOST_LOCKS
 #include <boost/thread/lock_guard.hpp>
 #include <boost/thread/mutex.hpp>

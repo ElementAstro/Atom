@@ -1,4 +1,5 @@
 #include "atom/async/parallel.hpp"
+#include "atom/async/execution/thread_utils.hpp"
 
 #include <pybind11/functional.h>
 #include <pybind11/numpy.h>
@@ -179,7 +180,7 @@ PYBIND11_MODULE(parallel, m) {
         The module includes:
           - Parallel: Main parallel algorithms class
           - SimdOps: SIMD-optimized operations
-          - ThreadConfig: Thread configuration and optimization
+          - ThreadUtils: Thread configuration and optimization
           - Task: C++20 coroutine task support
 
         Example:
@@ -212,31 +213,32 @@ PYBIND11_MODULE(parallel, m) {
         }
     });
 
-    // Define ThreadConfig Priority enum
-    py::enum_<atom::async::Parallel::ThreadConfig::Priority>(m,
-                                                             "ThreadPriority",
-                                                             R"pbdoc(
+    // Define ThreadUtils Priority enum
+    py::enum_<atom::async::ThreadUtils::Priority>(m, "ThreadPriority",
+                                                  R"pbdoc(
         Thread priority levels for parallel operations.
 
         Different priority levels affect how the operating system schedules
         the threads used in parallel computations.
         )pbdoc")
-        .value("LOWEST", atom::async::Parallel::ThreadConfig::Priority::Lowest,
+        .value("LOWEST", atom::async::ThreadUtils::Priority::Lowest,
                "Lowest thread priority")
-        .value("LOW", atom::async::Parallel::ThreadConfig::Priority::Low,
-               "Low thread priority")
-        .value("NORMAL", atom::async::Parallel::ThreadConfig::Priority::Normal,
+        .value("BELOW_NORMAL", atom::async::ThreadUtils::Priority::BelowNormal,
+               "Below normal thread priority")
+        .value("NORMAL", atom::async::ThreadUtils::Priority::Normal,
                "Normal thread priority (default)")
-        .value("HIGH", atom::async::Parallel::ThreadConfig::Priority::High,
-               "High thread priority")
-        .value("HIGHEST",
-               atom::async::Parallel::ThreadConfig::Priority::Highest,
+        .value("ABOVE_NORMAL", atom::async::ThreadUtils::Priority::AboveNormal,
+               "Above normal thread priority")
+        .value("HIGHEST", atom::async::ThreadUtils::Priority::Highest,
                "Highest thread priority")
+        .value("TIME_CRITICAL",
+               atom::async::ThreadUtils::Priority::TimeCritical,
+               "Time critical thread priority")
         .export_values();
 
-    // ThreadConfig class binding
-    py::class_<atom::async::Parallel::ThreadConfig>(m, "ThreadConfig",
-                                                    R"pbdoc(
+    // ThreadUtils class binding (replaces ThreadConfig)
+    py::class_<atom::async::ThreadUtils>(m, "ThreadUtils",
+                                         R"pbdoc(
         Thread configuration and optimization utilities.
 
         This class provides platform-specific thread optimization functions
@@ -244,7 +246,7 @@ PYBIND11_MODULE(parallel, m) {
         in parallel computations.
         )pbdoc")
         .def_static("set_thread_affinity",
-                    &atom::async::Parallel::ThreadConfig::setThreadAffinity,
+                    &atom::async::ThreadUtils::setThreadAffinity,
                     py::arg("cpu_id"),
                     R"pbdoc(
             Set the CPU affinity for the current thread.
@@ -256,11 +258,11 @@ PYBIND11_MODULE(parallel, m) {
                 bool: True if successful, False otherwise
 
             Examples:
-                >>> ThreadConfig.set_thread_affinity(0)  # Bind to CPU core 0
+                >>> ThreadUtils.set_thread_affinity(0)  # Bind to CPU core 0
                 True
             )pbdoc")
         .def_static("set_thread_priority",
-                    &atom::async::Parallel::ThreadConfig::setThreadPriority,
+                    &atom::async::ThreadUtils::setThreadPriority,
                     py::arg("priority"),
                     R"pbdoc(
             Set the priority for the current thread.
@@ -272,7 +274,7 @@ PYBIND11_MODULE(parallel, m) {
                 bool: True if successful, False otherwise
 
             Examples:
-                >>> ThreadConfig.set_thread_priority(ThreadPriority.HIGH)
+                >>> ThreadUtils.set_thread_priority(ThreadPriority.HIGHEST)
                 True
             )pbdoc");
 

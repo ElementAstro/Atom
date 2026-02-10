@@ -1,5 +1,6 @@
-#include "atom/connection/async_tcpclient.hpp"
-#include "atom/connection/async_sockethub.hpp"
+#include "atom/connection/tcp/async_tcpclient.hpp"
+#include "atom/connection/shared/async_sockethub.hpp"
+#include "atom/connection/tcp/tcp_common.hpp"
 
 #include <chrono>
 #include <ctime>

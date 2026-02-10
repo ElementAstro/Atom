@@ -43,9 +43,12 @@ protected:
 
     // Helper to verify path validity
     bool isValidPath(const std::vector<Point>& path, const GridMap& map,
-                     const Point& start, const Point& goal, bool allowLargeJumps = false) {
-        if (path.empty()) return false;
-        if (path.front() != start || path.back() != goal) return false;
+                     const Point& start, const Point& goal,
+                     bool allowLargeJumps = false) {
+        if (path.empty())
+            return false;
+        if (path.front() != start || path.back() != goal)
+            return false;
 
         for (const auto& point : path) {
             if (!map.isValid(point) || map.hasObstacle(point)) {
@@ -56,9 +59,10 @@ protected:
         // Check path continuity (more lenient for smoothed paths)
         if (!allowLargeJumps) {
             for (size_t i = 1; i < path.size(); ++i) {
-                auto diff = path[i] - path[i-1];
+                auto diff = path[i] - path[i - 1];
                 int distance = std::abs(diff.x) + std::abs(diff.y);
-                if (distance > 2) return false; // Allow diagonal movement
+                if (distance > 2)
+                    return false;  // Allow diagonal movement
             }
         }
 
@@ -107,12 +111,12 @@ TEST_F(PathfindingTest, GridMapNeighbors) {
     Point center{2, 2};
 
     auto neighbors = map.neighbors(center);
-    EXPECT_EQ(neighbors.size(), 8); // 8-directional movement
+    EXPECT_EQ(neighbors.size(), 8);  // 8-directional movement
 
     // Test corner case
     Point corner{0, 0};
     auto cornerNeighbors = map.neighbors(corner);
-    EXPECT_EQ(cornerNeighbors.size(), 3); // Only 3 valid neighbors
+    EXPECT_EQ(cornerNeighbors.size(), 3);  // Only 3 valid neighbors
 }
 
 // Test heuristic functions
@@ -124,10 +128,11 @@ TEST_F(PathfindingTest, HeuristicFunctions) {
     EXPECT_FLOAT_EQ(heuristics::euclidean(a, b), 5.0f);
     EXPECT_FLOAT_EQ(heuristics::zero(a, b), 0.0f);
 
-    // Diagonal heuristic should be between Manhattan and Euclidean
+    // Diagonal heuristic (Chebyshev) should be less than or equal to Euclidean
+    // and Manhattan
     float diagonal = heuristics::diagonal(a, b);
-    EXPECT_GT(diagonal, heuristics::euclidean(a, b));
-    EXPECT_LT(diagonal, heuristics::manhattan(a, b));
+    EXPECT_LE(diagonal, heuristics::euclidean(a, b));
+    EXPECT_LE(diagonal, heuristics::manhattan(a, b));
 }
 
 // Test A* pathfinding
@@ -176,7 +181,8 @@ TEST_F(PathfindingTest, BidirectionalSearch) {
     Point start{0, 0};
     Point goal{4, 4};
 
-    auto path = PathFinder::findBidirectionalPath(map, start, goal, heuristics::manhattan);
+    auto path = PathFinder::findBidirectionalPath(map, start, goal,
+                                                  heuristics::manhattan);
 
     ASSERT_TRUE(path.has_value());
     EXPECT_TRUE(isValidPath(*path, map, start, goal));
@@ -189,10 +195,10 @@ TEST_F(PathfindingTest, GridPathConvenience) {
     Point goal{4, 4};
 
     // Test different heuristics
-    auto pathManhattan = PathFinder::findGridPath(map, start, goal,
-        PathFinder::HeuristicType::Manhattan);
-    auto pathEuclidean = PathFinder::findGridPath(map, start, goal,
-        PathFinder::HeuristicType::Euclidean);
+    auto pathManhattan = PathFinder::findGridPath(
+        map, start, goal, PathFinder::HeuristicType::Manhattan);
+    auto pathEuclidean = PathFinder::findGridPath(
+        map, start, goal, PathFinder::HeuristicType::Euclidean);
 
     ASSERT_TRUE(pathManhattan.has_value());
     ASSERT_TRUE(pathEuclidean.has_value());
@@ -228,7 +234,8 @@ TEST_F(PathfindingTest, PathSmoothing) {
     auto smoothedPath = PathFinder::smoothPath(*path, map);
 
     // Smoothed path should be valid and potentially shorter
-    EXPECT_TRUE(isValidPath(smoothedPath, map, start, goal, true)); // Allow large jumps for smoothed paths
+    EXPECT_TRUE(isValidPath(smoothedPath, map, start, goal,
+                            true));  // Allow large jumps for smoothed paths
     EXPECT_LE(smoothedPath.size(), path->size());
 }
 

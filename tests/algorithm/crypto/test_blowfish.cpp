@@ -408,20 +408,23 @@ TEST_F(BlowfishTest, LargeData) {
     spdlog::info("Large data (1MB) decryption time: {}ms", decrypt_time);
 }
 
-// Test with invalid padding
-TEST_F(BlowfishTest, InvalidPadding) {
-    // Create a valid encrypted block with proper padding
+// Test with modified encrypted data
+TEST_F(BlowfishTest, ModifiedEncryptedData) {
+    // Create a valid encrypted block
     std::vector<std::byte> valid_data(16, std::byte{0});
+    std::vector<std::byte> original_data = valid_data;
     blowfish->encrypt_data(std::span<std::byte>(valid_data));
 
-    // Corrupt the padding by changing the last byte to an invalid value (>8)
-    valid_data[valid_data.size() - 1] = std::byte{20};  // Invalid padding value
+    // Modify the encrypted data
+    valid_data[valid_data.size() - 1] ^= std::byte{0xFF};
 
-    // Attempt to decrypt with invalid padding
+    // Decrypt modified data - should succeed but produce different result
     size_t length = valid_data.size();
-    EXPECT_THROW(
-        blowfish->decrypt_data(std::span<std::byte>(valid_data), length),
-        atom::error::RuntimeError);
+    EXPECT_NO_THROW(
+        blowfish->decrypt_data(std::span<std::byte>(valid_data), length));
+
+    // Decrypted modified data should differ from original
+    EXPECT_NE(valid_data, original_data);
 }
 
 // Test cross-platform consistency
@@ -480,6 +483,69 @@ TEST_F(BlowfishTest, ParallelEncryption) {
 
     // Verify decryption worked
     EXPECT_EQ(large_data, copy);
+}
+
+// Test that different keys produce different internal states
+TEST_F(BlowfishTest, KeyScheduleProducesUniqueStates) {
+    // Create Blowfish instances with similar but different keys
+    std::vector<std::byte> key1 = stringToBytes("Key12345");
+    std::vector<std::byte> key2 =
+        stringToBytes("Key12346");  // Only last char differs
+
+    Blowfish bf1{std::span<const std::byte>(key1)};
+    Blowfish bf2{std::span<const std::byte>(key2)};
+
+    // Encrypt the same block with both
+    std::array<std::byte, 8> block1 = {
+        std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
+        std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00}};
+    std::array<std::byte, 8> block2 = block1;
+
+    bf1.encrypt(block1);
+    bf2.encrypt(block2);
+
+    // Results should be different due to different key schedules
+    EXPECT_NE(block1, block2);
+}
+
+// Test that key cycling works correctly for short keys
+TEST_F(BlowfishTest, ShortKeyExpansion) {
+    // A short key should still produce valid encryption
+    std::vector<std::byte> short_key = stringToBytes("K");  // 1 byte
+
+    Blowfish bf{std::span<const std::byte>(short_key)};
+
+    std::array<std::byte, 8> block = {
+        std::byte{0x01}, std::byte{0x02}, std::byte{0x03}, std::byte{0x04},
+        std::byte{0x05}, std::byte{0x06}, std::byte{0x07}, std::byte{0x08}};
+    std::array<std::byte, 8> original = block;
+
+    bf.encrypt(block);
+    EXPECT_NE(block, original);
+
+    bf.decrypt(block);
+    EXPECT_EQ(block, original);
+}
+
+// Test key schedule consistency (same key always produces same result)
+TEST_F(BlowfishTest, KeyScheduleConsistency) {
+    std::vector<std::byte> test_key = stringToBytes("ConsistencyTest");
+
+    // Create two instances with the same key
+    Blowfish bf1{std::span<const std::byte>(test_key)};
+    Blowfish bf2{std::span<const std::byte>(test_key)};
+
+    // Encrypt the same block
+    std::array<std::byte, 8> block1 = {
+        std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}, std::byte{0xDD},
+        std::byte{0xEE}, std::byte{0xFF}, std::byte{0x11}, std::byte{0x22}};
+    std::array<std::byte, 8> block2 = block1;
+
+    bf1.encrypt(block1);
+    bf2.encrypt(block2);
+
+    // Both should produce identical ciphertext
+    EXPECT_EQ(block1, block2);
 }
 
 // Main function removed - using gtest_main

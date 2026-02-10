@@ -6,7 +6,7 @@
 #include <vector>
 
 // 引入 EventStack 头文件
-#include "../atom/async/eventstack.hpp"
+#include "atom/async/messaging/eventstack.hpp"
 
 // 用于测试的简单事件类
 class Event {

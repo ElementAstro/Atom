@@ -4,10 +4,12 @@
 #include <array>
 #include <cmath>
 #include <concepts>
+#include <numeric>
 #include <random>
 #include <vector>
 
 #include "../rust_numeric.hpp"
+#include "noise_base.hpp"
 
 namespace atom::algorithm {
 
@@ -20,31 +22,19 @@ namespace atom::algorithm {
  * - Higher dimensional scalability
  * - More natural-looking results
  */
-class SimplexNoise {
+class SimplexNoise : public NoiseBase {
 public:
     /**
      * @brief Construct a new Simplex Noise generator
      * @param seed Random seed for permutation table
      */
-    explicit SimplexNoise(u32 seed = std::default_random_engine::default_seed) {
-        // Initialize permutation table
-        perm_.resize(512);
-        std::iota(perm_.begin(), perm_.begin() + 256, 0);
-
-        std::default_random_engine engine(seed);
-        std::ranges::shuffle(std::span(perm_.begin(), perm_.begin() + 256),
-                             engine);
-
-        // Duplicate the permutation table
-        std::ranges::copy(std::span(perm_.begin(), perm_.begin() + 256),
-                          perm_.begin() + 256);
-
-        // Initialize gradient table for 2D
+    explicit SimplexNoise(u32 seed = std::default_random_engine::default_seed)
+        : NoiseBase(seed) {
+        // Initialize gradient tables using inherited perm_
         for (usize i = 0; i < 256; ++i) {
             grad2_[i] = GRAD2[perm_[i] % 8];
         }
 
-        // Initialize gradient table for 3D
         for (usize i = 0; i < 256; ++i) {
             grad3_[i] = GRAD3[perm_[i] % 12];
         }
@@ -293,7 +283,7 @@ public:
     }
 
 private:
-    std::vector<i32> perm_;
+    // perm_ is inherited from NoiseBase
     std::array<std::array<f64, 2>, 256> grad2_;
     std::array<std::array<f64, 3>, 256> grad3_;
 
@@ -323,8 +313,8 @@ private:
          {{0, -1, -1}}}};
 
     template <std::floating_point T>
-    static constexpr auto dot(const std::array<f64, 2>& g, T x,
-                              T y) noexcept -> T {
+    static constexpr auto dot(const std::array<f64, 2>& g, T x, T y) noexcept
+        -> T {
         return static_cast<T>(g[0]) * x + static_cast<T>(g[1]) * y;
     }
 

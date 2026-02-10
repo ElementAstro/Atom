@@ -22,7 +22,7 @@
  * @date 2024
  */
 
-#include "atom/async/message_bus.hpp"
+#include "atom/async/messaging/message_bus.hpp"
 
 #include <atomic>
 #include <chrono>

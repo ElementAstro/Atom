@@ -2,10 +2,10 @@
 #include <gtest/gtest.h>
 #include <spdlog/spdlog.h>
 #include <chrono>
-#include <string>
-#include <vector>
-#include <thread>
 #include <future>
+#include <string>
+#include <thread>
+#include <vector>
 #include "atom/algorithm/matrix_compress.hpp"
 #include "atom/error/exception.hpp"
 
@@ -23,7 +23,8 @@ protected:
     }
 
     // Helper to create a matrix with specific pattern
-    MatrixCompressor::Matrix createPatternMatrix(int rows, int cols, const std::string& pattern) {
+    MatrixCompressor::Matrix createPatternMatrix(int rows, int cols,
+                                                 const std::string& pattern) {
         MatrixCompressor::Matrix matrix(rows, std::vector<char>(cols));
         size_t patternIndex = 0;
         for (int i = 0; i < rows; ++i) {
@@ -39,7 +40,7 @@ protected:
     MatrixCompressor::Matrix createCompressibleMatrix(int rows, int cols) {
         MatrixCompressor::Matrix matrix(rows, std::vector<char>(cols));
         char currentChar = 'A';
-        int runLength = std::max(10, (rows * cols) / 20); // Large runs
+        int runLength = std::max(10, (rows * cols) / 20);  // Large runs
         int count = 0;
 
         for (int i = 0; i < rows; ++i) {
@@ -73,7 +74,8 @@ protected:
     void expectMatricesEqual(const MatrixCompressor::Matrix& expected,
                              const MatrixCompressor::Matrix& actual) {
         ASSERT_EQ(expected.size(), actual.size());
-        if (expected.empty()) return;
+        if (expected.empty())
+            return;
 
         ASSERT_EQ(expected[0].size(), actual[0].size());
         for (size_t i = 0; i < expected.size(); ++i) {
@@ -93,7 +95,8 @@ TEST_F(MatrixCompressEnhancedTest, EmptyMatrixHandling) {
     auto compressed = MatrixCompressor::compress(emptyMatrix);
     EXPECT_TRUE(compressed.empty());
 
-    // Decompressing empty data with positive dimensions should return zero-filled matrix
+    // Decompressing empty data with positive dimensions should return
+    // zero-filled matrix
     auto decompressed = MatrixCompressor::decompress(compressed, 2, 3);
     EXPECT_EQ(decompressed.size(), 2);
     EXPECT_EQ(decompressed[0].size(), 3);
@@ -143,14 +146,17 @@ TEST_F(MatrixCompressEnhancedTest, LargeMatrixCompression) {
     auto compressed = MatrixCompressor::compress(matrix);
     auto endTime = std::chrono::high_resolution_clock::now();
 
-    auto compressionTime = std::chrono::duration_cast<std::chrono::milliseconds>(
-        endTime - startTime);
+    auto compressionTime =
+        std::chrono::duration_cast<std::chrono::milliseconds>(endTime -
+                                                              startTime);
 
-    spdlog::info("Compressing {}x{} matrix took {} ms", size, size, compressionTime.count());
+    spdlog::info("Compressing {}x{} matrix took {} ms", size, size,
+                 compressionTime.count());
 
     // Verify compression ratio
-    double ratio = MatrixCompressor::calculateCompressionRatio(matrix, compressed);
-    EXPECT_LT(ratio, 0.5); // Should achieve good compression
+    double ratio =
+        MatrixCompressor::calculateCompressionRatio(matrix, compressed);
+    EXPECT_LT(ratio, 0.5);  // Should achieve good compression
 
     // Verify decompression
     auto decompressed = MatrixCompressor::decompress(compressed, size, size);
@@ -172,8 +178,10 @@ TEST_F(MatrixCompressEnhancedTest, ParallelCompressionPerformance) {
     auto compressedPar = MatrixCompressor::compressParallel(matrix, 4);
     auto endPar = std::chrono::high_resolution_clock::now();
 
-    auto seqTime = std::chrono::duration_cast<std::chrono::milliseconds>(endSeq - startSeq);
-    auto parTime = std::chrono::duration_cast<std::chrono::milliseconds>(endPar - startPar);
+    auto seqTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        endSeq - startSeq);
+    auto parTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        endPar - startPar);
 
     spdlog::info("Sequential compression: {} ms, Parallel compression: {} ms",
                  seqTime.count(), parTime.count());
@@ -227,18 +235,21 @@ TEST_F(MatrixCompressEnhancedTest, CompressionRatioCalculations) {
     // Highly compressible matrix
     auto compressible = createCompressibleMatrix(50, 50);
     auto compressedComp = MatrixCompressor::compress(compressible);
-    double ratioComp = MatrixCompressor::calculateCompressionRatio(compressible, compressedComp);
+    double ratioComp = MatrixCompressor::calculateCompressionRatio(
+        compressible, compressedComp);
 
     // Random matrix (low compressibility)
     auto random = createRandomMatrix(50, 50);
     auto compressedRand = MatrixCompressor::compress(random);
-    double ratioRand = MatrixCompressor::calculateCompressionRatio(random, compressedRand);
+    double ratioRand =
+        MatrixCompressor::calculateCompressionRatio(random, compressedRand);
 
     // Compressible matrix should have better ratio
     EXPECT_LT(ratioComp, ratioRand);
 
-    spdlog::info("Compressible matrix ratio: {:.3f}, Random matrix ratio: {:.3f}",
-                 ratioComp, ratioRand);
+    spdlog::info(
+        "Compressible matrix ratio: {:.3f}, Random matrix ratio: {:.3f}",
+        ratioComp, ratioRand);
 }
 
 // Test matrix generation with different charsets
@@ -267,8 +278,10 @@ TEST_F(MatrixCompressEnhancedTest, DownsamplingFactors) {
     for (int factor = 2; factor <= 4; ++factor) {
         auto downsampled = MatrixCompressor::downsample(matrix, factor);
 
-        int expectedRows = std::max(1, 8 / factor);
-        int expectedCols = std::max(1, 8 / factor);
+        // Using ceiling division to include edge blocks: (rows + factor - 1) /
+        // factor
+        int expectedRows = std::max(1, (8 + factor - 1) / factor);
+        int expectedCols = std::max(1, (8 + factor - 1) / factor);
 
         EXPECT_EQ(downsampled.size(), expectedRows);
         EXPECT_EQ(downsampled[0].size(), expectedCols);
@@ -345,10 +358,12 @@ TEST_F(MatrixCompressEnhancedTest, LargeFileIO) {
     std::string filename = "/tmp/large_matrix_test.dat";
 
     // Save and load
-    EXPECT_NO_THROW(MatrixCompressor::saveCompressedToFile(largeData, filename));
+    EXPECT_NO_THROW(
+        MatrixCompressor::saveCompressedToFile(largeData, filename));
 
     MatrixCompressor::CompressedData loaded;
-    EXPECT_NO_THROW(loaded = MatrixCompressor::loadCompressedFromFile(filename));
+    EXPECT_NO_THROW(loaded =
+                        MatrixCompressor::loadCompressedFromFile(filename));
 
     EXPECT_EQ(largeData.size(), loaded.size());
     for (size_t i = 0; i < largeData.size(); ++i) {

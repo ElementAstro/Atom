@@ -7,6 +7,9 @@
 #include <thread>
 #include <vector>
 
+#include "atom/algorithm/common/endian.hpp"
+#include "atom/algorithm/common/parallel.hpp"
+
 #ifdef __cpp_lib_hardware_interference_size
 #ifdef __has_include
 #if __has_include(<new>)
@@ -49,7 +52,39 @@ constexpr i32 SHIFT_11 = 11;
 // Helper function to validate key
 static inline bool isValidKey(const std::array<u32, 4>& key) noexcept {
     // Check if the key is all zeros, which is generally insecure
-    return !(key[0] == 0 && key[1] == 0 && key[2] == 0 && key[3] == 0);
+    if (key[0] == 0 && key[1] == 0 && key[2] == 0 && key[3] == 0) {
+        return false;
+    }
+
+    // Check for low entropy (all same values)
+    if (key[0] == key[1] && key[1] == key[2] && key[2] == key[3]) {
+        spdlog::warn("TEA key has low entropy: all values are identical");
+    }
+
+    // Count unique bytes for basic entropy check
+    std::array<u8, 16> key_bytes{};
+    for (usize i = 0; i < 4; ++i) {
+        key_bytes[i * 4] = static_cast<u8>(key[i] >> 24);
+        key_bytes[i * 4 + 1] = static_cast<u8>(key[i] >> 16);
+        key_bytes[i * 4 + 2] = static_cast<u8>(key[i] >> 8);
+        key_bytes[i * 4 + 3] = static_cast<u8>(key[i]);
+    }
+
+    std::array<bool, 256> seen{};
+    usize unique_count = 0;
+    for (auto byte : key_bytes) {
+        if (!seen[byte]) {
+            seen[byte] = true;
+            ++unique_count;
+        }
+    }
+
+    if (unique_count < 4) {
+        spdlog::warn("TEA key has very low entropy: only {} unique bytes",
+                     unique_count);
+    }
+
+    return true;
 }
 
 // TEA encryption function
@@ -248,8 +283,8 @@ auto xxteaDecryptImpl(std::span<const u32> inputData,
 }
 
 // XTEA encryption function with enhanced security and validation
-auto xteaEncrypt(u32& value0, u32& value1,
-                 const XTEAKey& key) noexcept(false) -> void {
+auto xteaEncrypt(u32& value0, u32& value1, const XTEAKey& key) noexcept(false)
+    -> void {
     try {
         if (!isValidKey(key)) {
             spdlog::error("Invalid key provided for XTEA encryption");
@@ -273,8 +308,8 @@ auto xteaEncrypt(u32& value0, u32& value1,
 }
 
 // XTEA decryption function with enhanced security and validation
-auto xteaDecrypt(u32& value0, u32& value1,
-                 const XTEAKey& key) noexcept(false) -> void {
+auto xteaDecrypt(u32& value0, u32& value1, const XTEAKey& key) noexcept(false)
+    -> void {
     try {
         if (!isValidKey(key)) {
             spdlog::error("Invalid key provided for XTEA decryption");

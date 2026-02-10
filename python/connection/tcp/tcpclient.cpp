@@ -1,4 +1,5 @@
-#include "atom/connection/async_tcpclient.hpp"
+#include "atom/connection/tcp/async_tcpclient.hpp"
+#include "atom/connection/tcp/tcp_common.hpp"
 
 #include <pybind11/chrono.h>
 #include <pybind11/functional.h>

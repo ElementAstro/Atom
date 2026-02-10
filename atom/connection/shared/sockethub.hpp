@@ -1,12 +1,13 @@
 #ifndef ATOM_CONNECTION_SOCKETHUB_HPP
 #define ATOM_CONNECTION_SOCKETHUB_HPP
 
-#include <chrono>
 #include <concepts>
 #include <functional>
 #include <memory>
 #include <string_view>
 #include <vector>
+
+#include "socket_types.hpp"
 
 namespace atom::connection {
 
@@ -23,17 +24,7 @@ concept ClientEventHandler =
         { h(clientId, clientAddr) } -> std::same_as<void>;
     };
 
-/**
- * @struct ClientInfo
- * @brief Information about a connected client
- */
-struct ClientInfo {
-    int id;
-    std::string address;
-    std::chrono::steady_clock::time_point connectedTime;
-    uint64_t bytesReceived = 0;
-    uint64_t bytesSent = 0;
-};
+// ClientInfo is now imported from socket_types.hpp
 
 /**
  * @class SocketHub

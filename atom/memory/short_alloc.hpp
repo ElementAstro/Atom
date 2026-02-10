@@ -147,8 +147,8 @@ public:
             0};  ///< Number of block coalescing operations
         std::atomic<size_t> splitOperations{
             0};  ///< Number of block split operations
-        std::atomic<size_t> memoryLeaks{0};  ///< Detected memory leaks
-        std::atomic<size_t> corruptionDetections{
+        mutable std::atomic<size_t> memoryLeaks{0};  ///< Detected memory leaks
+        mutable std::atomic<size_t> corruptionDetections{
             0};  ///< Memory corruption detections
         std::atomic<size_t> doubleFreesDetected{0};  ///< Double free detections
 
@@ -211,11 +211,11 @@ public:
             splitOperations.fetch_add(1, std::memory_order_relaxed);
         }
 
-        void recordMemoryLeak() {
+        void recordMemoryLeak() const {
             memoryLeaks.fetch_add(1, std::memory_order_relaxed);
         }
 
-        void recordCorruption() {
+        void recordCorruption() const {
             corruptionDetections.fetch_add(1, std::memory_order_relaxed);
         }
 

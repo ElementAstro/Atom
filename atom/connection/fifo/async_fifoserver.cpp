@@ -10,6 +10,8 @@
 #include <string_view>
 #include <thread>
 
+#include "fifo_platform.hpp"
+
 #ifdef _WIN32
 #include <asio/windows/stream_handle.hpp>
 #else
@@ -18,15 +20,16 @@
 #include <asio/posix/stream_descriptor.hpp>
 #endif
 
-namespace atom::async::connection {
+namespace atom::connection {
 
-class FifoServer::Impl {
+class AsyncFifoServer::Impl {
 public:
     explicit Impl(std::string_view fifoPath)
         : fifoPath_(fifoPath),
           io_context_(),
 #ifdef _WIN32
           pipe_(io_context_),
+          pipeHandle_(INVALID_HANDLE_VALUE),
 #else
           pipe_(io_context_),
 #endif
@@ -35,7 +38,14 @@ public:
 
     ~Impl() {
         stop();
+#ifdef _WIN32
+        if (pipeHandle_ != INVALID_HANDLE_VALUE) {
+            DisconnectNamedPipe(pipeHandle_);
+            CloseHandle(pipeHandle_);
+        }
+#else
         std::filesystem::remove(fifoPath_);
+#endif
     }
 
     void start(MessageHandler handler) {
@@ -47,7 +57,27 @@ public:
         running_ = true;
 
 #ifdef _WIN32
-        // Windows-specific implementation for named pipes
+        // Create Windows named pipe
+        std::string pipeName =
+            "\\\\.\\pipe\\" +
+            std::filesystem::path(fifoPath_).filename().string();
+        pipeHandle_ = CreateNamedPipeA(
+            pipeName.c_str(), PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+            PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+            PIPE_UNLIMITED_INSTANCES,
+            4096,  // Output buffer size
+            4096,  // Input buffer size
+            0,     // Default timeout
+            nullptr);
+
+        if (pipeHandle_ == INVALID_HANDLE_VALUE) {
+            spdlog::error("Failed to create named pipe: {}", GetLastError());
+            throw std::runtime_error("Failed to create named pipe");
+        }
+
+        // Assign to ASIO stream handle
+        pipe_.assign(pipeHandle_);
+        spdlog::info("Windows named pipe created: {}", pipeName);
 #else
         if (mkfifo(fifoPath_.c_str(), 0666) == -1 && errno != EEXIST) {
             spdlog::error("Failed to create FIFO: {}", strerror(errno));
@@ -152,6 +182,7 @@ private:
     asio::io_context io_context_;
 #ifdef _WIN32
     asio::windows::stream_handle pipe_;
+    HANDLE pipeHandle_;
 #else
     asio::posix::stream_descriptor pipe_;
 #endif
@@ -163,35 +194,37 @@ private:
     bool running_ = false;
 };
 
-FifoServer::FifoServer(std::string_view fifoPath)
+AsyncFifoServer::AsyncFifoServer(std::string_view fifoPath)
     : pimpl_(std::make_unique<Impl>(fifoPath)) {}
 
-FifoServer::~FifoServer() = default;
+AsyncFifoServer::~AsyncFifoServer() = default;
 
-void FifoServer::start(MessageHandler handler) { pimpl_->start(handler); }
+void AsyncFifoServer::start(MessageHandler handler) { pimpl_->start(handler); }
 
-void FifoServer::stop() { pimpl_->stop(); }
+void AsyncFifoServer::stop() { pimpl_->stop(); }
 
-void FifoServer::setClientHandler(ClientHandler handler) {
+void AsyncFifoServer::setClientHandler(ClientHandler handler) {
     pimpl_->setClientHandler(std::move(handler));
 }
 
-void FifoServer::setErrorHandler(ErrorHandler handler) {
+void AsyncFifoServer::setErrorHandler(ErrorHandler handler) {
     pimpl_->setErrorHandler(std::move(handler));
 }
 
-auto FifoServer::write(std::string_view data) -> std::future<bool> {
+auto AsyncFifoServer::write(std::string_view data) -> std::future<bool> {
     return pimpl_->write(data);
 }
 
-auto FifoServer::writeSync(std::string_view data) -> bool {
+auto AsyncFifoServer::writeSync(std::string_view data) -> bool {
     return write(data).get();
 }
 
-bool FifoServer::isRunning() const { return pimpl_->isRunning(); }
+bool AsyncFifoServer::isRunning() const { return pimpl_->isRunning(); }
 
-auto FifoServer::getPath() const -> std::string { return pimpl_->getPath(); }
+auto AsyncFifoServer::getPath() const -> std::string {
+    return pimpl_->getPath();
+}
 
-void FifoServer::cancel() { pimpl_->cancel(); }
+void AsyncFifoServer::cancel() { pimpl_->cancel(); }
 
-}  // namespace atom::async::connection
+}  // namespace atom::connection

@@ -244,8 +244,8 @@ public:
      * @return Vector of device IDs
      */
     [[nodiscard]] static auto getDevices(
-        cl_platform_id platform,
-        DeviceType device_type = DeviceType::ALL) -> std::vector<cl_device_id>;
+        cl_platform_id platform, DeviceType device_type = DeviceType::ALL)
+        -> std::vector<cl_device_id>;
 
     /**
      * @brief Get device information
@@ -268,8 +268,9 @@ public:
      * @param device Device ID
      * @return CommandQueue wrapper
      */
-    [[nodiscard]] static auto createCommandQueue(
-        const Context& context, cl_device_id device) -> CommandQueue;
+    [[nodiscard]] static auto createCommandQueue(const Context& context,
+                                                 cl_device_id device)
+        -> CommandQueue;
 
     /**
      * @brief Create buffer
@@ -328,16 +329,69 @@ public:
      * @param kernel_source OpenCL kernel source code
      * @param kernel_name Name of the kernel function
      * @param global_work_size Global work size
-     * @param local_work_size Local work size (optional)
+     * @param local_work_size Local work size (optional, 0 for auto)
      * @param args Kernel arguments
      * @return true if execution succeeded
+     * @note This is a simplified interface. For complex kernels with multiple
+     *       buffers, use Platform::buildKernel() and manage buffers manually.
      */
     template <typename... Args>
     [[nodiscard]] auto executeKernel(const std::string& kernel_source,
                                      const std::string& kernel_name,
                                      usize global_work_size,
                                      usize local_work_size,
-                                     Args&&... args) -> bool;
+                                     [[maybe_unused]] Args&&... args) -> bool {
+        if (!initialized_) {
+            spdlog::error("ComputeManager not initialized");
+            return false;
+        }
+
+        // Check kernel cache
+        auto it = kernel_cache_.find(kernel_name);
+        if (it == kernel_cache_.end()) {
+            auto kernel = Platform::buildKernel(context_.get(), device_,
+                                                kernel_source, kernel_name);
+            if (!kernel) {
+                spdlog::error("Failed to build kernel: {}", kernel_name);
+                return false;
+            }
+            kernel_cache_.emplace(kernel_name, std::move(*kernel));
+        }
+
+        cl_kernel kernel = kernel_cache_.at(kernel_name).get();
+
+        // Set kernel arguments (simplified: assumes scalar args only)
+        // For buffer args, users should use the manual API
+        [[maybe_unused]] usize arg_index = 0;
+        [[maybe_unused]] auto set_arg = [&]([[maybe_unused]] auto&& arg) {
+            using ArgType = std::decay_t<decltype(arg)>;
+            cl_int err = clSetKernelArg(kernel, static_cast<cl_uint>(arg_index),
+                                        sizeof(ArgType), &arg);
+            if (err != CL_SUCCESS) {
+                spdlog::error("Failed to set kernel arg {}: error {}",
+                              arg_index, err);
+            }
+            ++arg_index;
+        };
+        (set_arg(std::forward<Args>(args)), ...);
+
+        // Execute kernel
+        size_t global = global_work_size;
+        size_t local = local_work_size > 0 ? local_work_size : 0;
+        size_t* local_ptr = local > 0 ? &local : nullptr;
+
+        cl_int err =
+            clEnqueueNDRangeKernel(queue_.get(), kernel, 1, nullptr, &global,
+                                   local_ptr, 0, nullptr, nullptr);
+        if (err != CL_SUCCESS) {
+            spdlog::error("Failed to enqueue kernel: error {}", err);
+            return false;
+        }
+
+        // Wait for completion
+        err = clFinish(queue_.get());
+        return err == CL_SUCCESS;
+    }
 
     /**
      * @brief Get singleton instance

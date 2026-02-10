@@ -11,6 +11,8 @@
 #include <string_view>
 #include <vector>
 
+namespace atom::connection {
+
 /**
  * @class TTYBase
  * @brief Provides a base class for handling TTY (teletypewriter) connections.
@@ -245,5 +247,7 @@ auto makeByteSpan(Container& container) {
         reinterpret_cast<uint8_t*>(std::ranges::data(container)),
         std::ranges::size(container) * sizeof(value_type));
 }
+
+}  // namespace atom::connection
 
 #endif  // ATOM_CONNECTION_TTYBASE_HPP

@@ -1,8 +1,25 @@
+/*
+ * lodash.hpp
+ *
+ * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ */
+
+/*************************************************
+
+Date: 2024-1-1
+
+Description: Lodash-style utilities for function call control
+             (Debounce, Throttle)
+
+**************************************************/
+
 #ifndef ATOM_ASYNC_UTILS_LODASH_HPP
 #define ATOM_ASYNC_UTILS_LODASH_HPP
+
 /**
- * @class Debounce
- * @brief A class that implements a debouncing mechanism for function calls.
+ * @file lodash.hpp
+ * @brief Provides Debounce and Throttle classes for controlling function
+ *        invocation frequency, similar to Lodash's debounce/throttle utilities.
  */
 #include <chrono>
 #include <condition_variable>  // For std::condition_variable_any

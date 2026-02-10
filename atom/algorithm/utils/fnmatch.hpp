@@ -12,8 +12,8 @@ Description: Enhanced Python-Like fnmatch for C++
 
 **************************************************/
 
-#ifndef ATOM_SYSTEM_FNMATCH_HPP
-#define ATOM_SYSTEM_FNMATCH_HPP
+#ifndef ATOM_ALGORITHM_UTILS_FNMATCH_HPP
+#define ATOM_ALGORITHM_UTILS_FNMATCH_HPP
 
 #include <concepts>
 #include <exception>
@@ -109,8 +109,8 @@ template <StringLike T1, StringLike T2>
  */
 template <std::ranges::input_range Range, StringLike Pattern>
     requires StringLike<std::ranges::range_value_t<Range>>
-[[nodiscard]] auto filter(const Range& names, Pattern&& pattern,
-                          int flags = 0) -> bool;
+[[nodiscard]] auto filter(const Range& names, Pattern&& pattern, int flags = 0)
+    -> bool;
 
 /**
  * @brief Filters a range of strings based on multiple patterns.
@@ -127,7 +127,7 @@ template <std::ranges::input_range Range, StringLike Pattern>
  */
 template <std::ranges::input_range Range, std::ranges::input_range PatternRange>
     requires StringLike<std::ranges::range_value_t<Range>> &&
-                 StringLike<std::ranges::range_value_t<PatternRange>>
+             StringLike<std::ranges::range_value_t<PatternRange>>
 [[nodiscard]] auto filter(const Range& names, const PatternRange& patterns,
                           int flags = 0, bool use_parallel = true)
     -> std::vector<std::ranges::range_value_t<Range>>;
@@ -400,7 +400,7 @@ auto filter(const Range& names, Pattern&& pattern, int flags) -> bool {
 
 template <std::ranges::input_range Range, std::ranges::input_range PatternRange>
     requires StringLike<std::ranges::range_value_t<Range>> &&
-                 StringLike<std::ranges::range_value_t<PatternRange>>
+             StringLike<std::ranges::range_value_t<PatternRange>>
 auto filter(const Range& names, const PatternRange& patterns, int flags,
             bool use_parallel)
     -> std::vector<std::ranges::range_value_t<Range>> {
@@ -458,4 +458,4 @@ auto filter(const Range& names, const PatternRange& patterns, int flags,
 
 }  // namespace atom::algorithm
 
-#endif  // ATOM_SYSTEM_FNMATCH_HPP
+#endif  // ATOM_ALGORITHM_UTILS_FNMATCH_HPP

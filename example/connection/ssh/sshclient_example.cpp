@@ -17,6 +17,11 @@ Demonstrates all features including:
 - File info and rename operations
 - Error handling
 
+Performance Notes:
+- Command output uses 4KB buffer for better throughput
+- File transfers use 64KB buffer for optimal performance
+- All SFTP resources are RAII-managed for exception safety
+
 Note: Requires libssh library to be available.
 
 **************************************************/

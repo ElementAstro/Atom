@@ -4,7 +4,7 @@
 #include <thread>
 #include <vector>
 
-#include "atom/async/eventstack.hpp"
+#include "atom/async/messaging/eventstack.hpp"
 
 namespace atom::async {
 

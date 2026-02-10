@@ -40,7 +40,7 @@ public:
 
     /**
      * @brief Calculate the median of a dataset
-     * @param data Input data (will be modified for sorting)
+     * @param data Input data (will be partially reordered)
      * @return Median value
      */
     [[nodiscard]] static auto median(std::vector<T> data) -> T {
@@ -48,13 +48,19 @@ public:
             return T{0};
         }
 
-        std::sort(data.begin(), data.end());
         usize n = data.size();
+        auto mid = data.begin() + static_cast<std::ptrdiff_t>(n / 2);
+
+        // Use nth_element for O(n) average complexity instead of O(n log n)
+        // sort
+        std::nth_element(data.begin(), mid, data.end());
 
         if (n % 2 == 0) {
-            return (data[n / 2 - 1] + data[n / 2]) / T{2};
+            // For even size, need to find max of left partition
+            auto max_left = std::max_element(data.begin(), mid);
+            return (*max_left + *mid) / T{2};
         } else {
-            return data[n / 2];
+            return *mid;
         }
     }
 
@@ -116,8 +122,9 @@ public:
      * @param sample_correction Whether to use sample correction
      * @return Standard deviation
      */
-    [[nodiscard]] static auto standardDeviation(
-        std::span<const T> data, bool sample_correction = true) -> T {
+    [[nodiscard]] static auto standardDeviation(std::span<const T> data,
+                                                bool sample_correction = true)
+        -> T {
         return std::sqrt(variance(data, sample_correction));
     }
 
@@ -241,8 +248,8 @@ public:
      * @param percentile Percentile to calculate (0-100)
      * @return Percentile value
      */
-    [[nodiscard]] static auto percentile(std::vector<T> data,
-                                         T percentile) -> T {
+    [[nodiscard]] static auto percentile(std::vector<T> data, T percentile)
+        -> T {
         if (data.empty() || percentile < T{0} || percentile > T{100}) {
             return T{0};
         }
@@ -286,8 +293,8 @@ public:
      * @return Vector of outlier values
      */
     [[nodiscard]] static auto detectOutliers(std::vector<T> data,
-                                             T multiplier = T{
-                                                 1.5}) -> std::vector<T> {
+                                             T multiplier = T{1.5})
+        -> std::vector<T> {
         if (data.size() < 4) {
             return {};
         }

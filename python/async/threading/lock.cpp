@@ -12,8 +12,33 @@ namespace py = pybind11;
 using namespace atom::async;
 
 void init_lock(py::module_& m) {
-    // LockError exception
+    // Register exception classes
     py::register_exception<LockError>(m, "LockError");
+    py::register_exception<AsyncException>(m, "AsyncException");
+
+    // ILock abstract interface
+    py::class_<ILock, std::unique_ptr<ILock>>(m, "ILock",
+                                              R"pbdoc(
+        Abstract interface for all lock types.
+
+        Provides a unified interface for lock/unlock/tryLock operations,
+        allowing polymorphic use of different lock implementations.
+        )pbdoc")
+        .def("lock", &ILock::lock,
+             R"pbdoc(
+             Acquire the lock.
+             )pbdoc")
+        .def("unlock", &ILock::unlock,
+             R"pbdoc(
+             Release the lock.
+             )pbdoc")
+        .def("try_lock", &ILock::tryLock,
+             R"pbdoc(
+             Try to acquire the lock without blocking.
+
+             Returns:
+                 bool: True if the lock was acquired, False otherwise.
+             )pbdoc");
 
     // ScopedLock template for different lock types
     py::class_<ScopedLock<Spinlock>>(m, "ScopedSpinlock",
@@ -606,27 +631,47 @@ void init_lock(py::module_& m) {
                "Automatically select the best lock for the platform")
         .export_values();
 
-    // LockFactory static methods
-    m.def("create_lock", &LockFactory::createLock, py::arg("lock_type"),
-          R"pbdoc(
+    // LockFactory static methods - now returns ILock interface
+    m.def(
+        "create_lock",
+        [](LockFactory::LockType type) {
+            return LockFactory::createLock(type);
+        },
+        py::arg("lock_type"), py::return_value_policy::move,
+        R"pbdoc(
           Create a lock of the specified type.
 
           Args:
               lock_type: The type of lock to create.
 
           Returns:
-              A unique pointer to the created lock.
+              ILock: A lock implementing the ILock interface.
 
           Raises:
               ValueError: If the lock type is invalid or not available.
+
+          Example:
+              >>> lock = create_lock(LockType.SPINLOCK)
+              >>> lock.lock()
+              >>> # critical section
+              >>> lock.unlock()
           )pbdoc");
 
-    m.def("create_optimized_lock", &LockFactory::createOptimizedLock,
-          R"pbdoc(
+    m.def(
+        "create_optimized_lock",
+        []() { return LockFactory::createOptimizedLock(); },
+        py::return_value_policy::move,
+        R"pbdoc(
           Create the most optimal lock implementation for the current platform.
 
           Returns:
-              A unique pointer to the lock optimized for the current platform.
+              ILock: A lock optimized for the current platform.
+
+          Example:
+              >>> lock = create_optimized_lock()
+              >>> if lock.try_lock():
+              ...     # critical section
+              ...     lock.unlock()
           )pbdoc");
 
     // Utility functions for lock performance optimization

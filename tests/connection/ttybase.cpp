@@ -7,7 +7,7 @@
 #include <thread>
 #include <vector>
 
-#include "atom/connection/ttybase.hpp"
+#include "atom/connection/serial/ttybase.hpp"
 
 // Mock system calls for POSIX environment
 #ifdef __linux__
@@ -174,6 +174,8 @@ void reset_mocks() {
 }
 
 #endif  // __linux__
+
+using namespace atom::connection;
 
 namespace atom::connection::test {
 

@@ -200,31 +200,43 @@ void Blowfish::init_state(std::span<const std::byte> key) {
     std::ranges::copy(INITIAL_P, P_.begin());
     std::ranges::copy(INITIAL_S, S_.begin());
 
-    // Using regular loop for P-array initialization
+    // XOR P-array with key bytes (cycling through key)
+    usize key_index = 0;
     for (usize i = 0; i < P_ARRAY_SIZE; ++i) {
         u32 data = 0;
-        usize key_index = 0;
-        data = (std::to_integer<u32>(key[key_index]) << 24) |
-               (std::to_integer<u32>(key[(key_index + 1) % key.size()]) << 16) |
-               (std::to_integer<u32>(key[(key_index + 2) % key.size()]) << 8) |
-               (std::to_integer<u32>(key[(key_index + 3) % key.size()]));
+        for (int k = 0; k < 4; ++k) {
+            data = (data << 8) | std::to_integer<u32>(key[key_index]);
+            key_index = (key_index + 1) % key.size();
+        }
         P_[i] ^= data;
-        key_index = (key_index + 4) % key.size();
     }
 
-    // S-box initialization
+    // Encrypt zero block and replace P-array entries
+    std::array<std::byte, BLOCK_SIZE> block{};
+    for (usize i = 0; i < P_ARRAY_SIZE; i += 2) {
+        encrypt(std::span<std::byte, BLOCK_SIZE>(block));
+        P_[i] = (std::to_integer<u32>(block[0]) << 24) |
+                (std::to_integer<u32>(block[1]) << 16) |
+                (std::to_integer<u32>(block[2]) << 8) |
+                std::to_integer<u32>(block[3]);
+        P_[i + 1] = (std::to_integer<u32>(block[4]) << 24) |
+                    (std::to_integer<u32>(block[5]) << 16) |
+                    (std::to_integer<u32>(block[6]) << 8) |
+                    std::to_integer<u32>(block[7]);
+    }
+
+    // S-box initialization using encrypted blocks
     for (usize i = 0; i < 4; ++i) {
-        for (usize j = 0; j < S_BOX_SIZE; ++j) {
-            u32 data = 0;
-            usize key_index = 0;
-            data =
-                (std::to_integer<u32>(key[key_index]) << 24) |
-                (std::to_integer<u32>(key[(key_index + 1) % key.size()])
-                 << 16) |
-                (std::to_integer<u32>(key[(key_index + 2) % key.size()]) << 8) |
-                (std::to_integer<u32>(key[(key_index + 3) % key.size()]));
-            S_[i][j] ^= data;
-            key_index = (key_index + 4) % key.size();
+        for (usize j = 0; j < S_BOX_SIZE; j += 2) {
+            encrypt(std::span<std::byte, BLOCK_SIZE>(block));
+            S_[i][j] = (std::to_integer<u32>(block[0]) << 24) |
+                       (std::to_integer<u32>(block[1]) << 16) |
+                       (std::to_integer<u32>(block[2]) << 8) |
+                       std::to_integer<u32>(block[3]);
+            S_[i][j + 1] = (std::to_integer<u32>(block[4]) << 24) |
+                           (std::to_integer<u32>(block[5]) << 16) |
+                           (std::to_integer<u32>(block[6]) << 8) |
+                           std::to_integer<u32>(block[7]);
         }
     }
 }

@@ -17,7 +17,6 @@ Description: High-performance parallel algorithms library
 
 #include <algorithm>
 #include <concepts>
-#include <coroutine>
 #include <execution>
 #include <future>
 #include <numeric>
@@ -32,19 +31,8 @@ Description: High-performance parallel algorithms library
 #include <span>
 #include <stop_token>
 
-#include "atom/macro.hpp"
-
-#if defined(ATOM_PLATFORM_WINDOWS)
-#include <processthreadsapi.h>
-#include "../../../cmake/WindowsCompat.hpp"
-#elif defined(ATOM_PLATFORM_APPLE)
-#include <mach/thread_act.h>
-#include <mach/thread_policy.h>
-#include <pthread.h>
-#elif defined(ATOM_PLATFORM_LINUX)
-#include <pthread.h>
-#include <sched.h>
-#endif
+#include "coroutine_task.hpp"
+#include "thread_utils.hpp"
 
 // SIMD 指令集检测
 #if defined(__AVX512F__)
@@ -63,283 +51,15 @@ Description: High-performance parallel algorithms library
 
 namespace atom::async {
 
-/**
- * @brief C++20 协程任务类，用于异步并行计算
- *
- * @tparam T 任务结果类型
- */
-template <typename T>
-class [[nodiscard]] Task {
-public:
-    /**
-     * @brief 协程任务的 Promise 类型
-     */
-    struct promise_type {
-        std::optional<T> result;
-        std::exception_ptr exception;
-
-        Task get_return_object() noexcept {
-            return Task{
-                std::coroutine_handle<promise_type>::from_promise(*this)};
-        }
-
-        std::suspend_never initial_suspend() noexcept { return {}; }
-
-        std::suspend_always final_suspend() noexcept { return {}; }
-
-        void return_value(T value) noexcept { result = std::move(value); }
-
-        void unhandled_exception() noexcept {
-            exception = std::current_exception();
-        }
-    };
-
-    /**
-     * @brief 销毁协程任务
-     */
-    ~Task() {
-        if (handle && handle.done()) {
-            handle.destroy();
-        }
-    }
-
-    /**
-     * @brief 禁用复制
-     */
-    Task(const Task&) = delete;
-    Task& operator=(const Task&) = delete;
-
-    /**
-     * @brief 启用移动
-     */
-    Task(Task&& other) noexcept : handle(other.handle) {
-        other.handle = nullptr;
-    }
-
-    Task& operator=(Task&& other) noexcept {
-        if (this != &other) {
-            if (handle && handle.done()) {
-                handle.destroy();
-            }
-            handle = other.handle;
-            other.handle = nullptr;
-        }
-        return *this;
-    }
-
-    /**
-     * @brief 获取任务结果
-     *
-     * @return 结果值
-     * @throws 如果协程抛出异常，则重新抛出该异常
-     */
-    T get() {
-        if (!handle.done()) {
-            handle.resume();
-        }
-
-        if (handle.promise().exception) {
-            std::rethrow_exception(handle.promise().exception);
-        }
-
-        if (!handle.promise().result.has_value()) {
-            throw std::runtime_error("协程没有返回值");
-        }
-
-        return std::move(handle.promise().result.value());
-    }
-
-    /**
-     * @brief 检查任务是否完成
-     */
-    bool is_done() const { return handle.done(); }
-
-private:
-    explicit Task(std::coroutine_handle<promise_type> h) : handle(h) {}
-    std::coroutine_handle<promise_type> handle;
-};
-
-/**
- * @brief 空返回值的协程任务特化
- */
-template <>
-class Task<void> {
-public:
-    struct promise_type {
-        std::exception_ptr exception;
-
-        Task get_return_object() noexcept {
-            return Task{
-                std::coroutine_handle<promise_type>::from_promise(*this)};
-        }
-
-        std::suspend_never initial_suspend() noexcept { return {}; }
-
-        std::suspend_always final_suspend() noexcept { return {}; }
-
-        void return_void() noexcept {}
-
-        void unhandled_exception() noexcept {
-            exception = std::current_exception();
-        }
-    };
-
-    ~Task() {
-        if (handle && handle.done()) {
-            handle.destroy();
-        }
-    }
-
-    Task(const Task&) = delete;
-    Task& operator=(const Task&) = delete;
-
-    Task(Task&& other) noexcept : handle(other.handle) {
-        other.handle = nullptr;
-    }
-
-    Task& operator=(Task&& other) noexcept {
-        if (this != &other) {
-            if (handle && handle.done()) {
-                handle.destroy();
-            }
-            handle = other.handle;
-            other.handle = nullptr;
-        }
-        return *this;
-    }
-
-    void get() {
-        if (!handle.done()) {
-            handle.resume();
-        }
-
-        if (handle.promise().exception) {
-            std::rethrow_exception(handle.promise().exception);
-        }
-    }
-
-    bool is_done() const { return handle.done(); }
-
-private:
-    explicit Task(std::coroutine_handle<promise_type> h) : handle(h) {}
-    std::coroutine_handle<promise_type> handle;
-};
+// Task<T> is now provided by coroutine_task.hpp
 
 /**
  * @brief Parallel algorithm utilities for high-performance computations
  */
 class Parallel {
 public:
-    /**
-     * @brief 平台特定线程优化设置类
-     * 提供跨平台的线程亲和性和优先级设置
-     */
-    class ThreadConfig {
-    public:
-        /**
-         * @brief 线程优先级枚举
-         */
-        enum class Priority { Lowest, Low, Normal, High, Highest };
-
-        /**
-         * @brief 设置当前线程的CPU亲和性
-         * @param cpuId 要绑定的CPU核心ID
-         * @return 是否成功
-         */
-        static bool setThreadAffinity(int cpuId) {
-            if (cpuId < 0)
-                return false;
-
-#if defined(ATOM_PLATFORM_WINDOWS)
-            HANDLE currentThread = GetCurrentThread();
-            DWORD_PTR mask = 1ULL << cpuId;
-            return SetThreadAffinityMask(currentThread, mask) != 0;
-#elif defined(ATOM_PLATFORM_LINUX)
-            cpu_set_t cpuset;
-            CPU_ZERO(&cpuset);
-            CPU_SET(cpuId, &cpuset);
-            return pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t),
-                                          &cpuset) == 0;
-#elif defined(ATOM_PLATFORM_MACOS)
-            // macOS不直接支持线程亲和性，但可以提供"偏好"设置
-            thread_affinity_policy_data_t policy = {cpuId};
-            return thread_policy_set(
-                       pthread_mach_thread_np(pthread_self()),
-                       THREAD_AFFINITY_POLICY, (thread_policy_t)&policy,
-                       THREAD_AFFINITY_POLICY_COUNT) == KERN_SUCCESS;
-#else
-            return false;
-#endif
-        }
-
-        /**
-         * @brief 设置当前线程的优先级
-         * @param priority 要设置的优先级
-         * @return 是否成功
-         */
-        static bool setThreadPriority(Priority priority) {
-#if defined(ATOM_PLATFORM_WINDOWS)
-            int winPriority;
-            switch (priority) {
-                case Priority::Lowest:
-                    winPriority = THREAD_PRIORITY_LOWEST;
-                    break;
-                case Priority::Low:
-                    winPriority = THREAD_PRIORITY_BELOW_NORMAL;
-                    break;
-                case Priority::Normal:
-                    winPriority = THREAD_PRIORITY_NORMAL;
-                    break;
-                case Priority::High:
-                    winPriority = THREAD_PRIORITY_ABOVE_NORMAL;
-                    break;
-                case Priority::Highest:
-                    winPriority = THREAD_PRIORITY_HIGHEST;
-                    break;
-                default:
-                    winPriority = THREAD_PRIORITY_NORMAL;
-                    break;
-            }
-            return SetThreadPriority(GetCurrentThread(), winPriority) != 0;
-#elif defined(ATOM_PLATFORM_LINUX) || defined(ATOM_PLATFORM_MACOS)
-            int policy;
-            struct sched_param param {};
-
-            if (pthread_getschedparam(pthread_self(), &policy, &param) != 0) {
-                return false;
-            }
-
-            int minPriority = sched_get_priority_min(policy);
-            int maxPriority = sched_get_priority_max(policy);
-            int priorityRange = maxPriority - minPriority;
-
-            switch (priority) {
-                case Priority::Lowest:
-                    param.sched_priority = minPriority;
-                    break;
-                case Priority::Low:
-                    param.sched_priority = minPriority + priorityRange / 4;
-                    break;
-                case Priority::Normal:
-                    param.sched_priority = minPriority + priorityRange / 2;
-                    break;
-                case Priority::High:
-                    param.sched_priority = maxPriority - priorityRange / 4;
-                    break;
-                case Priority::Highest:
-                    param.sched_priority = maxPriority;
-                    break;
-                default:
-                    param.sched_priority = minPriority + priorityRange / 2;
-                    break;
-            }
-
-            return pthread_setschedparam(pthread_self(), policy, &param) == 0;
-#else
-            return false;
-#endif
-        }
-    };
+    // ThreadConfig is now provided by thread_utils.hpp as ThreadUtils
+    // Backward compatibility: use ThreadUtils directly
 
     /**
      * @brief 使用C++20标准的jthread代替future进行并行for_each操作
@@ -395,7 +115,7 @@ public:
 
                 try {
                     // 尝试在特定平台上优化线程性能
-                    ThreadConfig::setThreadAffinity(
+                    ThreadUtils::setThreadAffinity(
                         i % std::thread::hardware_concurrency());
 
                     std::for_each(chunk_begin, chunk_end, func);
@@ -492,8 +212,8 @@ public:
      * @return Vector of results from applying the function to each element
      */
     template <typename Iterator, typename Function>
-        requires std::invocable<Function, typename std::iterator_traits<
-                                              Iterator>::value_type>
+        requires std::invocable<
+            Function, typename std::iterator_traits<Iterator>::value_type>
     static auto map(Iterator begin, Iterator end, Function func,
                     size_t numThreads = 0)
         -> std::vector<std::invoke_result_t<
@@ -683,8 +403,8 @@ public:
      * @return Vector of elements that satisfy the predicate
      */
     template <typename Iterator, typename Predicate>
-        requires std::predicate<Predicate, typename std::iterator_traits<
-                                               Iterator>::value_type>
+        requires std::predicate<
+            Predicate, typename std::iterator_traits<Iterator>::value_type>
     static auto filter(Iterator begin, Iterator end, Predicate pred,
                        size_t numThreads = 0)
         -> std::vector<typename std::iterator_traits<Iterator>::value_type> {
@@ -855,7 +575,7 @@ public:
             threads.emplace_back(
                 [start, end, &input, &results, &func, &sync_point]() {
                     // 平台特定优化
-                    ThreadConfig::setThreadAffinity(
+                    ThreadUtils::setThreadAffinity(
                         start % std::thread::hardware_concurrency());
 
                     // 处理当前数据块

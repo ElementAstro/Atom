@@ -1,5 +1,5 @@
-#ifndef ATOM_ALGORITHM_FLOOD_GPP
-#define ATOM_ALGORITHM_FLOOD_GPP
+#ifndef ATOM_ALGORITHM_FLOOD_HPP
+#define ATOM_ALGORITHM_FLOOD_HPP
 
 #include <atomic>
 #include <concepts>
@@ -696,4 +696,4 @@ usize FloodFill::fillParallel(
 
 }  // namespace atom::algorithm
 
-#endif  // ATOM_ALGORITHM_FLOOD_GPP
+#endif  // ATOM_ALGORITHM_FLOOD_HPP

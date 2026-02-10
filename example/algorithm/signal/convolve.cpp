@@ -139,7 +139,7 @@ int main() {
         std::vector<std::vector<double>> input = {
             {1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
         std::vector<std::vector<std::complex<double>>> result =
-            atom::algorithm::dfT2D(input);
+            atom::algorithm::dft2D(input);
 
         std::cout << "2D DFT result (first few elements):" << std::endl;
         for (size_t i = 0; i < std::min(result.size(), size_t(3)); ++i) {
@@ -159,7 +159,7 @@ int main() {
             {{4, 0}, {5, 0}, {6, 0}},
             {{7, 0}, {8, 0}, {9, 0}}};
         std::vector<std::vector<double>> result =
-            atom::algorithm::idfT2D(input);
+            atom::algorithm::idft2D(input);
 
         std::cout << "\n2D IDFT result:" << std::endl;
         for (const auto& row : result) {

@@ -7,13 +7,13 @@
 using namespace atom::async::connection;
 
 int main() {
-    // Create an instance of UdpSocketHub
-    UdpSocketHub server;
+    // Create an instance of AsyncUdpServer
+    AsyncUdpServer server;
 
     // Define a message handler
-    UdpSocketHub::MessageHandler handler = [](const std::string& message,
-                                              const std::string& remoteIp,
-                                              unsigned short remotePort) {
+    AsyncUdpServer::MessageHandler handler = [](const std::string& message,
+                                                const std::string& remoteIp,
+                                                unsigned short remotePort) {
         std::cout << "Received message from " << remoteIp << ":" << remotePort
                   << " - " << message << std::endl;
     };

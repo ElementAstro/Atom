@@ -20,7 +20,6 @@ Description: Advanced async task executor with thread pooling
 #include <chrono>
 #include <concepts>
 #include <condition_variable>
-#include <coroutine>
 #include <exception>
 #include <functional>
 #include <future>
@@ -37,34 +36,17 @@ Description: Advanced async task executor with thread pooling
 #include <utility>
 #include <vector>
 
-// Platform-specific optimizations
+#include "coroutine_task.hpp"
+#include "thread_utils.hpp"
+
 #include "atom/macro.hpp"
 
-#if defined(ATOM_PLATFORM_WINDOWS)
-#include "../../../cmake/WindowsCompat.hpp"
-#elif defined(ATOM_PLATFORM_APPLE)
-#include <dispatch/dispatch.h>
-#include <mach/thread_policy.h>
-#include <pthread.h>
-#elif defined(ATOM_PLATFORM_LINUX)
-#include <pthread.h>
-#include <sched.h>
-#endif
+// Forward declaration for ThreadSafeQueue (defined in pool.hpp)
+// We use our own simplified WorkStealingQueue here to avoid circular
+// dependencies
 
-// Cache line size definition - to avoid false sharing (if not already defined
-// in macro.hpp)
-#ifndef ATOM_CACHE_LINE_SIZE
-#if defined(ATOM_PLATFORM_WINDOWS)
-#define ATOM_CACHE_LINE_SIZE 64
-#elif defined(ATOM_PLATFORM_APPLE)
-#define ATOM_CACHE_LINE_SIZE 128
-#else
-#define ATOM_CACHE_LINE_SIZE 64
-#endif
-#endif
-
-// Macro for aligning to cache line
-#define ATOM_CACHELINE_ALIGN alignas(ATOM_CACHE_LINE_SIZE)
+// Use unified ATOM_CACHE_LINE_SIZE from macro.hpp
+// ATOM_CACHE_ALIGN is also defined there
 
 namespace atom::async {
 
@@ -91,173 +73,7 @@ public:
         : ExecutorException(msg, loc) {}
 };
 
-// C++20 coroutine task type, including continuation and error handling
-template <typename R>
-class Task;
-
-// Task<void> specialization for coroutines
-template <>
-class Task<void> {
-public:
-    struct promise_type {
-        std::suspend_never initial_suspend() noexcept { return {}; }
-        std::suspend_always final_suspend() noexcept { return {}; }
-        void unhandled_exception() { exception_ = std::current_exception(); }
-        void return_void() {}
-
-        Task<void> get_return_object() {
-            return Task<void>{
-                std::coroutine_handle<promise_type>::from_promise(*this)};
-        }
-
-        std::exception_ptr exception_{};
-    };
-
-    using handle_type = std::coroutine_handle<promise_type>;
-
-    Task(handle_type h) : handle_(h) {}
-    ~Task() {
-        if (handle_ && handle_.done()) {
-            handle_.destroy();
-        }
-    }
-
-    Task(Task&& other) noexcept : handle_(other.handle_) {
-        other.handle_ = nullptr;
-    }
-
-    Task& operator=(Task&& other) noexcept {
-        if (this != &other) {
-            if (handle_)
-                handle_.destroy();
-            handle_ = other.handle_;
-            other.handle_ = nullptr;
-        }
-        return *this;
-    }
-
-    Task(const Task&) = delete;
-    Task& operator=(const Task&) = delete;
-
-    bool is_ready() const noexcept { return handle_.done(); }
-
-    void get() {
-        handle_.resume();
-        if (handle_.promise().exception_) {
-            std::rethrow_exception(handle_.promise().exception_);
-        }
-    }
-
-    struct Awaiter {
-        handle_type handle;
-        bool await_ready() const noexcept { return handle.done(); }
-        void await_suspend(std::coroutine_handle<> h) noexcept { h.resume(); }
-        void await_resume() {
-            if (handle.promise().exception_) {
-                std::rethrow_exception(handle.promise().exception_);
-            }
-        }
-    };
-
-    auto operator co_await() noexcept { return Awaiter{handle_}; }
-
-private:
-    handle_type handle_{};
-    std::exception_ptr exception_{};
-};
-
-// Generic type implementation
-template <typename R>
-class Task {
-public:
-    struct promise_type;
-    using handle_type = std::coroutine_handle<promise_type>;
-
-    struct promise_type {
-        std::suspend_never initial_suspend() noexcept { return {}; }
-        std::suspend_always final_suspend() noexcept { return {}; }
-        void unhandled_exception() { exception_ = std::current_exception(); }
-
-        template <typename T>
-            requires std::convertible_to<T, R>
-        void return_value(T&& value) {
-            result_ = std::forward<T>(value);
-        }
-
-        Task get_return_object() {
-            return Task{handle_type::from_promise(*this)};
-        }
-
-        R result_{};
-        std::exception_ptr exception_{};
-    };
-
-    Task(handle_type h) : handle_(h) {}
-    ~Task() {
-        if (handle_ && handle_.done()) {
-            handle_.destroy();
-        }
-    }
-
-    Task(Task&& other) noexcept : handle_(other.handle_) {
-        other.handle_ = nullptr;
-    }
-
-    Task& operator=(Task&& other) noexcept {
-        if (this != &other) {
-            if (handle_)
-                handle_.destroy();
-            handle_ = other.handle_;
-            other.handle_ = nullptr;
-        }
-        return *this;
-    }
-
-    Task(const Task&) = delete;
-    Task& operator=(const Task&) = delete;
-
-    bool is_ready() const noexcept { return handle_.done(); }
-
-    R get_result() {
-        if (handle_ && !handle_.done()) {
-            handle_.resume();
-        }
-        if (handle_.promise().exception_) {
-            std::rethrow_exception(handle_.promise().exception_);
-        }
-        return std::move(handle_.promise().result_);
-    }
-
-    R get() { return get_result(); }
-
-    // Coroutine awaiter support
-    struct Awaiter {
-        handle_type handle;
-
-        bool await_ready() const noexcept { return handle.done(); }
-
-        std::coroutine_handle<> await_suspend(
-            std::coroutine_handle<> h) noexcept {
-            // Store continuation
-            continuation = h;
-            return handle;
-        }
-
-        R await_resume() {
-            if (handle.promise().exception_) {
-                std::rethrow_exception(handle.promise().exception_);
-            }
-            return std::move(handle.promise().result_);
-        }
-
-        std::coroutine_handle<> continuation = nullptr;
-    };
-
-    Awaiter operator co_await() noexcept { return Awaiter{handle_}; }
-
-private:
-    handle_type handle_{};
-};
+// Task<T> is now provided by coroutine_task.hpp
 
 /**
  * @brief Asynchronous executor - high-performance thread pool implementation
@@ -376,7 +192,7 @@ public:
      */
     template <typename Func>
         requires std::invocable<Func> &&
-                     (!std::same_as<void, std::invoke_result_t<Func>>)
+                 (!std::same_as<void, std::invoke_result_t<Func>>)
     auto execute(Func&& func, Priority priority = Priority::Normal)
         -> std::future<std::invoke_result_t<Func>> {
         if (!isRunning()) {
@@ -423,7 +239,7 @@ public:
             struct Awaitable {
                 std::future<ResultT> future;
                 bool await_ready() const noexcept { return false; }
-                void await_suspend(std::coroutine_handle<> h) noexcept {}
+                void await_suspend(std::coroutine_handle<> /*h*/) noexcept {}
                 ResultT await_resume() { return future.get(); }
             };
 
@@ -462,10 +278,10 @@ private:
     Configuration m_config;
 
     // Atomic state variables
-    ATOM_CACHELINE_ALIGN std::atomic<bool> m_isRunning{false};
-    ATOM_CACHELINE_ALIGN std::atomic<size_t> m_activeThreads{0};
-    ATOM_CACHELINE_ALIGN std::atomic<size_t> m_pendingTasks{0};
-    ATOM_CACHELINE_ALIGN std::atomic<size_t> m_completedTasks{0};
+    ATOM_CACHE_ALIGN std::atomic<bool> m_isRunning{false};
+    ATOM_CACHE_ALIGN std::atomic<size_t> m_activeThreads{0};
+    ATOM_CACHE_ALIGN std::atomic<size_t> m_pendingTasks{0};
+    ATOM_CACHE_ALIGN std::atomic<size_t> m_completedTasks{0};
 
     // Task counting semaphore - C++20 feature
     std::counting_semaphore<> m_taskSemaphore{0};
@@ -570,14 +386,12 @@ private:
                 // throw TaskException("Task execution failed with exception");
             }
 
-            // Calculate task execution time
+            // Calculate task execution time (currently unused, for future
+            // metrics)
             auto endTime = std::chrono::high_resolution_clock::now();
-            auto duration =
+            [[maybe_unused]] auto duration =
                 std::chrono::duration_cast<std::chrono::microseconds>(
                     endTime - startTime);
-
-            // In a real application, task execution time can be logged here for
-            // performance analysis
 
             // Decrement active thread count
             m_activeThreads.fetch_sub(1, std::memory_order_relaxed);

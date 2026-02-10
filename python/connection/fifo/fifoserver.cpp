@@ -1,4 +1,4 @@
-#include "atom/connection/async_fifoserver.hpp"
+#include "atom/connection/fifo/async_fifoserver.hpp"
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -23,7 +23,7 @@ PYBIND11_MODULE(fifoserver, m) {
     });
 
     // FifoServer class binding
-    py::class_<atom::async::connection::FifoServer>(
+    py::class_<atom::connection::AsyncFifoServer>(
         m, "FifoServer",
         R"(A server for handling FIFO (named pipe) messages.
 
@@ -43,7 +43,7 @@ Examples:
         .def(py::init<std::string_view>(), py::arg("fifo_path"),
              "Constructs a FifoServer that will listen on the specified FIFO "
              "path.")
-        .def("start", &atom::async::connection::FifoServer::start,
+        .def("start", &atom::connection::AsyncFifoServer::start,
              R"(Starts the server to listen for messages.
 
 This method creates the FIFO if it doesn't exist and begins listening
@@ -52,12 +52,12 @@ for incoming messages in a background thread.
 Raises:
     RuntimeError: If the server fails to start or the FIFO cannot be created.
 )")
-        .def("stop", &atom::async::connection::FifoServer::stop,
+        .def("stop", &atom::connection::AsyncFifoServer::stop,
              R"(Stops the server.
 
 This method stops the server, closes the FIFO, and joins any background threads.
 )")
-        .def("is_running", &atom::async::connection::FifoServer::isRunning,
+        .def("is_running", &atom::connection::AsyncFifoServer::isRunning,
              R"(Checks if the server is currently running.
 
 Returns:
@@ -65,23 +65,23 @@ Returns:
 )")
         .def(
             "__enter__",
-            [](atom::async::connection::FifoServer& self)
-                -> atom::async::connection::FifoServer& {
+            [](atom::connection::AsyncFifoServer& self)
+                -> atom::connection::AsyncFifoServer& {
                 self.start();
                 return self;
             },
             "Support for context manager protocol (with statement).")
         .def(
             "__exit__",
-            [](atom::async::connection::FifoServer& self, py::object,
-               py::object, py::object) { self.stop(); },
+            [](atom::connection::AsyncFifoServer& self, py::object, py::object,
+               py::object) { self.stop(); },
             "Ensures server is stopped when exiting context manager.");
 
     // Factory function for easier creation
     m.def(
         "create_fifo_server",
         [](const std::string& path) {
-            return std::make_unique<atom::async::connection::FifoServer>(path);
+            return std::make_unique<atom::connection::AsyncFifoServer>(path);
         },
         py::arg("path"),
         R"(Factory function to create a FIFO server.

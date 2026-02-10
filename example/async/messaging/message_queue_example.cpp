@@ -22,7 +22,7 @@
  * @date 2024
  */
 
-#include "atom/async/message_queue.hpp"
+#include "atom/async/messaging/message_queue.hpp"
 
 #include <algorithm>
 #include <atomic>

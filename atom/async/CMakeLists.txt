@@ -49,11 +49,10 @@ set(HEADERS
     core/async.hpp
     core/future.hpp
     core/promise.hpp
-    core/promise_awaiter.hpp
     core/promise_fwd.hpp
-    core/promise_impl.hpp
     core/promise_utils.hpp
-    core/promise_void_impl.hpp
+    core/detail/callback_queue.hpp
+    core/detail/platform_dispatch.hpp
     threading/lock.hpp
     threading/thread_wrapper.hpp
     threading/threadlocal.hpp
@@ -62,9 +61,11 @@ set(HEADERS
     messaging/message_queue.hpp
     messaging/queue.hpp
     execution/async_executor.hpp
+    execution/coroutine_task.hpp
     execution/packaged_task.hpp
     execution/parallel.hpp
     execution/pool.hpp
+    execution/thread_utils.hpp
     sync/limiter.hpp
     sync/safetype.hpp
     sync/slot.hpp

@@ -10,7 +10,7 @@
 #include <thread>
 #include <vector>
 
-#include "atom/async/queue.hpp"
+#include "atom/async/messaging/queue.hpp"
 
 using namespace atom::async;
 
@@ -568,10 +568,11 @@ TYPED_TEST(ThreadSafeQueueTest, Transform) {
         this->queue.put(2);
         this->queue.put(3);
 
+        // Note: transform now takes const T& and preserves the original queue
         auto transformed_queue = this->queue.template transform<std::string>(
-            [](int val) { return "num_" + std::to_string(val); });
+            [](const int& val) { return "num_" + std::to_string(val); });
 
-        EXPECT_TRUE(this->queue.empty());  // Original queue is consumed
+        EXPECT_EQ(this->queue.size(), 3);  // Original queue is preserved
 
         ASSERT_TRUE(transformed_queue != nullptr);
         EXPECT_EQ(transformed_queue->size(), 3);
@@ -587,10 +588,11 @@ TYPED_TEST(ThreadSafeQueueTest, Transform) {
         this->queue.put("hello");
         this->queue.put("world");
 
+        // Note: transform now takes const T& and preserves the original queue
         auto transformed_queue = this->queue.template transform<size_t>(
-            [](std::string s) { return s.length(); });
+            [](const std::string& s) { return s.length(); });
 
-        EXPECT_TRUE(this->queue.empty());
+        EXPECT_EQ(this->queue.size(), 2);  // Original queue is preserved
 
         ASSERT_TRUE(transformed_queue != nullptr);
         EXPECT_EQ(transformed_queue->size(), 2);

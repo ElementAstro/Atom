@@ -1,7 +1,7 @@
 /*
  * test_async_fifoserver.cpp
  *
- * Tests for async::connection::FifoServer
+ * Tests fatom::connection::AsyncFifoServer
  * Note: The async FifoServer has a minimal API with only start(), stop(), and
  * isRunning() methods. It does not have sendMessage() functionality.
  */
@@ -21,7 +21,7 @@
 #include <unistd.h>
 #endif
 
-using namespace atom::async::connection;
+using namespace atom::connection;
 using namespace std::chrono_literals;
 
 class AsyncFifoServerTest : public ::testing::Test {
@@ -35,7 +35,7 @@ protected:
         // Create FIFO for testing
         mkfifo(fifo_path_.c_str(), 0666);
 #endif
-        server_ = std::make_unique<FifoServer>(fifo_path_);
+        server_ = std::make_unique<AsyncFifoServer>(fifo_path_);
     }
 
     void TearDown() override {
@@ -50,13 +50,13 @@ protected:
     }
 
     std::string fifo_path_;
-    std::unique_ptr<FifoServer> server_;
+    std::unique_ptr<AsyncFifoServer> server_;
 };
 
 TEST_F(AsyncFifoServerTest, BasicStartStop) {
     EXPECT_FALSE(server_->isRunning());
 
-    server_->start();
+    server_->start([](std::string_view) {});
     EXPECT_TRUE(server_->isRunning());
 
     server_->stop();
@@ -66,11 +66,11 @@ TEST_F(AsyncFifoServerTest, BasicStartStop) {
 TEST_F(AsyncFifoServerTest, MultipleStartCalls) {
     EXPECT_FALSE(server_->isRunning());
 
-    server_->start();
+    server_->start([](std::string_view) {});
     EXPECT_TRUE(server_->isRunning());
 
     // Second start should not cause issues
-    EXPECT_NO_THROW(server_->start());
+    EXPECT_NO_THROW(server_->start([](std::string_view) {}));
     EXPECT_TRUE(server_->isRunning());
 
     server_->stop();
@@ -78,7 +78,7 @@ TEST_F(AsyncFifoServerTest, MultipleStartCalls) {
 }
 
 TEST_F(AsyncFifoServerTest, MultipleStopCalls) {
-    server_->start();
+    server_->start([](std::string_view) {});
     EXPECT_TRUE(server_->isRunning());
 
     server_->stop();
@@ -102,7 +102,7 @@ TEST_F(AsyncFifoServerTest, ServerStateConsistency) {
     EXPECT_FALSE(server_->isRunning());
 
     for (int i = 0; i < 5; ++i) {
-        server_->start();
+        server_->start([](std::string_view) {});
         EXPECT_TRUE(server_->isRunning());
 
         server_->stop();
@@ -112,14 +112,14 @@ TEST_F(AsyncFifoServerTest, ServerStateConsistency) {
 
 TEST_F(AsyncFifoServerTest, RestartServer) {
     // First run
-    server_->start();
+    server_->start([](std::string_view) {});
     EXPECT_TRUE(server_->isRunning());
 
     server_->stop();
     EXPECT_FALSE(server_->isRunning());
 
     // Restart
-    server_->start();
+    server_->start([](std::string_view) {});
     EXPECT_TRUE(server_->isRunning());
 
     // Verify it's still running
@@ -134,7 +134,7 @@ TEST_F(AsyncFifoServerTest, ThreadSafetyIsRunning) {
     std::vector<std::thread> threads;
     std::atomic<int> successCount{0};
 
-    server_->start();
+    server_->start([](std::string_view) {});
     EXPECT_TRUE(server_->isRunning());
 
     // Multiple threads checking isRunning() concurrently
@@ -168,7 +168,7 @@ TEST_F(AsyncFifoServerTest, ConcurrentStartStop) {
         threads.emplace_back([this, i, &operationCount]() {
             try {
                 if (i % 2 == 0) {
-                    server_->start();
+                    server_->start([](std::string_view) {});
                 } else {
                     server_->stop();
                 }
@@ -190,7 +190,7 @@ TEST_F(AsyncFifoServerTest, ConcurrentStartStop) {
 TEST_F(AsyncFifoServerTest, RapidStartStop) {
     // Test rapid start/stop cycles
     for (int i = 0; i < 10; ++i) {
-        EXPECT_NO_THROW(server_->start());
+        EXPECT_NO_THROW(server_->start([](std::string_view) {}));
         EXPECT_NO_THROW(server_->stop());
     }
 
@@ -199,13 +199,13 @@ TEST_F(AsyncFifoServerTest, RapidStartStop) {
 
 TEST_F(AsyncFifoServerTest, ConstructorWithPath) {
     // Test that constructor accepts the path correctly
-    EXPECT_NO_THROW(FifoServer testServer(fifo_path_));
+    EXPECT_NO_THROW(AsyncFifoServer testServer(fifo_path_));
 }
 
 #ifndef _WIN32  // FIFO operations are more complex on Windows
 
 TEST_F(AsyncFifoServerTest, ServerListensOnFifo) {
-    server_->start();
+    server_->start([](std::string_view) {});
     EXPECT_TRUE(server_->isRunning());
 
     // Verify the FIFO exists and can be opened
@@ -221,7 +221,7 @@ TEST_F(AsyncFifoServerTest, ServerListensOnFifo) {
 }
 
 TEST_F(AsyncFifoServerTest, ClientCanConnectToServer) {
-    server_->start();
+    server_->start([](std::string_view) {});
     EXPECT_TRUE(server_->isRunning());
 
     std::promise<bool> connectionPromise;

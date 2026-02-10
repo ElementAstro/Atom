@@ -15,15 +15,18 @@ Description: SSH Server
 #include "sshserver.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <mutex>
 #include <random>
+#include <shared_mutex>
 #include <sstream>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 
 #ifdef _WIN32
 // clang-format off
@@ -44,19 +47,77 @@ Description: SSH Server
 
 namespace atom::connection {
 
+namespace {
+
+constexpr int DEFAULT_MAX_AUTH_ATTEMPTS = 6;
+constexpr int DEFAULT_MAX_CONNECTIONS = 10;
+constexpr int DEFAULT_LOGIN_GRACE_TIME = 120;
+constexpr int DEFAULT_IDLE_TIMEOUT = 300;
+constexpr int SIGTERM_WAIT_ITERATIONS = 10;
+constexpr int SIGTERM_WAIT_MS = 100;
+
+auto logLevelToString(LogLevel level) -> std::string {
+    switch (level) {
+        case LogLevel::QUIET:
+            return "QUIET";
+        case LogLevel::FATAL:
+            return "FATAL";
+        case LogLevel::ERROR:
+            return "ERROR";
+        case LogLevel::INFO:
+            return "INFO";
+        case LogLevel::VERBOSE:
+            return "VERBOSE";
+        case LogLevel::DEBUG:
+            return "DEBUG";
+        case LogLevel::DEBUG1:
+            return "DEBUG1";
+        case LogLevel::DEBUG2:
+            return "DEBUG2";
+        case LogLevel::DEBUG3:
+            return "DEBUG3";
+        default:
+            return "INFO";
+    }
+}
+
+auto stringToLogLevel(const std::string& str) -> LogLevel {
+    if (str == "QUIET")
+        return LogLevel::QUIET;
+    if (str == "FATAL")
+        return LogLevel::FATAL;
+    if (str == "ERROR")
+        return LogLevel::ERROR;
+    if (str == "INFO")
+        return LogLevel::INFO;
+    if (str == "VERBOSE")
+        return LogLevel::VERBOSE;
+    if (str == "DEBUG")
+        return LogLevel::DEBUG;
+    if (str == "DEBUG1")
+        return LogLevel::DEBUG1;
+    if (str == "DEBUG2")
+        return LogLevel::DEBUG2;
+    if (str == "DEBUG3")
+        return LogLevel::DEBUG3;
+    return LogLevel::INFO;
+}
+
+}  // namespace
+
 class SshServer::Impl {
 public:
     explicit Impl(const std::filesystem::path& configFile)
-        : configFile_(configFile), isRunning_(false), processId_(0) {
-        // Set default values for new parameters
-        maxAuthAttempts_ = 6;
-        maxConnections_ = 10;
-        loginGraceTime_ = 120;
-        idleTimeout_ = 300;
-        logLevel_ = LogLevel::INFO;
-        allowAgentForwarding_ = false;
-        allowTcpForwarding_ = false;
-
+        : configFile_(configFile),
+          maxAuthAttempts_(DEFAULT_MAX_AUTH_ATTEMPTS),
+          maxConnections_(DEFAULT_MAX_CONNECTIONS),
+          loginGraceTime_(DEFAULT_LOGIN_GRACE_TIME),
+          idleTimeout_(DEFAULT_IDLE_TIMEOUT),
+          allowAgentForwarding_(false),
+          allowTcpForwarding_(false),
+          logLevel_(LogLevel::INFO),
+          isRunning_(false),
+          processId_(0) {
         // Default secure ciphers and algorithms
         ciphers_ =
             "chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@"
@@ -72,7 +133,16 @@ public:
     }
 
     ~Impl() {
-        if (isRunning_) {
+        // Use atomic flag to signal shutdown without holding mutex
+        monitorThreadStop_.store(true, std::memory_order_release);
+
+        // Wait for monitor thread to finish
+        if (monitorThread_.joinable()) {
+            monitorThread_.join();
+        }
+
+        // Now safe to cleanup with mutex
+        if (isRunning_.load(std::memory_order_acquire)) {
             stop(true);
         }
     }
@@ -80,7 +150,7 @@ public:
     bool start() {
         std::lock_guard<std::mutex> lock(serverMutex_);
 
-        if (isRunning_) {
+        if (isRunning_.load(std::memory_order_acquire)) {
             return false;
         }
 
@@ -124,7 +194,7 @@ public:
                 processId_ = pi.dwProcessId;
                 CloseHandle(pi.hThread);
                 CloseHandle(pi.hProcess);
-                isRunning_ = true;
+                isRunning_.store(true, std::memory_order_release);
 
                 // Start monitoring thread
                 monitorThread_ = std::thread(&Impl::monitorSshd, this);
@@ -174,7 +244,7 @@ public:
             } else {
                 // Parent process
                 processId_ = pid;
-                isRunning_ = true;
+                isRunning_.store(true, std::memory_order_release);
 
                 // Start monitoring thread
                 monitorThread_ = std::thread(&Impl::monitorSshd, this);
@@ -191,7 +261,7 @@ public:
     bool stop(bool force = false) {
         std::lock_guard<std::mutex> lock(serverMutex_);
 
-        if (!isRunning_) {
+        if (!isRunning_.load(std::memory_order_acquire)) {
             return false;
         }
 
@@ -210,12 +280,13 @@ public:
                 CloseHandle(hProcess);
 
                 if (success) {
-                    isRunning_ = false;
+                    isRunning_.store(false, std::memory_order_release);
                     processId_ = 0;
 
                     // Stop the monitoring thread
                     if (monitorThread_.joinable()) {
-                        monitorThreadStop_ = true;
+                        monitorThreadStop_.store(true,
+                                                 std::memory_order_release);
                         monitorThread_.join();
                     }
 
@@ -234,16 +305,18 @@ public:
             // First try graceful shutdown with SIGTERM
             if (!force && kill(processId_, SIGTERM) == 0) {
                 // Wait briefly for the process to terminate
-                for (int i = 0; i < 10; i++) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                for (int i = 0; i < SIGTERM_WAIT_ITERATIONS; i++) {
+                    std::this_thread::sleep_for(
+                        std::chrono::milliseconds(SIGTERM_WAIT_MS));
                     if (kill(processId_, 0) != 0) {
                         // Process has exited
-                        isRunning_ = false;
+                        isRunning_.store(false, std::memory_order_release);
                         processId_ = 0;
 
                         // Stop the monitoring thread
                         if (monitorThread_.joinable()) {
-                            monitorThreadStop_ = true;
+                            monitorThreadStop_.store(true,
+                                                     std::memory_order_release);
                             monitorThread_.join();
                         }
 
@@ -256,12 +329,12 @@ public:
 
             // If we're forcing or SIGTERM didn't work, use SIGKILL
             if (kill(processId_, SIGKILL) == 0) {
-                isRunning_ = false;
+                isRunning_.store(false, std::memory_order_release);
                 processId_ = 0;
 
                 // Stop the monitoring thread
                 if (monitorThread_.joinable()) {
-                    monitorThreadStop_ = true;
+                    monitorThreadStop_.store(true, std::memory_order_release);
                     monitorThread_.join();
                 }
 
@@ -281,7 +354,7 @@ public:
     }
 
     bool restart() {
-        if (isRunning_) {
+        if (isRunning_.load(std::memory_order_acquire)) {
             if (!stop(true)) {
                 return false;
             }
@@ -294,7 +367,7 @@ public:
     }
 
     bool isRunning() const {
-        if (!isRunning_) {
+        if (!isRunning_.load(std::memory_order_acquire)) {
             return false;
         }
 
@@ -488,42 +561,21 @@ public:
 
     void allowIpAddress(const std::string& ipAddress) {
         std::lock_guard<std::mutex> lock(serverMutex_);
-
-        // Remove from denied list if present
-        auto it = std::find(deniedIps_.begin(), deniedIps_.end(), ipAddress);
-        if (it != deniedIps_.end()) {
-            deniedIps_.erase(it);
-        }
-
-        // Add to allowed list if not already present
-        if (std::find(allowedIps_.begin(), allowedIps_.end(), ipAddress) ==
-            allowedIps_.end()) {
-            allowedIps_.push_back(ipAddress);
-        }
+        deniedIps_.erase(ipAddress);    // Remove from denied list
+        allowedIps_.insert(ipAddress);  // Add to allowed list (O(1) avg)
     }
 
     void denyIpAddress(const std::string& ipAddress) {
         std::lock_guard<std::mutex> lock(serverMutex_);
-
-        // Remove from allowed list if present
-        auto it = std::find(allowedIps_.begin(), allowedIps_.end(), ipAddress);
-        if (it != allowedIps_.end()) {
-            allowedIps_.erase(it);
-        }
-
-        // Add to denied list if not already present
-        if (std::find(deniedIps_.begin(), deniedIps_.end(), ipAddress) ==
-            deniedIps_.end()) {
-            deniedIps_.push_back(ipAddress);
-        }
+        allowedIps_.erase(ipAddress);  // Remove from allowed list
+        deniedIps_.insert(ipAddress);  // Add to denied list (O(1) avg)
     }
 
     bool isIpAddressAllowed(const std::string& ipAddress) const {
         std::lock_guard<std::mutex> lock(serverMutex_);
 
-        // Check if explicitly denied
-        if (std::find(deniedIps_.begin(), deniedIps_.end(), ipAddress) !=
-            deniedIps_.end()) {
+        // Check if explicitly denied (O(1) lookup)
+        if (deniedIps_.contains(ipAddress)) {
             return false;
         }
 
@@ -532,9 +584,8 @@ public:
             return true;
         }
 
-        // Check if explicitly allowed
-        return std::find(allowedIps_.begin(), allowedIps_.end(), ipAddress) !=
-               allowedIps_.end();
+        // Check if explicitly allowed (O(1) lookup)
+        return allowedIps_.contains(ipAddress);
     }
 
     void allowAgentForwarding(bool allow) {
@@ -753,8 +804,10 @@ public:
 
         stats["uptime"] = getUptimeString();
         stats["active_connections"] = std::to_string(activeConnections_.size());
-        stats["total_connections"] = std::to_string(totalConnections_);
-        stats["failed_auth_attempts"] = std::to_string(failedAuthAttempts_);
+        stats["total_connections"] =
+            std::to_string(totalConnections_.load(std::memory_order_relaxed));
+        stats["failed_auth_attempts"] =
+            std::to_string(failedAuthAttempts_.load(std::memory_order_relaxed));
 
         return stats;
     }
@@ -821,24 +874,7 @@ private:
                 } else if (key == "ClientAliveInterval") {
                     idleTimeout_ = std::stoi(value);
                 } else if (key == "LogLevel") {
-                    if (value == "QUIET")
-                        logLevel_ = LogLevel::QUIET;
-                    else if (value == "FATAL")
-                        logLevel_ = LogLevel::FATAL;
-                    else if (value == "ERROR")
-                        logLevel_ = LogLevel::ERROR;
-                    else if (value == "INFO")
-                        logLevel_ = LogLevel::INFO;
-                    else if (value == "VERBOSE")
-                        logLevel_ = LogLevel::VERBOSE;
-                    else if (value == "DEBUG")
-                        logLevel_ = LogLevel::DEBUG;
-                    else if (value == "DEBUG1")
-                        logLevel_ = LogLevel::DEBUG1;
-                    else if (value == "DEBUG2")
-                        logLevel_ = LogLevel::DEBUG2;
-                    else if (value == "DEBUG3")
-                        logLevel_ = LogLevel::DEBUG3;
+                    logLevel_ = stringToLogLevel(value);
                 } else if (key == "SyslogFacility" && !logFile_.empty()) {
                     // If using file logging, ignore syslog setting
                 } else if (key == "AllowAgentForwarding") {
@@ -946,37 +982,7 @@ private:
         }
 
         // Logging
-        std::string logLevelStr;
-        switch (logLevel_) {
-            case LogLevel::QUIET:
-                logLevelStr = "QUIET";
-                break;
-            case LogLevel::FATAL:
-                logLevelStr = "FATAL";
-                break;
-            case LogLevel::ERROR:
-                logLevelStr = "ERROR";
-                break;
-            case LogLevel::INFO:
-                logLevelStr = "INFO";
-                break;
-            case LogLevel::VERBOSE:
-                logLevelStr = "VERBOSE";
-                break;
-            case LogLevel::DEBUG:
-                logLevelStr = "DEBUG";
-                break;
-            case LogLevel::DEBUG1:
-                logLevelStr = "DEBUG1";
-                break;
-            case LogLevel::DEBUG2:
-                logLevelStr = "DEBUG2";
-                break;
-            case LogLevel::DEBUG3:
-                logLevelStr = "DEBUG3";
-                break;
-        }
-        file << "LogLevel " << logLevelStr << '\n';
+        file << "LogLevel " << logLevelToString(logLevel_) << '\n';
 
         // If we're using a custom log file, specify it
         if (!logFile_.empty()) {
@@ -988,11 +994,12 @@ private:
     void monitorSshd() {
         startTime_ = std::chrono::system_clock::now();
 
-        while (!monitorThreadStop_ && isRunning_) {
+        while (!monitorThreadStop_.load(std::memory_order_acquire) &&
+               isRunning_.load(std::memory_order_acquire)) {
             // Check process exists
             if (!isRunning()) {
                 // Server stopped unexpectedly
-                isRunning_ = false;
+                isRunning_.store(false, std::memory_order_release);
                 break;
             }
 
@@ -1036,7 +1043,7 @@ private:
 
                 // Add to active connections
                 activeConnections_[conn.sessionId] = conn;
-                totalConnections_++;
+                totalConnections_.fetch_add(1, std::memory_order_relaxed);
 
                 // Call callback if registered
                 if (newConnectionCallback_) {
@@ -1067,7 +1074,7 @@ private:
                 std::string ipAddress =
                     "192.168.1." + std::to_string(dis(gen) * 10);
 
-                failedAuthAttempts_++;
+                failedAuthAttempts_.fetch_add(1, std::memory_order_relaxed);
 
                 // Call callback if registered
                 if (authFailureCallback_) {
@@ -1125,7 +1132,7 @@ private:
     bool passwordAuthentication_ = false;
     std::unordered_map<std::string, std::string> subsystems_;
 
-    // New configuration parameters
+    // Configuration parameters
     int maxAuthAttempts_;
     int maxConnections_;
     int loginGraceTime_;
@@ -1140,18 +1147,20 @@ private:
     std::filesystem::path logFile_;
     std::vector<std::string> allowedUsers_;
     std::vector<std::string> deniedUsers_;
-    std::vector<std::string> allowedIps_;
-    std::vector<std::string> deniedIps_;
+    std::unordered_set<std::string>
+        allowedIps_;  // Changed from vector for O(1) lookup
+    std::unordered_set<std::string>
+        deniedIps_;  // Changed from vector for O(1) lookup
 
-    // Runtime state
-    bool isRunning_;
+    // Runtime state (atomic for thread safety)
+    std::atomic<bool> isRunning_;
     uint64_t processId_;
     std::thread monitorThread_;
-    bool monitorThreadStop_ = false;
+    std::atomic<bool> monitorThreadStop_{false};
     std::unordered_map<std::string, SshConnection> activeConnections_;
     std::chrono::system_clock::time_point startTime_;
-    uint64_t totalConnections_ = 0;
-    uint64_t failedAuthAttempts_ = 0;
+    std::atomic<uint64_t> totalConnections_{0};
+    std::atomic<uint64_t> failedAuthAttempts_{0};
 
     // Callbacks
     std::function<void(const SshConnection&)> newConnectionCallback_;

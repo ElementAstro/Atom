@@ -15,14 +15,12 @@
 #include <vector>
 
 #include "atom/macro.hpp"
+#include "detail/callback_queue.hpp"
+#include "detail/platform_dispatch.hpp"
 
 #if defined(ATOM_PLATFORM_WINDOWS)
 #include "../../../cmake/WindowsCompat.hpp"
-#elif defined(ATOM_PLATFORM_APPLE)
-#define ATOM_PLATFORM_MACOS
-#include <dispatch/dispatch.h>
-#elif defined(__linux__)
-#define ATOM_PLATFORM_LINUX
+#elif defined(ATOM_PLATFORM_LINUX)
 #include <sys/sysinfo.h>  // For get_nprocs
 #endif
 
@@ -50,13 +48,7 @@ using future_value_t = decltype(std::declval<T>().get());
 #ifdef ATOM_USE_ASIO
 namespace internal {
 inline asio::thread_pool& get_asio_thread_pool() {
-    // Ensure thread pool is initialized safely and runs with a reasonable
-    // number of threads
-    static asio::thread_pool pool(
-        std::max(1u, std::thread::hardware_concurrency() > 0
-                         ? std::thread::hardware_concurrency()
-                         : 2));
-    return pool;
+    return detail::getAsioThreadPool();
 }
 }  // namespace internal
 #endif
@@ -89,71 +81,21 @@ concept ValidCallable = requires(F&& f, Args&&... args) {
     { std::invoke(std::forward<F>(f), std::forward<Args>(args)...) };
 };
 
-// New: Coroutine awaitable helper class
+// Coroutine awaitable helper class - uses unified platform dispatch
 template <typename T>
 class [[nodiscard]] AwaitableEnhancedFuture {
 public:
     explicit AwaitableEnhancedFuture(std::shared_future<T> future)
         : future_(std::move(future)) {}
 
-    bool await_ready() const noexcept {
+    [[nodiscard]] bool await_ready() const noexcept {
         return future_.wait_for(std::chrono::seconds(0)) ==
                std::future_status::ready;
     }
 
     template <typename Promise>
     void await_suspend(std::coroutine_handle<Promise> handle) const {
-#ifdef ATOM_USE_ASIO
-        asio::post(atom::async::internal::get_asio_thread_pool(),
-                   [future = future_, h = handle]() mutable {
-                       future.wait();  // Wait in an Asio thread pool thread
-                       h.resume();
-                   });
-#elif defined(ATOM_PLATFORM_WINDOWS)
-        // Windows thread pool optimization (original comment)
-        auto thread_proc = [](void* data) -> unsigned long {
-            auto* params = static_cast<
-                std::pair<std::shared_future<T>, std::coroutine_handle<>>*>(
-                data);
-            params->first.wait();
-            params->second.resume();
-            delete params;
-            return 0;
-        };
-
-        auto* params =
-            new std::pair<std::shared_future<T>, std::coroutine_handle<>>(
-                future_, handle);
-        HANDLE threadHandle =
-            CreateThread(nullptr, 0, thread_proc, params, 0, nullptr);
-        if (threadHandle) {
-            CloseHandle(threadHandle);
-        } else {
-            // Handle thread creation failure, e.g., resume immediately or throw
-            delete params;
-            if (handle)
-                handle.resume();  // Or signal error
-        }
-#elif defined(ATOM_PLATFORM_MACOS)
-        auto* params =
-            new std::pair<std::shared_future<T>, std::coroutine_handle<>>(
-                future_, handle);
-        dispatch_async_f(
-            dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
-            params, [](void* ctx) {
-                auto* p = static_cast<
-                    std::pair<std::shared_future<T>, std::coroutine_handle<>>*>(
-                    ctx);
-                p->first.wait();
-                p->second.resume();
-                delete p;
-            });
-#else
-        std::jthread([future = future_, h = handle]() mutable {
-            future.wait();
-            h.resume();
-        }).detach();
-#endif
+        detail::dispatchAwaitSuspend(future_, handle);
     }
 
     T await_resume() const { return future_.get(); }
@@ -168,61 +110,14 @@ public:
     explicit AwaitableEnhancedFuture(std::shared_future<void> future)
         : future_(std::move(future)) {}
 
-    bool await_ready() const noexcept {
+    [[nodiscard]] bool await_ready() const noexcept {
         return future_.wait_for(std::chrono::seconds(0)) ==
                std::future_status::ready;
     }
 
     template <typename Promise>
     void await_suspend(std::coroutine_handle<Promise> handle) const {
-#ifdef ATOM_USE_ASIO
-        asio::post(atom::async::internal::get_asio_thread_pool(),
-                   [future = future_, h = handle]() mutable {
-                       future.wait();  // Wait in an Asio thread pool thread
-                       h.resume();
-                   });
-#elif defined(ATOM_PLATFORM_WINDOWS)
-        auto thread_proc = [](void* data) -> unsigned long {
-            auto* params = static_cast<
-                std::pair<std::shared_future<void>, std::coroutine_handle<>>*>(
-                data);
-            params->first.wait();
-            params->second.resume();
-            delete params;
-            return 0;
-        };
-
-        auto* params =
-            new std::pair<std::shared_future<void>, std::coroutine_handle<>>(
-                future_, handle);
-        HANDLE threadHandle =
-            CreateThread(nullptr, 0, thread_proc, params, 0, nullptr);
-        if (threadHandle) {
-            CloseHandle(threadHandle);
-        } else {
-            delete params;
-            if (handle)
-                handle.resume();
-        }
-#elif defined(ATOM_PLATFORM_MACOS)
-        auto* params =
-            new std::pair<std::shared_future<void>, std::coroutine_handle<>>(
-                future_, handle);
-        dispatch_async_f(
-            dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
-            params, [](void* ctx) {
-                auto* p = static_cast<std::pair<std::shared_future<void>,
-                                                std::coroutine_handle<>>*>(ctx);
-                p->first.wait();
-                p->second.resume();
-                delete p;
-            });
-#else
-        std::jthread([future = future_, h = handle]() mutable {
-            future.wait();
-            h.resume();
-        }).detach();
-#endif
+        detail::dispatchAwaitSuspend(future_, handle);
     }
 
     void await_resume() const { future_.get(); }
@@ -1180,10 +1075,9 @@ auto whenAll(InputIt first, InputIt last,
 template <typename... Futures>
     requires(FutureCompatible<future_value_t<std::decay_t<Futures>>> &&
              ...)  // Ensure results are FutureCompatible
-auto whenAll(Futures&&... futures)
-    -> std::future<std::tuple<
-        future_value_t<std::decay_t<Futures>>...>> {  // Ensure decay for
-                                                      // future_value_t
+auto whenAll(Futures&&... futures) -> std::future<
+    std::tuple<future_value_t<std::decay_t<Futures>>...>> {  // Ensure decay for
+                                                             // future_value_t
 
     auto promise = std::make_shared<
         std::promise<std::tuple<future_value_t<std::decay_t<Futures>>...>>>();

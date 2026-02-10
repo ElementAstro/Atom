@@ -4,13 +4,14 @@
  * Copyright (C) 2024 Max Qian <lightapt.com>
  */
 
-#include "atom/connection/tcpclient.hpp"
+#include "atom/connection/tcp/tcpclient.hpp"
 #include <gtest/gtest.h>
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
 #include <vector>
+#include "atom/connection/tcp/tcp_common.hpp"
 
 #ifdef _WIN32
 #include <winsock2.h>

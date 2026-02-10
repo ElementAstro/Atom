@@ -6,84 +6,40 @@
 
 /*************************************************
 Date: 2024-5-24
-Description: UDP Client Class
+Description: Asynchronous UDP Client Class using Asio
 *************************************************/
 
 #ifndef ATOM_CONNECTION_ASYNC_UDPCLIENT_HPP
 #define ATOM_CONNECTION_ASYNC_UDPCLIENT_HPP
 
 #include <asio.hpp>
-#include <atomic>  // For std::atomic
 #include <chrono>
 #include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "udp_common.hpp"
+
 namespace atom::async::connection {
 
+// Import common types from udp namespace
+using atom::connection::udp::RemoteEndpoint;
+using atom::connection::udp::SocketOption;
+using atom::connection::udp::UdpError;
+using atom::connection::udp::UdpResult;
+using atom::connection::udp::UdpStatistics;
+
 /**
- * @class UdpClient
- * @brief Represents a UDP client for sending and receiving datagrams.
- * This class provides a high-performance, thread-safe UDP client implementation
- * using modern C++ features for asynchronous I/O, concurrency, and scalability.
+ * @class AsyncUdpClient
+ * @brief Represents an asynchronous UDP client for sending and receiving
+ * datagrams. This class provides a high-performance, thread-safe UDP client
+ * implementation using Asio for asynchronous I/O operations.
  */
-class UdpClient {
+class AsyncUdpClient {
 public:
-    enum class SocketOption {
-        Broadcast,
-        ReuseAddress,
-        ReceiveBufferSize,
-        SendBufferSize,
-        ReceiveTimeout,  // Note: Not directly supported, use receive() with
-                         // timeout
-        SendTimeout      // Note: Not directly supported, use sendWithTimeout()
-    };
-
-    /**
-     * @struct Statistics
-     * @brief Holds performance and usage statistics for the UDP client.
-     * All counters are atomic to ensure thread-safe, lock-free updates.
-     */
-    struct Statistics {
-        std::atomic<std::size_t> packets_sent{0};
-        std::atomic<std::size_t> packets_received{0};
-        std::atomic<std::size_t> bytes_sent{0};
-        std::atomic<std::size_t> bytes_received{0};
-        std::chrono::steady_clock::time_point start_time;
-
-        Statistics() : start_time(std::chrono::steady_clock::now()) {}
-
-        // Custom copy constructor and assignment operator for atomics
-        Statistics(const Statistics& other)
-            : packets_sent(other.packets_sent.load()),
-              packets_received(other.packets_received.load()),
-              bytes_sent(other.bytes_sent.load()),
-              bytes_received(other.bytes_received.load()),
-              start_time(other.start_time) {}
-
-        Statistics& operator=(const Statistics& other) {
-            if (this != &other) {
-                packets_sent = other.packets_sent.load();
-                packets_received = other.packets_received.load();
-                bytes_sent = other.bytes_sent.load();
-                bytes_received = other.bytes_received.load();
-                start_time = other.start_time;
-            }
-            return *this;
-        }
-
-        /**
-         * @brief Resets all statistical counters to zero.
-         */
-        void reset() {
-            packets_sent.store(0, std::memory_order_relaxed);
-            packets_received.store(0, std::memory_order_relaxed);
-            bytes_sent.store(0, std::memory_order_relaxed);
-            bytes_received.store(0, std::memory_order_relaxed);
-            start_time = std::chrono::steady_clock::now();
-        }
-    };
+    /// Backward compatibility alias for Statistics
+    using Statistics = UdpStatistics;
 
     using OnDataReceivedCallback =
         std::function<void(const std::vector<char>&, const std::string&, int)>;
@@ -91,27 +47,27 @@ public:
     using OnStatusCallback = std::function<void(const std::string&)>;
 
     /**
-     * @brief Constructs a new UDP client using IPv4.
+     * @brief Constructs a new async UDP client using IPv4.
      */
-    UdpClient();
+    AsyncUdpClient();
 
     /**
-     * @brief Constructs a new UDP client with a specified IP version.
+     * @brief Constructs a new async UDP client with a specified IP version.
      * @param use_ipv6 Set to true to use IPv6, false for IPv4.
      */
-    explicit UdpClient(bool use_ipv6);
+    explicit AsyncUdpClient(bool use_ipv6);
 
     /**
      * @brief Destructor.
      */
-    ~UdpClient();
+    ~AsyncUdpClient();
 
-    UdpClient(const UdpClient&) = delete;
-    UdpClient& operator=(const UdpClient&) = delete;
+    AsyncUdpClient(const AsyncUdpClient&) = delete;
+    AsyncUdpClient& operator=(const AsyncUdpClient&) = delete;
 
     // Move constructor and assignment operator
-    UdpClient(UdpClient&&) noexcept;
-    UdpClient& operator=(UdpClient&&) noexcept;
+    AsyncUdpClient(AsyncUdpClient&&) noexcept;
+    AsyncUdpClient& operator=(AsyncUdpClient&&) noexcept;
 
     /**
      * @brief Binds the socket to a specific local port and address.
@@ -120,7 +76,7 @@ public:
      * available interfaces.
      * @return true if the bind operation was successful, false otherwise.
      */
-    bool bind(int port, const std::string& address = "");
+    [[nodiscard]] bool bind(int port, const std::string& address = "");
 
     /**
      * @brief Sends a block of data to a specified destination.
@@ -129,7 +85,8 @@ public:
      * @param data A vector of characters containing the data to send.
      * @return true if the data was sent successfully, false otherwise.
      */
-    bool send(const std::string& host, int port, const std::vector<char>& data);
+    [[nodiscard]] bool send(const std::string& host, int port,
+                            const std::vector<char>& data);
 
     /**
      * @brief Sends a string to a specified destination.
@@ -138,7 +95,8 @@ public:
      * @param data The string data to send.
      * @return true if the data was sent successfully, false otherwise.
      */
-    bool send(const std::string& host, int port, const std::string& data);
+    [[nodiscard]] bool send(const std::string& host, int port,
+                            const std::string& data);
 
     /**
      * @brief Sends data with a specified timeout.
@@ -149,9 +107,9 @@ public:
      * complete.
      * @return true if the data was sent within the timeout, false otherwise.
      */
-    bool sendWithTimeout(const std::string& host, int port,
-                         const std::vector<char>& data,
-                         std::chrono::milliseconds timeout);
+    [[nodiscard]] bool sendWithTimeout(const std::string& host, int port,
+                                       const std::vector<char>& data,
+                                       std::chrono::milliseconds timeout);
 
     /**
      * @brief Sends the same data packet to multiple destinations.
@@ -160,8 +118,9 @@ public:
      * @return The number of destinations to which the data was sent
      * successfully.
      */
-    int batchSend(const std::vector<std::pair<std::string, int>>& destinations,
-                  const std::vector<char>& data);
+    [[nodiscard]] int batchSend(
+        const std::vector<std::pair<std::string, int>>& destinations,
+        const std::vector<char>& data);
 
     /**
      * @brief Receives data synchronously with an optional timeout.
@@ -217,14 +176,14 @@ public:
      * @param value The value to set for the option.
      * @return true if the option was set successfully, false otherwise.
      */
-    bool setSocketOption(SocketOption option, int value);
+    [[nodiscard]] bool setSocketOption(SocketOption option, int value);
 
     /**
      * @brief Sets the Time-To-Live (TTL) for unicast packets.
      * @param ttl The TTL value.
      * @return true if successful, false otherwise.
      */
-    bool setTTL(int ttl);
+    [[nodiscard]] bool setTTL(int ttl);
 
     /**
      * @brief Joins a multicast group.
@@ -233,8 +192,9 @@ public:
      * OS chooses.
      * @return true if the group was joined successfully, false otherwise.
      */
-    bool joinMulticastGroup(const std::string& multicastAddress,
-                            const std::string& interfaceAddress = "");
+    [[nodiscard]] bool joinMulticastGroup(
+        const std::string& multicastAddress,
+        const std::string& interfaceAddress = "");
 
     /**
      * @brief Leaves a multicast group.
@@ -242,20 +202,21 @@ public:
      * @param interfaceAddress The local interface address used to join.
      * @return true if the group was left successfully, false otherwise.
      */
-    bool leaveMulticastGroup(const std::string& multicastAddress,
-                             const std::string& interfaceAddress = "");
+    [[nodiscard]] bool leaveMulticastGroup(
+        const std::string& multicastAddress,
+        const std::string& interfaceAddress = "");
 
     /**
      * @brief Gets the local address and port the socket is bound to.
      * @return A pair containing the local IP address and port.
      */
-    std::pair<std::string, int> getLocalEndpoint() const;
+    [[nodiscard]] std::pair<std::string, int> getLocalEndpoint() const;
 
     /**
      * @brief Checks if the socket is currently open.
      * @return true if the socket is open, false otherwise.
      */
-    bool isOpen() const;
+    [[nodiscard]] bool isOpen() const noexcept;
 
     /**
      * @brief Closes the socket, stopping all operations.
@@ -266,7 +227,7 @@ public:
      * @brief Retrieves the current communication statistics.
      * @return A copy of the Statistics struct.
      */
-    Statistics getStatistics() const;
+    [[nodiscard]] Statistics getStatistics() const;
 
     /**
      * @brief Resets all communication statistics to zero.
@@ -277,6 +238,9 @@ private:
     class Impl;
     std::unique_ptr<Impl> impl_;
 };
+
+/// Backward compatibility alias
+using UdpClient = AsyncUdpClient;
 
 }  // namespace atom::async::connection
 #endif  // ATOM_CONNECTION_ASYNC_UDPCLIENT_HPP

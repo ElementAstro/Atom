@@ -44,7 +44,7 @@ using UdpResult = type::expected<T, UdpError>;
  */
 struct RemoteEndpoint {
     std::string host;
-    uint16_t port;
+    uint16_t port{0};
 
     bool operator==(const RemoteEndpoint&) const = default;
 };
@@ -107,7 +107,7 @@ public:
      * @param options Socket configuration options
      * @throws std::runtime_error if the socket creation or binding fails
      */
-    UdpClient(uint16_t port, const SocketOptions& options = {});
+    explicit UdpClient(uint16_t port, const SocketOptions& options = {});
 
     /**
      * @brief Destructor
@@ -341,4 +341,10 @@ private:
 };
 
 }  // namespace atom::connection
+
+// Bring udp types into connection namespace for convenience
+namespace atom::connection::udp {
+using atom::connection::UdpClient;
+}  // namespace atom::connection::udp
+
 #endif  // ATOM_CONNECTION_UDPCLIENT_HPP

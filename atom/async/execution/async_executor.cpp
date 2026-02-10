@@ -1,4 +1,6 @@
 #include "async_executor.hpp"
+#include "thread_utils.hpp"
+
 #include <spdlog/spdlog.h>
 #include <thread>
 
@@ -297,75 +299,26 @@ std::optional<AsyncExecutor::TaskItem> AsyncExecutor::stealTask(
     return std::nullopt;
 }
 
-// 设置线程亲和性
+// 设置线程亲和性 - 使用统一的 ThreadUtils
 void AsyncExecutor::setThreadAffinity(size_t threadId) {
-#if defined(ATOM_PLATFORM_WINDOWS)
-    // Windows平台实现
-    DWORD_PTR mask = (static_cast<DWORD_PTR>(1)
-                      << (threadId % std::thread::hardware_concurrency()));
-    SetThreadAffinityMask(GetCurrentThread(), mask);
-#elif defined(ATOM_PLATFORM_LINUX)
-    // Linux平台实现
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(threadId % std::thread::hardware_concurrency(), &cpuset);
-    pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-#elif defined(ATOM_PLATFORM_MACOS)
-    // macOS平台实现更复杂，有特殊API
-    thread_affinity_policy_data_t policy = {
-        static_cast<integer_t>(threadId % std::thread::hardware_concurrency())};
-    thread_policy_set(pthread_mach_thread_np(pthread_self()),
-                      THREAD_AFFINITY_POLICY, (thread_policy_t)&policy,
-                      THREAD_AFFINITY_POLICY_COUNT);
-#endif
+    ThreadUtils::setThreadAffinity(
+        static_cast<int>(threadId % std::thread::hardware_concurrency()));
 }
 
-// 设置线程优先级
+// 设置线程优先级 - 使用统一的 ThreadUtils
 void AsyncExecutor::setThreadPriority(std::thread::native_handle_type handle) {
-#if defined(ATOM_PLATFORM_WINDOWS)
-    // Windows平台实现
-    int winPriority = THREAD_PRIORITY_NORMAL;
-    if (m_config.threadPriority > 0) {
-        winPriority = THREAD_PRIORITY_ABOVE_NORMAL;
+    // Map config priority to ThreadUtils::Priority
+    ThreadUtils::Priority priority = ThreadUtils::Priority::Normal;
+    if (m_config.threadPriority > 50) {
+        priority = ThreadUtils::Priority::Highest;
+    } else if (m_config.threadPriority > 0) {
+        priority = ThreadUtils::Priority::AboveNormal;
+    } else if (m_config.threadPriority < -50) {
+        priority = ThreadUtils::Priority::Lowest;
     } else if (m_config.threadPriority < 0) {
-        winPriority = THREAD_PRIORITY_BELOW_NORMAL;
+        priority = ThreadUtils::Priority::BelowNormal;
     }
-    ::SetThreadPriority(reinterpret_cast<HANDLE>(handle), winPriority);
-#elif defined(ATOM_PLATFORM_LINUX)
-    // Linux平台实现
-    int policy;
-    struct sched_param param;
-
-    pthread_getschedparam(handle, &policy, &param);
-
-    // 调整优先级
-    int min_prio = sched_get_priority_min(policy);
-    int max_prio = sched_get_priority_max(policy);
-    int prio_range = max_prio - min_prio;
-
-    // 映射自定义优先级到系统范围
-    param.sched_priority =
-        min_prio + ((prio_range * (m_config.threadPriority + 100)) / 200);
-
-    pthread_setschedparam(handle, policy, &param);
-#elif defined(ATOM_PLATFORM_MACOS)
-    // macOS平台实现
-    struct sched_param param;
-    int policy;
-
-    pthread_getschedparam(handle, &policy, &param);
-
-    // 调整优先级
-    int min_prio = sched_get_priority_min(policy);
-    int max_prio = sched_get_priority_max(policy);
-    int prio_range = max_prio - min_prio;
-
-    // 映射自定义优先级到系统范围
-    param.sched_priority =
-        min_prio + ((prio_range * (m_config.threadPriority + 100)) / 200);
-
-    pthread_setschedparam(handle, policy, &param);
-#endif
+    ThreadUtils::setThreadPriority(handle, priority);
 }
 
 // 统计信息收集线程

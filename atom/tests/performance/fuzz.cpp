@@ -26,7 +26,7 @@ thread_local RandomDataGenerator* threadLocalGenerator = nullptr;
 }  // namespace
 
 void RandomDataGenerator::validateCount(int count,
-                                        const std::string& paramName) const {
+                                        std::string_view paramName) const {
     if (count < 0) {
         throw RandomGenerationError(std::format(
             "Invalid {} value: {} (must be non-negative)", paramName, count));
@@ -34,7 +34,7 @@ void RandomDataGenerator::validateCount(int count,
 }
 
 void RandomDataGenerator::validateProbability(
-    double probability, const std::string& paramName) const {
+    double probability, std::string_view paramName) const {
     if (probability < 0.0 || probability > 1.0) {
         throw RandomGenerationError(
             std::format("Invalid {} value: {} (must be between 0.0 and 1.0)",
@@ -95,8 +95,8 @@ auto RandomDataGenerator::updateConfig(const RandomConfig& config)
     return *this;
 }
 
-auto RandomDataGenerator::generateIntegers(int count, int min,
-                                           int max) -> std::vector<int> {
+auto RandomDataGenerator::generateIntegers(int count, int min, int max)
+    -> std::vector<int> {
     validateCount(count, "count");
 
     if (max == -1) {
@@ -124,8 +124,8 @@ auto RandomDataGenerator::generateInteger(int min, int max) -> int {
     });
 }
 
-auto RandomDataGenerator::generateReals(int count, double min,
-                                        double max) -> std::vector<double> {
+auto RandomDataGenerator::generateReals(int count, double min, double max)
+    -> std::vector<double> {
     validateCount(count, "count");
     validateRange(min, max, "real range");
 
@@ -149,8 +149,8 @@ auto RandomDataGenerator::generateReal(double min, double max) -> double {
 }
 
 auto RandomDataGenerator::generateString(
-    int length, bool alphanumeric,
-    std::optional<std::string_view> charset) -> std::string {
+    int length, bool alphanumeric, std::optional<std::string_view> charset)
+    -> std::string {
     validateCount(length, "string length");
 
     return withExclusiveLock([&]() {
@@ -444,8 +444,8 @@ auto RandomDataGenerator::generateIPv4Address(
     });
 }
 
-auto RandomDataGenerator::generateMACAddress(bool upperCase,
-                                             char separator) -> std::string {
+auto RandomDataGenerator::generateMACAddress(bool upperCase, char separator)
+    -> std::string {
     return withExclusiveLock([&]() {
         std::ostringstream oss;
 
@@ -527,8 +527,9 @@ auto RandomDataGenerator::generateURL(std::optional<std::string_view> protocol,
     });
 }
 
-auto RandomDataGenerator::generateNormalDistribution(
-    int count, double mean, double stddev) -> std::vector<double> {
+auto RandomDataGenerator::generateNormalDistribution(int count, double mean,
+                                                     double stddev)
+    -> std::vector<double> {
     validateCount(count, "count");
 
     if (stddev < 0) {
@@ -541,8 +542,9 @@ auto RandomDataGenerator::generateNormalDistribution(
     });
 }
 
-auto RandomDataGenerator::generateExponentialDistribution(
-    int count, double lambda) -> std::vector<double> {
+auto RandomDataGenerator::generateExponentialDistribution(int count,
+                                                          double lambda)
+    -> std::vector<double> {
     validateCount(count, "count");
 
     if (lambda <= 0) {

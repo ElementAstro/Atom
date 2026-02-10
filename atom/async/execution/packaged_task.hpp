@@ -11,25 +11,13 @@
 #include <vector>
 
 #include "atom/async/future.hpp"
+#include "atom/macro.hpp"
 
-#ifdef __cpp_lib_hardware_interference_size
-#ifdef __has_include
-#if __has_include(<new>)
-#include <new>
-using std::hardware_constructive_interference_size;
-using std::hardware_destructive_interference_size;
-#else
-constexpr std::size_t hardware_constructive_interference_size = 64;
-constexpr std::size_t hardware_destructive_interference_size = 64;
-#endif
-#else
-constexpr std::size_t hardware_constructive_interference_size = 64;
-constexpr std::size_t hardware_destructive_interference_size = 64;
-#endif
-#else
-constexpr std::size_t hardware_constructive_interference_size = 64;
-constexpr std::size_t hardware_destructive_interference_size = 64;
-#endif
+// Use unified cache line size from macro.hpp
+constexpr std::size_t hardware_constructive_interference_size =
+    ATOM_CACHE_LINE_SIZE;
+constexpr std::size_t hardware_destructive_interference_size =
+    ATOM_CACHE_LINE_SIZE;
 
 #ifdef ATOM_USE_LOCKFREE_QUEUE
 #include <boost/lockfree/queue.hpp>

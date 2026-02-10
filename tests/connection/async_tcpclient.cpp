@@ -1,4 +1,5 @@
-#include "atom/connection/async_tcpclient.hpp"
+#include "atom/connection/tcp/async_tcpclient.hpp"
+#include "atom/connection/tcp/tcp_common.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -472,13 +473,16 @@ TEST_F(TcpClientTest, ConnectionTimeout) {
 
     // Try to connect to a non-existent server (should timeout)
     auto start_time = std::chrono::steady_clock::now();
-    bool connected = client_->connect("192.0.2.1", 12345, std::chrono::milliseconds(200)); // RFC5737 test address
+    bool connected = client_->connect(
+        "192.0.2.1", 12345,
+        std::chrono::milliseconds(200));  // RFC5737 test address
     auto end_time = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        end_time - start_time);
 
     EXPECT_FALSE(connected);
-    EXPECT_GE(duration.count(), 100); // Should respect timeout
-    EXPECT_LE(duration.count(), 500); // Should not take much longer
+    EXPECT_GE(duration.count(), 100);  // Should respect timeout
+    EXPECT_LE(duration.count(), 500);  // Should not take much longer
 }
 
 // Test send with timeout
@@ -486,16 +490,18 @@ TEST_F(TcpClientTest, SendWithTimeout) {
     client_ = std::make_unique<TcpClient>();
     ASSERT_TRUE(client_->connect("127.0.0.1", port_));
 
-    std::vector<char> large_data(1024 * 1024, 'A'); // 1MB of data
+    std::vector<char> large_data(1024 * 1024, 'A');  // 1MB of data
 
     auto start_time = std::chrono::steady_clock::now();
-    bool sent = client_->sendWithTimeout(large_data, std::chrono::milliseconds(1000));
+    bool sent =
+        client_->sendWithTimeout(large_data, std::chrono::milliseconds(1000));
     auto end_time = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        end_time - start_time);
 
     // Should complete within timeout and succeed
     EXPECT_TRUE(sent);
-    EXPECT_LE(duration.count(), 1200); // Allow some tolerance
+    EXPECT_LE(duration.count(), 1200);  // Allow some tolerance
 }
 
 // Test receive with specific size
@@ -537,12 +543,13 @@ TEST_F(TcpClientTest, RequestResponseCycle) {
     std::string request = "REQUEST";
     std::vector<char> request_data(request.begin(), request.end());
 
-    auto response_future = client_->requestResponse(request_data, request.size());
+    auto response_future =
+        client_->requestResponse(request_data, request.size());
     ASSERT_EQ(response_future.wait_for(2s), std::future_status::ready);
 
     auto response = response_future.get();
     std::string response_string(response.begin(), response.end());
-    EXPECT_EQ(response_string, request); // Echo server returns same data
+    EXPECT_EQ(response_string, request);  // Echo server returns same data
 }
 
 // Test concurrent request-response cycles
@@ -557,7 +564,8 @@ TEST_F(TcpClientTest, ConcurrentRequestResponse) {
     for (int i = 0; i < num_requests; ++i) {
         std::string request = "Request" + std::to_string(i);
         std::vector<char> request_data(request.begin(), request.end());
-        futures.push_back(client_->requestResponse(request_data, request.size()));
+        futures.push_back(
+            client_->requestResponse(request_data, request.size()));
     }
 
     // Wait for all responses

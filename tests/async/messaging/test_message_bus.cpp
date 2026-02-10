@@ -4,7 +4,7 @@
 #include <asio/io_context.hpp>
 #include <memory>
 
-#include "atom/async/message_bus.hpp"
+#include "atom/async/messaging/message_bus.hpp"
 
 using namespace atom::async;
 

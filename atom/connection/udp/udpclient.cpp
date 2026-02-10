@@ -52,10 +52,7 @@ constexpr size_t MAX_BUFFER_SIZE = 65536;
 constexpr char BROADCAST_ADDR[] = "255.255.255.255";
 
 // Utility functions
-bool isValidPort(uint16_t port) {
-    return port > 0 &&
-           port <= MAX_PORT;  // Allow system ports for privileged processes
-}
+bool isValidPort(uint16_t port) { return port > 0 && port <= MAX_PORT; }
 
 bool setSocketNonBlocking(int socket) {
 #ifdef _WIN32
@@ -95,7 +92,6 @@ bool isMulticastAddress(const std::string& ipAddress) {
     if (inet_pton(AF_INET, ipAddress.c_str(), &(sa.sin_addr)) != 1) {
         return false;
     }
-
     uint32_t addr = ntohl(sa.sin_addr.s_addr);
     // Multicast addresses are in the range 224.0.0.0 to 239.255.255.255
     return (addr & 0xF0000000) == 0xE0000000;
@@ -210,7 +206,7 @@ public:
                 return type::unexpected(UdpError::InvalidParameter);
             }
 
-            struct sockaddr_in address {};
+            struct sockaddr_in address{};
             address.sin_family = AF_INET;
             address.sin_addr.s_addr = INADDR_ANY;
             address.sin_port = htons(port);
@@ -370,7 +366,7 @@ public:
                 return type::unexpected(UdpError::InvalidParameter);
             }
 
-            struct addrinfo hints {};
+            struct addrinfo hints{};
             struct addrinfo* result = nullptr;
 
             hints.ai_family = AF_INET;
@@ -427,7 +423,7 @@ public:
                 return type::unexpected(UdpError::BroadcastError);
             }
 
-            struct sockaddr_in broadcastAddr {};
+            struct sockaddr_in broadcastAddr{};
             broadcastAddr.sin_family = AF_INET;
             broadcastAddr.sin_port = htons(port);
 
@@ -505,7 +501,7 @@ public:
                 }
 #else
                 // Use epoll for timeout on Linux/Unix
-                struct epoll_event event {};
+                struct epoll_event event{};
                 event.events = EPOLLIN;
                 event.data.fd = socket_;
 
@@ -530,7 +526,7 @@ public:
             }
 
             std::vector<char> data(maxSize);
-            struct sockaddr_in clientAddress {};
+            struct sockaddr_in clientAddress{};
             socklen_t clientAddressLength = sizeof(clientAddress);
 
             ssize_t bytesRead =
@@ -579,7 +575,7 @@ public:
                 return type::unexpected(UdpError::InvalidParameter);
             }
 
-            struct ip_mreq mreq {};
+            struct ip_mreq mreq{};
 
             // Set the multicast IP address
             if (inet_pton(AF_INET, groupAddress.c_str(), &mreq.imr_multiaddr) <=
@@ -620,7 +616,7 @@ public:
                 return type::unexpected(UdpError::InvalidParameter);
             }
 
-            struct ip_mreq mreq {};
+            struct ip_mreq mreq{};
 
             // Set the multicast IP address
             if (inet_pton(AF_INET, groupAddress.c_str(), &mreq.imr_multiaddr) <=
@@ -670,7 +666,7 @@ public:
                 return type::unexpected(UdpError::MulticastError);
             }
 
-            struct sockaddr_in multicastAddr {};
+            struct sockaddr_in multicastAddr{};
             multicastAddr.sin_family = AF_INET;
             multicastAddr.sin_port = htons(port);
 
@@ -824,7 +820,7 @@ private:
         std::vector<char> buffer(bufferSize);
 
         while (!receivingStopped_ && !stopToken.stop_requested()) {
-            struct sockaddr_in clientAddress {};
+            struct sockaddr_in clientAddress{};
             socklen_t clientAddressLength = sizeof(clientAddress);
 
             ssize_t bytesRead =
@@ -912,8 +908,6 @@ private:
 
 // UdpClient implementation
 UdpClient::UdpClient() : impl_(std::make_unique<Impl>()) {}
-
-UdpClient::UdpClient(uint16_t port) : impl_(std::make_unique<Impl>(port)) {}
 
 UdpClient::UdpClient(uint16_t port, const SocketOptions& options)
     : impl_(std::make_unique<Impl>(port, options)) {}
@@ -1007,6 +1001,21 @@ UdpResult<bool> UdpClient::startReceiving(size_t bufferSize) noexcept {
                 onStatusChangeCallback_(status);
             }
         });
+}
+
+void UdpClient::setOnDataReceivedCallback(
+    std::function<void(std::span<const char>, const RemoteEndpoint&)>
+        callback) {
+    onDataReceivedCallback_ = std::move(callback);
+}
+
+void UdpClient::setOnErrorCallback(
+    std::function<void(UdpError, const std::string&)> callback) {
+    onErrorCallback_ = std::move(callback);
+}
+
+void UdpClient::setOnStatusChangeCallback(std::function<void(bool)> callback) {
+    onStatusChangeCallback_ = std::move(callback);
 }
 
 void UdpClient::stopReceiving() noexcept { impl_->stopReceiving(); }

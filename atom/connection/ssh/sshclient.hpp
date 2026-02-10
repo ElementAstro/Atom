@@ -15,10 +15,6 @@ Description: SSH Client
 #ifndef ATOM_CONNECTION_SSHCLIENT_HPP
 #define ATOM_CONNECTION_SSHCLIENT_HPP
 
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <stdexcept>
 #include <string>
 #include <vector>
 

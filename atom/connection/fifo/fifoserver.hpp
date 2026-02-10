@@ -16,15 +16,13 @@ Description: FIFO Server
 #define ATOM_CONNECTION_FIFOSERVER_HPP
 
 #include <concepts>
-#include <functional>
 #include <future>
-
 #include <memory>
-#include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
-#include "fifoclient.hpp"  // For MessagePriority enum
+
+#include "fifo_common.hpp"
 
 namespace atom::connection {
 
@@ -35,52 +33,6 @@ template <typename T>
 concept Messageable = std::convertible_to<T, std::string> || requires(T t) {
     { std::to_string(t) } -> std::convertible_to<std::string>;
 };
-
-/**
- * @brief Enum representing different log levels for the server
- */
-enum class LogLevel { Debug, Info, Warning, Error, None };
-
-// MessagePriority enum is defined in fifoclient.hpp
-
-/**
- * @brief Structure to hold server statistics
- */
-struct ServerStats {
-    size_t messages_sent = 0;
-    size_t messages_failed = 0;
-    size_t bytes_sent = 0;
-    double avg_message_size = 0.0;
-    double avg_latency_ms = 0.0;
-    size_t queue_high_watermark = 0;
-    size_t current_queue_size = 0;
-};
-
-/**
- * @brief Configuration options for the FIFO server
- */
-struct ServerConfig {
-    size_t max_queue_size = 1000;
-    size_t max_message_size = 1024 * 1024;  // 1MB
-    bool enable_compression = false;
-    bool enable_encryption = false;
-    bool auto_reconnect = true;
-    int max_reconnect_attempts = 5;
-    std::chrono::milliseconds reconnect_delay{500};
-    LogLevel log_level = LogLevel::Info;
-    bool flush_on_stop = true;
-    std::optional<std::chrono::milliseconds> message_ttl{};
-};
-
-/**
- * @brief Type for message handling callbacks
- */
-using MessageCallback = std::function<void(const std::string&, bool)>;
-
-/**
- * @brief Type for server status change callbacks
- */
-using StatusCallback = std::function<void(bool)>;
 
 /**
  * @brief A class representing a server for handling FIFO messages.

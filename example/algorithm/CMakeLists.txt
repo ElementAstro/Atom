@@ -34,6 +34,7 @@ endfunction()
 
 # Process examples in organized subdirectories
 set(ALGORITHM_CATEGORIES
+    common
     core
     crypto
     hash

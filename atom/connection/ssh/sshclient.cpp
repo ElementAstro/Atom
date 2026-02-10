@@ -19,8 +19,10 @@ Description: SSH Client
 #include <filesystem>
 #include <iomanip>
 #include <sstream>
+#include <vector>
 
 #include "atom/error/exception.hpp"
+#include "sftp_guard.hpp"
 
 namespace fs = std::filesystem;
 
@@ -124,38 +126,28 @@ void SSHClient::executeCommand(const std::string &command,
                                std::vector<std::string> &output) {
     ensureConnected();
 
-    ssh_channel channel = ssh_channel_new(ssh_session_);
-    if (channel == nullptr) {
+    SshChannelGuard channel(ssh_channel_new(ssh_session_));
+    if (!channel) {
         THROW_RUNTIME_ERROR("Failed to create SSH channel.");
     }
 
-    struct ChannelGuard {
-        ssh_channel channel;
-        ~ChannelGuard() {
-            if (channel != nullptr) {
-                ssh_channel_send_eof(channel);
-                ssh_channel_close(channel);
-                ssh_channel_free(channel);
-            }
-        }
-    } guard{channel};
-
-    int rc = ssh_channel_open_session(channel);
+    int rc = ssh_channel_open_session(channel.get());
     if (rc != SSH_OK) {
         THROW_RUNTIME_ERROR("Failed to open SSH channel: " +
                             std::string(ssh_get_error(ssh_session_)));
     }
 
-    rc = ssh_channel_request_exec(channel, command.c_str());
+    rc = ssh_channel_request_exec(channel.get(), command.c_str());
     if (rc != SSH_OK) {
         THROW_RUNTIME_ERROR("Failed to execute command: " +
                             std::string(ssh_get_error(ssh_session_)));
     }
 
-    char buffer[256];
+    constexpr int COMMAND_BUFFER_SIZE = 4096;
+    char buffer[COMMAND_BUFFER_SIZE];
     int nbytes = 0;
-    while ((nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0)) >
-           0) {
+    while ((nbytes = ssh_channel_read(channel.get(), buffer, sizeof(buffer),
+                                      0)) > 0) {
         output.emplace_back(buffer, nbytes);
     }
 
@@ -182,9 +174,8 @@ void SSHClient::executeCommands(const std::vector<std::string> &commands,
 bool SSHClient::fileExists(const std::string &remote_path) const {
     ensureConnected();
 
-    sftp_attributes attrs = sftp_stat(sftp_session_, remote_path.c_str());
-    if (attrs != nullptr) {
-        sftp_attributes_free(attrs);
+    SftpAttributesGuard attrs(sftp_stat(sftp_session_, remote_path.c_str()));
+    if (attrs) {
         return true;
     }
 
@@ -241,20 +232,19 @@ std::vector<std::string> SSHClient::listDirectory(
     std::vector<std::string> file_list;
     ensureConnected();
 
-    sftp_dir dir = sftp_opendir(sftp_session_, remote_path.c_str());
-    if (dir == nullptr) {
+    SftpDirGuard dir(sftp_opendir(sftp_session_, remote_path.c_str()));
+    if (!dir) {
         THROW_RUNTIME_ERROR("Failed to open remote directory '" + remote_path +
                             "': error code " +
                             std::to_string(sftp_get_error(sftp_session_)));
     }
 
     sftp_attributes attributes = nullptr;
-    while ((attributes = sftp_readdir(sftp_session_, dir)) != nullptr) {
-        file_list.emplace_back(attributes->name);
-        sftp_attributes_free(attributes);
+    while ((attributes = sftp_readdir(sftp_session_, dir.get())) != nullptr) {
+        SftpAttributesGuard attrsGuard(attributes);
+        file_list.emplace_back(attrsGuard.get()->name);
     }
 
-    sftp_closedir(dir);
     return file_list;
 }
 
@@ -292,73 +282,71 @@ void SSHClient::downloadFile(const std::string &remote_path,
                              const std::string &local_path) {
     ensureConnected();
 
-    sftp_file file = sftp_open(sftp_session_, remote_path.c_str(), O_RDONLY, 0);
-    if (file == nullptr) {
+    constexpr size_t TRANSFER_BUFFER_SIZE = 65536;  // 64KB for better perf
+
+    SftpFileGuard remoteFile(
+        sftp_open(sftp_session_, remote_path.c_str(), O_RDONLY, 0));
+    if (!remoteFile) {
         THROW_RUNTIME_ERROR("Failed to open remote file for download: " +
                             remote_path);
     }
 
-    FILE *fp = std::fopen(local_path.c_str(), "wb");
-    if (fp == nullptr) {
-        sftp_close(file);
+    LocalFileGuard localFile(std::fopen(local_path.c_str(), "wb"));
+    if (!localFile) {
         THROW_RUNTIME_ERROR("Failed to open local file for download: " +
                             local_path);
     }
 
-    char buffer[4096];
+    std::vector<char> buffer(TRANSFER_BUFFER_SIZE);
     int nbytes = 0;
-    while ((nbytes = sftp_read(file, buffer, sizeof(buffer))) > 0) {
-        const size_t written = std::fwrite(buffer, 1, nbytes, fp);
+    while ((nbytes = sftp_read(remoteFile.get(), buffer.data(),
+                               buffer.size())) > 0) {
+        const size_t written =
+            std::fwrite(buffer.data(), 1, nbytes, localFile.get());
         if (written != static_cast<size_t>(nbytes)) {
-            std::fclose(fp);
-            sftp_close(file);
             THROW_RUNTIME_ERROR("Failed to write to local file: " + local_path);
         }
     }
 
     if (nbytes < 0) {
         const int err = sftp_get_error(sftp_session_);
-        std::fclose(fp);
-        sftp_close(file);
         THROW_RUNTIME_ERROR("Failed to download file '" + remote_path +
                             "': error code " + std::to_string(err));
     }
-
-    std::fclose(fp);
-    sftp_close(file);
 }
 
 void SSHClient::uploadFile(const std::string &local_path,
                            const std::string &remote_path) {
     ensureConnected();
 
-    constexpr int permissions = 0644;
+    constexpr int DEFAULT_FILE_PERMISSIONS = 0644;
+    constexpr size_t TRANSFER_BUFFER_SIZE = 65536;  // 64KB for better perf
 
-    sftp_file file = sftp_open(sftp_session_, remote_path.c_str(),
-                               O_WRONLY | O_CREAT | O_TRUNC, permissions);
-    if (file == nullptr) {
+    SftpFileGuard remoteFile(sftp_open(sftp_session_, remote_path.c_str(),
+                                       O_WRONLY | O_CREAT | O_TRUNC,
+                                       DEFAULT_FILE_PERMISSIONS));
+    if (!remoteFile) {
         THROW_RUNTIME_ERROR("Failed to open remote file for upload: " +
                             remote_path);
     }
 
-    FILE *fp = std::fopen(local_path.c_str(), "rb");
-    if (fp == nullptr) {
-        sftp_close(file);
+    LocalFileGuard localFile(std::fopen(local_path.c_str(), "rb"));
+    if (!localFile) {
         THROW_RUNTIME_ERROR("Failed to open local file for upload: " +
                             local_path);
     }
 
-    char buffer[4096];
+    std::vector<char> buffer(TRANSFER_BUFFER_SIZE);
     size_t nbytes = 0;
-    while ((nbytes = std::fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+    while ((nbytes = std::fread(buffer.data(), 1, buffer.size(),
+                                localFile.get())) > 0) {
         size_t written_total = 0;
         while (written_total < nbytes) {
-            const int written = sftp_write(file, buffer + written_total,
-                                           nbytes - written_total);
+            const int written =
+                sftp_write(remoteFile.get(), buffer.data() + written_total,
+                           nbytes - written_total);
             if (written < 0) {
                 const int err = sftp_get_error(sftp_session_);
-                std::fclose(fp);
-                sftp_close(file);
                 THROW_RUNTIME_ERROR("Failed to upload file '" + remote_path +
                                     "': error code " + std::to_string(err));
             }
@@ -366,14 +354,9 @@ void SSHClient::uploadFile(const std::string &local_path,
         }
     }
 
-    if (std::ferror(fp) != 0) {
-        std::fclose(fp);
-        sftp_close(file);
+    if (std::ferror(localFile.get()) != 0) {
         THROW_RUNTIME_ERROR("Failed to read from local file: " + local_path);
     }
-
-    std::fclose(fp);
-    sftp_close(file);
 }
 
 void SSHClient::uploadDirectory(const std::string &local_path,

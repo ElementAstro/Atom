@@ -294,7 +294,7 @@ TEST_F(LockTest, CountingSemaphoreBasicFunctionality) {
     EXPECT_LE(maxActiveCount.load(), 3);
 }
 
-// Test LockFactory
+// Test LockFactory with ILock interface
 TEST_F(LockTest, LockFactoryCreation) {
     auto spinlock = LockFactory::createLock(LockFactory::LockType::SPINLOCK);
     EXPECT_NE(spinlock, nullptr);
@@ -306,6 +306,106 @@ TEST_F(LockTest, LockFactoryCreation) {
     auto adaptiveSpinlock =
         LockFactory::createLock(LockFactory::LockType::ADAPTIVE_SPINLOCK);
     EXPECT_NE(adaptiveSpinlock, nullptr);
+}
+
+// Test ILock interface functionality
+TEST_F(LockTest, ILockInterfaceFunctionality) {
+    auto lock = LockFactory::createLock(LockFactory::LockType::SPINLOCK);
+    ASSERT_NE(lock, nullptr);
+
+    // Test lock/unlock through interface
+    lock->lock();
+    lock->unlock();
+
+    // Test tryLock through interface
+    EXPECT_TRUE(lock->tryLock());
+    lock->unlock();
+
+    // Test concurrent access through ILock interface
+    std::atomic<int> counter{0};
+    std::vector<std::thread> threads;
+    const int numThreads = 5;
+    const int incrementsPerThread = 100;
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&lock, &counter, incrementsPerThread]() {
+            for (int j = 0; j < incrementsPerThread; ++j) {
+                lock->lock();
+                ++counter;
+                lock->unlock();
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_EQ(counter.load(), numThreads * incrementsPerThread);
+}
+
+// Test exponential backoff utility
+TEST_F(LockTest, ExponentialBackoffUtility) {
+    std::atomic<bool> flag{false};
+    std::atomic<int> spinCount{0};
+
+    // Test that backoff completes when condition is met
+    std::thread setter([&flag]() {
+        std::this_thread::sleep_for(50ms);
+        flag.store(true);
+    });
+
+    BackoffConfig config;
+    config.maxBackoff = 64;
+    config.yieldThreshold = 32;
+
+    bool result = exponentialBackoffSpin(
+        [&flag, &spinCount]() {
+            spinCount.fetch_add(1);
+            return flag.load();
+        },
+        config);
+
+    EXPECT_TRUE(result);
+    EXPECT_GT(spinCount.load(), 0);
+
+    setter.join();
+}
+
+// Test optimized tryLock with timeout
+TEST_F(LockTest, OptimizedTryLockWithTimeout) {
+    Spinlock lock;
+
+    // Lock should be acquired immediately when free
+    auto start = std::chrono::steady_clock::now();
+    bool acquired = lock.tryLock(100ms);
+    auto elapsed = std::chrono::steady_clock::now() - start;
+
+    EXPECT_TRUE(acquired);
+    EXPECT_LT(elapsed, 10ms);  // Should be nearly instant
+    lock.unlock();
+
+    // Lock should timeout when held by another thread
+    std::atomic<bool> lockHeld{false};
+    std::thread holder([&lock, &lockHeld]() {
+        lock.lock();
+        lockHeld.store(true);
+        std::this_thread::sleep_for(200ms);
+        lock.unlock();
+    });
+
+    while (!lockHeld.load()) {
+        std::this_thread::yield();
+    }
+
+    start = std::chrono::steady_clock::now();
+    acquired = lock.tryLock(50ms);
+    elapsed = std::chrono::steady_clock::now() - start;
+
+    EXPECT_FALSE(acquired);
+    EXPECT_GE(elapsed, 45ms);  // Should have waited close to timeout
+
+    holder.join();
 }
 
 // Test lock performance characteristics

@@ -10,18 +10,15 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <concepts>
 #include <condition_variable>
 #include <coroutine>
 #include <cstddef>
 #include <deque>
-#include <exception>
 #include <functional>
 #include <future>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <source_location>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -29,54 +26,15 @@
 #include <utility>
 #include <vector>
 
-// Add spdlog include
+#include "common.hpp"
 #include "spdlog/spdlog.h"
 
-// Conditional Asio include
 #ifdef ATOM_USE_ASIO
 #include <asio.hpp>
 #include <asio/post.hpp>
 #endif
 
 #include "atom/macro.hpp"
-
-#if defined(ATOM_PLATFORM_WINDOWS)
-#include "../../../cmake/WindowsCompat.hpp"
-#elif defined(ATOM_PLATFORM_APPLE)
-#include <TargetConditionals.h>
-#endif
-
-#if defined(__GNUC__) || defined(__clang__)
-#define ATOM_LIKELY(x) __builtin_expect(!!(x), 1)
-#define ATOM_UNLIKELY(x) __builtin_expect(!!(x), 0)
-#define ATOM_FORCE_INLINE __attribute__((always_inline)) inline
-#define ATOM_NO_INLINE __attribute__((noinline))
-#define ATOM_RESTRICT __restrict__
-#elif defined(_MSC_VER)
-#define ATOM_LIKELY(x) (x)
-#define ATOM_UNLIKELY(x) (x)
-#define ATOM_FORCE_INLINE __forceinline
-#define ATOM_NO_INLINE __declspec(noinline)
-#define ATOM_RESTRICT __restrict
-#else
-#define ATOM_LIKELY(x) (x)
-#define ATOM_UNLIKELY(x) (x)
-#define ATOM_FORCE_INLINE inline
-#define ATOM_NO_INLINE
-#define ATOM_RESTRICT
-#endif
-
-#ifndef ATOM_CACHE_LINE_SIZE
-#if defined(ATOM_PLATFORM_WINDOWS)
-#define ATOM_CACHE_LINE_SIZE 64
-#elif defined(ATOM_PLATFORM_MACOS)
-#define ATOM_CACHE_LINE_SIZE 128
-#else
-#define ATOM_CACHE_LINE_SIZE 64
-#endif
-#endif
-
-#define ATOM_CACHELINE_ALIGN alignas(ATOM_CACHE_LINE_SIZE)
 
 // Add boost lockfree support
 #ifdef ATOM_USE_LOCKFREE_QUEUE
@@ -86,38 +44,17 @@
 
 namespace atom::async {
 
-// Custom exception classes for message queue operations (messages in English)
-class MessageQueueException : public std::runtime_error {
+// Custom exception classes - use base classes from common.hpp
+class MessageQueueException : public MessagingException {
 public:
     explicit MessageQueueException(
         const std::string& message,
         const std::source_location& location = std::source_location::current())
-        : std::runtime_error(message + " at " + location.file_name() + ":" +
-                             std::to_string(location.line()) + " in " +
-                             location.function_name()) {
-        // Example: spdlog::error("MessageQueueException: {} (at {}:{} in {})",
-        // message, location.file_name(), location.line(),
-        // location.function_name());
-    }
+        : MessagingException(message, location) {}
 };
 
-class SubscriberException : public MessageQueueException {
-public:
-    explicit SubscriberException(
-        const std::string& message,
-        const std::source_location& location = std::source_location::current())
-        : MessageQueueException(message, location) {}
-};
-
-class TimeoutException : public MessageQueueException {
-public:
-    explicit TimeoutException(
-        const std::string& message,
-        const std::source_location& location = std::source_location::current())
-        : MessageQueueException(message, location) {}
-};
-
-// Concept to ensure message type has basic requirements - 增强版本
+// Use SubscriberException and TimeoutException from common.hpp
+// Concept to ensure message type has basic requirements
 template <typename T>
 concept MessageType =
     std::copy_constructible<T> && std::move_constructible<T> &&
@@ -420,7 +357,7 @@ public:
                         if (stoken.stop_requested())
                             break;
 
-                        // After wait, re-check queues. Lock is held.
+                    // After wait, re-check queues. Lock is held.
 #ifdef ATOM_USE_LOCKFREE_QUEUE
                         if (m_lockfreeQueue_.pop(
                                 currentMessage)) {  // Pop while lock is held

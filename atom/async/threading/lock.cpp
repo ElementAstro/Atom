@@ -14,9 +14,9 @@ Description: Some useful spinlock implementations
 
 #include "lock.hpp"
 
-#include <functional>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <thread>
 
 namespace atom::async {
@@ -41,32 +41,16 @@ void Spinlock::lock() {
         return;
     }
 
-    // Slow path - exponential backoff
-    uint32_t backoff_count = 1;
-    constexpr uint32_t MAX_BACKOFF = 1024;
-
-    while (true) {
-        // Perform exponential backoff
-        for (uint32_t i = 0; i < backoff_count; ++i) {
-            cpu_relax();
-        }
-
-        // Try to acquire the lock
-        if (!flag_.test_and_set(std::memory_order_acquire)) {
+    // Slow path - use exponential backoff utility
+    exponentialBackoffSpin([this]() noexcept {
+        bool acquired = !flag_.test_and_set(std::memory_order_acquire);
 #ifdef ATOM_DEBUG
-            owner_.store(current_id, std::memory_order_relaxed);
+        if (acquired) {
+            owner_.store(std::this_thread::get_id(), std::memory_order_relaxed);
+        }
 #endif
-            return;
-        }
-
-        // Increase backoff time (capped at maximum)
-        backoff_count = std::min(backoff_count * 2, MAX_BACKOFF);
-
-        // Yield to scheduler if we've been spinning for a while
-        if (backoff_count >= MAX_BACKOFF / 2) {
-            std::this_thread::yield();
-        }
-    }
+        return acquired;
+    });
 }
 
 auto Spinlock::tryLock() noexcept -> bool {
@@ -148,27 +132,10 @@ void UnfairSpinlock::lock() noexcept {
         return;
     }
 
-    // Slow path with backoff
-    uint32_t backoff_count = 1;
-    constexpr uint32_t MAX_BACKOFF = 1024;
-
-    while (true) {
-        for (uint32_t i = 0; i < backoff_count; ++i) {
-            cpu_relax();
-        }
-
-        if (!flag_.test_and_set(std::memory_order_acquire)) {
-            return;
-        }
-
-        // Increase backoff time (capped at maximum)
-        backoff_count = std::min(backoff_count * 2, MAX_BACKOFF);
-
-        // Yield to scheduler if we've been spinning for a while
-        if (backoff_count >= MAX_BACKOFF / 2) {
-            std::this_thread::yield();
-        }
-    }
+    // Slow path - use exponential backoff utility
+    exponentialBackoffSpin([this]() noexcept {
+        return !flag_.test_and_set(std::memory_order_acquire);
+    });
 }
 
 void UnfairSpinlock::unlock() noexcept {
@@ -200,36 +167,21 @@ void BoostSpinlock::lock() noexcept {
         return;
     }
 
-    // Slow path - exponential backoff
-    uint32_t backoff_count = 1;
-    constexpr uint32_t MAX_BACKOFF = 1024;
-
-    // Wait until we acquire the lock
-    while (true) {
+    // Slow path - use exponential backoff utility
+    exponentialBackoffSpin([this]() noexcept {
         // First check if lock is free without doing an exchange
         if (!flag_.load(boost::memory_order_relaxed)) {
             // Lock appears free, try to acquire
             if (!flag_.exchange(true, boost::memory_order_acquire)) {
 #ifdef ATOM_DEBUG
-                owner_.store(current_id, boost::memory_order_relaxed);
+                owner_.store(std::this_thread::get_id(),
+                             boost::memory_order_relaxed);
 #endif
-                return;
+                return true;
             }
         }
-
-        // Perform exponential backoff
-        for (uint32_t i = 0; i < backoff_count; ++i) {
-            cpu_relax();
-        }
-
-        // Increase backoff time (capped at maximum)
-        backoff_count = std::min(backoff_count * 2, MAX_BACKOFF);
-
-        // Yield to scheduler if we've been spinning for a while
-        if (backoff_count >= MAX_BACKOFF / 2) {
-            std::this_thread::yield();
-        }
-    }
+        return false;
+    });
 }
 
 auto BoostSpinlock::tryLock() noexcept -> bool {
@@ -261,72 +213,72 @@ void BoostSpinlock::unlock() noexcept {
 }
 #endif
 
-auto LockFactory::createLock(LockType type)
-    -> std::unique_ptr<void, std::function<void(void*)>> {
+auto LockFactory::createLock(LockType type) -> std::unique_ptr<ILock> {
     switch (type) {
-        case LockType::SPINLOCK: {
-            auto lock = new Spinlock();
-            return {lock,
-                    [](void* ptr) { delete static_cast<Spinlock*>(ptr); }};
-        }
-        case LockType::TICKET_SPINLOCK: {
-            auto lock = new TicketSpinlock();
-            return {lock, [](void* ptr) {
-                        delete static_cast<TicketSpinlock*>(ptr);
-                    }};
-        }
-        case LockType::UNFAIR_SPINLOCK: {
-            auto lock = new UnfairSpinlock();
-            return {lock, [](void* ptr) {
-                        delete static_cast<UnfairSpinlock*>(ptr);
-                    }};
-        }
-        case LockType::ADAPTIVE_SPINLOCK: {
-            auto lock = new AdaptiveSpinlock();
-            return {lock, [](void* ptr) {
-                        delete static_cast<AdaptiveSpinlock*>(ptr);
-                    }};
-        }
+        case LockType::SPINLOCK:
+            return std::make_unique<LockAdapter<Spinlock>>();
+        case LockType::TICKET_SPINLOCK:
+            return std::make_unique<TicketSpinlockAdapter>();
+        case LockType::UNFAIR_SPINLOCK:
+            return std::make_unique<LockAdapter<UnfairSpinlock>>();
+        case LockType::ADAPTIVE_SPINLOCK:
+            return std::make_unique<LockAdapter<AdaptiveSpinlock>>();
+#ifdef ATOM_HAS_ATOMIC_WAIT
+        case LockType::ATOMIC_WAIT_LOCK:
+            return std::make_unique<LockAdapter<AtomicWaitLock>>();
+#endif
+#ifdef ATOM_PLATFORM_WINDOWS
+        case LockType::WINDOWS_SPINLOCK:
+            return std::make_unique<LockAdapter<WindowsSpinlock>>();
+        case LockType::WINDOWS_SHARED_MUTEX:
+            return std::make_unique<LockAdapter<WindowsSharedMutex>>();
+#endif
+#ifdef ATOM_PLATFORM_MACOS
+        case LockType::DARWIN_SPINLOCK:
+            return std::make_unique<LockAdapter<DarwinSpinlock>>();
+#endif
+#ifdef ATOM_PLATFORM_LINUX
+        case LockType::LINUX_FUTEX_LOCK:
+            return std::make_unique<LockAdapter<LinuxFutexLock>>();
+#endif
 #ifdef ATOM_USE_BOOST_LOCKFREE
-        case LockType::BOOST_SPINLOCK: {
-            auto lock = new BoostSpinlock();
-            return {lock,
-                    [](void* ptr) { delete static_cast<BoostSpinlock*>(ptr); }};
-        }
+        case LockType::BOOST_SPINLOCK:
+            return std::make_unique<LockAdapter<BoostSpinlock>>();
 #endif
 #ifdef ATOM_USE_BOOST_LOCKS
-        case LockType::BOOST_MUTEX: {
-            auto lock = new boost::mutex();
-            return {lock,
-                    [](void* ptr) { delete static_cast<boost::mutex*>(ptr); }};
-        }
-        case LockType::BOOST_RECURSIVE_MUTEX: {
-            auto lock = new BoostRecursiveMutex();
-            return {lock, [](void* ptr) {
-                        delete static_cast<BoostRecursiveMutex*>(ptr);
-                    }};
-        }
-        case LockType::BOOST_SHARED_MUTEX: {
-            auto lock = new BoostSharedMutex();
-            return {lock, [](void* ptr) {
-                        delete static_cast<BoostSharedMutex*>(ptr);
-                    }};
-        }
+        case LockType::BOOST_MUTEX:
+            return std::make_unique<LockAdapter<boost::mutex>>();
+        case LockType::BOOST_RECURSIVE_MUTEX:
+            return std::make_unique<LockAdapter<BoostRecursiveMutex>>();
+        case LockType::BOOST_SHARED_MUTEX:
+            return std::make_unique<LockAdapter<BoostSharedMutex>>();
 #endif
+        case LockType::STD_MUTEX:
+            return std::make_unique<LockAdapter<std::mutex>>();
+        case LockType::STD_RECURSIVE_MUTEX:
+            return std::make_unique<LockAdapter<std::recursive_mutex>>();
+        case LockType::STD_SHARED_MUTEX:
+            return std::make_unique<LockAdapter<std::shared_mutex>>();
+        case LockType::AUTO_OPTIMIZED:
+            return createOptimizedLock();
         default:
             throw std::invalid_argument("Invalid lock type");
     }
 }
 
-auto LockFactory::createOptimizedLock()
-    -> std::unique_ptr<void, std::function<void(void*)>> {
-    // For now, return a simple mutex as the optimized lock
-    // In a real implementation, this could choose between different lock types
-    // based on platform capabilities and performance characteristics
-    auto mutex = std::make_unique<std::mutex>();
-    auto deleter = [](void* ptr) { delete static_cast<std::mutex*>(ptr); };
-    return std::unique_ptr<void, std::function<void(void*)>>(mutex.release(),
-                                                             deleter);
+auto LockFactory::createOptimizedLock() -> std::unique_ptr<ILock> {
+    // Select the best lock based on platform capabilities
+#ifdef ATOM_PLATFORM_WINDOWS
+    return std::make_unique<LockAdapter<WindowsSpinlock>>();
+#elif defined(ATOM_PLATFORM_LINUX)
+    return std::make_unique<LockAdapter<LinuxFutexLock>>();
+#elif defined(ATOM_PLATFORM_MACOS)
+    return std::make_unique<LockAdapter<DarwinSpinlock>>();
+#elif defined(ATOM_HAS_ATOMIC_WAIT)
+    return std::make_unique<LockAdapter<AtomicWaitLock>>();
+#else
+    return std::make_unique<LockAdapter<AdaptiveSpinlock>>();
+#endif
 }
 
 }  // namespace atom::async

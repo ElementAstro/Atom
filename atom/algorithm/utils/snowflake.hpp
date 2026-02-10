@@ -318,6 +318,7 @@ public:
             if (i < N - 1) {
                 sequence_ = (sequence_ + 1) & SEQUENCE_MASK;
                 if (sequence_ == 0) {
+                    ++statistics_.sequence_rollovers;
                     u64 current_last = last_timestamp_.load();
                     timestamp = wait_next_millis(current_last);
                     // Re-check after wait in case another thread updated it
@@ -330,6 +331,9 @@ public:
                 }
             }
         }
+
+        // Update statistics
+        statistics_.total_ids_generated += N;
 
         return ids;
     }
@@ -413,6 +417,7 @@ public:
 #endif
         last_timestamp_.store(0);
         sequence_ = 0;
+        statistics_ = Statistics{};
     }
 
     /**

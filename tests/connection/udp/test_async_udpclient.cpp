@@ -223,18 +223,18 @@ TEST_F(AsyncUdpClientTest, GetStatistics) {
     ASSERT_TRUE(client_->bind(12360));
 
     auto stats = client_->getStatistics();
-    EXPECT_EQ(stats.packets_sent, 0);
-    EXPECT_EQ(stats.packets_received, 0);
-    EXPECT_EQ(stats.bytes_sent, 0);
-    EXPECT_EQ(stats.bytes_received, 0);
+    EXPECT_EQ(stats.packetsSent, 0);
+    EXPECT_EQ(stats.packetsReceived, 0);
+    EXPECT_EQ(stats.bytesSent, 0);
+    EXPECT_EQ(stats.bytesReceived, 0);
 
     // Send some data to update statistics
     std::vector<char> testData = {'S', 't', 'a', 't', 's'};
     client_->send("127.0.0.1", 12361, testData);
 
     auto updatedStats = client_->getStatistics();
-    EXPECT_GT(updatedStats.packets_sent, 0);
-    EXPECT_GT(updatedStats.bytes_sent, 0);
+    EXPECT_GT(updatedStats.packetsSent, 0);
+    EXPECT_GT(updatedStats.bytesSent, 0);
 }
 
 TEST_F(AsyncUdpClientTest, ResetStatistics) {
@@ -245,26 +245,24 @@ TEST_F(AsyncUdpClientTest, ResetStatistics) {
     client_->send("127.0.0.1", 12363, testData);
 
     auto stats = client_->getStatistics();
-    EXPECT_GT(stats.packets_sent, 0);
+    EXPECT_GT(stats.packetsSent, 0);
 
     client_->resetStatistics();
     auto resetStats = client_->getStatistics();
-    EXPECT_EQ(resetStats.packets_sent, 0);
-    EXPECT_EQ(resetStats.bytes_sent, 0);
+    EXPECT_EQ(resetStats.packetsSent, 0);
+    EXPECT_EQ(resetStats.bytesSent, 0);
 }
 
 TEST_F(AsyncUdpClientTest, SocketOptions) {
     ASSERT_TRUE(client_->bind(12364));
 
     // Test socket option setting (implementation dependent)
+    EXPECT_NO_THROW(client_->setSocketOption(SocketOption::Broadcast, 1));
+    EXPECT_NO_THROW(client_->setSocketOption(SocketOption::ReuseAddress, 1));
     EXPECT_NO_THROW(
-        client_->setSocketOption(UdpClient::SocketOption::Broadcast, 1));
+        client_->setSocketOption(SocketOption::ReceiveBufferSize, 8192));
     EXPECT_NO_THROW(
-        client_->setSocketOption(UdpClient::SocketOption::ReuseAddress, 1));
-    EXPECT_NO_THROW(client_->setSocketOption(
-        UdpClient::SocketOption::ReceiveBufferSize, 8192));
-    EXPECT_NO_THROW(client_->setSocketOption(
-        UdpClient::SocketOption::SendBufferSize, 8192));
+        client_->setSocketOption(SocketOption::SendBufferSize, 8192));
 }
 
 TEST_F(AsyncUdpClientTest, IPv6Support) {

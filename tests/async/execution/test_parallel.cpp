@@ -11,6 +11,7 @@
 #include <span>
 #include <vector>
 #include "atom/async/execution/parallel.hpp"
+#include "atom/async/execution/thread_utils.hpp"
 
 using namespace atom::async;
 
@@ -303,13 +304,15 @@ TEST_F(ParallelTest, SIMDOperationsWithSpan) {
 
 TEST_F(ParallelTest, ThreadConfiguration) {
     // Test thread affinity (may not work on all systems)
-    bool affinity_result = Parallel::ThreadConfig::setThreadAffinity(0);
+    bool affinity_result = ThreadUtils::setThreadAffinity(0);
     // Don't assert on this as it may not be supported
+    (void)affinity_result;
 
     // Test thread priority
-    bool priority_result = Parallel::ThreadConfig::setThreadPriority(
-        Parallel::ThreadConfig::Priority::Normal);
+    bool priority_result =
+        ThreadUtils::setThreadPriority(ThreadUtils::Priority::Normal);
     // Don't assert on this as it may not be supported
+    (void)priority_result;
 }
 
 TEST_F(ParallelTest, EmptyRanges) {

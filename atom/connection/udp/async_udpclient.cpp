@@ -2,15 +2,20 @@
 
 #include <asio.hpp>
 #include <future>
-#include <iostream>
 #include <mutex>
 #include <sstream>
 #include <thread>
 #include <unordered_map>
 
+#include "atom/log/loguru.hpp"
+
 namespace atom::async::connection {
 
-class UdpClient::Impl {
+using atom::connection::udp::RemoteEndpoint;
+using atom::connection::udp::SocketOption;
+using atom::connection::udp::UdpStatistics;
+
+class AsyncUdpClient::Impl {
 public:
     Impl()
         : io_context_(),
@@ -125,8 +130,8 @@ public:
 
             // Update statistics
             std::lock_guard<std::mutex> lock(stats_mutex_);
-            stats_.packets_sent++;
-            stats_.bytes_sent += sent;
+            stats_.packetsSent++;
+            stats_.bytesSent += sent;
 
             if (onStatusCallback_) {
                 std::stringstream ss;
@@ -251,8 +256,8 @@ public:
 
             // Update statistics
             std::lock_guard<std::mutex> lock(stats_mutex_);
-            stats_.packets_received++;
-            stats_.bytes_received += data.size();
+            stats_.packetsReceived++;
+            stats_.bytesReceived += data.size();
 
             if (onStatusCallback_) {
                 std::stringstream ss;
@@ -616,7 +621,7 @@ public:
         }
     }
 
-    Statistics getStatistics() const {
+    UdpStatistics getStatistics() const {
         std::lock_guard<std::mutex> lock(stats_mutex_);
         return stats_;
     }
@@ -651,8 +656,8 @@ private:
                         // Update statistics
                         {
                             std::lock_guard<std::mutex> lock(stats_mutex_);
-                            stats_.packets_received++;
-                            stats_.bytes_received += bytes_recvd;
+                            stats_.packetsReceived++;
+                            stats_.bytesReceived += bytes_recvd;
                         }
 
                         // Invoke callback
@@ -705,7 +710,7 @@ private:
     OnStatusCallback onStatusCallback_;
 
     mutable std::mutex stats_mutex_;
-    Statistics stats_;
+    UdpStatistics stats_;
 
     std::mutex receive_mutex_;
     bool use_ipv6_;
@@ -716,95 +721,96 @@ private:
 
 // Main class implementations delegating to Impl
 
-UdpClient::UdpClient() : impl_(std::make_unique<Impl>()) {}
+AsyncUdpClient::AsyncUdpClient() : impl_(std::make_unique<Impl>()) {}
 
-UdpClient::UdpClient(bool use_ipv6) : impl_(std::make_unique<Impl>(use_ipv6)) {}
+AsyncUdpClient::AsyncUdpClient(bool use_ipv6)
+    : impl_(std::make_unique<Impl>(use_ipv6)) {}
 
-UdpClient::~UdpClient() = default;
+AsyncUdpClient::~AsyncUdpClient() = default;
 
 // Move operations
-UdpClient::UdpClient(UdpClient&&) noexcept = default;
-UdpClient& UdpClient::operator=(UdpClient&&) noexcept = default;
+AsyncUdpClient::AsyncUdpClient(AsyncUdpClient&&) noexcept = default;
+AsyncUdpClient& AsyncUdpClient::operator=(AsyncUdpClient&&) noexcept = default;
 
-bool UdpClient::bind(int port, const std::string& address) {
+bool AsyncUdpClient::bind(int port, const std::string& address) {
     return impl_->bind(port, address);
 }
 
-bool UdpClient::send(const std::string& host, int port,
-                     const std::vector<char>& data) {
+bool AsyncUdpClient::send(const std::string& host, int port,
+                          const std::vector<char>& data) {
     return impl_->send(host, port, data);
 }
 
-bool UdpClient::send(const std::string& host, int port,
-                     const std::string& data) {
+bool AsyncUdpClient::send(const std::string& host, int port,
+                          const std::string& data) {
     return impl_->send(host, port, data);
 }
 
-bool UdpClient::sendWithTimeout(const std::string& host, int port,
-                                const std::vector<char>& data,
-                                std::chrono::milliseconds timeout) {
+bool AsyncUdpClient::sendWithTimeout(const std::string& host, int port,
+                                     const std::vector<char>& data,
+                                     std::chrono::milliseconds timeout) {
     return impl_->sendWithTimeout(host, port, data, timeout);
 }
 
-int UdpClient::batchSend(
+int AsyncUdpClient::batchSend(
     const std::vector<std::pair<std::string, int>>& destinations,
     const std::vector<char>& data) {
     return impl_->batchSend(destinations, data);
 }
 
-std::vector<char> UdpClient::receive(size_t size, std::string& remoteHost,
-                                     int& remotePort,
-                                     std::chrono::milliseconds timeout) {
+std::vector<char> AsyncUdpClient::receive(size_t size, std::string& remoteHost,
+                                          int& remotePort,
+                                          std::chrono::milliseconds timeout) {
     return impl_->receive(size, remoteHost, remotePort, timeout);
 }
 
-void UdpClient::setOnDataReceivedCallback(
+void AsyncUdpClient::setOnDataReceivedCallback(
     const OnDataReceivedCallback& callback) {
     impl_->setOnDataReceivedCallback(callback);
 }
 
-void UdpClient::setOnErrorCallback(const OnErrorCallback& callback) {
+void AsyncUdpClient::setOnErrorCallback(const OnErrorCallback& callback) {
     impl_->setOnErrorCallback(callback);
 }
 
-void UdpClient::setOnStatusCallback(const OnStatusCallback& callback) {
+void AsyncUdpClient::setOnStatusCallback(const OnStatusCallback& callback) {
     impl_->setOnStatusCallback(callback);
 }
 
-void UdpClient::startReceiving(size_t bufferSize) {
+void AsyncUdpClient::startReceiving(size_t bufferSize) {
     impl_->startReceiving(bufferSize);
 }
 
-void UdpClient::stopReceiving() { impl_->stopReceiving(); }
+void AsyncUdpClient::stopReceiving() { impl_->stopReceiving(); }
 
-bool UdpClient::setSocketOption(SocketOption option, int value) {
+bool AsyncUdpClient::setSocketOption(SocketOption option, int value) {
     return impl_->setSocketOption(option, value);
 }
 
-bool UdpClient::setTTL(int ttl) { return impl_->setTTL(ttl); }
+bool AsyncUdpClient::setTTL(int ttl) { return impl_->setTTL(ttl); }
 
-bool UdpClient::joinMulticastGroup(const std::string& multicastAddress,
-                                   const std::string& interfaceAddress) {
+bool AsyncUdpClient::joinMulticastGroup(const std::string& multicastAddress,
+                                        const std::string& interfaceAddress) {
     return impl_->joinMulticastGroup(multicastAddress, interfaceAddress);
 }
 
-bool UdpClient::leaveMulticastGroup(const std::string& multicastAddress,
-                                    const std::string& interfaceAddress) {
+bool AsyncUdpClient::leaveMulticastGroup(const std::string& multicastAddress,
+                                         const std::string& interfaceAddress) {
     return impl_->leaveMulticastGroup(multicastAddress, interfaceAddress);
 }
 
-std::pair<std::string, int> UdpClient::getLocalEndpoint() const {
+std::pair<std::string, int> AsyncUdpClient::getLocalEndpoint() const {
     return impl_->getLocalEndpoint();
 }
 
-bool UdpClient::isOpen() const { return impl_->isOpen(); }
+bool AsyncUdpClient::isOpen() const noexcept { return impl_->isOpen(); }
 
-void UdpClient::close() { impl_->close(); }
+void AsyncUdpClient::close() { impl_->close(); }
 
-UdpClient::Statistics UdpClient::getStatistics() const {
+AsyncUdpClient::Statistics AsyncUdpClient::getStatistics() const {
     return impl_->getStatistics();
 }
 
-void UdpClient::resetStatistics() { impl_->resetStatistics(); }
+void AsyncUdpClient::resetStatistics() { impl_->resetStatistics(); }
 
 }  // namespace atom::async::connection

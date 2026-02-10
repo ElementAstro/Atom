@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "atom/async/execution/thread_utils.hpp"
 #include "atom/async/parallel.hpp"
 
 // 辅助函数 - 打印数组内容样本template <typename T>
@@ -764,26 +765,23 @@ std::cout << "\n===== 边界情况和错误处理示例 =====\n";
     }
 }
 
-// 线程配置示例
+// 线程配置示例 - 使用 ThreadUtils
 {
-    std::cout << "\n线程配置示例:" << std::endl;
-
-    std::cout << "线程亲和性和优先级设置功能需要 "
-                 "atom::async::Parallel::ThreadConfig 实现，已被注释"
-              << std::endl;
+    std::cout << "\n线程配置示例 (使用 ThreadUtils):" << std::endl;
 
     // 尝试设置线程亲和性
-    bool success = false;  // 置为 false 作为默认值
+    bool success = atom::async::ThreadUtils::setThreadAffinity(0);
     std::cout << "设置当前线程亲和性到CPU 0: " << (success ? "成功" : "失败")
               << std::endl;
 
     // 尝试设置负数CPU ID (应该失败)
-    success = false;  // 置为 false 作为默认值
+    success = atom::async::ThreadUtils::setThreadAffinity(-1);
     std::cout << "设置当前线程亲和性到CPU -1: " << (success ? "成功" : "失败")
               << std::endl;
 
     // 尝试设置线程优先级
-    success = false;  // 置为 false 作为默认值
+    success = atom::async::ThreadUtils::setThreadPriority(
+        atom::async::ThreadUtils::Priority::Normal);
     std::cout << "设置当前线程优先级为Normal: " << (success ? "成功" : "失败")
               << std::endl;
 }

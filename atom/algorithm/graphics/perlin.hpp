@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../rust_numeric.hpp"
+#include "noise_base.hpp"
 
 #ifdef ATOM_USE_OPENCL
 #include <CL/cl.h>
@@ -21,24 +22,22 @@
 #endif
 
 namespace atom::algorithm {
-class PerlinNoise {
+
+/**
+ * @brief Perlin noise generator.
+ *
+ * Classic Perlin noise implementation with optional OpenCL acceleration.
+ */
+class PerlinNoise : public NoiseBase {
 public:
-    explicit PerlinNoise(u32 seed = std::default_random_engine::default_seed) {
-        p.resize(512);
-        std::iota(p.begin(), p.begin() + 256, 0);
-
-        std::default_random_engine engine(seed);
-        std::ranges::shuffle(std::span(p.begin(), p.begin() + 256), engine);
-
-        std::ranges::copy(std::span(p.begin(), p.begin() + 256),
-                          p.begin() + 256);
-
+    explicit PerlinNoise(u32 seed = std::default_random_engine::default_seed)
+        : NoiseBase(seed) {
 #ifdef ATOM_USE_OPENCL
         initializeOpenCL();
 #endif
     }
 
-    ~PerlinNoise() {
+    ~PerlinNoise() override {
 #ifdef ATOM_USE_OPENCL
         cleanupOpenCL();
 #endif
@@ -75,8 +74,9 @@ public:
 
     [[nodiscard]] auto generateNoiseMap(
         i32 width, i32 height, f64 scale, i32 octaves, f64 persistence,
-        f64 /*lacunarity*/, i32 seed = std::default_random_engine::default_seed)
-        const -> std::vector<std::vector<f64>> {
+        f64 /*lacunarity*/,
+        i32 seed = std::default_random_engine::default_seed) const
+        -> std::vector<std::vector<f64>> {
         std::vector<std::vector<f64>> noiseMap(height, std::vector<f64>(width));
         std::default_random_engine prng(seed);
         std::uniform_real_distribution<f64> dist(-10000, 10000);
@@ -96,7 +96,7 @@ public:
     }
 
 private:
-    std::vector<i32> p;
+    // Uses inherited perm_ from NoiseBase
 
 #ifdef ATOM_USE_OPENCL
     cl_context context_;
@@ -176,23 +176,23 @@ private:
                 float v = lerp(y, 0.0f, 1.0f);
                 float w = lerp(z, 0.0f, 1.0f);
 
-                int A = p[X] + Y;
-                int AA = p[A] + Z;
-                int AB = p[A + 1] + Z;
-                int B = p[X + 1] + Y;
-                int BA = p[B] + Z;
-                int BB = p[B + 1] + Z;
+                int A = perm_[X] + Y;
+                int AA = perm_[A] + Z;
+                int AB = perm_[A + 1] + Z;
+                int B = perm_[X + 1] + Y;
+                int BA = perm_[B] + Z;
+                int BB = perm_[B + 1] + Z;
 
                 float res = lerp(
                     w,
-                    lerp(v, lerp(u, grad(p[AA], x, y, z), grad(p[BA], x - 1, y, z)),
-                         lerp(u, grad(p[AB], x, y - 1, z),
-                              grad(p[BB], x - 1, y - 1, z))),
+                    lerp(v, lerp(u, grad(perm_[AA], x, y, z), grad(perm_[BA], x - 1, y, z)),
+                         lerp(u, grad(perm_[AB], x, y - 1, z),
+                              grad(perm_[BB], x - 1, y - 1, z))),
                     lerp(v,
-                         lerp(u, grad(p[AA + 1], x, y, z - 1),
-                              grad(p[BA + 1], x - 1, y, z - 1)),
-                         lerp(u, grad(p[AB + 1], x, y - 1, z - 1),
-                              grad(p[BB + 1], x - 1, y - 1, z - 1))));
+                         lerp(u, grad(perm_[AA + 1], x, y, z - 1),
+                              grad(perm_[BA + 1], x - 1, y, z - 1)),
+                         lerp(u, grad(perm_[AB + 1], x, y - 1, z - 1),
+                              grad(perm_[BB + 1], x - 1, y - 1, z - 1))));
                 result[gid] = (res + 1) / 2;
             }
 
@@ -288,7 +288,7 @@ private:
 
         cl_mem p_buffer =
             clCreateBuffer(context_, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                           p.size() * sizeof(i32), p.data(), &err);
+                           perm_.size() * sizeof(i32), perm_.data(), &err);
         if (err != CL_SUCCESS) {
 #ifdef ATOM_USE_BOOST
             throw boost::enable_error_info(std::runtime_error(
@@ -351,7 +351,7 @@ private:
         z -= std::floor(z);
 
         // Compute fade curves for each of x, y, z
-#ifdef USE_SIMD
+#ifdef ATOM_USE_SIMD
         // SIMD-based fade function calculations
         __m256d xSimd = _mm256_set1_pd(x);
         __m256d ySimd = _mm256_set1_pd(y);
@@ -380,24 +380,25 @@ private:
 #endif
 
         // Hash coordinates of the 8 cube corners
-        i32 A = p[X] + Y;
-        i32 AA = p[A] + Z;
-        i32 AB = p[A + 1] + Z;
-        i32 B = p[X + 1] + Y;
-        i32 BA = p[B] + Z;
-        i32 BB = p[B + 1] + Z;
+        i32 A = perm_[X] + Y;
+        i32 AA = perm_[A] + Z;
+        i32 AB = perm_[A + 1] + Z;
+        i32 B = perm_[X + 1] + Y;
+        i32 BA = perm_[B] + Z;
+        i32 BB = perm_[B + 1] + Z;
 
         // Add blended results from 8 corners of cube
-        T res = lerp(
-            w,
-            lerp(v, lerp(u, grad(p[AA], x, y, z), grad(p[BA], x - 1, y, z)),
-                 lerp(u, grad(p[AB], x, y - 1, z),
-                      grad(p[BB], x - 1, y - 1, z))),
-            lerp(v,
-                 lerp(u, grad(p[AA + 1], x, y, z - 1),
-                      grad(p[BA + 1], x - 1, y, z - 1)),
-                 lerp(u, grad(p[AB + 1], x, y - 1, z - 1),
-                      grad(p[BB + 1], x - 1, y - 1, z - 1))));
+        T res = lerp(w,
+                     lerp(v,
+                          lerp(u, grad(perm_[AA], x, y, z),
+                               grad(perm_[BA], x - 1, y, z)),
+                          lerp(u, grad(perm_[AB], x, y - 1, z),
+                               grad(perm_[BB], x - 1, y - 1, z))),
+                     lerp(v,
+                          lerp(u, grad(perm_[AA + 1], x, y, z - 1),
+                               grad(perm_[BA + 1], x - 1, y, z - 1)),
+                          lerp(u, grad(perm_[AB + 1], x, y - 1, z - 1),
+                               grad(perm_[BB + 1], x - 1, y - 1, z - 1))));
         return (res + 1) / 2;  // Normalize to [0,1]
     }
 

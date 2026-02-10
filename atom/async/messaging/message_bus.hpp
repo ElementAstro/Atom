@@ -18,8 +18,6 @@ Description: Main Message Bus with Asio support and additional features
 #include <algorithm>
 #include <any>     // For std::any, std::any_cast, std::bad_any_cast
 #include <chrono>  // For std::chrono
-#include <concepts>
-#include <exception>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -33,7 +31,8 @@ Description: Main Message Bus with Asio support and additional features
 #include <unordered_set>
 #include <vector>
 
-#include "spdlog/spdlog.h"  // Added for logging
+#include "common.hpp"
+#include "spdlog/spdlog.h"
 
 #ifdef ATOM_USE_ASIO
 #include <asio/io_context.hpp>
@@ -57,18 +56,17 @@ Description: Main Message Bus with Asio support and additional features
 
 namespace atom::async {
 
-// C++20 concept for messages
-template <typename T>
-concept MessageConcept =
-    std::copyable<T> && !std::is_pointer_v<T> && !std::is_reference_v<T>;
+// Use MessageConcept from common.hpp
 
 /**
  * @brief Exception class for MessageBus errors
  */
-class MessageBusException : public std::runtime_error {
+class MessageBusException : public MessagingException {
 public:
-    explicit MessageBusException(const std::string& message)
-        : std::runtime_error(message) {}
+    explicit MessageBusException(
+        const std::string& message,
+        const std::source_location& location = std::source_location::current())
+        : MessagingException(message, location) {}
 };
 
 /**
@@ -108,22 +106,6 @@ public:
         std::conditional_t<defined(ATOM_USE_SPSC_QUEUE),
                            boost::lockfree::spsc_queue<PendingMessage>,
                            boost::lockfree::queue<PendingMessage>>;
-#endif
-
-// 平台特定优化
-#if defined(ATOM_PLATFORM_WINDOWS)
-    // Windows特定优化
-    static constexpr bool USE_SLIM_RW_LOCKS = true;
-    static constexpr bool USE_WAITABLE_TIMERS = true;
-#elif defined(ATOM_PLATFORM_APPLE)
-    // macOS特定优化
-    static constexpr bool USE_DISPATCH_QUEUES = true;
-    static constexpr bool USE_SLIM_RW_LOCKS = false;
-    static constexpr bool USE_WAITABLE_TIMERS = false;
-#else
-    // Linux/其他平台优化
-    static constexpr bool USE_SLIM_RW_LOCKS = false;
-    static constexpr bool USE_WAITABLE_TIMERS = false;
 #endif
 
     /**
@@ -1023,9 +1005,9 @@ public:
      * @return A vector of messages.
      */
     template <MessageConcept MessageType>
-    [[nodiscard]] auto getMessageHistory(std::string_view name_sv,
-                                         std::size_t count = K_MAX_HISTORY_SIZE)
-        const -> std::vector<MessageType> {
+    [[nodiscard]] auto getMessageHistory(
+        std::string_view name_sv, std::size_t count = K_MAX_HISTORY_SIZE) const
+        -> std::vector<MessageType> {
         try {
             if (count == 0) {
                 return {};
@@ -1283,7 +1265,7 @@ private:
     /**
      * @brief Extracts the namespace from the message name.
      * @param name_sv The message name.
-     * @return The namespace part of the name.
+     * @return The namespace part of the name (before first dot).
      */
     [[nodiscard]] std::string extractNamespace(
         std::string_view name_sv) const noexcept {
@@ -1291,16 +1273,43 @@ private:
         if (pos != std::string_view::npos) {
             return std::string(name_sv.substr(0, pos));
         }
-        // If no '.', the name itself can be considered a "namespace" or root
-        // level. For consistency, if we always want a distinct namespace part,
-        // this might return empty or the name itself. Current logic: "foo.bar"
-        // -> "foo"; "foo" -> "foo". If "foo" should not be a namespace for
-        // itself, then: return (pos != std::string_view::npos) ?
-        // std::string(name_sv.substr(0, pos)) : "";
-        return std::string(
-            name_sv);  // Treat full name as namespace if no dot, or just the
-                       // part before first dot. The original code returns
-                       // std::string(name) if no dot. Let's keep it.
+        return std::string(name_sv);
+    }
+
+    /**
+     * @brief Helper to schedule delayed task execution.
+     * @param task The task to execute after delay.
+     * @param delay The delay duration.
+     * @param name Task name for logging.
+     */
+    template <typename Task>
+    void scheduleDelayedTask(Task&& task, std::chrono::milliseconds delay,
+                             const std::string& name) {
+#ifdef ATOM_USE_ASIO
+        auto timer = std::make_shared<asio::steady_timer>(io_context_, delay);
+        timer->async_wait(
+            [timer, task_copy = std::forward<Task>(task),
+             name_copy = name](const asio::error_code& errorCode) {
+                if (!errorCode) {
+                    task_copy();
+                } else {
+                    spdlog::error("[MessageBus] Asio timer error for '{}': {}",
+                                  name_copy, errorCode.message());
+                }
+            });
+#else
+        auto wrapper = [delay, task_copy = std::forward<Task>(task),
+                        name_copy = name]() {
+            std::this_thread::sleep_for(delay);
+            try {
+                task_copy();
+            } catch (const std::exception& e) {
+                spdlog::error("[MessageBus] Exception in delayed task '{}': {}",
+                              name_copy, e.what());
+            }
+        };
+        std::thread(wrapper).detach();
+#endif
     }
 
 #ifdef ATOM_USE_LOCKFREE_QUEUE

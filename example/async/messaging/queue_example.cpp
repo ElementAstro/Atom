@@ -322,9 +322,10 @@ for (int i = 1; i <= 10; ++i) {
 
 printSubsection("Transform elements");
 
-// Transform: multiply each element by 10
+// Transform: multiply each element by 10 (now takes const T& and preserves
+// original)
 auto transformedQueue =
-    queue.transform<int>([](int value) { return value * 10; });
+    queue.transform<int>([](const int& value) { return value * 10; });
 
 std::cout << "Original queue: ";
 for (const auto& elem : queue.toVector()) {

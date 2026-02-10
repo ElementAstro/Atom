@@ -1,4 +1,4 @@
-#include "atom/async/safetype.hpp"
+#include "atom/async/sync/safetype.hpp"
 
 #include <pybind11/functional.h>
 #include <pybind11/operators.h>  // For operators like == if needed explicitly for py::object with concepts
@@ -448,7 +448,61 @@ Returns:
                 return py::make_iterator(items.begin(), items.end());
             },
             py::keep_alive<0, 1>(),
-            "Support for iteration over vector elements.");
+            "Support for iteration over vector elements.")
+        .def(
+            "snapshot",
+            [](const atom::async::ThreadSafeVector<py::object>& self) {
+                return self.snapshot();
+            },
+            R"(Get a snapshot (copy) of the current vector contents.
+
+This method returns a copy of all elements, ensuring thread-safe access
+without holding locks during iteration.
+
+Returns:
+    list: A copy of all elements in the vector.
+
+Examples:
+    >>> vec = ThreadSafeVector()
+    >>> vec.push_back("a")
+    >>> vec.push_back("b")
+    >>> snapshot = vec.snapshot()
+    >>> print(snapshot)  # ['a', 'b']
+)")
+        .def(
+            "with_data",
+            [](const atom::async::ThreadSafeVector<py::object>& self,
+               py::function func) -> py::object {
+                return self.withData(
+                    [func](const std::vector<py::object>& data) -> py::object {
+                        py::gil_scoped_acquire acquire;
+                        py::list py_list;
+                        for (const auto& item : data) {
+                            py_list.append(item);
+                        }
+                        return func(py_list);
+                    });
+            },
+            py::arg("func"),
+            R"(Apply a function to the vector data with thread-safe access.
+
+This method provides callback-based access to the underlying data,
+ensuring thread safety during the operation.
+
+Args:
+    func: A function that takes a list and returns a result.
+
+Returns:
+    The result of applying the function to the data.
+
+Examples:
+    >>> vec = ThreadSafeVector()
+    >>> vec.push_back(1)
+    >>> vec.push_back(2)
+    >>> vec.push_back(3)
+    >>> total = vec.with_data(lambda data: sum(data))
+    >>> print(total)  # 6
+)");
 
     // LockFreeList class binding
     py::class_<atom::async::LockFreeList<py::object>>(

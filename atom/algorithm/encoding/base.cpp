@@ -5,6 +5,7 @@
  */
 
 #include "base.hpp"
+#include "../core/hex_utils.hpp"
 #include "../rust_numeric.hpp"
 
 #include <spdlog/spdlog.h>
@@ -25,11 +26,8 @@
 
 namespace atom::algorithm {
 
-// Base64字符表和查找表
-constexpr std::string_view BASE64_CHARS =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "abcdefghijklmnopqrstuvwxyz"
-    "0123456789+/";
+// 使用 detail 命名空间中已定义的 BASE64_CHARS
+using detail::BASE64_CHARS;
 
 // 创建Base64反向查找表
 constexpr auto createReverseLookupTable() {
@@ -300,8 +298,8 @@ void base64EncodeSIMD(std::string_view input, OutputIt dest,
 
 // 改进后的Base64解码实现 - 使用atom::type::expected
 template <typename OutputIt>
-auto base64DecodeImpl(std::string_view input,
-                      OutputIt dest) noexcept -> atom::type::expected<usize> {
+auto base64DecodeImpl(std::string_view input, OutputIt dest) noexcept
+    -> atom::type::expected<usize> {
     usize outSize = 0;
     std::array<u8, 4> inBlock{};
     std::array<u8, 3> outBlock{};
@@ -410,8 +408,8 @@ auto base64DecodeImpl(std::string_view input,
 #ifdef ATOM_USE_SIMD
 // 完善的SIMD优化Base64解码实现
 template <typename OutputIt>
-auto base64DecodeSIMD(std::string_view input,
-                      OutputIt dest) noexcept -> atom::type::expected<usize> {
+auto base64DecodeSIMD(std::string_view input, OutputIt dest) noexcept
+    -> atom::type::expected<usize> {
 #if defined(__AVX2__)
     // AVX2实现
     // 这里应实现完整的AVX2 Base64解码逻辑
@@ -429,8 +427,8 @@ auto base64DecodeSIMD(std::string_view input,
 #endif
 
 // Base64编码接口
-auto base64Encode(std::string_view input,
-                  bool padding) noexcept -> atom::type::expected<std::string> {
+auto base64Encode(std::string_view input, bool padding) noexcept
+    -> atom::type::expected<std::string> {
     try {
         std::string output;
         const usize outSize = ((input.size() + 2) / 3) * 4;
@@ -645,8 +643,8 @@ auto decodeBase32(std::string_view encoded_sv) noexcept
 }
 
 // Base16/Hex encoding implementation
-auto encodeHex(std::span<const std::uint8_t> data,
-               bool uppercase) noexcept -> std::string {
+auto encodeHex(std::span<const std::uint8_t> data, bool uppercase) noexcept
+    -> std::string {
     if (data.empty()) {
         return {};
     }
@@ -675,21 +673,8 @@ auto decodeHex(std::string_view hex) noexcept
         result.reserve(hex.size() / 2);
 
         for (usize i = 0; i < hex.size(); i += 2) {
-            char high = hex[i];
-            char low = hex[i + 1];
-
-            auto hexToNibble = [](char c) -> atom::type::expected<u8> {
-                if (c >= '0' && c <= '9')
-                    return c - '0';
-                if (c >= 'A' && c <= 'F')
-                    return c - 'A' + 10;
-                if (c >= 'a' && c <= 'f')
-                    return c - 'a' + 10;
-                return atom::type::make_unexpected("Invalid hex character");
-            };
-
-            auto highNibble = hexToNibble(high);
-            auto lowNibble = hexToNibble(low);
+            auto highNibble = hexToNibble(hex[i]);
+            auto lowNibble = hexToNibble(hex[i + 1]);
 
             if (!highNibble || !lowNibble) {
                 return atom::type::make_unexpected("Invalid hex character");
@@ -707,8 +692,8 @@ auto decodeHex(std::string_view hex) noexcept
 }
 
 // URL encoding implementation
-auto urlEncode(std::string_view str,
-               bool encodeSpaceAsPlus) noexcept -> std::string {
+auto urlEncode(std::string_view str, bool encodeSpaceAsPlus) noexcept
+    -> std::string {
     std::string result;
     result.reserve(str.size() * 3);  // Worst case: every char needs encoding
 
@@ -747,21 +732,8 @@ auto urlDecode(std::string_view str) noexcept
                         "Invalid URL encoding: incomplete percent sequence");
                 }
 
-                char high = str[i + 1];
-                char low = str[i + 2];
-
-                auto hexToNibble = [](char c) -> atom::type::expected<u8> {
-                    if (c >= '0' && c <= '9')
-                        return c - '0';
-                    if (c >= 'A' && c <= 'F')
-                        return c - 'A' + 10;
-                    if (c >= 'a' && c <= 'f')
-                        return c - 'a' + 10;
-                    return atom::type::make_unexpected("Invalid hex character");
-                };
-
-                auto highNibble = hexToNibble(high);
-                auto lowNibble = hexToNibble(low);
+                auto highNibble = hexToNibble(str[i + 1]);
+                auto lowNibble = hexToNibble(str[i + 2]);
 
                 if (!highNibble || !lowNibble) {
                     return atom::type::make_unexpected(

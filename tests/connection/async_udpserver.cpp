@@ -4,12 +4,12 @@
 #include "atom/connection/async_udpserver.hpp"
 
 #include <asio.hpp>
+#include <atomic>
 #include <chrono>
 #include <future>
+#include <mutex>
 #include <thread>
 #include <vector>
-#include <atomic>
-#include <mutex>
 
 // Silence spdlog during tests for cleaner output
 #define SPDLOG_LEVEL_OFF
@@ -33,7 +33,8 @@ class TestUdpClient {
 public:
     TestUdpClient() : socket_(io_context_) {}
 
-    bool send(const std::string& host, uint16_t port, const std::string& message) {
+    bool send(const std::string& host, uint16_t port,
+              const std::string& message) {
         try {
             asio::ip::udp::resolver resolver(io_context_);
             auto endpoints = resolver.resolve(host, std::to_string(port));
@@ -48,7 +49,8 @@ public:
         }
     }
 
-    std::string receive(uint16_t port, std::chrono::milliseconds timeout = 1000ms) {
+    std::string receive(uint16_t port,
+                        std::chrono::milliseconds timeout = 1000ms) {
         try {
             socket_.open(asio::ip::udp::v4());
             socket_.bind(asio::ip::udp::endpoint(asio::ip::udp::v4(), port));
@@ -60,7 +62,8 @@ public:
             auto start = std::chrono::steady_clock::now();
             while (std::chrono::steady_clock::now() - start < timeout) {
                 asio::error_code ec;
-                size_t received = socket_.receive_from(asio::buffer(buffer), sender_endpoint, 0, ec);
+                size_t received = socket_.receive_from(asio::buffer(buffer),
+                                                       sender_endpoint, 0, ec);
                 if (!ec && received > 0) {
                     socket_.close();
                     return std::string(buffer.data(), received);
@@ -79,27 +82,27 @@ private:
     asio::ip::udp::socket socket_;
 };
 
-// Test fixture for UdpSocketHub
-class UdpSocketHubTest : public ::testing::Test {
+// Test fixture for AsyncUdpServer
+class AsyncUdpServerTest : public ::testing::Test {
 protected:
-    std::unique_ptr<UdpSocketHub> server_;
+    std::unique_ptr<AsyncUdpServer> server_;
     uint16_t port_;
 
     void SetUp() override {
         port_ = find_free_udp_port();
-        server_ = std::make_unique<UdpSocketHub>();
+        server_ = std::make_unique<AsyncUdpServer>();
     }
 
     void TearDown() override {
         if (server_ && server_->isRunning()) {
             server_->stop();
         }
-        std::this_thread::sleep_for(50ms); // Allow cleanup
+        std::this_thread::sleep_for(50ms);  // Allow cleanup
     }
 };
 
 // Basic functionality tests
-TEST_F(UdpSocketHubTest, StartStop) {
+TEST_F(AsyncUdpServerTest, StartStop) {
     EXPECT_FALSE(server_->isRunning());
 
     ASSERT_TRUE(server_->start(port_));
@@ -109,13 +112,14 @@ TEST_F(UdpSocketHubTest, StartStop) {
     EXPECT_FALSE(server_->isRunning());
 }
 
-TEST_F(UdpSocketHubTest, MessageHandling) {
+TEST_F(AsyncUdpServerTest, MessageHandling) {
     std::vector<std::string> received_messages;
     std::vector<std::string> sender_ips;
     std::vector<unsigned short> sender_ports;
     std::mutex messages_mutex;
 
-    server_->addMessageHandler([&](const std::string& message, const std::string& ip, unsigned short port) {
+    server_->addMessageHandler([&](const std::string& message,
+                                   const std::string& ip, unsigned short port) {
         std::lock_guard<std::mutex> lock(messages_mutex);
         received_messages.push_back(message);
         sender_ips.push_back(ip);
@@ -139,7 +143,7 @@ TEST_F(UdpSocketHubTest, MessageHandling) {
     }
 }
 
-TEST_F(UdpSocketHubTest, SendToClient) {
+TEST_F(AsyncUdpServerTest, SendToClient) {
     ASSERT_TRUE(server_->start(port_));
 
     // Start a client to receive the message
@@ -149,7 +153,7 @@ TEST_F(UdpSocketHubTest, SendToClient) {
         EXPECT_EQ(received, "Server response");
     });
 
-    std::this_thread::sleep_for(50ms); // Let client start
+    std::this_thread::sleep_for(50ms);  // Let client start
 
     // Send message to client
     bool sent = server_->sendTo("Server response", "127.0.0.1", port_ + 1);
@@ -158,7 +162,7 @@ TEST_F(UdpSocketHubTest, SendToClient) {
     client_thread.join();
 }
 
-TEST_F(UdpSocketHubTest, Broadcast) {
+TEST_F(AsyncUdpServerTest, Broadcast) {
     ASSERT_TRUE(server_->start(port_));
 
     // Start multiple clients to receive broadcast
@@ -176,7 +180,7 @@ TEST_F(UdpSocketHubTest, Broadcast) {
         });
     }
 
-    std::this_thread::sleep_for(100ms); // Let clients start
+    std::this_thread::sleep_for(100ms);  // Let clients start
 
     // Send broadcast message
     bool sent = server_->broadcast("Broadcast message", port_ + 10);
@@ -191,7 +195,7 @@ TEST_F(UdpSocketHubTest, Broadcast) {
 }
 
 // Multicast tests
-TEST_F(UdpSocketHubTest, MulticastJoinLeave) {
+TEST_F(AsyncUdpServerTest, MulticastJoinLeave) {
     ASSERT_TRUE(server_->start(port_));
 
     std::string multicast_address = "224.0.0.1";
@@ -205,28 +209,30 @@ TEST_F(UdpSocketHubTest, MulticastJoinLeave) {
     EXPECT_TRUE(left);
 }
 
-TEST_F(UdpSocketHubTest, MulticastSend) {
+TEST_F(AsyncUdpServerTest, MulticastSend) {
     ASSERT_TRUE(server_->start(port_));
 
     std::string multicast_address = "224.0.0.2";
     uint16_t multicast_port = port_ + 20;
 
     // Send multicast message
-    bool sent = server_->sendToMulticast("Multicast message", multicast_address, multicast_port);
+    bool sent = server_->sendToMulticast("Multicast message", multicast_address,
+                                         multicast_port);
     EXPECT_TRUE(sent);
 }
 
 // Concurrent client handling tests
-TEST_F(UdpSocketHubTest, ConcurrentClients) {
+TEST_F(AsyncUdpServerTest, ConcurrentClients) {
     std::atomic<int> message_count{0};
     std::mutex messages_mutex;
     std::vector<std::string> all_messages;
 
-    server_->addMessageHandler([&](const std::string& message, const std::string&, unsigned short) {
-        std::lock_guard<std::mutex> lock(messages_mutex);
-        all_messages.push_back(message);
-        message_count.fetch_add(1);
-    });
+    server_->addMessageHandler(
+        [&](const std::string& message, const std::string&, unsigned short) {
+            std::lock_guard<std::mutex> lock(messages_mutex);
+            all_messages.push_back(message);
+            message_count.fetch_add(1);
+        });
 
     ASSERT_TRUE(server_->start(port_));
 
@@ -256,7 +262,7 @@ TEST_F(UdpSocketHubTest, ConcurrentClients) {
 }
 
 // Statistics tests
-TEST_F(UdpSocketHubTest, Statistics) {
+TEST_F(AsyncUdpServerTest, Statistics) {
     ASSERT_TRUE(server_->start(port_));
 
     // Send some messages
@@ -283,11 +289,12 @@ TEST_F(UdpSocketHubTest, Statistics) {
 // ============================================================================
 
 // Test error handling
-TEST_F(UdpSocketHubTest, ErrorHandling) {
+TEST_F(AsyncUdpServerTest, ErrorHandling) {
     std::vector<std::string> errors;
     std::mutex errors_mutex;
 
-    server_->addErrorHandler([&](const std::string& error, const std::error_code& ec) {
+    server_->addErrorHandler([&](const std::string& error,
+                                 const std::error_code& ec) {
         std::lock_guard<std::mutex> lock(errors_mutex);
         errors.push_back(error + " (code: " + std::to_string(ec.value()) + ")");
     });
@@ -308,13 +315,14 @@ TEST_F(UdpSocketHubTest, ErrorHandling) {
 }
 
 // Test performance under load
-TEST_F(UdpSocketHubTest, PerformanceUnderLoad) {
+TEST_F(AsyncUdpServerTest, PerformanceUnderLoad) {
     std::atomic<int> message_count{0};
     std::atomic<int> error_count{0};
 
-    server_->addMessageHandler([&](const std::string&, const std::string&, unsigned short) {
-        message_count.fetch_add(1);
-    });
+    server_->addMessageHandler(
+        [&](const std::string&, const std::string&, unsigned short) {
+            message_count.fetch_add(1);
+        });
 
     server_->addErrorHandler([&](const std::string&, const std::error_code&) {
         error_count.fetch_add(1);
@@ -333,7 +341,8 @@ TEST_F(UdpSocketHubTest, PerformanceUnderLoad) {
         client_threads.emplace_back([this, t]() {
             TestUdpClient client;
             for (int i = 0; i < num_messages / num_threads; ++i) {
-                std::string message = "Load test " + std::to_string(t) + "_" + std::to_string(i);
+                std::string message =
+                    "Load test " + std::to_string(t) + "_" + std::to_string(i);
                 client.send("127.0.0.1", port_, message);
                 // Small delay to avoid overwhelming the system
                 if (i % 10 == 0) {
@@ -349,26 +358,30 @@ TEST_F(UdpSocketHubTest, PerformanceUnderLoad) {
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        end_time - start_time);
 
     // Give server time to process remaining messages
     std::this_thread::sleep_for(500ms);
 
     // Verify performance metrics
-    EXPECT_GT(message_count.load(), num_messages / 2); // At least half should succeed
-    EXPECT_LT(duration.count(), 10000); // Should complete within 10 seconds
+    EXPECT_GT(message_count.load(),
+              num_messages / 2);         // At least half should succeed
+    EXPECT_LT(duration.count(), 10000);  // Should complete within 10 seconds
 
     // Error rate should be reasonable
-    EXPECT_LT(error_count.load(), num_messages / 10); // Less than 10% error rate
+    EXPECT_LT(error_count.load(),
+              num_messages / 10);  // Less than 10% error rate
 }
 
 // Test IP filtering functionality
-TEST_F(UdpSocketHubTest, IpFiltering) {
+TEST_F(AsyncUdpServerTest, IpFiltering) {
     std::atomic<int> message_count{0};
 
-    server_->addMessageHandler([&](const std::string&, const std::string&, unsigned short) {
-        message_count.fetch_add(1);
-    });
+    server_->addMessageHandler(
+        [&](const std::string&, const std::string&, unsigned short) {
+            message_count.fetch_add(1);
+        });
 
     ASSERT_TRUE(server_->start(port_));
 
@@ -397,24 +410,24 @@ TEST_F(UdpSocketHubTest, IpFiltering) {
 }
 
 // Test buffer size configuration
-TEST_F(UdpSocketHubTest, BufferSizeConfiguration) {
+TEST_F(AsyncUdpServerTest, BufferSizeConfiguration) {
     // Create server with custom buffer size
-    server_ = std::make_unique<UdpSocketHub>(4); // 4 threads
+    server_ = std::make_unique<AsyncUdpServer>(4);  // 4 threads
 
     std::atomic<int> message_count{0};
-    server_->addMessageHandler([&](const std::string&, const std::string&, unsigned short) {
-        message_count.fetch_add(1);
-    });
+    server_->addMessageHandler(
+        [&](const std::string&, const std::string&, unsigned short) {
+            message_count.fetch_add(1);
+        });
 
     ASSERT_TRUE(server_->start(port_));
 
     // Send messages of various sizes
     TestUdpClient client;
     std::vector<std::string> messages = {
-        "Small",
-        std::string(100, 'A'),   // 100 bytes
-        std::string(1000, 'B'),  // 1KB
-        std::string(8000, 'C')   // 8KB (close to typical UDP limit)
+        "Small", std::string(100, 'A'),  // 100 bytes
+        std::string(1000, 'B'),          // 1KB
+        std::string(8000, 'C')           // 8KB (close to typical UDP limit)
     };
 
     for (const auto& message : messages) {
@@ -429,15 +442,16 @@ TEST_F(UdpSocketHubTest, BufferSizeConfiguration) {
 }
 
 // Test graceful shutdown
-TEST_F(UdpSocketHubTest, GracefulShutdown) {
+TEST_F(AsyncUdpServerTest, GracefulShutdown) {
     std::atomic<bool> handler_running{false};
     std::atomic<bool> handler_completed{false};
 
-    server_->addMessageHandler([&](const std::string&, const std::string&, unsigned short) {
-        handler_running = true;
-        std::this_thread::sleep_for(200ms); // Simulate processing time
-        handler_completed = true;
-    });
+    server_->addMessageHandler(
+        [&](const std::string&, const std::string&, unsigned short) {
+            handler_running = true;
+            std::this_thread::sleep_for(200ms);  // Simulate processing time
+            handler_completed = true;
+        });
 
     ASSERT_TRUE(server_->start(port_));
 
@@ -455,9 +469,10 @@ TEST_F(UdpSocketHubTest, GracefulShutdown) {
     auto stop_start = std::chrono::steady_clock::now();
     server_->stop();
     auto stop_end = std::chrono::steady_clock::now();
-    auto stop_duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop_end - stop_start);
+    auto stop_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        stop_end - stop_start);
 
     // Server should stop gracefully, allowing handler to complete
     EXPECT_TRUE(handler_completed.load());
-    EXPECT_LT(stop_duration.count(), 1000); // Should not take too long to stop
+    EXPECT_LT(stop_duration.count(), 1000);  // Should not take too long to stop
 }

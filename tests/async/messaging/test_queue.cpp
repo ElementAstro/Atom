@@ -5,7 +5,7 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include "atom/async/queue.hpp"
+#include "atom/async/messaging/queue.hpp"
 
 TEST(ThreadSafeQueueTest, PutAndTake) {
     atom::async::ThreadSafeQueue<int> queue;
@@ -135,29 +135,37 @@ TEST(ThreadSafeQueueTest, Transform) {
     queue.put(2);
     queue.put(3);
 
+    // Note: transform now takes const T& and preserves the original queue
     auto transformedQueue =
-        queue.transform<double>([](int x) -> double { return x * 2; });
+        queue.transform<double>([](const int& x) -> double { return x * 2; });
 
     EXPECT_EQ(transformedQueue->take(), 2);
     EXPECT_EQ(transformedQueue->take(), 4);
     EXPECT_EQ(transformedQueue->take(), 6);
+
+    // Original queue should still have elements (transform is now read-only)
+    EXPECT_EQ(queue.size(), 3);
 }
 
 TEST(ThreadSafeQueueTest, GroupBy) {
     auto intQueue = std::make_shared<atom::async::ThreadSafeQueue<int>>();
 
-    // 添加一些元素
+    // Add some elements
     for (int i = 0; i <= 4; ++i) {
         intQueue->put(i);
     }
     auto groupedQueues = intQueue->groupBy<std::string>(
         [](const int& x) { return (x % 2 == 0) ? "even" : "odd"; });
 
-    EXPECT_EQ(groupedQueues.size(), 4);
+    // Should have 2 groups: "even" and "odd"
+    EXPECT_EQ(groupedQueues.size(), 2);
 
-    // TODO: Fix this test
-    // EXPECT_EQ(groupedQueues[0].get(),
-    //          (std::vector{"even", "odd", "even", "odd", "even"}));
+    // Count total elements across all groups
+    size_t totalElements = 0;
+    for (const auto& group : groupedQueues) {
+        totalElements += group->size();
+    }
+    EXPECT_EQ(totalElements, 5);  // 0, 1, 2, 3, 4
 }
 
 TEST(ThreadSafeQueueTest, ToVector) {
@@ -350,8 +358,9 @@ TEST(ThreadSafeQueueTest, TransformToString) {
     queue.put(2);
     queue.put(3);
 
-    auto stringQueue =
-        queue.transform<std::string>([](int x) { return std::to_string(x); });
+    // Note: transform now takes const T&
+    auto stringQueue = queue.transform<std::string>(
+        [](const int& x) { return std::to_string(x); });
 
     EXPECT_EQ(stringQueue->take().value(), "1");
     EXPECT_EQ(stringQueue->take().value(), "2");

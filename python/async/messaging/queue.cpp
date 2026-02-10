@@ -1,4 +1,4 @@
-#include "atom/async/queue.hpp"
+#include "atom/async/messaging/queue.hpp"
 
 #include <pybind11/chrono.h>
 #include <pybind11/functional.h>
@@ -325,8 +325,10 @@ Args:
             "transform",
             [](atom::async::ThreadSafeQueue<py::object>& self,
                py::function func) {
+                // Note: transform now takes const T& and preserves the original
+                // queue
                 return self.transform<py::object>(
-                    [func](py::object obj) { return func(obj); });
+                    [func](const py::object& obj) { return func(obj); });
             },
             py::arg("func"),
             R"(Transform elements using a function and return a new queue.
@@ -336,6 +338,9 @@ Args:
 
 Returns:
     A new ThreadSafeQueue containing the transformed elements.
+
+Note:
+    The original queue is preserved (read-only operation).
 )")
         .def(
             "group_by",
@@ -446,8 +451,22 @@ Raises:
              "Check if the queue is empty.")
         .def("capacity", &atom::async::LockFreeQueue<py::object>::capacity,
              "Get the capacity of the queue.")
-        .def("resize", &atom::async::LockFreeQueue<py::object>::resize,
-             py::arg("capacity"), "Resize the queue capacity.");
+        .def(
+            "resize",
+            [](atom::async::LockFreeQueue<py::object>& self, size_t capacity) {
+                // Note: resize is not supported at runtime for lock-free queues
+                return self.resize(capacity);
+            },
+            py::arg("capacity"),
+            R"(Attempt to resize the queue capacity.
+
+Note:
+    This operation is NOT supported at runtime for lock-free queues.
+    The capacity is fixed at construction time.
+
+Returns:
+    bool: Always returns False to indicate operation not supported.
+)");
 
     // SPSCQueue binding
     py::class_<atom::async::SPSCQueue<py::object>>(

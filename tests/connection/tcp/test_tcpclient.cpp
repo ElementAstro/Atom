@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include "atom/connection/tcp/tcp_common.hpp"
 #include "atom/connection/tcp/tcpclient.hpp"
 
 #ifdef _WIN32
@@ -55,7 +56,7 @@ private:
         serverSocket_ = socket(AF_INET, SOCK_STREAM, 0);
         ASSERT_NE(serverSocket_, -1) << "Failed to create server socket";
 
-        struct sockaddr_in serverAddr {};
+        struct sockaddr_in serverAddr{};
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_addr.s_addr = INADDR_ANY;
         serverAddr.sin_port = htons(port_);
@@ -72,7 +73,7 @@ private:
         ASSERT_EQ(result, 0) << "Listen failed";
 
         while (!stop_) {
-            struct sockaddr_in clientAddr {};
+            struct sockaddr_in clientAddr{};
             socklen_t clientLen = sizeof(clientAddr);
 
             clientSocket_ = accept(serverSocket_, (struct sockaddr*)&clientAddr,

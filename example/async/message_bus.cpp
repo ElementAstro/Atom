@@ -1,4 +1,4 @@
-#include "atom/async/message_bus.hpp"
+#include "atom/async/messaging/message_bus.hpp"
 
 #include <iostream>
 #include <thread>

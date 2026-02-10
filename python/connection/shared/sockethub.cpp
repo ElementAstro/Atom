@@ -1,4 +1,4 @@
-#include "atom/connection/async_sockethub.hpp"
+#include "atom/connection/shared/async_sockethub.hpp"
 
 #include <pybind11/chrono.h>
 #include <pybind11/functional.h>
@@ -24,18 +24,21 @@ PYBIND11_MODULE(sockethub, m) {
         }
     });
 
-    // Enum for LogLevel
-    py::enum_<atom::async::connection::LogLevel>(
-        m, "LogLevel", "Log level settings for SocketHub")
-        .value("DEBUG", atom::async::connection::LogLevel::DEBUG,
+    // Enum for LogLevel (now uses atom::connection::LogLevel from
+    // socket_types.hpp)
+    py::enum_<atom::connection::LogLevel>(m, "LogLevel",
+                                          "Log level settings for SocketHub")
+        .value("TRACE", atom::connection::LogLevel::TRACE,
+               "Trace level logging")
+        .value("DEBUG", atom::connection::LogLevel::DEBUG_LEVEL,
                "Debug level logging")
-        .value("INFO", atom::async::connection::LogLevel::INFO,
+        .value("INFO", atom::connection::LogLevel::INFO_LEVEL,
                "Info level logging")
-        .value("WARNING", atom::async::connection::LogLevel::WARNING,
+        .value("WARNING", atom::connection::LogLevel::WARNING_LEVEL,
                "Warning level logging")
-        .value("ERROR", atom::async::connection::LogLevel::ERROR,
+        .value("ERROR", atom::connection::LogLevel::ERROR_LEVEL,
                "Error level logging")
-        .value("FATAL", atom::async::connection::LogLevel::FATAL,
+        .value("FATAL", atom::connection::LogLevel::FATAL_LEVEL,
                "Fatal level logging")
         .export_values();
 
@@ -133,13 +136,13 @@ Examples:
                        &atom::async::connection::SocketHubConfig::log_level,
                        "Logging level");
 
-    // SocketHubStats struct
-    py::class_<atom::async::connection::SocketHubStats>(
+    // SocketHubStats struct (now uses atomic members from socket_types.hpp)
+    py::class_<atom::connection::SocketHubStats>(
         m, "SocketHubStats",
         R"(Statistics for monitoring SocketHub activity.
 
 This structure provides metrics about server usage, including connection counts
-and message throughput.
+and message throughput. All counters are thread-safe atomic values.
 
 Examples:
     >>> stats = hub.get_statistics()
@@ -147,30 +150,49 @@ Examples:
     >>> print(f"Messages processed: {stats.messages_received}")
 )")
         .def(py::init<>())
-        .def_readonly(
+        .def_property_readonly(
             "total_connections",
-            &atom::async::connection::SocketHubStats::total_connections,
+            [](const atom::connection::SocketHubStats& s) {
+                return s.total_connections.load();
+            },
             "Total number of connections since server start")
-        .def_readonly(
+        .def_property_readonly(
             "active_connections",
-            &atom::async::connection::SocketHubStats::active_connections,
+            [](const atom::connection::SocketHubStats& s) {
+                return s.active_connections.load();
+            },
             "Number of currently active connections")
-        .def_readonly(
+        .def_property_readonly(
             "messages_received",
-            &atom::async::connection::SocketHubStats::messages_received,
+            [](const atom::connection::SocketHubStats& s) {
+                return s.messages_received.load();
+            },
             "Total number of messages received")
-        .def_readonly("messages_sent",
-                      &atom::async::connection::SocketHubStats::messages_sent,
-                      "Total number of messages sent")
-        .def_readonly("bytes_received",
-                      &atom::async::connection::SocketHubStats::bytes_received,
-                      "Total bytes received")
-        .def_readonly("bytes_sent",
-                      &atom::async::connection::SocketHubStats::bytes_sent,
-                      "Total bytes sent")
+        .def_property_readonly(
+            "messages_sent",
+            [](const atom::connection::SocketHubStats& s) {
+                return s.messages_sent.load();
+            },
+            "Total number of messages sent")
+        .def_property_readonly(
+            "bytes_received",
+            [](const atom::connection::SocketHubStats& s) {
+                return s.bytes_received.load();
+            },
+            "Total bytes received")
+        .def_property_readonly(
+            "bytes_sent",
+            [](const atom::connection::SocketHubStats& s) {
+                return s.bytes_sent.load();
+            },
+            "Total bytes sent")
         .def_readonly("start_time",
-                      &atom::async::connection::SocketHubStats::start_time,
-                      "Time when the server started");
+                      &atom::connection::SocketHubStats::start_time,
+                      "Time when the server started")
+        .def("uptime", &atom::connection::SocketHubStats::uptime,
+             "Get uptime duration in seconds")
+        .def("reset", &atom::connection::SocketHubStats::reset,
+             "Reset all statistics");
 
     // SocketHub class
     py::class_<atom::async::connection::SocketHub>(

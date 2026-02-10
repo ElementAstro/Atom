@@ -199,8 +199,8 @@ auto extend2D(const std::vector<std::vector<T>>& input, usize newRows,
 // Helper function to extend 2D vectors with proper padding modes
 template <typename T>
 auto pad2D(const std::vector<std::vector<T>>& input, usize padTop,
-           usize padBottom, usize padLeft, usize padRight,
-           PaddingMode mode) -> std::vector<std::vector<T>> {
+           usize padBottom, usize padLeft, usize padRight, PaddingMode mode)
+    -> std::vector<std::vector<T>> {
     if (input.empty() || input[0].empty()) {
         THROW_CONVOLVE_ERROR("Cannot pad empty matrix");
     }
@@ -312,10 +312,11 @@ auto pad2D(const std::vector<std::vector<T>>& input, usize padTop,
 }
 
 // Helper function to get output dimensions for convolution
-auto getConvolutionOutputDimensions(
-    usize inputHeight, usize inputWidth, usize kernelHeight, usize kernelWidth,
-    usize strideY, usize strideX,
-    PaddingMode paddingMode) -> std::pair<usize, usize> {
+auto getConvolutionOutputDimensions(usize inputHeight, usize inputWidth,
+                                    usize kernelHeight, usize kernelWidth,
+                                    usize strideY, usize strideX,
+                                    PaddingMode paddingMode)
+    -> std::pair<usize, usize> {
     if (kernelHeight > inputHeight || kernelWidth > inputWidth) {
         THROW_CONVOLVE_ERROR(
             "Kernel dimensions ({},{}) cannot be larger than input dimensions "
@@ -389,8 +390,8 @@ auto createCommandQueue(cl_context context) -> CLCmdQueuePtr {
     return CLCmdQueuePtr(commandQueue);
 }
 
-auto createProgram(const std::string& source,
-                   cl_context context) -> CLProgramPtr {
+auto createProgram(const std::string& source, cl_context context)
+    -> CLProgramPtr {
     const char* sourceStr = source.c_str();
     cl_int err;
     cl_program program =
@@ -612,8 +613,8 @@ auto deconvolve2DOpenCL(const std::vector<std::vector<f64>>& signal,
 // Function to convolve a 2D input with a 2D kernel using multithreading or
 // OpenCL
 auto convolve2D(const std::vector<std::vector<f64>>& input,
-                const std::vector<std::vector<f64>>& kernel,
-                i32 numThreads) -> std::vector<std::vector<f64>> {
+                const std::vector<std::vector<f64>>& kernel, i32 numThreads)
+    -> std::vector<std::vector<f64>> {
     try {
         // 输入验证
         if (input.empty() || input[0].empty()) {
@@ -757,8 +758,8 @@ auto convolve2D(const std::vector<std::vector<f64>>& input,
 // Function to deconvolve a 2D input with a 2D kernel using multithreading or
 // OpenCL
 auto deconvolve2D(const std::vector<std::vector<f64>>& signal,
-                  const std::vector<std::vector<f64>>& kernel,
-                  i32 numThreads) -> std::vector<std::vector<f64>> {
+                  const std::vector<std::vector<f64>>& kernel, i32 numThreads)
+    -> std::vector<std::vector<f64>> {
     try {
         // 输入验证
         if (signal.empty() || signal[0].empty()) {
@@ -808,7 +809,7 @@ auto deconvolve2D(const std::vector<std::vector<f64>>& signal,
 
         auto discreteFourierTransform2D =
             [&](const std::vector<std::vector<f64>>& input) {
-                return dfT2D(
+                return dft2D(
                     input,
                     numThreads);  // Assume DFT2D supports multithreading
             };
@@ -886,9 +887,9 @@ auto deconvolve2D(const std::vector<std::vector<f64>>& signal,
 #endif
 
         std::vector<std::vector<f64>> frequencyInverse =
-            idfT2D(frequencyProduct, numThreads);
+            idft2D(frequencyProduct, numThreads);
 
-        // Extract the relevant portion (idfT2D already handles scaling)
+        // Extract the relevant portion (idft2D already handles scaling)
         std::vector<std::vector<f64>> result(signalRows,
                                              std::vector<f64>(signalCols, 0.0));
         for (usize i = 0; i < signalRows; ++i) {
@@ -905,8 +906,8 @@ auto deconvolve2D(const std::vector<std::vector<f64>>& signal,
 }
 
 // 2D Discrete Fourier Transform (2D DFT)
-auto dfT2D(const std::vector<std::vector<f64>>& signal,
-           i32 numThreads) -> std::vector<std::vector<std::complex<f64>>> {
+auto dft2D(const std::vector<std::vector<f64>>& signal, i32 numThreads)
+    -> std::vector<std::vector<std::complex<f64>>> {
     const usize M = signal.size();
     const usize N = signal[0].size();
     std::vector<std::vector<std::complex<f64>>> frequency(
@@ -1005,7 +1006,7 @@ auto dfT2D(const std::vector<std::vector<f64>>& signal,
 }
 
 // 2D Inverse Discrete Fourier Transform (2D IDFT)
-auto idfT2D(const std::vector<std::vector<std::complex<f64>>>& spectrum,
+auto idft2D(const std::vector<std::vector<std::complex<f64>>>& spectrum,
             i32 numThreads) -> std::vector<std::vector<f64>> {
     const usize M = spectrum.size();
     const usize N = spectrum[0].size();
@@ -1108,8 +1109,8 @@ auto idfT2D(const std::vector<std::vector<std::complex<f64>>>& spectrum,
 }
 
 // Function to generate a Gaussian kernel
-auto generateGaussianKernel(i32 size,
-                            f64 sigma) -> std::vector<std::vector<f64>> {
+auto generateGaussianKernel(i32 size, f64 sigma)
+    -> std::vector<std::vector<f64>> {
     std::vector<std::vector<f64>> kernel(
         static_cast<usize>(size), std::vector<f64>(static_cast<usize>(size)));
     f64 sum = 0.0;

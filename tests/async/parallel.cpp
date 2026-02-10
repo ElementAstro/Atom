@@ -11,6 +11,7 @@
 #include <thread>
 #include <vector>
 
+#include "atom/async/execution/thread_utils.hpp"
 #include "atom/async/parallel.hpp"
 
 using namespace atom::async;
@@ -43,14 +44,12 @@ protected:
 // Test fixture for Task coroutine
 class TaskTest : public ::testing::Test {};
 
-// Test fixture for ThreadConfig
-class ThreadConfigTest : public ::testing::Test {};
+// Test fixture for ThreadUtils
+class ThreadUtilsTest : public ::testing::Test {};
 
 // Task coroutine tests
 TEST_F(TaskTest, BasicTaskExecution) {
-    auto task = []() -> Task<int> {
-        co_return 42;
-    }();
+    auto task = []() -> Task<int> { co_return 42; }();
 
     EXPECT_EQ(task.get(), 42);
     EXPECT_TRUE(task.is_done());
@@ -79,27 +78,24 @@ TEST_F(TaskTest, VoidTask) {
 }
 
 TEST_F(TaskTest, TaskMoveSemantics) {
-    auto task1 = []() -> Task<int> {
-        co_return 100;
-    }();
+    auto task1 = []() -> Task<int> { co_return 100; }();
 
     Task<int> task2 = std::move(task1);
     EXPECT_EQ(task2.get(), 100);
     EXPECT_TRUE(task2.is_done());
 }
 
-// ThreadConfig tests
-TEST_F(ThreadConfigTest, SetThreadAffinity) {
+// ThreadUtils tests
+TEST_F(ThreadUtilsTest, SetThreadAffinity) {
     // Test setting thread affinity (may not work on all systems)
-    bool result = Parallel::ThreadConfig::setThreadAffinity(0);
+    bool result = ThreadUtils::setThreadAffinity(0);
     // Just ensure it doesn't crash - result depends on platform and permissions
     EXPECT_TRUE(result || !result);  // Always passes, just tests compilation
 }
 
-TEST_F(ThreadConfigTest, SetThreadPriority) {
+TEST_F(ThreadUtilsTest, SetThreadPriority) {
     // Test setting thread priority
-    bool result = Parallel::ThreadConfig::setThreadPriority(
-        Parallel::ThreadConfig::Priority::Normal);
+    bool result = ThreadUtils::setThreadPriority(ThreadUtils::Priority::Normal);
     // Just ensure it doesn't crash - result depends on platform and permissions
     EXPECT_TRUE(result || !result);  // Always passes, just tests compilation
 }
@@ -109,9 +105,8 @@ TEST_F(ParallelTest, ForEachBasic) {
     std::vector<int> data = {1, 2, 3, 4, 5};
     std::atomic<int> sum{0};
 
-    Parallel::for_each(data.begin(), data.end(), [&sum](int val) {
-        sum.fetch_add(val);
-    });
+    Parallel::for_each(data.begin(), data.end(),
+                       [&sum](int val) { sum.fetch_add(val); });
 
     EXPECT_EQ(sum.load(), 15);
 }
@@ -119,9 +114,8 @@ TEST_F(ParallelTest, ForEachBasic) {
 TEST_F(ParallelTest, ForEachLargeDataset) {
     std::atomic<long long> sum{0};
 
-    Parallel::for_each(test_data.begin(), test_data.end(), [&sum](int val) {
-        sum.fetch_add(val);
-    });
+    Parallel::for_each(test_data.begin(), test_data.end(),
+                       [&sum](int val) { sum.fetch_add(val); });
 
     // Sum of 1 to 1000 = 1000 * 1001 / 2 = 500500
     EXPECT_EQ(sum.load(), 500500);
@@ -131,9 +125,9 @@ TEST_F(ParallelTest, ForEachWithCustomThreadCount) {
     std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8};
     std::atomic<int> sum{0};
 
-    Parallel::for_each(data.begin(), data.end(), [&sum](int val) {
-        sum.fetch_add(val);
-    }, 2);  // Use 2 threads
+    Parallel::for_each(
+        data.begin(), data.end(), [&sum](int val) { sum.fetch_add(val); },
+        2);  // Use 2 threads
 
     EXPECT_EQ(sum.load(), 36);
 }
@@ -142,10 +136,9 @@ TEST_F(ParallelTest, ForEachEmptyRange) {
     std::vector<int> empty_data;
     std::atomic<int> sum{0};
 
-    EXPECT_NO_THROW(Parallel::for_each(empty_data.begin(), empty_data.end(),
-                                      [&sum](int val) {
-        sum.fetch_add(val);
-    }));
+    EXPECT_NO_THROW(
+        Parallel::for_each(empty_data.begin(), empty_data.end(),
+                           [&sum](int val) { sum.fetch_add(val); }));
 
     EXPECT_EQ(sum.load(), 0);
 }
@@ -154,9 +147,8 @@ TEST_F(ParallelTest, ForEachEmptyRange) {
 TEST_F(ParallelTest, MapBasic) {
     std::vector<int> data = {1, 2, 3, 4, 5};
 
-    auto result = Parallel::map(data.begin(), data.end(), [](int val) {
-        return val * 2;
-    });
+    auto result = Parallel::map(data.begin(), data.end(),
+                                [](int val) { return val * 2; });
 
     std::vector<int> expected = {2, 4, 6, 8, 10};
     EXPECT_EQ(result, expected);
@@ -164,9 +156,7 @@ TEST_F(ParallelTest, MapBasic) {
 
 TEST_F(ParallelTest, MapLargeDataset) {
     auto result = Parallel::map(test_data.begin(), test_data.begin() + 100,
-                               [](int val) {
-        return val * val;
-    });
+                                [](int val) { return val * val; });
 
     EXPECT_EQ(result.size(), 100);
     for (int i = 0; i < 100; ++i) {
@@ -177,9 +167,8 @@ TEST_F(ParallelTest, MapLargeDataset) {
 TEST_F(ParallelTest, MapWithDifferentTypes) {
     std::vector<int> data = {1, 2, 3, 4, 5};
 
-    auto result = Parallel::map(data.begin(), data.end(), [](int val) {
-        return std::to_string(val);
-    });
+    auto result = Parallel::map(data.begin(), data.end(),
+                                [](int val) { return std::to_string(val); });
 
     std::vector<std::string> expected = {"1", "2", "3", "4", "5"};
     EXPECT_EQ(result, expected);
@@ -188,9 +177,8 @@ TEST_F(ParallelTest, MapWithDifferentTypes) {
 TEST_F(ParallelTest, MapEmptyRange) {
     std::vector<int> empty_data;
 
-    auto result = Parallel::map(empty_data.begin(), empty_data.end(), [](int val) {
-        return val * 2;
-    });
+    auto result = Parallel::map(empty_data.begin(), empty_data.end(),
+                                [](int val) { return val * 2; });
 
     EXPECT_TRUE(result.empty());
 }
@@ -199,14 +187,15 @@ TEST_F(ParallelTest, MapEmptyRange) {
 TEST_F(ParallelTest, ReduceBasic) {
     std::vector<int> data = {1, 2, 3, 4, 5};
 
-    int result = Parallel::reduce(data.begin(), data.end(), 0, std::plus<int>());
+    int result =
+        Parallel::reduce(data.begin(), data.end(), 0, std::plus<int>());
 
     EXPECT_EQ(result, 15);
 }
 
 TEST_F(ParallelTest, ReduceLargeDataset) {
     int result = Parallel::reduce(test_data.begin(), test_data.end(), 0,
-                                 std::plus<int>());
+                                  std::plus<int>());
 
     EXPECT_EQ(result, 500500);  // Sum of 1 to 1000
 }
@@ -214,8 +203,8 @@ TEST_F(ParallelTest, ReduceLargeDataset) {
 TEST_F(ParallelTest, ReduceWithMultiplication) {
     std::vector<int> data = {1, 2, 3, 4, 5};
 
-    int result = Parallel::reduce(data.begin(), data.end(), 1,
-                                 std::multiplies<int>());
+    int result =
+        Parallel::reduce(data.begin(), data.end(), 1, std::multiplies<int>());
 
     EXPECT_EQ(result, 120);  // 5!
 }
@@ -224,7 +213,7 @@ TEST_F(ParallelTest, ReduceEmptyRange) {
     std::vector<int> empty_data;
 
     int result = Parallel::reduce(empty_data.begin(), empty_data.end(), 42,
-                                 std::plus<int>());
+                                  std::plus<int>());
 
     EXPECT_EQ(result, 42);  // Should return initial value
 }
@@ -242,9 +231,10 @@ TEST_F(ParallelTest, FilterBasic) {
 }
 
 TEST_F(ParallelTest, FilterLargeDataset) {
-    auto result = Parallel::filter(test_data.begin(), test_data.end(), [](int val) {
-        return val % 10 == 0;  // Multiples of 10
-    });
+    auto result =
+        Parallel::filter(test_data.begin(), test_data.end(), [](int val) {
+            return val % 10 == 0;  // Multiples of 10
+        });
 
     EXPECT_EQ(result.size(), 100);  // 10, 20, 30, ..., 1000
     for (int i = 0; i < 100; ++i) {
@@ -255,9 +245,8 @@ TEST_F(ParallelTest, FilterLargeDataset) {
 TEST_F(ParallelTest, FilterEmptyRange) {
     std::vector<int> empty_data;
 
-    auto result = Parallel::filter(empty_data.begin(), empty_data.end(), [](int val) {
-        return val > 0;
-    });
+    auto result = Parallel::filter(empty_data.begin(), empty_data.end(),
+                                   [](int val) { return val > 0; });
 
     EXPECT_TRUE(result.empty());
 }
@@ -318,9 +307,8 @@ TEST_F(ParallelTest, MapSpanBasic) {
     std::vector<int> data = {1, 2, 3, 4, 5};
     std::span<const int> span_data(data);
 
-    auto result = Parallel::map_span(span_data, [](int val) {
-        return val * 3;
-    });
+    auto result =
+        Parallel::map_span(span_data, [](int val) { return val * 3; });
 
     std::vector<int> expected = {3, 6, 9, 12, 15};
     EXPECT_EQ(result, expected);
@@ -330,9 +318,8 @@ TEST_F(ParallelTest, MapSpanWithCustomThreads) {
     std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8};
     std::span<const int> span_data(data);
 
-    auto result = Parallel::map_span(span_data, [](int val) {
-        return val * val;
-    }, 2);  // Use 2 threads
+    auto result = Parallel::map_span(
+        span_data, [](int val) { return val * val; }, 2);  // Use 2 threads
 
     std::vector<int> expected = {1, 4, 9, 16, 25, 36, 49, 64};
     EXPECT_EQ(result, expected);
@@ -342,9 +329,8 @@ TEST_F(ParallelTest, MapSpanEmptySpan) {
     std::vector<int> empty_data;
     std::span<const int> empty_span(empty_data);
 
-    auto result = Parallel::map_span(empty_span, [](int val) {
-        return val * 2;
-    });
+    auto result =
+        Parallel::map_span(empty_span, [](int val) { return val * 2; });
 
     EXPECT_TRUE(result.empty());
 }
@@ -353,9 +339,7 @@ TEST_F(ParallelTest, MapSpanEmptySpan) {
 TEST_F(ParallelTest, FilterRangeBasic) {
     std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
 
-    auto result = Parallel::filter_range(data, [](int val) {
-        return val > 5;
-    });
+    auto result = Parallel::filter_range(data, [](int val) { return val > 5; });
 
     std::vector<int> expected = {6, 7, 8, 9, 10};
     EXPECT_EQ(result, expected);
@@ -364,9 +348,12 @@ TEST_F(ParallelTest, FilterRangeBasic) {
 TEST_F(ParallelTest, FilterRangeWithCustomThreads) {
     std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
 
-    auto result = Parallel::filter_range(data, [](int val) {
-        return val % 3 == 0;  // Multiples of 3
-    }, 3);  // Use 3 threads
+    auto result = Parallel::filter_range(
+        data,
+        [](int val) {
+            return val % 3 == 0;  // Multiples of 3
+        },
+        3);  // Use 3 threads
 
     std::vector<int> expected = {3, 6, 9};
     EXPECT_EQ(result, expected);
@@ -375,18 +362,15 @@ TEST_F(ParallelTest, FilterRangeWithCustomThreads) {
 TEST_F(ParallelTest, FilterRangeEmptyRange) {
     std::vector<int> empty_data;
 
-    auto result = Parallel::filter_range(empty_data, [](int val) {
-        return val > 0;
-    });
+    auto result =
+        Parallel::filter_range(empty_data, [](int val) { return val > 0; });
 
     EXPECT_TRUE(result.empty());
 }
 
 // Async coroutine tests
 TEST_F(ParallelTest, AsyncBasic) {
-    auto task = Parallel::async([]() {
-        return 42;
-    });
+    auto task = Parallel::async([]() { return 42; });
 
     EXPECT_EQ(task.get(), 42);
     EXPECT_TRUE(task.is_done());
@@ -394,9 +378,7 @@ TEST_F(ParallelTest, AsyncBasic) {
 
 TEST_F(ParallelTest, AsyncVoid) {
     bool executed = false;
-    auto task = Parallel::async([&executed]() {
-        executed = true;
-    });
+    auto task = Parallel::async([&executed]() { executed = true; });
 
     task.get();
     EXPECT_TRUE(executed);
@@ -404,9 +386,7 @@ TEST_F(ParallelTest, AsyncVoid) {
 }
 
 TEST_F(ParallelTest, AsyncWithParameters) {
-    auto task = Parallel::async([](int a, int b) {
-        return a + b;
-    }, 10, 20);
+    auto task = Parallel::async([](int a, int b) { return a + b; }, 10, 20);
 
     EXPECT_EQ(task.get(), 30);
 }
@@ -423,19 +403,14 @@ TEST_F(ParallelTest, AsyncException) {
 TEST_F(ParallelTest, WhenAllVoidTasks) {
     std::atomic<int> counter{0};
 
-    auto task1 = Parallel::async([&counter]() {
-        counter.fetch_add(1);
-    });
+    auto task1 = Parallel::async([&counter]() { counter.fetch_add(1); });
 
-    auto task2 = Parallel::async([&counter]() {
-        counter.fetch_add(2);
-    });
+    auto task2 = Parallel::async([&counter]() { counter.fetch_add(2); });
 
-    auto task3 = Parallel::async([&counter]() {
-        counter.fetch_add(3);
-    });
+    auto task3 = Parallel::async([&counter]() { counter.fetch_add(3); });
 
-    auto all_task = Parallel::when_all(std::move(task1), std::move(task2), std::move(task3));
+    auto all_task = Parallel::when_all(std::move(task1), std::move(task2),
+                                       std::move(task3));
     all_task.get();
 
     EXPECT_EQ(counter.load(), 6);
@@ -446,9 +421,8 @@ TEST_F(ParallelTest, ParallelForEachAsync) {
     std::span<const int> span_data(data);
     std::atomic<int> sum{0};
 
-    auto task = Parallel::parallel_for_each_async(span_data, [&sum](int val) {
-        sum.fetch_add(val);
-    });
+    auto task = Parallel::parallel_for_each_async(
+        span_data, [&sum](int val) { sum.fetch_add(val); });
 
     task.get();
     EXPECT_EQ(sum.load(), 15);
@@ -480,7 +454,8 @@ protected:
 };
 
 TEST_F(SimdOpsTest, AddBasic) {
-    SimdOps::add<float>(a_data.data(), b_data.data(), result_data.data(), a_data.size());
+    SimdOps::add<float>(a_data.data(), b_data.data(), result_data.data(),
+                        a_data.size());
 
     for (size_t i = 0; i < a_data.size(); ++i) {
         EXPECT_FLOAT_EQ(result_data[i], a_data[i] + b_data[i]);
@@ -488,7 +463,8 @@ TEST_F(SimdOpsTest, AddBasic) {
 }
 
 TEST_F(SimdOpsTest, MultiplyBasic) {
-    SimdOps::multiply<float>(a_data.data(), b_data.data(), result_data.data(), a_data.size());
+    SimdOps::multiply<float>(a_data.data(), b_data.data(), result_data.data(),
+                             a_data.size());
 
     for (size_t i = 0; i < a_data.size(); ++i) {
         EXPECT_FLOAT_EQ(result_data[i], a_data[i] * b_data[i]);
@@ -496,7 +472,8 @@ TEST_F(SimdOpsTest, MultiplyBasic) {
 }
 
 TEST_F(SimdOpsTest, DotProductBasic) {
-    float result = SimdOps::dotProduct<float>(a_data.data(), b_data.data(), a_data.size());
+    float result =
+        SimdOps::dotProduct<float>(a_data.data(), b_data.data(), a_data.size());
 
     float expected = 0.0f;
     for (size_t i = 0; i < a_data.size(); ++i) {
@@ -521,12 +498,15 @@ TEST_F(SimdOpsTest, DotProductSpan) {
 }
 
 TEST_F(SimdOpsTest, NullPointerThrows) {
-    EXPECT_THROW(SimdOps::add<float>(nullptr, b_data.data(), result_data.data(), a_data.size()),
+    EXPECT_THROW(SimdOps::add<float>(nullptr, b_data.data(), result_data.data(),
+                                     a_data.size()),
                  std::invalid_argument);
-    EXPECT_THROW(SimdOps::multiply<float>(a_data.data(), nullptr, result_data.data(), a_data.size()),
+    EXPECT_THROW(SimdOps::multiply<float>(a_data.data(), nullptr,
+                                          result_data.data(), a_data.size()),
                  std::invalid_argument);
-    EXPECT_THROW(SimdOps::dotProduct<float>(nullptr, b_data.data(), a_data.size()),
-                 std::invalid_argument);
+    EXPECT_THROW(
+        SimdOps::dotProduct<float>(nullptr, b_data.data(), a_data.size()),
+        std::invalid_argument);
 }
 
 TEST_F(SimdOpsTest, MismatchedSpanSizes) {
@@ -534,7 +514,8 @@ TEST_F(SimdOpsTest, MismatchedSpanSizes) {
     std::span<const float> span_a(a_data);
     std::span<const float> span_short(short_data);
 
-    EXPECT_THROW(SimdOps::dotProduct<float>(span_a, span_short), std::invalid_argument);
+    EXPECT_THROW(SimdOps::dotProduct<float>(span_a, span_short),
+                 std::invalid_argument);
 }
 
 // Performance and stress tests
@@ -564,12 +545,12 @@ TEST_F(ParallelPerformanceTest, LargeDatasetForEach) {
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    Parallel::for_each(large_data.begin(), large_data.end(), [&sum](int val) {
-        sum.fetch_add(val);
-    });
+    Parallel::for_each(large_data.begin(), large_data.end(),
+                       [&sum](int val) { sum.fetch_add(val); });
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Sum of 1 to 100000 = 100000 * 100001 / 2 = 5000050000
     EXPECT_EQ(sum.load(), 5000050000LL);
@@ -579,12 +560,12 @@ TEST_F(ParallelPerformanceTest, LargeDatasetForEach) {
 TEST_F(ParallelPerformanceTest, LargeDatasetMap) {
     auto start = std::chrono::high_resolution_clock::now();
 
-    auto result = Parallel::map(large_data.begin(), large_data.begin() + 10000, [](int val) {
-        return val * 2;
-    });
+    auto result = Parallel::map(large_data.begin(), large_data.begin() + 10000,
+                                [](int val) { return val * 2; });
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_EQ(result.size(), 10000);
     EXPECT_EQ(result[0], 2);
@@ -595,11 +576,13 @@ TEST_F(ParallelPerformanceTest, LargeDatasetMap) {
 TEST_F(ParallelPerformanceTest, LargeDatasetReduce) {
     auto start = std::chrono::high_resolution_clock::now();
 
-    long long result = Parallel::reduce(large_data.begin(), large_data.begin() + 50000,
-                                       0LL, std::plus<long long>());
+    long long result =
+        Parallel::reduce(large_data.begin(), large_data.begin() + 50000, 0LL,
+                         std::plus<long long>());
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Sum of 1 to 50000 = 50000 * 50001 / 2 = 1250025000
     EXPECT_EQ(result, 1250025000LL);
@@ -614,7 +597,8 @@ TEST_F(ParallelPerformanceTest, LargeDatasetSort) {
     Parallel::sort(data.begin(), data.end());
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_TRUE(std::is_sorted(data.begin(), data.end()));
     EXPECT_LT(duration.count(), 2000);  // Should complete within 2 seconds
@@ -626,12 +610,13 @@ TEST_F(ParallelTest, ForEachWithException) {
     std::atomic<int> processed{0};
 
     // Some tasks will throw, but others should still execute
-    EXPECT_NO_THROW(Parallel::for_each(data.begin(), data.end(), [&processed](int val) {
-        processed.fetch_add(1);
-        if (val == 3) {
-            throw std::runtime_error("Test exception");
-        }
-    }));
+    EXPECT_NO_THROW(
+        Parallel::for_each(data.begin(), data.end(), [&processed](int val) {
+            processed.fetch_add(1);
+            if (val == 3) {
+                throw std::runtime_error("Test exception");
+            }
+        }));
 
     // Some tasks should have been processed (exact count depends on timing)
     EXPECT_GT(processed.load(), 0);
@@ -664,9 +649,9 @@ TEST_F(ParallelTest, ConcurrentAccess) {
     for (int t = 0; t < 4; ++t) {
         threads.emplace_back([&data, &total_sum]() {
             std::atomic<long long> local_sum{0};
-            Parallel::for_each(data.begin(), data.end(), [&local_sum](const int& val) {
-                local_sum.fetch_add(val);
-            });
+            Parallel::for_each(
+                data.begin(), data.end(),
+                [&local_sum](const int& val) { local_sum.fetch_add(val); });
             total_sum.fetch_add(local_sum.load());
         });
     }
@@ -675,7 +660,8 @@ TEST_F(ParallelTest, ConcurrentAccess) {
         thread.join();
     }
 
-    // Each thread should have computed the same sum, so total should be 4 times the sum
+    // Each thread should have computed the same sum, so total should be 4 times
+    // the sum
     long long expected_single_sum = 1000 * 1001 / 2;  // Sum of 1 to 1000
     EXPECT_EQ(total_sum.load(), expected_single_sum * 4);
 }
@@ -686,9 +672,8 @@ TEST_F(ParallelTest, SingleThreadPerformance) {
     std::atomic<int> sum{0};
 
     // Force single thread execution
-    Parallel::for_each(data.begin(), data.end(), [&sum](int val) {
-        sum.fetch_add(val);
-    }, 1);
+    Parallel::for_each(
+        data.begin(), data.end(), [&sum](int val) { sum.fetch_add(val); }, 1);
 
     EXPECT_EQ(sum.load(), 15);
 }
@@ -698,9 +683,8 @@ TEST_F(ParallelTest, ZeroThreadsDefaultsToHardwareConcurrency) {
     std::atomic<int> sum{0};
 
     // Zero threads should default to hardware concurrency
-    EXPECT_NO_THROW(Parallel::for_each(data.begin(), data.end(), [&sum](int val) {
-        sum.fetch_add(val);
-    }, 0));
+    EXPECT_NO_THROW(Parallel::for_each(
+        data.begin(), data.end(), [&sum](int val) { sum.fetch_add(val); }, 0));
 
     EXPECT_EQ(sum.load(), 15);
 }

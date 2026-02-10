@@ -1,293 +1,142 @@
 #include "async_sockethub.hpp"
 
-#include <algorithm>
+#include <asio.hpp>
+#include <asio/ssl.hpp>
+
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <iostream>
 #include <mutex>
 #include <queue>
+#include <shared_mutex>
 #include <thread>
 #include <unordered_set>
 
+#include "rate_limiter.hpp"
+#include "socket_client_base.hpp"
+
 namespace atom::async::connection {
 
-// Client class to manage individual connections
+using atom::connection::RateLimiter;
+using atom::connection::SocketClientBase;
+
+// Client class using template base - TCP version
+using TcpClientImpl = SocketClientBase<asio::ip::tcp::socket>;
+// Client class using template base - SSL version
+using SslClientImpl =
+    SocketClientBase<asio::ssl::stream<asio::ip::tcp::socket>>;
+
+/**
+ * @class Client
+ * @brief Wrapper class that handles both TCP and SSL clients uniformly
+ */
 class Client {
 public:
+    // TCP constructor
     Client(size_t id, std::shared_ptr<asio::ip::tcp::socket> socket)
-        : id_(id),
-          socket_(socket),
-          is_authenticated_(false),
-          connect_time_(std::chrono::system_clock::now()),
-          last_activity_time_(connect_time_),
-          messages_sent_(0),
-          messages_received_(0),
-          bytes_sent_(0),
-          bytes_received_(0) {}
+        : id_(id), is_ssl_(false) {
+        tcp_client_ = std::make_shared<TcpClientImpl>(id, std::move(socket));
+    }
 
-    // SSL version constructor
+    // SSL constructor
     Client(size_t id,
            std::shared_ptr<asio::ssl::stream<asio::ip::tcp::socket>> ssl_socket)
-        : id_(id),
-          ssl_socket_(ssl_socket),
-          is_authenticated_(false),
-          connect_time_(std::chrono::system_clock::now()),
-          last_activity_time_(connect_time_),
-          messages_sent_(0),
-          messages_received_(0),
-          bytes_sent_(0),
-          bytes_received_(0) {}
+        : id_(id), is_ssl_(true) {
+        ssl_client_ =
+            std::make_shared<SslClientImpl>(id, std::move(ssl_socket));
+    }
 
-    size_t getId() const { return id_; }
+    [[nodiscard]] size_t getId() const noexcept { return id_; }
 
-    bool isAuthenticated() const { return is_authenticated_; }
-    void setAuthenticated(bool auth) { is_authenticated_ = auth; }
+    [[nodiscard]] bool isAuthenticated() const noexcept {
+        return is_ssl_ ? ssl_client_->isAuthenticated()
+                       : tcp_client_->isAuthenticated();
+    }
+
+    void setAuthenticated(bool auth) noexcept {
+        is_ssl_ ? ssl_client_->setAuthenticated(auth)
+                : tcp_client_->setAuthenticated(auth);
+    }
 
     void setMetadata(const std::string& key, const std::string& value) {
-        std::lock_guard<std::mutex> lock(metadata_mutex_);
-        metadata_[key] = value;
+        is_ssl_ ? ssl_client_->setMetadata(key, value)
+                : tcp_client_->setMetadata(key, value);
     }
 
-    std::string getMetadata(const std::string& key) const {
-        std::lock_guard<std::mutex> lock(metadata_mutex_);
-        auto it = metadata_.find(key);
-        if (it != metadata_.end()) {
-            return it->second;
-        }
-        return "";
+    [[nodiscard]] std::string getMetadata(const std::string& key) const {
+        return is_ssl_ ? ssl_client_->getMetadata(key)
+                       : tcp_client_->getMetadata(key);
     }
 
-    std::string getRemoteAddress() const {
-        try {
-            if (socket_) {
-                return socket_->remote_endpoint().address().to_string();
-            } else if (ssl_socket_) {
-                return ssl_socket_->lowest_layer()
-                    .remote_endpoint()
-                    .address()
-                    .to_string();
-            }
-        } catch (const std::exception& e) {
-            // Endpoint might be closed
-        }
-        return "unknown";
+    [[nodiscard]] std::string getRemoteAddress() const {
+        return is_ssl_ ? ssl_client_->getRemoteAddress()
+                       : tcp_client_->getRemoteAddress();
     }
 
-    std::chrono::system_clock::time_point getConnectTime() const {
-        return connect_time_;
+    [[nodiscard]] std::chrono::system_clock::time_point getConnectTime()
+        const noexcept {
+        return is_ssl_ ? ssl_client_->getConnectTime()
+                       : tcp_client_->getConnectTime();
     }
 
-    std::chrono::system_clock::time_point getLastActivityTime() const {
-        return last_activity_time_;
+    [[nodiscard]] std::chrono::system_clock::time_point getLastActivityTime()
+        const noexcept {
+        return is_ssl_ ? ssl_client_->getLastActivityTime()
+                       : tcp_client_->getLastActivityTime();
     }
 
-    void updateLastActivity() {
-        last_activity_time_ = std::chrono::system_clock::now();
+    void updateLastActivity() noexcept {
+        is_ssl_ ? ssl_client_->updateLastActivity()
+                : tcp_client_->updateLastActivity();
     }
 
     void send(const Message& message,
               std::function<void(bool success)> callback = nullptr) {
-        if (socket_) {
-            sendViaTcp(message, callback);
-        } else if (ssl_socket_) {
-            sendViaSsl(message, callback);
-        }
+        is_ssl_ ? ssl_client_->send(message, std::move(callback))
+                : tcp_client_->send(message, std::move(callback));
     }
 
     void startReading(std::function<void(const Message&)> message_handler,
                       std::function<void()> disconnect_handler) {
-        message_handler_ = message_handler;
-        disconnect_handler_ = disconnect_handler;
-
-        if (socket_) {
-            doReadTcp();
-        } else if (ssl_socket_) {
-            doReadSsl();
-        }
+        is_ssl_ ? ssl_client_->startReading(std::move(message_handler),
+                                            std::move(disconnect_handler))
+                : tcp_client_->startReading(std::move(message_handler),
+                                            std::move(disconnect_handler));
     }
 
     void disconnect() {
-        try {
-            if (socket_) {
-                socket_->close();
-            } else if (ssl_socket_) {
-                ssl_socket_->lowest_layer().close();
-            }
-        } catch (const std::exception& e) {
-            // Already closed or other error
-        }
+        is_ssl_ ? ssl_client_->disconnect() : tcp_client_->disconnect();
     }
 
-    // Statistics
-    size_t getMessagesSent() const { return messages_sent_; }
-    size_t getMessagesReceived() const { return messages_received_; }
-    size_t getBytesSent() const { return bytes_sent_; }
-    size_t getBytesReceived() const { return bytes_received_; }
+    [[nodiscard]] size_t getMessagesSent() const noexcept {
+        return is_ssl_ ? ssl_client_->getMessagesSent()
+                       : tcp_client_->getMessagesSent();
+    }
+
+    [[nodiscard]] size_t getMessagesReceived() const noexcept {
+        return is_ssl_ ? ssl_client_->getMessagesReceived()
+                       : tcp_client_->getMessagesReceived();
+    }
+
+    [[nodiscard]] size_t getBytesSent() const noexcept {
+        return is_ssl_ ? ssl_client_->getBytesSent()
+                       : tcp_client_->getBytesSent();
+    }
+
+    [[nodiscard]] size_t getBytesReceived() const noexcept {
+        return is_ssl_ ? ssl_client_->getBytesReceived()
+                       : tcp_client_->getBytesReceived();
+    }
 
 private:
-    void doReadTcp() {
-        auto buffer = std::make_shared<std::vector<char>>(4096);
-        socket_->async_read_some(
-            asio::buffer(*buffer),
-            [this, buffer](std::error_code ec, std::size_t length) {
-                if (!ec) {
-                    bytes_received_ += length;
-                    messages_received_++;
-                    updateLastActivity();
-
-                    Message msg;
-                    msg.type = Message::Type::TEXT;
-                    msg.data = std::vector<char>(buffer->begin(),
-                                                 buffer->begin() + length);
-                    msg.sender_id = id_;
-
-                    if (message_handler_) {
-                        message_handler_(msg);
-                    }
-
-                    doReadTcp();
-                } else {
-                    if (disconnect_handler_) {
-                        disconnect_handler_();
-                    }
-                }
-            });
-    }
-
-    void doReadSsl() {
-        auto buffer = std::make_shared<std::vector<char>>(4096);
-        ssl_socket_->async_read_some(
-            asio::buffer(*buffer),
-            [this, buffer](std::error_code ec, std::size_t length) {
-                if (!ec) {
-                    bytes_received_ += length;
-                    messages_received_++;
-                    updateLastActivity();
-
-                    Message msg;
-                    msg.type = Message::Type::TEXT;
-                    msg.data = std::vector<char>(buffer->begin(),
-                                                 buffer->begin() + length);
-                    msg.sender_id = id_;
-
-                    if (message_handler_) {
-                        message_handler_(msg);
-                    }
-
-                    doReadSsl();
-                } else {
-                    if (disconnect_handler_) {
-                        disconnect_handler_();
-                    }
-                }
-            });
-    }
-
-    void sendViaTcp(const Message& message,
-                    std::function<void(bool)> callback) {
-        bytes_sent_ += message.data.size();
-        messages_sent_++;
-        updateLastActivity();
-
-        asio::async_write(*socket_, asio::buffer(message.data),
-                          [this, callback](std::error_code ec, std::size_t) {
-                              if (callback) {
-                                  callback(!ec);
-                              }
-                          });
-    }
-
-    void sendViaSsl(const Message& message,
-                    std::function<void(bool)> callback) {
-        bytes_sent_ += message.data.size();
-        messages_sent_++;
-        updateLastActivity();
-
-        asio::async_write(*ssl_socket_, asio::buffer(message.data),
-                          [this, callback](std::error_code ec, std::size_t) {
-                              if (callback) {
-                                  callback(!ec);
-                              }
-                          });
-    }
-
     size_t id_;
-    std::shared_ptr<asio::ip::tcp::socket> socket_;
-    std::shared_ptr<asio::ssl::stream<asio::ip::tcp::socket>> ssl_socket_;
-    bool is_authenticated_;
-    std::function<void(const Message&)> message_handler_;
-    std::function<void()> disconnect_handler_;
-    std::chrono::system_clock::time_point connect_time_;
-    std::chrono::system_clock::time_point last_activity_time_;
-    std::atomic<size_t> messages_sent_;
-    std::atomic<size_t> messages_received_;
-    std::atomic<size_t> bytes_sent_;
-    std::atomic<size_t> bytes_received_;
-    std::unordered_map<std::string, std::string> metadata_;
-    mutable std::mutex metadata_mutex_;
+    bool is_ssl_;
+    std::shared_ptr<TcpClientImpl> tcp_client_;
+    std::shared_ptr<SslClientImpl> ssl_client_;
 };
 
-// Rate limiter for DoS protection
-class RateLimiter {
-public:
-    RateLimiter(int max_connections_per_ip, int max_messages_per_minute)
-        : max_connections_per_ip_(max_connections_per_ip),
-          max_messages_per_minute_(max_messages_per_minute) {}
-
-    bool canConnect(const std::string& ip_address) {
-        std::lock_guard<std::mutex> lock(mutex_);
-
-        auto& count = connection_count_[ip_address];
-        if (count >= max_connections_per_ip_) {
-            return false;
-        }
-
-        count++;
-        return true;
-    }
-
-    void releaseConnection(const std::string& ip_address) {
-        std::lock_guard<std::mutex> lock(mutex_);
-
-        auto it = connection_count_.find(ip_address);
-        if (it != connection_count_.end() && it->second > 0) {
-            it->second--;
-        }
-    }
-
-    bool canSendMessage(const std::string& ip_address) {
-        std::lock_guard<std::mutex> lock(mutex_);
-
-        auto now = std::chrono::system_clock::now();
-        auto& message_times = message_history_[ip_address];
-
-        // Remove messages older than 1 minute
-        auto minute_ago = now - std::chrono::minutes(1);
-        message_times.erase(
-            std::remove_if(
-                message_times.begin(), message_times.end(),
-                [&minute_ago](const auto& time) { return time < minute_ago; }),
-            message_times.end());
-
-        if (message_times.size() >=
-            static_cast<std::size_t>(max_messages_per_minute_)) {
-            return false;
-        }
-
-        message_times.push_back(now);
-        return true;
-    }
-
-private:
-    int max_connections_per_ip_;
-    int max_messages_per_minute_;
-    std::unordered_map<std::string, int> connection_count_;
-    std::unordered_map<std::string,
-                       std::vector<std::chrono::system_clock::time_point>>
-        message_history_;
-    std::mutex mutex_;
-};
+// RateLimiter is now imported from rate_limiter.hpp
 
 // Task queue for thread pool
 class TaskQueue {
@@ -456,32 +305,32 @@ public:
 
     void addMessageHandler(
         const std::function<void(const Message&, size_t)>& handler) {
-        std::lock_guard<std::mutex> lock(handler_mutex_);
+        std::unique_lock lock(handler_mutex_);
         message_handlers_.push_back(handler);
     }
 
     void addConnectHandler(
         const std::function<void(size_t, const std::string&)>& handler) {
-        std::lock_guard<std::mutex> lock(connect_handler_mutex_);
+        std::unique_lock lock(connect_handler_mutex_);
         connect_handlers_.push_back(handler);
     }
 
     void addDisconnectHandler(
         const std::function<void(size_t, const std::string&)>& handler) {
-        std::lock_guard<std::mutex> lock(disconnect_handler_mutex_);
+        std::unique_lock lock(disconnect_handler_mutex_);
         disconnect_handlers_.push_back(handler);
     }
 
     void addErrorHandler(
         const std::function<void(const std::string&, size_t)>& handler) {
-        std::lock_guard<std::mutex> lock(error_handler_mutex_);
+        std::unique_lock lock(error_handler_mutex_);
         error_handlers_.push_back(handler);
     }
 
     void broadcastMessage(const Message& message) {
         std::vector<std::shared_ptr<Client>> client_copies;
         {
-            std::lock_guard<std::mutex> lock(client_mutex_);
+            std::unique_lock lock(client_mutex_);
             for (const auto& [id, client] : clients_) {
                 client_copies.push_back(client);
             }
@@ -503,7 +352,7 @@ public:
     void sendMessageToClient(size_t client_id, const Message& message) {
         std::shared_ptr<Client> client;
         {
-            std::lock_guard<std::mutex> lock(client_mutex_);
+            std::unique_lock lock(client_mutex_);
             auto it = clients_.find(client_id);
             if (it != clients_.end()) {
                 client = it->second;
@@ -534,7 +383,7 @@ public:
     void disconnectClient(size_t client_id, const std::string& reason) {
         std::shared_ptr<Client> client;
         {
-            std::lock_guard<std::mutex> lock(client_mutex_);
+            std::unique_lock lock(client_mutex_);
             auto it = clients_.find(client_id);
             if (it != clients_.end()) {
                 client = it->second;
@@ -564,7 +413,7 @@ public:
     }
 
     void createGroup(const std::string& group_name) {
-        std::lock_guard<std::mutex> lock(group_mutex_);
+        std::unique_lock lock(group_mutex_);
         groups_[group_name] = std::unordered_set<size_t>();
         log(LogLevel::INFO_LEVEL, "Created group: " + group_name);
     }
@@ -572,7 +421,7 @@ public:
     void addClientToGroup(size_t client_id, const std::string& group_name) {
         bool client_exists = false;
         {
-            std::lock_guard<std::mutex> lock(client_mutex_);
+            std::unique_lock lock(client_mutex_);
             client_exists = clients_.find(client_id) != clients_.end();
         }
 
@@ -583,7 +432,7 @@ public:
             return;
         }
 
-        std::lock_guard<std::mutex> lock(group_mutex_);
+        std::unique_lock lock(group_mutex_);
         auto it = groups_.find(group_name);
         if (it == groups_.end()) {
             // Create the group if it doesn't exist
@@ -601,7 +450,7 @@ public:
 
     void removeClientFromGroup(size_t client_id,
                                const std::string& group_name) {
-        std::lock_guard<std::mutex> lock(group_mutex_);
+        std::unique_lock lock(group_mutex_);
         auto it = groups_.find(group_name);
         if (it != groups_.end()) {
             it->second.erase(client_id);
@@ -615,7 +464,7 @@ public:
                           const Message& message) {
         std::vector<size_t> client_ids;
         {
-            std::lock_guard<std::mutex> lock(group_mutex_);
+            std::unique_lock lock(group_mutex_);
             auto it = groups_.find(group_name);
             if (it != groups_.end()) {
                 client_ids.assign(it->second.begin(), it->second.end());
@@ -648,7 +497,7 @@ public:
                            const std::string& value) {
         std::shared_ptr<Client> client;
         {
-            std::lock_guard<std::mutex> lock(client_mutex_);
+            std::unique_lock lock(client_mutex_);
             auto it = clients_.find(client_id);
             if (it != clients_.end()) {
                 client = it->second;
@@ -666,7 +515,7 @@ public:
     std::string getClientMetadata(size_t client_id, const std::string& key) {
         std::shared_ptr<Client> client;
         {
-            std::lock_guard<std::mutex> lock(client_mutex_);
+            std::unique_lock lock(client_mutex_);
             auto it = clients_.find(client_id);
             if (it != clients_.end()) {
                 client = it->second;
@@ -694,13 +543,13 @@ public:
     bool isRunning() const { return is_running_; }
 
     bool isClientConnected(size_t client_id) const {
-        std::lock_guard<std::mutex> lock(client_mutex_);
+        std::unique_lock lock(client_mutex_);
         return clients_.find(client_id) != clients_.end();
     }
 
     std::vector<size_t> getConnectedClients() const {
         std::vector<size_t> result;
-        std::lock_guard<std::mutex> lock(client_mutex_);
+        std::unique_lock lock(client_mutex_);
         result.reserve(clients_.size());
         for (const auto& [id, _] : clients_) {
             result.push_back(id);
@@ -710,7 +559,7 @@ public:
 
     std::vector<std::string> getGroups() const {
         std::vector<std::string> result;
-        std::lock_guard<std::mutex> lock(group_mutex_);
+        std::unique_lock lock(group_mutex_);
         result.reserve(groups_.size());
         for (const auto& [name, _] : groups_) {
             result.push_back(name);
@@ -720,7 +569,7 @@ public:
 
     std::vector<size_t> getClientsInGroup(const std::string& group_name) const {
         std::vector<size_t> result;
-        std::lock_guard<std::mutex> lock(group_mutex_);
+        std::unique_lock lock(group_mutex_);
         auto it = groups_.find(group_name);
         if (it != groups_.end()) {
             result.assign(it->second.begin(), it->second.end());
@@ -871,7 +720,7 @@ private:
 
             // Add client to the collection
             {
-                std::lock_guard<std::mutex> lock(client_mutex_);
+                std::unique_lock lock(client_mutex_);
                 clients_[client_id] = client;
                 stats_.total_connections++;
                 stats_.active_connections++;
@@ -934,7 +783,7 @@ private:
 
             // Add client to the collection
             {
-                std::lock_guard<std::mutex> lock(client_mutex_);
+                std::unique_lock lock(client_mutex_);
                 clients_[client_id] = client;
                 stats_.total_connections++;
                 stats_.active_connections++;
@@ -984,7 +833,7 @@ private:
         // Copy the handlers to avoid holding the lock during callback execution
         std::vector<std::function<void(const Message&, size_t)>> handlers_copy;
         {
-            std::lock_guard<std::mutex> lock(handler_mutex_);
+            std::unique_lock lock(handler_mutex_);
             handlers_copy = message_handlers_;
         }
 
@@ -1000,7 +849,7 @@ private:
         std::vector<std::function<void(size_t, const std::string&)>>
             handlers_copy;
         {
-            std::lock_guard<std::mutex> lock(connect_handler_mutex_);
+            std::unique_lock lock(connect_handler_mutex_);
             handlers_copy = connect_handlers_;
         }
 
@@ -1015,7 +864,7 @@ private:
         std::vector<std::function<void(size_t, const std::string&)>>
             handlers_copy;
         {
-            std::lock_guard<std::mutex> lock(disconnect_handler_mutex_);
+            std::unique_lock lock(disconnect_handler_mutex_);
             handlers_copy = disconnect_handlers_;
         }
 
@@ -1032,7 +881,7 @@ private:
         std::vector<std::function<void(const std::string&, size_t)>>
             handlers_copy;
         {
-            std::lock_guard<std::mutex> lock(error_handler_mutex_);
+            std::unique_lock lock(error_handler_mutex_);
             handlers_copy = error_handlers_;
         }
 
@@ -1046,7 +895,7 @@ private:
     void disconnectAllClients(const std::string& reason) {
         std::vector<size_t> client_ids;
         {
-            std::lock_guard<std::mutex> lock(client_mutex_);
+            std::unique_lock lock(client_mutex_);
             client_ids.reserve(clients_.size());
             for (const auto& [id, _] : clients_) {
                 client_ids.push_back(id);
@@ -1061,7 +910,7 @@ private:
     std::string getClientIp(size_t client_id) {
         std::shared_ptr<Client> client;
         {
-            std::lock_guard<std::mutex> lock(client_mutex_);
+            std::unique_lock lock(client_mutex_);
             auto it = clients_.find(client_id);
             if (it != clients_.end()) {
                 client = it->second;
@@ -1085,6 +934,9 @@ private:
             // Default log to console
             std::string level_str;
             switch (level) {
+                case LogLevel::TRACE:
+                    level_str = "TRACE";
+                    break;
                 case LogLevel::DEBUG_LEVEL:
                     level_str = "DEBUG";
                     break;
@@ -1131,7 +983,7 @@ private:
         auto now = std::chrono::system_clock::now();
 
         {
-            std::lock_guard<std::mutex> lock(client_mutex_);
+            std::unique_lock lock(client_mutex_);
             for (const auto& [id, client] : clients_) {
                 auto last_activity = client->getLastActivityTime();
                 if (now - last_activity > config_.connection_timeout) {
@@ -1156,32 +1008,33 @@ private:
     asio::ip::tcp::acceptor acceptor_;
     asio::ssl::context ssl_context_;
     asio::executor_work_guard<asio::io_context::executor_type> work_guard_;
-    bool is_running_;
+    std::atomic<bool> is_running_{false};
     std::unordered_map<size_t, std::shared_ptr<Client>> clients_;
-    mutable std::mutex client_mutex_;
+    mutable std::shared_mutex
+        client_mutex_;  // Use shared_mutex for read-heavy operations
     std::vector<std::function<void(const Message&, size_t)>> message_handlers_;
-    std::mutex handler_mutex_;
+    mutable std::shared_mutex handler_mutex_;
     std::vector<std::function<void(size_t, const std::string&)>>
         connect_handlers_;
-    std::mutex connect_handler_mutex_;
+    mutable std::shared_mutex connect_handler_mutex_;
     std::vector<std::function<void(size_t, const std::string&)>>
         disconnect_handlers_;
-    std::mutex disconnect_handler_mutex_;
+    mutable std::shared_mutex disconnect_handler_mutex_;
     std::vector<std::function<void(const std::string&, size_t)>>
         error_handlers_;
-    std::mutex error_handler_mutex_;
-    size_t next_client_id_;
+    mutable std::shared_mutex error_handler_mutex_;
+    std::atomic<size_t> next_client_id_{1};
     std::thread io_thread_;
     std::unordered_map<std::string, std::unordered_set<size_t>> groups_;
-    mutable std::mutex group_mutex_;
+    mutable std::shared_mutex group_mutex_;
     RateLimiter rate_limiter_;
     TaskQueue task_queue_;
     std::function<bool(const std::string&, const std::string&)> authenticator_;
-    bool require_authentication_;
-    bool logging_enabled_ = true;
+    std::atomic<bool> require_authentication_{false};
+    std::atomic<bool> logging_enabled_{true};
     LogLevel log_level_ = LogLevel::INFO_LEVEL;
     std::function<void(LogLevel, const std::string&)> log_handler_;
-    SocketHubStats stats_;
+    SocketHubStats stats_;  // Now uses atomic members from socket_types.hpp
 };
 
 // SocketHub implementation forwarding to Impl

@@ -5,6 +5,7 @@
 #include <cstring>
 #include <future>
 
+#include "atom/algorithm/common/hex.hpp"
 #include "atom/error/exception.hpp"
 
 #ifdef ATOM_USE_BOOST
@@ -336,29 +337,13 @@ void SHA1::processBlockSIMD(const u8* block) noexcept {
 
 template <usize N>
 auto bytesToHex(const std::array<u8, N>& bytes) noexcept -> std::string {
-    static constexpr char HEX_CHARS[] = "0123456789abcdef";
-    std::string result(N * 2, ' ');
-
-    for (usize i = 0; i < N; ++i) {
-        result[i * 2] = HEX_CHARS[(bytes[i] >> 4) & 0xF];
-        result[i * 2 + 1] = HEX_CHARS[bytes[i] & 0xF];
-    }
-
-    return result;
+    return hex::toHexString(bytes);
 }
 
 template <>
 auto bytesToHex<SHA1::DIGEST_SIZE>(
     const std::array<u8, SHA1::DIGEST_SIZE>& bytes) noexcept -> std::string {
-    static constexpr char HEX_CHARS[] = "0123456789abcdef";
-    std::string result(SHA1::DIGEST_SIZE * 2, ' ');
-
-    for (usize i = 0; i < SHA1::DIGEST_SIZE; ++i) {
-        result[i * 2] = HEX_CHARS[(bytes[i] >> 4) & 0xF];
-        result[i * 2 + 1] = HEX_CHARS[bytes[i] & 0xF];
-    }
-
-    return result;
+    return hex::toHexString(bytes);
 }
 
 // Explicit template instantiation for test usage

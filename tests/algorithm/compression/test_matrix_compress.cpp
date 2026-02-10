@@ -249,6 +249,48 @@ TEST_F(MatrixCompressorTest, Downsampling) {
     expectMatricesEqual(expected, downsampled);
 }
 
+// Test downsampling with non-uniform values (tests the inner loop fix)
+TEST_F(MatrixCompressorTest, DownsamplingAveraging) {
+    // Create a matrix where averaging is needed
+    MatrixCompressor::Matrix matrix = {
+        {static_cast<char>(10), static_cast<char>(20), static_cast<char>(30),
+         static_cast<char>(40)},
+        {static_cast<char>(10), static_cast<char>(20), static_cast<char>(30),
+         static_cast<char>(40)},
+        {static_cast<char>(50), static_cast<char>(60), static_cast<char>(70),
+         static_cast<char>(80)},
+        {static_cast<char>(50), static_cast<char>(60), static_cast<char>(70),
+         static_cast<char>(80)}};
+
+    auto downsampled = MatrixCompressor::downsample(matrix, 2);
+
+    // Each 2x2 block should be averaged
+    // Block (0,0): (10+20+10+20)/4 = 15
+    // Block (0,1): (30+40+30+40)/4 = 35
+    // Block (1,0): (50+60+50+60)/4 = 55
+    // Block (1,1): (70+80+70+80)/4 = 75
+    ASSERT_EQ(2, static_cast<int>(downsampled.size()));
+    ASSERT_EQ(2, static_cast<int>(downsampled[0].size()));
+
+    EXPECT_EQ(static_cast<char>(15), downsampled[0][0]);
+    EXPECT_EQ(static_cast<char>(35), downsampled[0][1]);
+    EXPECT_EQ(static_cast<char>(55), downsampled[1][0]);
+    EXPECT_EQ(static_cast<char>(75), downsampled[1][1]);
+}
+
+// Test downsampling with odd-sized matrix
+TEST_F(MatrixCompressorTest, DownsamplingOddSize) {
+    MatrixCompressor::Matrix matrix = {
+        {'A', 'A', 'B'}, {'A', 'A', 'B'}, {'C', 'C', 'D'}};
+
+    auto downsampled = MatrixCompressor::downsample(matrix, 2);
+
+    // 3x3 matrix with factor 2 should produce a matrix where edge blocks
+    // have fewer elements to average
+    ASSERT_EQ(2, static_cast<int>(downsampled.size()));
+    ASSERT_EQ(2, static_cast<int>(downsampled[0].size()));
+}
+
 TEST_F(MatrixCompressorTest, Upsampling) {
     MatrixCompressor::Matrix matrix = {{'A', 'B'}, {'C', 'D'}};
     auto upsampled = MatrixCompressor::upsample(matrix, 2);

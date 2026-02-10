@@ -94,8 +94,8 @@ auto teaDecrypt(u32 &value0, u32 &value1,
  * @throws TEAException if the input data is too small or the key is invalid.
  */
 template <UInt32Container Container>
-auto xxteaEncrypt(const Container &inputData,
-                  std::span<const u32, 4> inputKey) -> std::vector<u32>;
+auto xxteaEncrypt(const Container &inputData, std::span<const u32, 4> inputKey)
+    -> std::vector<u32>;
 
 /**
  * @brief Decrypts a container of 32-bit values using the XXTEA algorithm.
@@ -108,8 +108,8 @@ auto xxteaEncrypt(const Container &inputData,
  * @throws TEAException if the input data is too small or the key is invalid.
  */
 template <UInt32Container Container>
-auto xxteaDecrypt(const Container &inputData,
-                  std::span<const u32, 4> inputKey) -> std::vector<u32>;
+auto xxteaDecrypt(const Container &inputData, std::span<const u32, 4> inputKey)
+    -> std::vector<u32>;
 
 /**
  * @brief Encrypts two 32-bit values using the XTEA (Extended TEA) algorithm.
@@ -121,8 +121,8 @@ auto xxteaDecrypt(const Container &inputData,
  * @param key A reference to an XTEAKey representing the 128-bit key.
  * @throws TEAException if the key is invalid.
  */
-auto xteaEncrypt(u32 &value0, u32 &value1,
-                 const XTEAKey &key) noexcept(false) -> void;
+auto xteaEncrypt(u32 &value0, u32 &value1, const XTEAKey &key) noexcept(false)
+    -> void;
 
 /**
  * @brief Decrypts two 32-bit values using the XTEA (Extended TEA) algorithm.
@@ -132,8 +132,8 @@ auto xteaEncrypt(u32 &value0, u32 &value1,
  * @param key A reference to an XTEAKey representing the 128-bit key.
  * @throws TEAException if the key is invalid.
  */
-auto xteaDecrypt(u32 &value0, u32 &value1,
-                 const XTEAKey &key) noexcept(false) -> void;
+auto xteaDecrypt(u32 &value0, u32 &value1, const XTEAKey &key) noexcept(false)
+    -> void;
 
 /**
  * @brief Converts a byte array to a vector of 32-bit unsigned integers.
@@ -148,7 +148,7 @@ auto xteaDecrypt(u32 &value0, u32 &value1,
  */
 template <typename T>
     requires std::ranges::contiguous_range<T> &&
-                 std::same_as<std::ranges::range_value_t<T>, u8>
+             std::same_as<std::ranges::range_value_t<T>, u8>
 auto toUint32Vector(const T &data) -> std::vector<u32>;
 
 /**
@@ -294,8 +294,8 @@ auto toByteArrayImpl(std::span<const u32> data) -> std::vector<u8>;
  * @throws TEAException if the input data is too small or the key is invalid.
  */
 template <UInt32Container Container>
-auto xxteaEncrypt(const Container &inputData,
-                  std::span<const u32, 4> inputKey) -> std::vector<u32> {
+auto xxteaEncrypt(const Container &inputData, std::span<const u32, 4> inputKey)
+    -> std::vector<u32> {
     return xxteaEncryptImpl(
         std::span<const u32>{inputData.data(), inputData.size()}, inputKey);
 }
@@ -311,8 +311,8 @@ auto xxteaEncrypt(const Container &inputData,
  * @throws TEAException if the input data is too small or the key is invalid.
  */
 template <UInt32Container Container>
-auto xxteaDecrypt(const Container &inputData,
-                  std::span<const u32, 4> inputKey) -> std::vector<u32> {
+auto xxteaDecrypt(const Container &inputData, std::span<const u32, 4> inputKey)
+    -> std::vector<u32> {
     return xxteaDecryptImpl(
         std::span<const u32>{inputData.data(), inputData.size()}, inputKey);
 }
@@ -320,8 +320,16 @@ auto xxteaDecrypt(const Container &inputData,
 /**
  * @brief Parallel version of XXTEA encryption for large data sets.
  *
- * This function uses multiple threads to encrypt the input data, which can
- * significantly improve performance for large data sets.
+ * @warning SECURITY WARNING: This function processes data in independent
+ * chunks, which effectively operates in ECB (Electronic Codebook) mode. This
+ * breaks the semantic security of XXTEA as identical plaintext blocks produce
+ * identical ciphertext blocks. Use only when:
+ * - Performance is critical and security trade-offs are acceptable
+ * - Data has high entropy (e.g., already compressed or random)
+ * - You understand the security implications
+ *
+ * For secure encryption of structured data, use the non-parallel version
+ * xxteaEncrypt() which processes the entire message as a single block.
  *
  * @tparam Container A type that satisfies the UInt32Container concept.
  * @param inputData The container of 32-bit values to be encrypted.
@@ -331,9 +339,12 @@ auto xxteaDecrypt(const Container &inputData,
  * @return A vector of encrypted 32-bit values.
  */
 template <UInt32Container Container>
+[[deprecated(
+    "Use xxteaEncrypt() for secure encryption. This parallel version "
+    "operates in ECB mode which has security weaknesses.")]]
 auto xxteaEncryptParallel(const Container &inputData,
-                          std::span<const u32, 4> inputKey,
-                          usize numThreads) -> std::vector<u32> {
+                          std::span<const u32, 4> inputKey, usize numThreads)
+    -> std::vector<u32> {
     return xxteaEncryptParallelImpl(
         std::span<const u32>{inputData.data(), inputData.size()}, inputKey,
         numThreads);
@@ -342,8 +353,10 @@ auto xxteaEncryptParallel(const Container &inputData,
 /**
  * @brief Parallel version of XXTEA decryption for large data sets.
  *
- * This function uses multiple threads to decrypt the input data, which can
- * significantly improve performance for large data sets.
+ * @warning SECURITY WARNING: This function is the counterpart to
+ * xxteaEncryptParallel() and processes data in independent chunks (ECB mode).
+ * Only use this to decrypt data that was encrypted with xxteaEncryptParallel().
+ * See xxteaEncryptParallel() documentation for security implications.
  *
  * @tparam Container A type that satisfies the UInt32Container concept.
  * @param inputData The container of 32-bit values to be decrypted.
@@ -353,9 +366,12 @@ auto xxteaEncryptParallel(const Container &inputData,
  * @return A vector of decrypted 32-bit values.
  */
 template <UInt32Container Container>
+[[deprecated(
+    "Use xxteaDecrypt() for secure decryption. This parallel version "
+    "operates in ECB mode which has security weaknesses.")]]
 auto xxteaDecryptParallel(const Container &inputData,
-                          std::span<const u32, 4> inputKey,
-                          usize numThreads) -> std::vector<u32> {
+                          std::span<const u32, 4> inputKey, usize numThreads)
+    -> std::vector<u32> {
     return xxteaDecryptParallelImpl(
         std::span<const u32>{inputData.data(), inputData.size()}, inputKey,
         numThreads);
@@ -374,7 +390,7 @@ auto xxteaDecryptParallel(const Container &inputData,
  */
 template <typename T>
     requires std::ranges::contiguous_range<T> &&
-                 std::same_as<std::ranges::range_value_t<T>, u8>
+             std::same_as<std::ranges::range_value_t<T>, u8>
 auto toUint32Vector(const T &data) -> std::vector<u32> {
     return toUint32VectorImpl(std::span<const u8>{data.data(), data.size()});
 }

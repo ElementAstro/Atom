@@ -1,4 +1,4 @@
-#include "atom/async/eventstack.hpp"
+#include "atom/async/messaging/eventstack.hpp"
 
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>

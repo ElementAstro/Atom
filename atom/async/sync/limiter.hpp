@@ -241,6 +241,14 @@ private:
     void cleanup(std::string_view function_name,
                  const std::chrono::seconds& time_window);
 
+    /**
+     * @brief Collects waiters that can be resumed based on current rate limits.
+     * @return Vector of function names and their coroutine handles to resume.
+     * @note Caller must hold the mutex.
+     */
+    auto collectResumableWaiters()
+        -> std::vector<std::pair<std::string, std::coroutine_handle<>>>;
+
 #ifdef ATOM_USE_ASIO
     void asioProcessWaiters();
     mutable asio::thread_pool asio_pool_;

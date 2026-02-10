@@ -31,7 +31,7 @@ Description: Implementation of murmur3 hash and quick hash
 #include <string_view>
 #include <vector>
 
-#if USE_OPENCL
+#ifdef ATOM_USE_OPENCL
 #include <CL/cl.h>
 #include <memory>
 #endif
@@ -39,6 +39,7 @@ Description: Implementation of murmur3 hash and quick hash
 #include "../rust_numeric.hpp"
 #include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
+#include "hash.hpp"  // For Hashable concept
 
 #ifdef ATOM_USE_BOOST
 #include <boost/container/small_vector.hpp>
@@ -48,11 +49,7 @@ Description: Implementation of murmur3 hash and quick hash
 
 namespace atom::algorithm {
 
-// Use C++20 concepts to define hashable types
-template <typename T>
-concept Hashable = requires(T a) {
-    { std::hash<T>{}(a) } -> std::convertible_to<usize>;
-};
+// Hashable concept is now imported from hash.hpp
 
 inline constexpr usize K_HASH_SIZE = 32;
 
@@ -158,15 +155,15 @@ public:
      */
     template <std::ranges::range Range>
         requires Hashable<std::ranges::range_value_t<Range>>
-    [[nodiscard]] auto computeSignature(const Range& set) const
-        noexcept(false) -> HashSignature {
+    [[nodiscard]] auto computeSignature(const Range& set) const noexcept(false)
+        -> HashSignature {
         if (hash_functions_.empty()) {
             return {};
         }
 
         HashSignature signature(hash_functions_.size(),
                                 std::numeric_limits<usize>::max());
-#if USE_OPENCL
+#ifdef ATOM_USE_OPENCL
         if (opencl_available_) {
             try {
                 computeSignatureOpenCL(set, signature);
@@ -177,7 +174,7 @@ public:
         } else {
 #endif
             computeSignatureCPU(set, signature);
-#if USE_OPENCL
+#ifdef ATOM_USE_OPENCL
         }
 #endif
         return signature;
@@ -213,7 +210,7 @@ public:
      * @return bool True if OpenCL is supported, false otherwise.
      */
     [[nodiscard]] bool supportsOpenCL() const noexcept {
-#if USE_OPENCL
+#ifdef ATOM_USE_OPENCL
         return opencl_available_.load(std::memory_order_acquire);
 #else
         return false;
@@ -300,7 +297,7 @@ private:
         }
     }
 
-#if USE_OPENCL
+#ifdef ATOM_USE_OPENCL
     /**
      * @brief OpenCL resources and state.
      */

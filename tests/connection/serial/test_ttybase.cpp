@@ -5,7 +5,7 @@
 #include <thread>
 #include "atom/connection/serial/ttybase.hpp"
 
-// TTYBase is not in atom::connection namespace
+using namespace atom::connection;
 using namespace std::chrono_literals;
 
 // Concrete implementation of TTYBase for testing

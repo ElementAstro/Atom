@@ -26,10 +26,6 @@ TimerTask::TimerTask(std::function<void()> func, unsigned int delay,
       m_delay(delay),
       m_repeatCount(repeatCount),
       m_priority(priority) {
-    std::cout << "[DEBUG] TimerTask constructor: delay = " << delay
-              << ", repeatCount = " << repeatCount
-              << ", priority = " << priority << std::endl;
-
     if (!func) {
         throw std::invalid_argument("Function cannot be null");
     }
@@ -112,17 +108,12 @@ void Timer::ensureThreadStarted() noexcept(false) {
 }
 
 Timer::Timer() noexcept(false) {
-    std::cout << "[DEBUG] Timer constructor entry" << std::endl;
-
     try {
         // Initialize atomic flags first
         m_stop.store(false, std::memory_order_relaxed);
         m_paused.store(false, std::memory_order_relaxed);
 
-        std::cout << "[DEBUG] Timer atomic flags initialized" << std::endl;
-
 #ifdef ATOM_USE_ASIO
-        std::cout << "[DEBUG] Using ASIO mode" << std::endl;
         try {
             m_ioContext = std::make_unique<asio::io_context>();
             m_work = std::make_unique<
@@ -137,30 +128,15 @@ Timer::Timer() noexcept(false) {
                     // Suppress exceptions
                 }
             }).detach();
-
-            std::cout << "[DEBUG] ASIO timer initialized successfully"
-                      << std::endl;
         } catch (const std::exception &e) {
-            std::cout << "[DEBUG] ASIO timer initialization failed: "
-                      << e.what() << std::endl;
             throw std::runtime_error(
                 std::string("Failed to create asio timer: ") + e.what());
         }
 #else
-        std::cout << "[DEBUG] Using non-ASIO mode" << std::endl;
         // Don't start the thread immediately - start it when first task is
         // added This prevents race conditions during object construction
 #endif
-
-        std::cout << "[DEBUG] Timer constructor completed successfully"
-                  << std::endl;
-    } catch (const std::exception &e) {
-        std::cout << "[DEBUG] Timer constructor failed: " << e.what()
-                  << std::endl;
-        throw;
     } catch (...) {
-        std::cout << "[DEBUG] Timer constructor failed with unknown exception"
-                  << std::endl;
         throw;
     }
 }

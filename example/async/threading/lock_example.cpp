@@ -439,24 +439,50 @@ void error_handling_example() {
     }
 }
 
-// =================== LockFactory 使用示例 ===================
+// =================== LockFactory 使用示例 (使用 ILock 接口)
+// ===================
 
 void lock_factory_example() {
-    std::cout << "\n===== LockFactory 使用示例 =====\n";
+    std::cout << "\n===== LockFactory 使用示例 (ILock 接口) =====\n";
 
     try {
-        // 创建自动优化的锁
+        // 创建自动优化的锁 - 返回 std::unique_ptr<ILock>
         auto optimized_lock = atom::async::LockFactory::createOptimizedLock();
         std::cout << "成功创建自动优化锁" << std::endl;
+
+        // 通过 ILock 接口使用锁
+        optimized_lock->lock();
+        std::cout << "通过 ILock 接口获取锁" << std::endl;
+        optimized_lock->unlock();
+        std::cout << "通过 ILock 接口释放锁" << std::endl;
 
         // 创建特定类型的锁
         auto spinlock = atom::async::LockFactory::createLock(
             atom::async::LockFactory::LockType::SPINLOCK);
-        std::cout << "成功创建Spinlock" << std::endl;
+        std::cout << "成功创建Spinlock (ILock*)" << std::endl;
+
+        // 使用 tryLock 通过接口
+        if (spinlock->tryLock()) {
+            std::cout << "通过 ILock::tryLock() 成功获取锁" << std::endl;
+            spinlock->unlock();
+        }
 
         auto ticket_lock = atom::async::LockFactory::createLock(
             atom::async::LockFactory::LockType::TICKET_SPINLOCK);
-        std::cout << "成功创建TicketSpinlock" << std::endl;
+        std::cout << "成功创建TicketSpinlock (ILock*)" << std::endl;
+
+        // 多态使用示例：通过 ILock 接口操作不同类型的锁
+        std::vector<std::unique_ptr<atom::async::ILock>> locks;
+        locks.push_back(atom::async::LockFactory::createLock(
+            atom::async::LockFactory::LockType::SPINLOCK));
+        locks.push_back(atom::async::LockFactory::createLock(
+            atom::async::LockFactory::LockType::ADAPTIVE_SPINLOCK));
+
+        for (size_t i = 0; i < locks.size(); ++i) {
+            locks[i]->lock();
+            std::cout << "锁 " << i << " 已获取 (通过 ILock 接口)" << std::endl;
+            locks[i]->unlock();
+        }
 
         // 尝试创建无效的锁类型
         try {
@@ -470,6 +496,47 @@ void lock_factory_example() {
     } catch (const std::exception& e) {
         std::cout << "创建锁时发生异常：" << e.what() << std::endl;
     }
+}
+
+// =================== 指数退避工具示例 ===================
+
+void exponential_backoff_example() {
+    std::cout << "\n===== 指数退避工具示例 =====\n";
+
+    std::atomic<bool> ready{false};
+    std::atomic<int> spin_count{0};
+
+    // 启动一个线程在短暂延迟后设置标志
+    std::thread setter([&ready]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        ready.store(true);
+        std::cout << "标志已设置为 true" << std::endl;
+    });
+
+    // 使用指数退避等待条件满足
+    atom::async::BackoffConfig config;
+    config.maxBackoff = 128;
+    config.yieldThreshold = 64;
+
+    std::cout << "使用 exponentialBackoffSpin 等待条件..." << std::endl;
+    auto start = std::chrono::steady_clock::now();
+
+    bool result = atom::async::exponentialBackoffSpin(
+        [&ready, &spin_count]() {
+            spin_count.fetch_add(1);
+            return ready.load();
+        },
+        config);
+
+    auto elapsed = std::chrono::steady_clock::now() - start;
+    auto elapsed_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+
+    std::cout << "结果: " << (result ? "成功" : "失败") << std::endl;
+    std::cout << "自旋次数: " << spin_count.load() << std::endl;
+    std::cout << "耗时: " << elapsed_ms << " ms" << std::endl;
+
+    setter.join();
 }
 
 // =================== 计数信号量使用示例 ===================
@@ -595,8 +662,11 @@ int main() {
     // 错误处理
     error_handling_example();
 
-    // 工厂模式
+    // 工厂模式 (ILock 接口)
     lock_factory_example();
+
+    // 指数退避工具
+    exponential_backoff_example();
 
     // 信号量示例
     counting_semaphore_example();

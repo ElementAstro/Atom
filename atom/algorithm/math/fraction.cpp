@@ -101,8 +101,8 @@ auto Fraction::operator*=(const Fraction& other) -> Fraction& {
         }
 
         // Pre-calculate gcd to maximize reduction effect
-        int gcd1 = gcd(numerator, other.denominator);
-        int gcd2 = gcd(denominator, other.numerator);
+        int gcd1 = std::gcd(numerator, other.denominator);
+        int gcd2 = std::gcd(denominator, other.numerator);
 
         // Pre-reduction can reduce overflow risk
         long long n = (static_cast<long long>(numerator) / gcd1) *
@@ -136,8 +136,8 @@ auto Fraction::operator/=(const Fraction& other) -> Fraction& {
         }
 
         // Pre-calculate gcd to maximize reduction effect
-        int gcd1 = gcd(numerator, other.numerator);
-        int gcd2 = gcd(denominator, other.denominator);
+        int gcd1 = std::gcd(numerator, other.numerator);
+        int gcd2 = std::gcd(denominator, other.denominator);
 
         // Pre-reduction can reduce overflow risk
         long long n = (static_cast<long long>(numerator) / gcd1) *

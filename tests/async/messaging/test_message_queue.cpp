@@ -4,7 +4,7 @@
 #include <asio/io_context.hpp>
 #include <memory>
 
-#include "atom/async/message_queue.hpp"
+#include "atom/async/messaging/message_queue.hpp"
 
 using namespace atom::async;
 

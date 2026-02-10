@@ -8,7 +8,7 @@
 
 Date: 2024-5-24
 
-Description: TCP Client Class
+Description: TCP Client Class with native socket backend
 
 *************************************************/
 
@@ -20,15 +20,16 @@ Description: TCP Client Class
 #include <mutex>
 #include <thread>
 
+#include "atom/log/loguru.hpp"
+
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib")
-// MSVC doesn't define ssize_t, but MinGW does
 #ifndef _SSIZE_T_DEFINED
 #define _SSIZE_T_DEFINED
-typedef int ssize_t;
+using ssize_t = int;
 #endif
 #endif
 #else
@@ -49,9 +50,18 @@ typedef int ssize_t;
 #endif
 
 namespace atom::connection {
+
 namespace {
-// Helper function to create system_error from socket errors
-std::system_error createSystemError(const std::string& message) {
+
+#ifdef _WIN32
+constexpr auto INVALID_SOCKET_VALUE = INVALID_SOCKET;
+using SocketType = SOCKET;
+#else
+constexpr int INVALID_SOCKET_VALUE = -1;
+using SocketType = int;
+#endif
+
+std::system_error createSocketError(const std::string& message) {
 #ifdef _WIN32
     return std::system_error(WSAGetLastError(), std::system_category(),
                              message);
@@ -60,8 +70,7 @@ std::system_error createSystemError(const std::string& message) {
 #endif
 }
 
-// Helper to make socket non-blocking
-bool setNonBlocking(int socket, bool nonBlocking) {
+bool setNonBlocking(SocketType socket, bool nonBlocking) {
 #ifdef _WIN32
     u_long mode = nonBlocking ? 1 : 0;
     return ioctlsocket(socket, FIONBIO, &mode) == 0;
@@ -73,6 +82,69 @@ bool setNonBlocking(int socket, bool nonBlocking) {
     return fcntl(socket, F_SETFL, flags) == 0;
 #endif
 }
+
+void closeSocket(SocketType socket) {
+#ifdef _WIN32
+    closesocket(socket);
+#else
+    close(socket);
+#endif
+}
+
+/**
+ * @brief Unified socket wait helper - eliminates code duplication
+ */
+enum class WaitType { Read, Write, Connect };
+
+bool waitForSocket(SocketType socket, WaitType type,
+                   std::chrono::milliseconds timeout) {
+    fd_set read_fds, write_fds, error_fds;
+    FD_ZERO(&read_fds);
+    FD_ZERO(&write_fds);
+    FD_ZERO(&error_fds);
+
+    fd_set* read_ptr = nullptr;
+    fd_set* write_ptr = nullptr;
+
+    switch (type) {
+        case WaitType::Read:
+            FD_SET(socket, &read_fds);
+            read_ptr = &read_fds;
+            break;
+        case WaitType::Write:
+            FD_SET(socket, &write_fds);
+            write_ptr = &write_fds;
+            break;
+        case WaitType::Connect:
+            FD_SET(socket, &write_fds);
+            FD_SET(socket, &error_fds);
+            write_ptr = &write_fds;
+            break;
+    }
+
+    struct timeval tv;
+    detail::msToTimeval(timeout, tv.tv_sec, tv.tv_usec);
+
+    int result =
+        select(static_cast<int>(socket) + 1, read_ptr, write_ptr,
+               type == WaitType::Connect ? &error_fds : nullptr,
+               timeout > std::chrono::milliseconds::zero() ? &tv : nullptr);
+
+    if (result <= 0) {
+        return false;
+    }
+
+    switch (type) {
+        case WaitType::Read:
+            return FD_ISSET(socket, &read_fds);
+        case WaitType::Write:
+        case WaitType::Connect:
+            return FD_ISSET(socket, &write_fds);
+    }
+
+    return false;
+}
+
 }  // namespace
 
 class TcpClient::Impl {
@@ -83,35 +155,14 @@ public:
             WSADATA wsaData;
             int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
             if (result != 0) {
-                throw std::runtime_error("WSAStartup failed with error: " +
+                throw std::runtime_error("WSAStartup failed: " +
                                          std::to_string(result));
             }
+            wsa_initialized_ = true;
 #endif
-            // Create socket based on IPv4/IPv6 preference
-            socket_ = socket(options.ipv6_enabled ? AF_INET6 : AF_INET,
-                             SOCK_STREAM, IPPROTO_TCP);
-            if (socket_ == INVALID_SOCKET) {
-                throw createSystemError("Socket creation failed");
-            }
-
-            // Configure socket options
+            createSocket();
             configureSocket();
-
-#if defined(__linux__)
-            // Create epoll for async I/O on Linux
-            epoll_fd_ = epoll_create1(0);
-            if (epoll_fd_ == -1) {
-                throw createSystemError(
-                    "Failed to create epoll file descriptor");
-            }
-#elif defined(__APPLE__)
-            // Create kqueue for async I/O on macOS
-            kqueue_fd_ = kqueue();
-            if (kqueue_fd_ == -1) {
-                throw createSystemError(
-                    "Failed to create kqueue file descriptor");
-            }
-#endif
+            initPlatformIO();
         } catch (const std::exception& e) {
             last_error_ = std::system_error(
                 std::make_error_code(std::errc::io_error), e.what());
@@ -125,130 +176,37 @@ public:
     type::expected<void, std::system_error> connect(
         std::string_view host, uint16_t port,
         std::chrono::milliseconds timeout) {
-        try {
-            if (port == 0) {
-                return type::unexpected(std::system_error(
-                    std::make_error_code(std::errc::invalid_argument),
-                    "Invalid port number"));
-            }
+        if (port == 0) {
+            return type::unexpected(std::system_error(
+                std::make_error_code(std::errc::invalid_argument),
+                "Invalid port number"));
+        }
 
-            // Resolve hostname
-            struct addrinfo hints = {};
-            struct addrinfo* result = nullptr;
+        // Resolve hostname
+        auto resolve_result = resolveHost(host, port);
+        if (!resolve_result) {
+            return type::unexpected(resolve_result.error().error());
+        }
 
-            hints.ai_family = options_.ipv6_enabled ? AF_UNSPEC : AF_INET;
-            hints.ai_socktype = SOCK_STREAM;
+        auto& endpoints = *resolve_result;
 
-            int status =
-                getaddrinfo(std::string(host).c_str(),
-                            std::to_string(port).c_str(), &hints, &result);
-            if (status != 0) {
-                return type::unexpected(std::system_error(
-                    std::make_error_code(std::errc::host_unreachable),
-                    "Failed to resolve hostname: " +
-                        std::string(gai_strerror(status))));
-            }
-
-            // Smart pointer for automatic cleanup
-            struct AddrInfoGuard {
-                addrinfo* info;
-                ~AddrInfoGuard() {
-                    if (info)
-                        freeaddrinfo(info);
-                }
-            } addrGuard{result};
-
-            // Try to connect to each address
-            for (struct addrinfo* rp = result; rp != nullptr;
-                 rp = rp->ai_next) {
-                // Configure socket timeout
-                if (timeout > std::chrono::milliseconds::zero()) {
-                    setSocketTimeout(timeout);
-                }
-
-                // Make socket non-blocking for timeout support
-                if (!setNonBlocking(socket_, true)) {
-                    continue;  // Try next address
-                }
-
-                // Attempt connection
-                status = ::connect(socket_, rp->ai_addr, rp->ai_addrlen);
-
-#ifdef _WIN32
-                if (status == SOCKET_ERROR &&
-                    WSAGetLastError() != WSAEWOULDBLOCK) {
-                    continue;  // Try next address
-                }
-#else
-                if (status < 0 && errno != EINPROGRESS) {
-                    continue;  // Try next address
-                }
-#endif
-
-                // Wait for the connection to complete or timeout
-                if (!waitForConnectComplete(timeout)) {
-                    continue;  // Try next address
-                }
-
-                // Verify connection success
-                int error = 0;
-                socklen_t len = sizeof(error);
-                if (getsockopt(socket_, SOL_SOCKET, SO_ERROR,
-#ifdef _WIN32
-                               reinterpret_cast<char*>(&error),
-#else
-                               &error,
-#endif
-                               &len) < 0 ||
-                    error != 0) {
-                    continue;  // Try next address
-                }
-
-                // Restore blocking mode
-                setNonBlocking(socket_, false);
-
-                // Connection successful
+        // Try each resolved address
+        for (auto* rp = endpoints.get(); rp != nullptr; rp = rp->ai_next) {
+            auto connect_result = tryConnect(rp, timeout);
+            if (connect_result) {
                 connected_ = true;
+                registerWithPlatformIO();
 
-#if defined(__linux__)
-                // Add socket to epoll
-                struct epoll_event event = {};
-                event.events = EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP;
-                event.data.fd = socket_;
-                if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, socket_, &event) ==
-                    -1) {
-                    return type::unexpected(
-                        createSystemError("Failed to add socket to epoll"));
-                }
-#elif defined(__APPLE__)
-                // Add socket to kqueue
-                struct kevent event;
-                EV_SET(&event, socket_, EVFILT_READ, EV_ADD, 0, 0, nullptr);
-                if (kevent(kqueue_fd_, &event, 1, nullptr, 0, nullptr) == -1) {
-                    return type::unexpected(
-                        createSystemError("Failed to add socket to kqueue"));
-                }
-#endif
-
-                // Invoke connection callback
                 if (onConnectedCallback_) {
                     onConnectedCallback_();
                 }
-
-                return {};  // Success
+                return {};
             }
-
-            // If we got here, all connection attempts failed
-            return type::unexpected(std::system_error(
-                std::make_error_code(std::errc::connection_refused),
-                "Failed to connect to any resolved address"));
-        } catch (const std::exception& e) {
-            auto error = std::system_error(
-                std::make_error_code(std::errc::io_error),
-                "Connection failed: " + std::string(e.what()));
-            last_error_ = error;
-            return type::unexpected(error);
         }
+
+        return type::unexpected(std::system_error(
+            std::make_error_code(std::errc::connection_refused),
+            "Failed to connect to any resolved address"));
     }
 
     Task<type::expected<void, std::system_error>> connect_async(
@@ -263,22 +221,17 @@ public:
 
         if (connected_) {
             stopReceiving();
-
-#ifdef _WIN32
-            closesocket(socket_);
-#else
-            close(socket_);
-#endif
+            closeSocket(socket_);
             connected_ = false;
 
             // Recreate socket for reuse
-            socket_ = socket(options_.ipv6_enabled ? AF_INET6 : AF_INET,
-                             SOCK_STREAM, IPPROTO_TCP);
-            if (socket_ != INVALID_SOCKET) {
+            try {
+                createSocket();
                 configureSocket();
+            } catch (...) {
+                socket_ = INVALID_SOCKET_VALUE;
             }
 
-            // Invoke disconnection callback
             if (onDisconnectedCallback_) {
                 onDisconnectedCallback_();
             }
@@ -297,70 +250,10 @@ public:
         }
 
         if (data.empty()) {
-            return 0;  // Nothing to send
+            return 0;
         }
 
-        try {
-            // Handle large data by sending in chunks
-            size_t total_sent = 0;
-            size_t remaining = data.size();
-
-            while (remaining > 0) {
-                // Calculate chunk size (limited by SO_SNDBUF)
-                size_t chunk_size =
-                    std::min(remaining, options_.send_buffer_size);
-
-                ssize_t bytes_sent =
-                    ::send(socket_, data.data() + total_sent, chunk_size,
-#ifdef _WIN32
-                           0
-#else
-                           MSG_NOSIGNAL  // Prevent SIGPIPE
-#endif
-                    );
-
-                if (bytes_sent < 0) {
-#ifdef _WIN32
-                    if (WSAGetLastError() == WSAEWOULDBLOCK) {
-                        // Wait until socket is writable
-                        if (!waitForSendReady(std::chrono::seconds(5))) {
-                            auto error =
-                                createSystemError("Send operation timed out");
-                            last_error_ = error;
-                            return type::unexpected(error);
-                        }
-                        continue;  // Retry send
-                    }
-#else
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        // Wait until socket is writable
-                        if (!waitForSendReady(std::chrono::seconds(5))) {
-                            auto error =
-                                createSystemError("Send operation timed out");
-                            last_error_ = error;
-                            return type::unexpected(error);
-                        }
-                        continue;  // Retry send
-                    }
-#endif
-
-                    auto error = createSystemError("Send failed");
-                    last_error_ = error;
-                    return type::unexpected(error);
-                }
-
-                total_sent += bytes_sent;
-                remaining -= bytes_sent;
-            }
-
-            return total_sent;
-        } catch (const std::exception& e) {
-            auto error = std::system_error(
-                std::make_error_code(std::errc::io_error),
-                "Send operation failed: " + std::string(e.what()));
-            last_error_ = error;
-            return type::unexpected(error);
-        }
+        return sendChunked(data);
     }
 
     Task<type::expected<size_t, std::system_error>> send_async(
@@ -382,62 +275,24 @@ public:
         }
 
         if (max_size == 0) {
-            return std::vector<char>{};  // Requested zero bytes
+            return std::vector<char>{};
         }
 
-        try {
-            // Apply timeout if specified
-            if (timeout > std::chrono::milliseconds::zero()) {
-                setSocketTimeout(timeout);
-            }
+        // Apply timeout
+        if (timeout > std::chrono::milliseconds::zero()) {
+            setSocketTimeout(timeout);
+        }
 
-            // Wait until data is available or timeout
-            if (!waitForReceiveReady(timeout)) {
-                auto error = std::system_error(
-                    std::make_error_code(std::errc::timed_out),
-                    "Receive operation timed out");
-                last_error_ = error;
-                return type::unexpected(error);
-            }
-
-            // Create buffer limited by max_size and receive buffer size
-            size_t buffer_size =
-                std::min(max_size, options_.receive_buffer_size);
-            std::vector<char> buffer(buffer_size);
-
-            // Perform the receive
-            ssize_t bytes_read = ::recv(socket_, buffer.data(), buffer_size, 0);
-
-            if (bytes_read < 0) {
-                auto error = createSystemError("Receive failed");
-                last_error_ = error;
-                return type::unexpected(error);
-            } else if (bytes_read == 0) {
-                // Connection closed by peer
-                connected_ = false;
-
-                if (onDisconnectedCallback_) {
-                    onDisconnectedCallback_();
-                }
-
-                auto error = std::system_error(
-                    std::make_error_code(std::errc::connection_reset),
-                    "Connection closed by peer");
-                last_error_ = error;
-                return type::unexpected(error);
-            }
-
-            // Resize buffer to actual bytes read
-            buffer.resize(bytes_read);
-            return buffer;
-
-        } catch (const std::exception& e) {
-            auto error = std::system_error(
-                std::make_error_code(std::errc::io_error),
-                "Receive operation failed: " + std::string(e.what()));
+        // Wait for data
+        if (!waitForSocket(socket_, WaitType::Read, timeout)) {
+            auto error =
+                std::system_error(std::make_error_code(std::errc::timed_out),
+                                  "Receive timed out");
             last_error_ = error;
             return type::unexpected(error);
         }
+
+        return receiveData(max_size);
     }
 
     Task<type::expected<std::vector<char>, std::system_error>> receive_async(
@@ -448,22 +303,18 @@ public:
 
     [[nodiscard]] bool isConnected() const { return connected_; }
 
-    void setOnConnectedCallback(const std::function<void()>& callback) {
-        onConnectedCallback_ = callback;
+    [[nodiscard]] const std::system_error& getLastError() const {
+        return last_error_;
     }
 
-    void setOnDisconnectedCallback(const std::function<void()>& callback) {
-        onDisconnectedCallback_ = callback;
-    }
-
-    void setOnDataReceivedCallback(
-        const std::function<void(std::span<const char>)>& callback) {
-        onDataReceivedCallback_ = callback;
-    }
-
-    void setOnErrorCallback(
-        const std::function<void(const std::system_error&)>& callback) {
-        onErrorCallback_ = callback;
+    void setCallbacks(const TcpClient::OnConnectedCallback& connected,
+                      const TcpClient::OnDisconnectedCallback& disconnected,
+                      const TcpClient::OnDataReceivedCallback& dataReceived,
+                      const TcpClient::OnErrorCallback& error) {
+        onConnectedCallback_ = connected;
+        onDisconnectedCallback_ = disconnected;
+        onDataReceivedCallback_ = dataReceived;
+        onErrorCallback_ = error;
     }
 
     void startReceiving(size_t buffer_size) {
@@ -473,14 +324,12 @@ public:
             return;
         }
 
-        stopReceiving();
+        stopReceivingLocked();
 
-        // Use at least the minimum buffer size
         size_t actual_buffer_size =
             std::max(buffer_size, options_.receive_buffer_size);
         receiving_stopped_.store(false);
 
-        // Launch the receiving thread
         receiving_thread_ = std::jthread(
             [this, actual_buffer_size](std::stop_token stop_token) {
                 receiveLoop(actual_buffer_size, stop_token);
@@ -488,64 +337,68 @@ public:
     }
 
     void stopReceiving() {
-        receiving_stopped_.store(true);
-
-        if (receiving_thread_.joinable()) {
-            receiving_thread_.request_stop();
-            receiving_thread_.join();
-        }
-    }
-
-    [[nodiscard]] const std::system_error& getLastError() const {
-        return last_error_;
+        std::lock_guard<std::mutex> lock(mutex_);
+        stopReceivingLocked();
     }
 
 private:
+    void createSocket() {
+        socket_ = socket(options_.ipv6_enabled ? AF_INET6 : AF_INET,
+                         SOCK_STREAM, IPPROTO_TCP);
+        if (socket_ == INVALID_SOCKET_VALUE) {
+            throw createSocketError("Socket creation failed");
+        }
+    }
+
     void configureSocket() {
-        // Set socket options
         int opt = 1;
 
-        // TCP keep-alive
         if (options_.keep_alive) {
             setsockopt(socket_, SOL_SOCKET, SO_KEEPALIVE,
-#ifdef _WIN32
-                       reinterpret_cast<const char*>(&opt),
-#else
-                       &opt,
-#endif
-                       sizeof(opt));
+                       reinterpret_cast<const char*>(&opt), sizeof(opt));
         }
 
-        // Disable Nagle's algorithm (TCP_NODELAY)
         if (options_.no_delay) {
             setsockopt(socket_, IPPROTO_TCP, TCP_NODELAY,
-#ifdef _WIN32
-                       reinterpret_cast<const char*>(&opt),
-#else
-                       &opt,
-#endif
-                       sizeof(opt));
+                       reinterpret_cast<const char*>(&opt), sizeof(opt));
         }
 
-        // Configure send and receive buffer sizes
         int recv_size = static_cast<int>(options_.receive_buffer_size);
         int send_size = static_cast<int>(options_.send_buffer_size);
 
         setsockopt(socket_, SOL_SOCKET, SO_RCVBUF,
-#ifdef _WIN32
                    reinterpret_cast<const char*>(&recv_size),
-#else
-                   &recv_size,
-#endif
                    sizeof(recv_size));
-
         setsockopt(socket_, SOL_SOCKET, SO_SNDBUF,
-#ifdef _WIN32
                    reinterpret_cast<const char*>(&send_size),
-#else
-                   &send_size,
-#endif
                    sizeof(send_size));
+    }
+
+    void initPlatformIO() {
+#if defined(__linux__)
+        epoll_fd_ = epoll_create1(0);
+        if (epoll_fd_ == -1) {
+            throw createSocketError("Failed to create epoll");
+        }
+#elif defined(__APPLE__)
+        kqueue_fd_ = kqueue();
+        if (kqueue_fd_ == -1) {
+            throw createSocketError("Failed to create kqueue");
+        }
+#endif
+    }
+
+    void registerWithPlatformIO() {
+#if defined(__linux__)
+        struct epoll_event event = {};
+        event.events = EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP;
+        event.data.fd = socket_;
+        epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, socket_, &event);
+#elif defined(__APPLE__)
+        struct kevent event;
+        EV_SET(&event, socket_, EVFILT_READ, EV_ADD, 0, 0, nullptr);
+        kevent(kqueue_fd_, &event, 1, nullptr, 0, nullptr);
+#endif
     }
 
     void setSocketTimeout(std::chrono::milliseconds timeout) {
@@ -557,77 +410,152 @@ private:
                    reinterpret_cast<const char*>(&tv), sizeof(tv));
 #else
         struct timeval tv;
-        tv.tv_sec = timeout.count() / 1000;
-        tv.tv_usec = (timeout.count() % 1000) * 1000;
+        detail::msToTimeval(timeout, tv.tv_sec, tv.tv_usec);
         setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
         setsockopt(socket_, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 #endif
     }
 
-    bool waitForConnectComplete(std::chrono::milliseconds timeout) {
-        fd_set write_fds, error_fds;
-        FD_ZERO(&write_fds);
-        FD_ZERO(&error_fds);
+    struct AddrInfoDeleter {
+        void operator()(addrinfo* info) const {
+            if (info)
+                freeaddrinfo(info);
+        }
+    };
+    using AddrInfoPtr = std::unique_ptr<addrinfo, AddrInfoDeleter>;
 
-#ifdef _WIN32
-        FD_SET(socket_, &write_fds);
-        FD_SET(socket_, &error_fds);
-#else
-        FD_SET(socket_, &write_fds);
-        FD_SET(socket_, &error_fds);
-#endif
+    type::expected<AddrInfoPtr, std::system_error> resolveHost(
+        std::string_view host, uint16_t port) {
+        struct addrinfo hints = {};
+        struct addrinfo* result = nullptr;
 
-        struct timeval tv;
-        tv.tv_sec = timeout.count() / 1000;
-        tv.tv_usec = (timeout.count() % 1000) * 1000;
+        hints.ai_family = options_.ipv6_enabled ? AF_UNSPEC : AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
 
-        int result =
-            select(socket_ + 1, nullptr, &write_fds, &error_fds,
-                   timeout > std::chrono::milliseconds::zero() ? &tv : nullptr);
+        int status = getaddrinfo(std::string(host).c_str(),
+                                 std::to_string(port).c_str(), &hints, &result);
+        if (status != 0) {
+            return type::unexpected(std::system_error(
+                std::make_error_code(std::errc::host_unreachable),
+                "Failed to resolve: " + std::string(gai_strerror(status))));
+        }
 
-        return result > 0 && FD_ISSET(socket_, &write_fds);
+        return AddrInfoPtr(result);
     }
 
-    bool waitForSendReady(std::chrono::milliseconds timeout) {
-        fd_set write_fds;
-        FD_ZERO(&write_fds);
+    type::expected<void, std::system_error> tryConnect(
+        addrinfo* addr, std::chrono::milliseconds timeout) {
+        if (!setNonBlocking(socket_, true)) {
+            return type::unexpected(
+                createSocketError("Failed to set non-blocking"));
+        }
+
+        int status = ::connect(socket_, addr->ai_addr, addr->ai_addrlen);
 
 #ifdef _WIN32
-        FD_SET(socket_, &write_fds);
+        bool in_progress =
+            (status == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK);
 #else
-        FD_SET(socket_, &write_fds);
+        bool in_progress = (status < 0 && errno == EINPROGRESS);
 #endif
 
-        struct timeval tv;
-        tv.tv_sec = timeout.count() / 1000;
-        tv.tv_usec = (timeout.count() % 1000) * 1000;
+        if (status == 0 || in_progress) {
+            if (!waitForSocket(socket_, WaitType::Connect, timeout)) {
+                return type::unexpected(std::system_error(
+                    std::make_error_code(std::errc::timed_out),
+                    "Connection timed out"));
+            }
 
-        int result =
-            select(socket_ + 1, nullptr, &write_fds, nullptr,
-                   timeout > std::chrono::milliseconds::zero() ? &tv : nullptr);
+            // Verify connection success
+            int error = 0;
+            socklen_t len = sizeof(error);
+            if (getsockopt(socket_, SOL_SOCKET, SO_ERROR,
+                           reinterpret_cast<char*>(&error), &len) < 0 ||
+                error != 0) {
+                return type::unexpected(std::system_error(
+                    std::make_error_code(std::errc::connection_refused),
+                    "Connection verification failed"));
+            }
 
-        return result > 0 && FD_ISSET(socket_, &write_fds);
+            setNonBlocking(socket_, false);
+            return {};
+        }
+
+        return type::unexpected(createSocketError("Connect failed"));
     }
 
-    bool waitForReceiveReady(std::chrono::milliseconds timeout) {
-        fd_set read_fds;
-        FD_ZERO(&read_fds);
+    type::expected<size_t, std::system_error> sendChunked(
+        std::span<const char> data) {
+        size_t total_sent = 0;
+        size_t remaining = data.size();
 
+        while (remaining > 0) {
+            size_t chunk_size = std::min(remaining, options_.send_buffer_size);
+
+            ssize_t bytes_sent = ::send(socket_, data.data() + total_sent,
+                                        static_cast<int>(chunk_size),
 #ifdef _WIN32
-        FD_SET(socket_, &read_fds);
+                                        0
 #else
-        FD_SET(socket_, &read_fds);
+                                        MSG_NOSIGNAL
 #endif
+            );
 
-        struct timeval tv;
-        tv.tv_sec = timeout.count() / 1000;
-        tv.tv_usec = (timeout.count() % 1000) * 1000;
+            if (bytes_sent < 0) {
+#ifdef _WIN32
+                if (WSAGetLastError() == WSAEWOULDBLOCK) {
+#else
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+#endif
+                    if (!waitForSocket(socket_, WaitType::Write,
+                                       std::chrono::seconds(5))) {
+                        auto error = createSocketError("Send timed out");
+                        last_error_ = error;
+                        return type::unexpected(error);
+                    }
+                    continue;
+                }
 
-        int result =
-            select(socket_ + 1, &read_fds, nullptr, nullptr,
-                   timeout > std::chrono::milliseconds::zero() ? &tv : nullptr);
+                auto error = createSocketError("Send failed");
+                last_error_ = error;
+                return type::unexpected(error);
+            }
 
-        return result > 0 && FD_ISSET(socket_, &read_fds);
+            total_sent += bytes_sent;
+            remaining -= bytes_sent;
+        }
+
+        return total_sent;
+    }
+
+    type::expected<std::vector<char>, std::system_error> receiveData(
+        size_t max_size) {
+        size_t buffer_size = std::min(max_size, options_.receive_buffer_size);
+        std::vector<char> buffer(buffer_size);
+
+        ssize_t bytes_read =
+            ::recv(socket_, buffer.data(), static_cast<int>(buffer_size), 0);
+
+        if (bytes_read < 0) {
+            auto error = createSocketError("Receive failed");
+            last_error_ = error;
+            return type::unexpected(error);
+        }
+
+        if (bytes_read == 0) {
+            connected_ = false;
+            if (onDisconnectedCallback_) {
+                onDisconnectedCallback_();
+            }
+            auto error = std::system_error(
+                std::make_error_code(std::errc::connection_reset),
+                "Connection closed by peer");
+            last_error_ = error;
+            return type::unexpected(error);
+        }
+
+        buffer.resize(bytes_read);
+        return buffer;
     }
 
     void receiveLoop(size_t buffer_size, const std::stop_token& stop_token) {
@@ -635,107 +563,42 @@ private:
 
         while (!receiving_stopped_.load() && !stop_token.stop_requested()) {
             try {
-#if defined(__linux__)
-                // Use epoll for efficient I/O waiting on Linux
-                struct epoll_event events[10];
-                int num_events = epoll_wait(epoll_fd_, events, 10, 100);
-
-                if (num_events < 0) {
-                    if (errno == EINTR)
-                        continue;  // Interrupted
-                    throw createSystemError("epoll_wait failed");
-                }
-
-                bool has_data = false;
-                for (int i = 0; i < num_events; i++) {
-                    if (events[i].events & EPOLLIN) {
-                        has_data = true;
-                        break;
-                    }
-
-                    if (events[i].events & (EPOLLERR | EPOLLHUP)) {
-                        // Socket error or hangup
-                        connected_ = false;
-                        if (onDisconnectedCallback_) {
-                            onDisconnectedCallback_();
-                        }
-                        return;
-                    }
-                }
+                bool has_data = waitForPlatformIO();
 
                 if (!has_data) {
-                    continue;  // No data available
+                    continue;
                 }
 
-#elif defined(__APPLE__)
-                // Use kqueue for efficient I/O waiting on macOS
-                struct kevent events[10];
-                struct timespec timeout = {0, 100000000};  // 100ms
-
-                int num_events =
-                    kevent(kqueue_fd_, nullptr, 0, events, 10, &timeout);
-
-                if (num_events < 0) {
-                    if (errno == EINTR)
-                        continue;  // Interrupted
-                    throw createSystemError("kevent failed");
-                }
-
-                bool has_data = false;
-                for (int i = 0; i < num_events; i++) {
-                    if (events[i].filter == EVFILT_READ) {
-                        has_data = true;
-                        break;
-                    }
-                }
-
-                if (!has_data) {
-                    continue;  // No data available
-                }
-
-#else
-                // Use select for other platforms
-                if (!waitForReceiveReady(std::chrono::milliseconds(100))) {
-                    continue;  // No data or timeout
-                }
-#endif
-
-                // Lock for the recv operation
                 std::unique_lock<std::mutex> lock(mutex_);
-
                 if (!connected_) {
                     break;
                 }
 
-                ssize_t bytes_read =
-                    ::recv(socket_, buffer.data(), buffer.size(), 0);
+                ssize_t bytes_read = ::recv(socket_, buffer.data(),
+                                            static_cast<int>(buffer.size()), 0);
 
                 if (bytes_read < 0) {
 #ifdef _WIN32
-                    if (WSAGetLastError() == WSAEWOULDBLOCK) {
-                        continue;  // No data available
-                    }
+                    if (WSAGetLastError() == WSAEWOULDBLOCK)
+                        continue;
 #else
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        continue;  // No data available
-                    }
+                    if (errno == EAGAIN || errno == EWOULDBLOCK)
+                        continue;
 #endif
-                    throw createSystemError(
-                        "Receive failed in background thread");
-                } else if (bytes_read == 0) {
-                    // Connection closed
-                    connected_ = false;
-                    lock.unlock();  // Unlock before callback
+                    throw createSocketError("Receive failed");
+                }
 
+                if (bytes_read == 0) {
+                    connected_ = false;
+                    lock.unlock();
                     if (onDisconnectedCallback_) {
                         onDisconnectedCallback_();
                     }
                     break;
                 }
 
-                // Create a data view of valid size
                 std::span<const char> data_view(buffer.data(), bytes_read);
-                lock.unlock();  // Unlock before callback
+                lock.unlock();
 
                 if (onDataReceivedCallback_) {
                     onDataReceivedCallback_(data_view);
@@ -746,35 +609,75 @@ private:
                 if (onErrorCallback_) {
                     onErrorCallback_(e);
                 }
-
-                // If the error is fatal, break the loop
                 if (e.code().value() != EINTR) {
                     break;
                 }
-            } catch (const std::exception& e) {
-                auto error = std::system_error(
-                    std::make_error_code(std::errc::io_error),
-                    "Receive thread error: " + std::string(e.what()));
-                last_error_ = error;
-
-                if (onErrorCallback_) {
-                    onErrorCallback_(error);
-                }
-                break;
             }
+        }
+    }
+
+    bool waitForPlatformIO() {
+#if defined(__linux__)
+        struct epoll_event events[10];
+        int num_events = epoll_wait(epoll_fd_, events, 10, 100);
+
+        if (num_events < 0) {
+            if (errno == EINTR)
+                return false;
+            throw createSocketError("epoll_wait failed");
+        }
+
+        for (int i = 0; i < num_events; i++) {
+            if (events[i].events & EPOLLIN)
+                return true;
+            if (events[i].events & (EPOLLERR | EPOLLHUP)) {
+                connected_ = false;
+                if (onDisconnectedCallback_) {
+                    onDisconnectedCallback_();
+                }
+                return false;
+            }
+        }
+        return false;
+
+#elif defined(__APPLE__)
+        struct kevent events[10];
+        struct timespec timeout = {0, 100000000};  // 100ms
+
+        int num_events = kevent(kqueue_fd_, nullptr, 0, events, 10, &timeout);
+
+        if (num_events < 0) {
+            if (errno == EINTR)
+                return false;
+            throw createSocketError("kevent failed");
+        }
+
+        for (int i = 0; i < num_events; i++) {
+            if (events[i].filter == EVFILT_READ)
+                return true;
+        }
+        return false;
+
+#else
+    return waitForSocket(socket_, WaitType::Read,
+                         std::chrono::milliseconds(100));
+#endif
+    }
+
+    void stopReceivingLocked() {
+        receiving_stopped_.store(true);
+        if (receiving_thread_.joinable()) {
+            receiving_thread_.request_stop();
+            receiving_thread_.join();
         }
     }
 
     void cleanupResources() {
         stopReceiving();
 
-        if (socket_ != INVALID_SOCKET) {
-#ifdef _WIN32
-            closesocket(socket_);
-#else
-            close(socket_);
-#endif
-            socket_ = -1;
+        if (socket_ != INVALID_SOCKET_VALUE) {
+            closeSocket(socket_);
+            socket_ = INVALID_SOCKET_VALUE;
         }
 
 #ifdef __linux__
@@ -790,15 +693,17 @@ private:
 #endif
 
 #ifdef _WIN32
-        WSACleanup();
+        if (wsa_initialized_) {
+            WSACleanup();
+            wsa_initialized_ = false;
+        }
 #endif
     }
 
-    // Socket and connection state
+    // Socket state
+    SocketType socket_ = INVALID_SOCKET_VALUE;
 #ifdef _WIN32
-    SOCKET socket_ = INVALID_SOCKET;
-#else
-    int socket_ = -1;
+    bool wsa_initialized_ = false;
 #endif
 
 #ifdef __linux__
@@ -807,27 +712,32 @@ private:
     int kqueue_fd_ = -1;
 #endif
 
-    // Flags and options
+    // Configuration
     Options options_;
     std::atomic<bool> connected_{false};
 
-    // Threading support
+    // Threading
     std::mutex mutex_;
     std::jthread receiving_thread_;
     std::atomic<bool> receiving_stopped_{false};
 
     // Callbacks
-    std::function<void()> onConnectedCallback_;
-    std::function<void()> onDisconnectedCallback_;
-    std::function<void(std::span<const char>)> onDataReceivedCallback_;
-    std::function<void(const std::system_error&)> onErrorCallback_;
+    TcpClient::OnConnectedCallback onConnectedCallback_;
+    TcpClient::OnDisconnectedCallback onDisconnectedCallback_;
+    TcpClient::OnDataReceivedCallback onDataReceivedCallback_;
+    TcpClient::OnErrorCallback onErrorCallback_;
 
     // Error tracking
     std::system_error last_error_{std::error_code(), ""};
 };
 
+// TcpClient public implementation
+
 TcpClient::TcpClient(Options options)
     : impl_(std::make_unique<Impl>(options)) {}
+
+TcpClient::TcpClient(const TcpClientConfig& config)
+    : impl_(std::make_unique<Impl>(Options::fromConfig(config))) {}
 
 TcpClient::~TcpClient() = default;
 
@@ -878,18 +788,16 @@ TcpClient::receive_async(size_t max_size, std::chrono::milliseconds timeout) {
 
 bool TcpClient::isConnected() const { return impl_->isConnected(); }
 
+const std::system_error& TcpClient::getLastError() const {
+    return impl_->getLastError();
+}
+
 void TcpClient::startReceiving(size_t buffer_size) {
-    impl_->setOnConnectedCallback(onConnectedCallback_);
-    impl_->setOnDisconnectedCallback(onDisconnectedCallback_);
-    impl_->setOnDataReceivedCallback(onDataReceivedCallback_);
-    impl_->setOnErrorCallback(onErrorCallback_);
+    impl_->setCallbacks(onConnectedCallback_, onDisconnectedCallback_,
+                        onDataReceivedCallback_, onErrorCallback_);
     impl_->startReceiving(buffer_size);
 }
 
 void TcpClient::stopReceiving() { impl_->stopReceiving(); }
-
-const std::system_error& TcpClient::getLastError() const {
-    return impl_->getLastError();
-}
 
 }  // namespace atom::connection

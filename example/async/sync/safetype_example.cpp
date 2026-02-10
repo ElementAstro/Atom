@@ -8,7 +8,7 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include "atom/async/safetype.hpp"
+#include "atom/async/sync/safetype.hpp"
 
 // 辅助函数：打印分隔线void printSeparator(const std::string& title) {
 std::cout << "\n===== " << title << " =====\n" << std::endl;
@@ -309,6 +309,51 @@ std::cout << "\n测试收缩容量:" << std::endl;
 std::cout << "收缩前容量: " << rangeVec.getCapacity() << std::endl;
 rangeVec.shrinkToFit();
 std::cout << "收缩后容量: " << rangeVec.getCapacity() << std::endl;
+
+// 测试 snapshot() 方法 - 获取数据快照
+std::cout << "\n测试 snapshot() 方法:" << std::endl;
+auto snapshot = rangeVec.snapshot();
+std::cout << "快照大小: " << snapshot.size() << std::endl;
+std::cout << "快照内容: ";
+for (const auto& val : snapshot) {
+    std::cout << val << " ";
+}
+std::cout << std::endl;
+
+// 修改快照不影响原数据
+snapshot[0] = 999;
+std::cout << "修改快照后原数据第一个元素: " << rangeVec.at(0) << std::endl;
+
+// 测试 withData() 方法 - 使用回调函数访问数据
+std::cout << "\n测试 withData() 方法:" << std::endl;
+
+// 计算元素总和
+int sum = rangeVec.withData([](const std::vector<int>& data) {
+    int total = 0;
+    for (int val : data) {
+        total += val;
+    }
+    return total;
+});
+std::cout << "元素总和: " << sum << std::endl;
+
+// 查找最大值
+int maxVal = rangeVec.withData([](const std::vector<int>& data) {
+    return *std::max_element(data.begin(), data.end());
+});
+std::cout << "最大值: " << maxVal << std::endl;
+
+// 计算平均值
+double avg = rangeVec.withData([](const std::vector<int>& data) {
+    if (data.empty())
+        return 0.0;
+    double sum = 0;
+    for (int val : data) {
+        sum += val;
+    }
+    return sum / data.size();
+});
+std::cout << "平均值: " << avg << std::endl;
 
 // 多线程测试
 printSeparator("ThreadSafeVector 多线程测试");

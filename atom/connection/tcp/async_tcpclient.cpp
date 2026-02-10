@@ -1,117 +1,198 @@
+/*
+ * async_tcpclient.cpp
+ *
+ * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ */
+
 #include "async_tcpclient.hpp"
 
 #include <algorithm>
-#include <functional>
-#include <future>
-#include <iostream>
-#include <memory>
 #include <mutex>
-#include <optional>
-#include <random>
-#include <string>
+#include <shared_mutex>
 #include <thread>
-#include <vector>
+#include <unordered_map>
+#include <variant>
 
 #include <asio.hpp>
 #include <asio/ssl.hpp>
 
+#include <spdlog/spdlog.h>
+
 namespace atom::async::connection {
 
-// Helper for exponential backoff with jitter
-class BackoffCalculator {
+namespace {
+constexpr std::array<char, 4> DEFAULT_HEARTBEAT_DATA = {'P', 'I', 'N', 'G'};
+}
+
+/**
+ * @brief Socket wrapper that unifies SSL and plain socket operations
+ *
+ * Uses std::variant to eliminate SSL/non-SSL branching throughout the code
+ */
+class SocketWrapper {
 public:
-    BackoffCalculator(std::chrono::milliseconds initial_delay,
-                      std::chrono::milliseconds max_delay, double factor = 2.0,
-                      double jitter = 0.1)
-        : initial_delay_(initial_delay),
-          max_delay_(max_delay),
-          factor_(factor),
-          jitter_(jitter),
-          current_delay_(initial_delay),
-          attempt_(0),
-          random_engine_(std::random_device()()) {}
+    using PlainSocket = asio::ip::tcp::socket;
+    using SslSocket = asio::ssl::stream<asio::ip::tcp::socket>;
 
-    std::chrono::milliseconds nextDelay() {
-        // Reset after many attempts to avoid potential overflow
-        if (attempt_ > 30) {
-            reset();
+    explicit SocketWrapper(asio::io_context& io_ctx, bool use_ssl,
+                           asio::ssl::context& ssl_ctx)
+        : use_ssl_(use_ssl) {
+        if (use_ssl) {
+            socket_ = std::make_unique<SslSocket>(io_ctx, ssl_ctx);
+        } else {
+            socket_ = std::make_unique<PlainSocket>(io_ctx);
         }
-
-        // Calculate next delay with exponential backoff
-        if (attempt_ > 0) {
-            current_delay_ =
-                std::min(std::chrono::duration_cast<std::chrono::milliseconds>(
-                             std::chrono::duration<double, std::milli>(
-                                 current_delay_.count() * factor_)),
-                         max_delay_);
-        }
-
-        // Apply jitter
-        std::uniform_real_distribution<double> dist(1.0 - jitter_,
-                                                    1.0 + jitter_);
-        double jitter_factor = dist(random_engine_);
-
-        auto jittered_delay =
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::duration<double, std::milli>(
-                    current_delay_.count() * jitter_factor));
-
-        attempt_++;
-        return jittered_delay;
     }
 
-    void reset() {
-        current_delay_ = initial_delay_;
-        attempt_ = 0;
+    [[nodiscard]] bool useSsl() const noexcept { return use_ssl_; }
+
+    // Get the lowest layer for connection operations
+    auto& lowestLayer() {
+        if (use_ssl_) {
+            return std::get<std::unique_ptr<SslSocket>>(socket_)
+                ->lowest_layer();
+        }
+        return std::get<std::unique_ptr<PlainSocket>>(socket_)->lowest_layer();
+    }
+
+    // Async connect
+    template <typename Endpoints, typename Handler>
+    void asyncConnect(const Endpoints& endpoints, Handler&& handler) {
+        asio::async_connect(lowestLayer(), endpoints,
+                            std::forward<Handler>(handler));
+    }
+
+    // SSL handshake (no-op for plain socket)
+    template <typename Handler>
+    void asyncHandshake(Handler&& handler) {
+        if (use_ssl_) {
+            std::get<std::unique_ptr<SslSocket>>(socket_)->async_handshake(
+                asio::ssl::stream_base::client, std::forward<Handler>(handler));
+        } else {
+            // No handshake needed, call handler immediately
+            asio::post(lowestLayer().get_executor(),
+                       [h = std::forward<Handler>(handler)]() mutable {
+                           h(asio::error_code{});
+                       });
+        }
+    }
+
+    // Sync write
+    size_t write(const asio::const_buffer& buffer, asio::error_code& ec) {
+        if (use_ssl_) {
+            return asio::write(*std::get<std::unique_ptr<SslSocket>>(socket_),
+                               buffer, ec);
+        }
+        return asio::write(*std::get<std::unique_ptr<PlainSocket>>(socket_),
+                           buffer, ec);
+    }
+
+    // Async write
+    template <typename Buffer, typename Handler>
+    void asyncWrite(const Buffer& buffer, Handler&& handler) {
+        if (use_ssl_) {
+            asio::async_write(*std::get<std::unique_ptr<SslSocket>>(socket_),
+                              buffer, std::forward<Handler>(handler));
+        } else {
+            asio::async_write(*std::get<std::unique_ptr<PlainSocket>>(socket_),
+                              buffer, std::forward<Handler>(handler));
+        }
+    }
+
+    // Async read
+    template <typename Buffer, typename Handler>
+    void asyncRead(const Buffer& buffer, Handler&& handler) {
+        if (use_ssl_) {
+            asio::async_read(*std::get<std::unique_ptr<SslSocket>>(socket_),
+                             buffer, std::forward<Handler>(handler));
+        } else {
+            asio::async_read(*std::get<std::unique_ptr<PlainSocket>>(socket_),
+                             buffer, std::forward<Handler>(handler));
+        }
+    }
+
+    // Async read some
+    template <typename Buffer, typename Handler>
+    void asyncReadSome(const Buffer& buffer, Handler&& handler) {
+        if (use_ssl_) {
+            std::get<std::unique_ptr<SslSocket>>(socket_)->async_read_some(
+                buffer, std::forward<Handler>(handler));
+        } else {
+            std::get<std::unique_ptr<PlainSocket>>(socket_)->async_read_some(
+                buffer, std::forward<Handler>(handler));
+        }
+    }
+
+    // Async read until
+    template <typename Buffer, typename Handler>
+    void asyncReadUntil(Buffer& buffer, char delimiter, Handler&& handler) {
+        if (use_ssl_) {
+            asio::async_read_until(
+                *std::get<std::unique_ptr<SslSocket>>(socket_), buffer,
+                delimiter, std::forward<Handler>(handler));
+        } else {
+            asio::async_read_until(
+                *std::get<std::unique_ptr<PlainSocket>>(socket_), buffer,
+                delimiter, std::forward<Handler>(handler));
+        }
+    }
+
+    void cancel() {
+        asio::error_code ec;
+        lowestLayer().cancel(ec);
+    }
+
+    void close() {
+        asio::error_code ec;
+        lowestLayer().close(ec);
+    }
+
+    [[nodiscard]] asio::ip::tcp::endpoint remoteEndpoint() const {
+        asio::error_code ec;
+        if (use_ssl_) {
+            return std::get<std::unique_ptr<SslSocket>>(socket_)
+                ->lowest_layer()
+                .remote_endpoint(ec);
+        }
+        return std::get<std::unique_ptr<PlainSocket>>(socket_)->remote_endpoint(
+            ec);
     }
 
 private:
-    std::chrono::milliseconds initial_delay_;
-    std::chrono::milliseconds max_delay_;
-    double factor_;
-    double jitter_;
-    std::chrono::milliseconds current_delay_;
-    int attempt_;
-    std::mt19937 random_engine_;
+    bool use_ssl_;
+    std::variant<std::unique_ptr<PlainSocket>, std::unique_ptr<SslSocket>>
+        socket_;
 };
 
-class TcpClient::Impl {
+class TcpClient::Impl : public std::enable_shared_from_this<TcpClient::Impl> {
 public:
-    Impl(const ConnectionConfig& config)
+    explicit Impl(const TcpClientConfig& config)
         : config_(config),
           io_context_(),
           work_guard_(asio::make_work_guard(io_context_)),
           ssl_context_(asio::ssl::context::sslv23),
           state_(ConnectionState::Disconnected),
           backoff_calculator_(config.reconnect_delay, std::chrono::seconds(30),
-                              1.5, 0.2),
-          stats_(),
-          properties_() {
-        // Set up SSL context if needed
+                              1.5, 0.2) {
         if (config_.use_ssl) {
             configureSslContext();
-            ssl_socket_ =
-                std::make_unique<ssl_socket_t>(io_context_, ssl_context_);
-        } else {
-            plain_socket_ =
-                std::make_unique<asio::ip::tcp::socket>(io_context_);
         }
 
-        // Start the IO thread
+        socket_ = std::make_unique<SocketWrapper>(io_context_, config_.use_ssl,
+                                                  ssl_context_);
+
         io_thread_ = std::thread([this]() {
             try {
                 io_context_.run();
             } catch (const std::exception& e) {
-                logError("IO context exception: " + std::string(e.what()));
+                spdlog::error("IO context exception: {}", e.what());
             }
         });
     }
 
     ~Impl() {
-        // Clean shutdown
         disconnect();
 
-        // Stop IO service and join thread
         try {
             work_guard_.reset();
             io_context_.stop();
@@ -120,180 +201,72 @@ public:
                 io_thread_.join();
             }
         } catch (const std::exception& e) {
-            // Log but don't throw from destructor
-            std::cerr << "Error during TCP client cleanup: " << e.what()
-                      << std::endl;
+            spdlog::error("Error during TCP client cleanup: {}", e.what());
         }
     }
 
     bool connect(const std::string& host, int port,
                  std::optional<std::chrono::milliseconds> timeout) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        auto promise = std::make_shared<std::promise<bool>>();
+        auto future = promise->get_future();
 
-        // Already connected or connecting
-        if (state_ == ConnectionState::Connected ||
-            state_ == ConnectionState::Connecting) {
-            return true;
-        }
+        // Post the connection to the IO context
+        asio::post(io_context_, [this, host, port, timeout,
+                                 promise = std::move(promise)]() mutable {
+            connectInternal(host, port, timeout, std::move(promise));
+        });
 
-        last_host_ = host;
-        last_port_ = port;
-
-        changeState(ConnectionState::Connecting);
-
-        if (on_connecting_) {
-            on_connecting_();
-        }
-
-        stats_.connection_attempts++;
-
-        auto actual_timeout = timeout.value_or(config_.connect_timeout);
-
-        try {
-            asio::ip::tcp::resolver resolver(io_context_);
-            auto endpoints = resolver.resolve(host, std::to_string(port));
-
-            // 使用共享指针来包装promise对象
-            auto connect_promise_ptr = std::make_shared<std::promise<bool>>();
-            auto connect_future = connect_promise_ptr->get_future();
-
-            // Create a timer for timeout handling
-            auto timer = std::make_shared<asio::steady_timer>(io_context_);
-            timer->expires_after(actual_timeout);
-
-            // Set up connection handlers
-            auto handle_connect =
-                [this, timer, promise_ptr = connect_promise_ptr](
-                    const asio::error_code& ec,
-                    const asio::ip::tcp::endpoint& _endpoint [[maybe_unused]]) {
-                    timer->cancel();
-
-                    if (ec) {
-                        logError("Connect error: " + ec.message());
-                        stats_.failed_connections++;
-                        changeState(ConnectionState::Failed);
-                        promise_ptr->set_value(false);
-
-                        if (on_error_) {
-                            on_error_("Connect error: " + ec.message());
-                        }
-                        return;
-                    }
-
-                    if (config_.use_ssl) {
-                        // Perform SSL handshake
-                        ssl_socket_->async_handshake(
-                            asio::ssl::stream_base::client,
-                            [this, timer, promise_ptr](
-                                const asio::error_code& handshake_ec) {
-                                if (handshake_ec) {
-                                    logError("SSL handshake error: " +
-                                             handshake_ec.message());
-                                    stats_.failed_connections++;
-                                    changeState(ConnectionState::Failed);
-                                    promise_ptr->set_value(false);
-
-                                    if (on_error_) {
-                                        on_error_("SSL handshake error: " +
-                                                  handshake_ec.message());
-                                    }
-                                    return;
-                                }
-
-                                handleSuccessfulConnection(*promise_ptr);
-                            });
-                    } else {
-                        handleSuccessfulConnection(*promise_ptr);
-                    }
-                };
-
-            // Set up timeout handler
-            timer->async_wait([this, promise_ptr = connect_promise_ptr](
-                                  const asio::error_code& ec) {
-                if (ec == asio::error::operation_aborted) {
-                    return;
-                }
-                logError("Connection timed out");
-                if (config_.use_ssl) {
-                    ssl_socket_->lowest_layer().cancel();
-                } else {
-                    plain_socket_->cancel();
-                }
-                stats_.failed_connections++;
-                changeState(ConnectionState::Failed);
-                promise_ptr->set_value(false);
-                if (on_error_) {
-                    on_error_("Connection timed out");
-                }
-            });
-
-            // Initiate async connection
-            if (config_.use_ssl) {
-                asio::async_connect(ssl_socket_->lowest_layer(), endpoints,
-                                    handle_connect);
-            } else {
-                asio::async_connect(*plain_socket_, endpoints, handle_connect);
-            }
-
-            // Wait for the connection to complete
-            return connect_future.get();
-
-        } catch (const std::exception& e) {
-            logError(std::string("Connection exception: ") + e.what());
-            stats_.failed_connections++;
-            changeState(ConnectionState::Failed);
-
-            if (on_error_) {
-                on_error_(std::string("Connection exception: ") + e.what());
-            }
-            return false;
-        }
+        return future.get();
     }
 
     std::future<bool> connectAsync(const std::string& host, int port) {
-        return std::async(std::launch::async, [this, host, port]() {
-            return connect(host, port, std::nullopt);
+        auto promise = std::make_shared<std::promise<bool>>();
+        auto future = promise->get_future();
+
+        asio::post(io_context_, [this, host, port,
+                                 promise = std::move(promise)]() mutable {
+            connectInternal(host, port, std::nullopt, std::move(promise));
         });
+
+        return future;
     }
 
     void disconnect() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
 
         if (state_ == ConnectionState::Disconnected) {
             return;
         }
 
         try {
-            // Cancel any pending operations
-            if (config_.use_ssl) {
-                ssl_socket_->lowest_layer().cancel();
-                ssl_socket_->lowest_layer().close();
-            } else if (plain_socket_) {
-                plain_socket_->cancel();
-                plain_socket_->close();
-            }
+            socket_->cancel();
+            socket_->close();
 
-            // Cancel heartbeat timer
             if (heartbeat_timer_) {
                 heartbeat_timer_->cancel();
             }
 
-            changeState(ConnectionState::Disconnected);
+            auto old_state = state_;
+            state_ = ConnectionState::Disconnected;
+            lock.unlock();
 
             backoff_calculator_.reset();
 
+            if (on_state_changed_) {
+                on_state_changed_(old_state, ConnectionState::Disconnected);
+            }
             if (on_disconnected_) {
                 on_disconnected_();
             }
 
-            logInfo("Disconnected from server.");
+            spdlog::info("Disconnected from server");
         } catch (const std::exception& e) {
-            logError(std::string("Error during disconnect: ") + e.what());
+            spdlog::error("Error during disconnect: {}", e.what());
         }
     }
 
     void configureReconnection(int attempts, std::chrono::milliseconds delay) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
         config_.reconnect_attempts = attempts;
         config_.reconnect_delay = delay;
         backoff_calculator_ =
@@ -302,579 +275,373 @@ public:
 
     void setHeartbeatInterval(std::chrono::milliseconds interval,
                               const std::vector<char>& data) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
         config_.heartbeat_interval = interval;
         heartbeat_data_ =
-            data.empty() ? std::vector<char>{'P', 'I', 'N', 'G'} : data;
+            data.empty() ? std::vector<char>(DEFAULT_HEARTBEAT_DATA.begin(),
+                                             DEFAULT_HEARTBEAT_DATA.end())
+                         : data;
 
-        // If connected, restart the heartbeat with new settings
-        if (state_ == ConnectionState::Connected && heartbeat_timer_) {
+        if (state_ == ConnectionState::Connected) {
+            lock.unlock();
             startHeartbeat();
         }
     }
 
-    bool send(const std::vector<char>& data) {
-        std::lock_guard<std::mutex> lock(mutex_);
+    bool send(std::span<const char> data) {
+        std::shared_lock lock(mutex_);
 
         if (state_ != ConnectionState::Connected) {
-            logError("Cannot send: not connected");
+            spdlog::warn("Cannot send: not connected");
             return false;
         }
 
         try {
-            size_t bytes_written;
-            if (config_.use_ssl) {
-                bytes_written = asio::write(*ssl_socket_, asio::buffer(data));
-            } else {
-                bytes_written = asio::write(*plain_socket_, asio::buffer(data));
+            asio::error_code ec;
+            size_t bytes_written =
+                socket_->write(asio::buffer(data.data(), data.size()), ec);
+
+            if (ec) {
+                lock.unlock();
+                handleError(ec.message());
+                return false;
             }
 
             stats_.total_bytes_sent += bytes_written;
-            stats_.last_activity_time = std::chrono::steady_clock::now();
-
-            logInfo("Sent data of size: " + std::to_string(bytes_written));
+            stats_.updateLastActivityTime();
             return true;
         } catch (const std::exception& e) {
-            logError(std::string("Send error: ") + e.what());
+            spdlog::error("Send error: {}", e.what());
+            lock.unlock();
             handleError(e.what());
             return false;
         }
     }
 
-    bool sendString(const std::string& data) {
-        return send(std::vector<char>(data.begin(), data.end()));
+    bool sendString(std::string_view data) {
+        return send(std::span<const char>(data.data(), data.size()));
     }
 
-    bool sendWithTimeout(const std::vector<char>& data,
+    bool sendWithTimeout(std::span<const char> data,
                          std::chrono::milliseconds timeout) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        auto promise = std::make_shared<std::promise<bool>>();
+        auto future = promise->get_future();
 
-        if (state_ != ConnectionState::Connected) {
-            logError("Cannot send: not connected");
-            return false;
-        }
+        asio::post(
+            io_context_,
+            [this, data_copy = std::vector<char>(data.begin(), data.end()),
+             timeout, promise]() mutable {
+                std::shared_lock lock(mutex_);
 
-        try {
-            // Create a timer for the timeout
-            auto timer = std::make_shared<asio::steady_timer>(io_context_);
-            timer->expires_after(timeout);
+                if (state_ != ConnectionState::Connected) {
+                    promise->set_value(false);
+                    return;
+                }
 
-            // Set up a promise to track the result
-            auto send_promise = std::make_shared<std::promise<bool>>();
-            auto send_future = send_promise->get_future();
+                auto timer = std::make_shared<asio::steady_timer>(io_context_);
+                timer->expires_after(timeout);
 
-            // Start the timeout timer
-            timer->async_wait(
-                [this, timer, send_promise](const asio::error_code& ec) {
-                    if (ec == asio::error::operation_aborted) {
-                        // Timer canceled, operation completed in time
-                        return;
-                    }
+                auto completed = std::make_shared<std::atomic<bool>>(false);
 
-                    logError("Send operation timed out");
-                    send_promise->set_value(false);
+                timer->async_wait(
+                    [this, completed, promise](const asio::error_code& ec) {
+                        if (ec == asio::error::operation_aborted ||
+                            completed->exchange(true)) {
+                            return;
+                        }
+                        socket_->cancel();
+                        promise->set_value(false);
+                    });
 
-                    // Cancel the socket operation
-                    if (config_.use_ssl) {
-                        ssl_socket_->lowest_layer().cancel();
-                    } else {
-                        plain_socket_->cancel();
-                    }
-                });
-
-            // Start the async write operation
-            if (config_.use_ssl) {
-                asio::async_write(
-                    *ssl_socket_, asio::buffer(data),
-                    [this, timer, send_promise](const asio::error_code& ec,
-                                                std::size_t bytes_transferred) {
+                socket_->asyncWrite(
+                    asio::buffer(data_copy),
+                    [this, timer, completed, promise](
+                        const asio::error_code& ec, std::size_t bytes) {
+                        if (completed->exchange(true)) {
+                            return;
+                        }
                         timer->cancel();
 
                         if (ec) {
-                            logError("Async write error: " + ec.message());
-                            send_promise->set_value(false);
-                            handleError(ec.message());
+                            promise->set_value(false);
                             return;
                         }
 
-                        stats_.total_bytes_sent += bytes_transferred;
-                        stats_.last_activity_time =
-                            std::chrono::steady_clock::now();
-
-                        send_promise->set_value(true);
-                        logInfo("Sent data of size: " +
-                                std::to_string(bytes_transferred));
+                        stats_.total_bytes_sent += bytes;
+                        stats_.updateLastActivityTime();
+                        promise->set_value(true);
                     });
-            } else {
-                asio::async_write(
-                    *plain_socket_, asio::buffer(data),
-                    [this, timer, send_promise](const asio::error_code& ec,
-                                                std::size_t bytes_transferred) {
-                        timer->cancel();
+            });
 
-                        if (ec) {
-                            logError("Async write error: " + ec.message());
-                            send_promise->set_value(false);
-                            handleError(ec.message());
-                            return;
-                        }
-
-                        stats_.total_bytes_sent += bytes_transferred;
-                        stats_.last_activity_time =
-                            std::chrono::steady_clock::now();
-
-                        send_promise->set_value(true);
-                        logInfo("Sent data of size: " +
-                                std::to_string(bytes_transferred));
-                    });
-            }
-
-            return send_future.get();
-
-        } catch (const std::exception& e) {
-            logError(std::string("Send with timeout error: ") + e.what());
-            handleError(e.what());
-            return false;
-        }
+        return future.get();
     }
 
     std::future<std::vector<char>> receive(
         size_t size, std::optional<std::chrono::milliseconds> timeout) {
-        auto actual_timeout = timeout.value_or(config_.read_timeout);
+        auto promise = std::make_shared<std::promise<std::vector<char>>>();
+        auto future = promise->get_future();
 
-        return std::async(std::launch::async, [this, size, actual_timeout]() {
-            std::lock_guard<std::mutex> lock(mutex_);
-
-            if (state_ != ConnectionState::Connected) {
-                logError("Cannot receive: not connected");
-                return std::vector<char>();
-            }
-
-            try {
-                std::vector<char> data(size);
-
-                // Create a timer for timeout
-                auto timer = std::make_shared<asio::steady_timer>(io_context_);
-                timer->expires_after(actual_timeout);
-
-                // Set up a promise to track the result
-                auto receive_promise =
-                    std::make_shared<std::promise<std::vector<char>>>();
-                auto receive_future = receive_promise->get_future();
-
-                // Start the timeout timer
-                timer->async_wait(
-                    [this, timer, receive_promise](const asio::error_code& ec) {
-                        if (ec == asio::error::operation_aborted) {
-                            // Timer canceled, operation completed in time
-                            return;
-                        }
-
-                        logError("Receive operation timed out");
-                        receive_promise->set_value(std::vector<char>());
-
-                        // Cancel the socket operation
-                        if (config_.use_ssl) {
-                            ssl_socket_->lowest_layer().cancel();
-                        } else {
-                            plain_socket_->cancel();
-                        }
-                    });
-
-                // Start the async read operation
-                if (config_.use_ssl) {
-                    asio::async_read(
-                        *ssl_socket_, asio::buffer(data, size),
-                        [this, data, timer, receive_promise](
-                            const asio::error_code& ec,
-                            std::size_t bytes_transferred) {
-                            timer->cancel();
-
-                            if (ec) {
-                                logError("Async read error: " + ec.message());
-                                receive_promise->set_value(std::vector<char>());
-                                handleError(ec.message());
-                                return;
-                            }
-
-                            stats_.total_bytes_received += bytes_transferred;
-                            stats_.last_activity_time =
-                                std::chrono::steady_clock::now();
-
-                            // Resize data to actual bytes received
-                            auto result_data = data;
-                            result_data.resize(bytes_transferred);
-                            receive_promise->set_value(result_data);
-
-                            logInfo("Received data of size: " +
-                                    std::to_string(bytes_transferred));
-                        });
-                } else {
-                    asio::async_read(
-                        *plain_socket_, asio::buffer(data, size),
-                        [this, data, timer, receive_promise](
-                            const asio::error_code& ec,
-                            std::size_t bytes_transferred) {
-                            timer->cancel();
-
-                            if (ec) {
-                                logError("Async read error: " + ec.message());
-                                receive_promise->set_value(std::vector<char>());
-                                handleError(ec.message());
-                                return;
-                            }
-
-                            stats_.total_bytes_received += bytes_transferred;
-                            stats_.last_activity_time =
-                                std::chrono::steady_clock::now();
-
-                            // Resize data to actual bytes received
-                            auto result_data = data;
-                            result_data.resize(bytes_transferred);
-                            receive_promise->set_value(result_data);
-
-                            logInfo("Received data of size: " +
-                                    std::to_string(bytes_transferred));
-                        });
-                }
-
-                return receive_future.get();
-
-            } catch (const std::exception& e) {
-                logError(std::string("Receive error: ") + e.what());
-                handleError(e.what());
-                return std::vector<char>();
-            }
+        asio::post(io_context_, [this, size, timeout,
+                                 promise = std::move(promise)]() mutable {
+            receiveInternal(size, timeout, std::move(promise));
         });
+
+        return future;
     }
 
     std::future<std::string> receiveUntil(
         char delimiter, std::optional<std::chrono::milliseconds> timeout) {
-        auto actual_timeout = timeout.value_or(config_.read_timeout);
+        auto promise = std::make_shared<std::promise<std::string>>();
+        auto future = promise->get_future();
 
-        return std::async(std::launch::async, [this, delimiter,
-                                               actual_timeout]() {
-            std::lock_guard<std::mutex> lock(mutex_);
-
-            if (state_ != ConnectionState::Connected) {
-                logError("Cannot receive: not connected");
-                return std::string();
-            }
-
-            try {
-                // Create a timer for timeout
-                auto timer = std::make_shared<asio::steady_timer>(io_context_);
-                timer->expires_after(actual_timeout);
-
-                // Set up a promise to track the result
-                auto receive_promise =
-                    std::make_shared<std::promise<std::string>>();
-                auto receive_future = receive_promise->get_future();
-
-                // Buffer for the result
-                auto buffer = std::make_shared<asio::streambuf>();
-
-                // Start the timeout timer
-                timer->async_wait(
-                    [this, timer, receive_promise](const asio::error_code& ec) {
-                        if (ec == asio::error::operation_aborted) {
-                            // Timer canceled, operation completed in time
-                            return;
-                        }
-
-                        logError("Receive until operation timed out");
-                        receive_promise->set_value(std::string());
-
-                        // Cancel the socket operation
-                        if (config_.use_ssl) {
-                            ssl_socket_->lowest_layer().cancel();
-                        } else {
-                            plain_socket_->cancel();
-                        }
-                    });
-
-                // Start the async read until operation
-                if (config_.use_ssl) {
-                    asio::async_read_until(
-                        *ssl_socket_, *buffer, delimiter,
-                        [this, buffer, timer, receive_promise](
-                            const asio::error_code& ec,
-                            std::size_t bytes_transferred) {
-                            timer->cancel();
-
-                            if (ec) {
-                                logError("Async read until error: " +
-                                         ec.message());
-                                receive_promise->set_value(std::string());
-                                handleError(ec.message());
-                                return;
-                            }
-
-                            stats_.total_bytes_received += bytes_transferred;
-                            stats_.last_activity_time =
-                                std::chrono::steady_clock::now();
-
-                            // Extract data from streambuf to string
-                            std::string data(
-                                asio::buffers_begin(buffer->data()),
-                                asio::buffers_begin(buffer->data()) +
-                                    bytes_transferred);
-
-                            buffer->consume(bytes_transferred);
-                            receive_promise->set_value(data);
-
-                            logInfo("Received data until delimiter, size: " +
-                                    std::to_string(bytes_transferred));
-                        });
-                } else {
-                    asio::async_read_until(
-                        *plain_socket_, *buffer, delimiter,
-                        [this, buffer, timer, receive_promise](
-                            const asio::error_code& ec,
-                            std::size_t bytes_transferred) {
-                            timer->cancel();
-
-                            if (ec) {
-                                logError("Async read until error: " +
-                                         ec.message());
-                                receive_promise->set_value(std::string());
-                                handleError(ec.message());
-                                return;
-                            }
-
-                            stats_.total_bytes_received += bytes_transferred;
-                            stats_.last_activity_time =
-                                std::chrono::steady_clock::now();
-
-                            // Extract data from streambuf to string
-                            std::string data(
-                                asio::buffers_begin(buffer->data()),
-                                asio::buffers_begin(buffer->data()) +
-                                    bytes_transferred);
-
-                            buffer->consume(bytes_transferred);
-                            receive_promise->set_value(data);
-
-                            logInfo("Received data until delimiter, size: " +
-                                    std::to_string(bytes_transferred));
-                        });
-                }
-
-                return receive_future.get();
-
-            } catch (const std::exception& e) {
-                logError(std::string("Receive until error: ") + e.what());
-                handleError(e.what());
-                return std::string();
-            }
+        asio::post(io_context_, [this, delimiter, timeout,
+                                 promise = std::move(promise)]() mutable {
+            receiveUntilInternal(delimiter, timeout, std::move(promise));
         });
+
+        return future;
     }
 
     std::future<std::vector<char>> requestResponse(
-        const std::vector<char>& request, size_t response_size,
+        std::span<const char> request, size_t response_size,
         std::optional<std::chrono::milliseconds> timeout) {
-        auto actual_timeout = timeout.value_or(std::chrono::milliseconds(
-            config_.write_timeout.count() + config_.read_timeout.count()));
+        auto promise = std::make_shared<std::promise<std::vector<char>>>();
+        auto future = promise->get_future();
 
-        return std::async(std::launch::async, [this, request, response_size,
-                                               actual_timeout]() {
-            // Send the request
-            if (!send(request)) {
-                logError("Request-response cycle failed at request stage");
-                return std::vector<char>();
+        auto request_copy =
+            std::make_shared<std::vector<char>>(request.begin(), request.end());
+
+        asio::post(io_context_, [this, request_copy, response_size, timeout,
+                                 promise = std::move(promise)]() mutable {
+            if (!send(*request_copy)) {
+                promise->set_value({});
+                return;
             }
 
-            // Wait for the response
-            auto response_future = receive(response_size, actual_timeout);
-            return response_future.get();
+            receiveInternal(response_size, timeout, std::move(promise));
         });
+
+        return future;
     }
 
     void setProxyConfig(const ProxyConfig& config) {
-        std::lock_guard<std::mutex> lock(mutex_);
-
+        std::unique_lock lock(mutex_);
         proxy_config_ = config;
-        // Actual proxy implementation would set up the proxy connection here
-        if (proxy_config_.enabled) {
-            logInfo("Proxy configuration set: " + proxy_config_.host + ":" +
-                    std::to_string(proxy_config_.port));
-        } else {
-            logInfo("Proxy disabled");
-        }
+        spdlog::info("Proxy configuration {}",
+                     config.enabled ? "enabled" : "disabled");
     }
 
     void configureSslCertificates(const std::string& cert_path,
                                   const std::string& key_path,
                                   const std::string& ca_path) {
-        std::lock_guard<std::mutex> lock(mutex_);
-
+        std::unique_lock lock(mutex_);
         config_.ssl_certificate_path = cert_path;
         config_.ssl_private_key_path = key_path;
         config_.ca_certificate_path = ca_path;
 
-        // Reconfigure the SSL context if needed
         if (config_.use_ssl) {
             configureSslContext();
         }
     }
 
-    ConnectionState getConnectionState() const {
-        std::lock_guard<std::mutex> lock(mutex_);
+    [[nodiscard]] ConnectionState getConnectionState() const {
+        std::shared_lock lock(mutex_);
         return state_;
     }
 
-    bool isConnected() const {
-        std::lock_guard<std::mutex> lock(mutex_);
+    [[nodiscard]] bool isConnected() const {
+        std::shared_lock lock(mutex_);
         return state_ == ConnectionState::Connected;
     }
 
-    std::string getErrorMessage() const {
-        std::lock_guard<std::mutex> lock(mutex_);
+    [[nodiscard]] std::string getErrorMessage() const {
+        std::shared_lock lock(mutex_);
         return last_error_;
     }
 
-    const ConnectionStats& getStats() const {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return stats_;
+    [[nodiscard]] ConnectionStats getStats() const {
+        return stats_;  // Already thread-safe via atomics
     }
 
-    void resetStats() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        stats_ = ConnectionStats();
-    }
+    void resetStats() { stats_.reset(); }
 
-    std::string getRemoteAddress() const {
-        std::lock_guard<std::mutex> lock(mutex_);
-        try {
-            if (state_ == ConnectionState::Connected) {
-                if (config_.use_ssl) {
-                    return ssl_socket_->lowest_layer()
-                        .remote_endpoint()
-                        .address()
-                        .to_string();
-                } else {
-                    return plain_socket_->remote_endpoint()
-                        .address()
-                        .to_string();
-                }
+    [[nodiscard]] std::string getRemoteAddress() const {
+        std::shared_lock lock(mutex_);
+        if (state_ == ConnectionState::Connected) {
+            try {
+                return socket_->remoteEndpoint().address().to_string();
+            } catch (...) {
             }
-        } catch (const std::exception& e) {
-            // Ignore errors and return the last known host
         }
         return last_host_;
     }
 
-    int getRemotePort() const {
-        std::lock_guard<std::mutex> lock(mutex_);
-        try {
-            if (state_ == ConnectionState::Connected) {
-                if (config_.use_ssl) {
-                    return ssl_socket_->lowest_layer().remote_endpoint().port();
-                } else {
-                    return plain_socket_->remote_endpoint().port();
-                }
+    [[nodiscard]] int getRemotePort() const {
+        std::shared_lock lock(mutex_);
+        if (state_ == ConnectionState::Connected) {
+            try {
+                return socket_->remoteEndpoint().port();
+            } catch (...) {
             }
-        } catch (const std::exception& e) {
-            // Ignore errors and return the last known port
         }
         return last_port_;
     }
 
     void setProperty(const std::string& key, const std::string& value) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock lock(mutex_);
         properties_[key] = value;
     }
 
-    std::string getProperty(const std::string& key) const {
-        std::lock_guard<std::mutex> lock(mutex_);
+    [[nodiscard]] std::string getProperty(const std::string& key) const {
+        std::shared_lock lock(mutex_);
         auto it = properties_.find(key);
-        if (it != properties_.end()) {
-            return it->second;
-        }
-        return "";
+        return it != properties_.end() ? it->second : "";
     }
 
-    void setOnConnectingCallback(const OnConnectingCallback& callback) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        on_connecting_ = callback;
+    // Callback setters
+    void setOnConnectingCallback(TcpClient::OnConnectingCallback cb) {
+        std::unique_lock lock(mutex_);
+        on_connecting_ = std::move(cb);
     }
-
-    void setOnConnectedCallback(const OnConnectedCallback& callback) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        on_connected_ = callback;
+    void setOnConnectedCallback(TcpClient::OnConnectedCallback cb) {
+        std::unique_lock lock(mutex_);
+        on_connected_ = std::move(cb);
     }
-
-    void setOnDisconnectedCallback(const OnDisconnectedCallback& callback) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        on_disconnected_ = callback;
+    void setOnDisconnectedCallback(TcpClient::OnDisconnectedCallback cb) {
+        std::unique_lock lock(mutex_);
+        on_disconnected_ = std::move(cb);
     }
-
-    void setOnDataReceivedCallback(const OnDataReceivedCallback& callback) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        on_data_received_ = callback;
+    void setOnDataReceivedCallback(TcpClient::OnDataReceivedCallback cb) {
+        std::unique_lock lock(mutex_);
+        on_data_received_ = std::move(cb);
     }
-
-    void setOnErrorCallback(const OnErrorCallback& callback) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        on_error_ = callback;
+    void setOnErrorCallback(TcpClient::OnErrorCallback cb) {
+        std::unique_lock lock(mutex_);
+        on_error_ = std::move(cb);
     }
-
-    void setOnStateChangedCallback(const OnStateChangedCallback& callback) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        on_state_changed_ = callback;
+    void setOnStateChangedCallback(TcpClient::OnStateChangedCallback cb) {
+        std::unique_lock lock(mutex_);
+        on_state_changed_ = std::move(cb);
     }
-
-    void setOnHeartbeatCallback(const OnHeartbeatCallback& callback) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        on_heartbeat_ = callback;
+    void setOnHeartbeatCallback(TcpClient::OnHeartbeatCallback cb) {
+        std::unique_lock lock(mutex_);
+        on_heartbeat_ = std::move(cb);
     }
 
 private:
-    using ssl_socket_t = asio::ssl::stream<asio::ip::tcp::socket>;
-
     void configureSslContext() {
         try {
-            if (config_.verify_ssl) {
-                ssl_context_.set_verify_mode(asio::ssl::verify_peer);
-            } else {
-                ssl_context_.set_verify_mode(asio::ssl::verify_none);
-            }
+            ssl_context_.set_verify_mode(config_.verify_ssl
+                                             ? asio::ssl::verify_peer
+                                             : asio::ssl::verify_none);
 
-            // Load certificates if provided
             if (!config_.ca_certificate_path.empty()) {
                 ssl_context_.load_verify_file(config_.ca_certificate_path);
             }
-
             if (!config_.ssl_certificate_path.empty()) {
                 ssl_context_.use_certificate_file(config_.ssl_certificate_path,
                                                   asio::ssl::context::pem);
             }
-
             if (!config_.ssl_private_key_path.empty()) {
                 ssl_context_.use_private_key_file(config_.ssl_private_key_path,
                                                   asio::ssl::context::pem);
             }
-
-            logInfo("SSL context configured");
         } catch (const std::exception& e) {
-            logError(std::string("SSL context configuration error: ") +
-                     e.what());
+            spdlog::error("SSL context configuration error: {}", e.what());
         }
     }
 
-    // 修改函数签名，接受引用而不是值
-    void handleSuccessfulConnection(std::promise<bool>& connect_promise) {
+    void connectInternal(const std::string& host, int port,
+                         std::optional<std::chrono::milliseconds> timeout,
+                         std::shared_ptr<std::promise<bool>> promise) {
+        std::unique_lock lock(mutex_);
+
+        if (state_ == ConnectionState::Connected ||
+            state_ == ConnectionState::Connecting) {
+            promise->set_value(state_ == ConnectionState::Connected);
+            return;
+        }
+
+        last_host_ = host;
+        last_port_ = port;
+        changeStateLocked(ConnectionState::Connecting);
+        stats_.connection_attempts++;
+
+        lock.unlock();
+
+        if (on_connecting_) {
+            on_connecting_();
+        }
+
+        auto actual_timeout = timeout.value_or(config_.connect_timeout);
+
+        try {
+            asio::ip::tcp::resolver resolver(io_context_);
+            auto endpoints = resolver.resolve(host, std::to_string(port));
+
+            auto timer = std::make_shared<asio::steady_timer>(io_context_);
+            timer->expires_after(actual_timeout);
+
+            auto completed = std::make_shared<std::atomic<bool>>(false);
+
+            timer->async_wait(
+                [this, completed, promise](const asio::error_code& ec) {
+                    if (ec == asio::error::operation_aborted ||
+                        completed->exchange(true)) {
+                        return;
+                    }
+                    socket_->cancel();
+                    handleConnectionFailure(*promise, "Connection timed out");
+                });
+
+            socket_->asyncConnect(
+                endpoints, [this, timer, completed, promise](
+                               const asio::error_code& ec,
+                               const asio::ip::tcp::endpoint&) {
+                    if (completed->exchange(true)) {
+                        return;
+                    }
+                    timer->cancel();
+
+                    if (ec) {
+                        handleConnectionFailure(
+                            *promise, "Connect error: " + ec.message());
+                        return;
+                    }
+
+                    // Perform SSL handshake if needed
+                    socket_->asyncHandshake(
+                        [this, promise](const asio::error_code& handshake_ec) {
+                            if (handshake_ec) {
+                                handleConnectionFailure(
+                                    *promise, "SSL handshake error: " +
+                                                  handshake_ec.message());
+                                return;
+                            }
+                            handleSuccessfulConnection(*promise);
+                        });
+                });
+
+        } catch (const std::exception& e) {
+            handleConnectionFailure(
+                *promise, std::string("Connection exception: ") + e.what());
+        }
+    }
+
+    void handleSuccessfulConnection(std::promise<bool>& promise) {
+        std::unique_lock lock(mutex_);
+
         stats_.successful_connections++;
-        stats_.last_connected_time = std::chrono::steady_clock::now();
-        stats_.last_activity_time = stats_.last_connected_time;
+        stats_.updateLastConnectedTime();
+        stats_.updateLastActivityTime();
 
-        changeState(ConnectionState::Connected);
-        connect_promise.set_value(true);
+        changeStateLocked(ConnectionState::Connected);
+        lock.unlock();
 
-        // Start continuous reading
+        promise.set_value(true);
+
         startReceiving();
 
-        // Start heartbeat if enabled
         if (config_.heartbeat_interval.count() > 0) {
             startHeartbeat();
         }
@@ -883,54 +650,63 @@ private:
             on_connected_();
         }
 
-        logInfo("Connected to " + last_host_ + ":" +
-                std::to_string(last_port_));
-
-        // Reset backoff calculator since connection succeeded
         backoff_calculator_.reset();
+        spdlog::info("Connected to {}:{}", last_host_, last_port_);
+    }
+
+    void handleConnectionFailure(std::promise<bool>& promise,
+                                 const std::string& error) {
+        spdlog::error("{}", error);
+
+        std::unique_lock lock(mutex_);
+        stats_.failed_connections++;
+        last_error_ = error;
+        changeStateLocked(ConnectionState::Failed);
+        lock.unlock();
+
+        promise.set_value(false);
+
+        if (on_error_) {
+            on_error_(error);
+        }
     }
 
     void startReceiving() {
+        std::shared_lock lock(mutex_);
         if (state_ != ConnectionState::Connected) {
             return;
         }
 
         receive_buffer_.resize(config_.receive_buffer_size);
+        lock.unlock();
 
-        if (config_.use_ssl) {
-            ssl_socket_->async_read_some(
-                asio::buffer(receive_buffer_),
-                [this](std::error_code ec, std::size_t length) {
-                    handleReceive(ec, length);
-                });
-        } else {
-            plain_socket_->async_read_some(
-                asio::buffer(receive_buffer_),
-                [this](std::error_code ec, std::size_t length) {
-                    handleReceive(ec, length);
-                });
-        }
+        socket_->asyncReadSome(
+            asio::buffer(receive_buffer_),
+            [this](const asio::error_code& ec, std::size_t length) {
+                handleReceive(ec, length);
+            });
     }
 
-    void handleReceive(const std::error_code& ec, std::size_t length) {
-        if (!ec) {
-            stats_.total_bytes_received += length;
-            stats_.last_activity_time = std::chrono::steady_clock::now();
-
-            if (on_data_received_) {
-                on_data_received_(std::vector<char>(
-                    receive_buffer_.begin(), receive_buffer_.begin() + length));
+    void handleReceive(const asio::error_code& ec, std::size_t length) {
+        if (ec) {
+            if (ec != asio::error::operation_aborted) {
+                handleError(ec.message());
             }
-
-            // Continue reading
-            startReceiving();
-        } else {
-            handleError(ec.message());
+            return;
         }
+
+        stats_.total_bytes_received += length;
+        stats_.updateLastActivityTime();
+
+        if (on_data_received_) {
+            on_data_received_(std::vector<char>(
+                receive_buffer_.begin(), receive_buffer_.begin() + length));
+        }
+
+        startReceiving();
     }
 
     void startHeartbeat() {
-        // Create new timer if needed
         if (!heartbeat_timer_) {
             heartbeat_timer_ =
                 std::make_unique<asio::steady_timer>(io_context_);
@@ -938,71 +714,83 @@ private:
 
         heartbeat_timer_->expires_after(config_.heartbeat_interval);
         heartbeat_timer_->async_wait([this](const asio::error_code& ec) {
-            if (!ec && state_ == ConnectionState::Connected) {
-                // Send heartbeat data
-                send(heartbeat_data_);
-
-                if (on_heartbeat_) {
-                    on_heartbeat_();
-                }
-
-                // Reschedule heartbeat
-                startHeartbeat();
+            if (ec) {
+                return;
             }
+
+            std::shared_lock lock(mutex_);
+            if (state_ != ConnectionState::Connected) {
+                return;
+            }
+            lock.unlock();
+
+            send(heartbeat_data_);
+
+            if (on_heartbeat_) {
+                on_heartbeat_();
+            }
+
+            startHeartbeat();
         });
     }
 
     void handleError(const std::string& error) {
-        if (state_ == ConnectionState::Connected) {
-            logError("Connection error: " + error);
+        std::unique_lock lock(mutex_);
 
-            if (on_error_) {
-                on_error_(error);
-            }
+        if (state_ != ConnectionState::Connected) {
+            return;
+        }
 
-            // Set state to disconnected
-            changeState(ConnectionState::Disconnected);
+        spdlog::error("Connection error: {}", error);
+        last_error_ = error;
+        changeStateLocked(ConnectionState::Disconnected);
 
-            if (on_disconnected_) {
-                on_disconnected_();
-            }
+        lock.unlock();
 
-            // Try to reconnect if auto-reconnect is enabled
-            if (config_.auto_reconnect && config_.reconnect_attempts > 0) {
-                attemptReconnect();
-            }
+        if (on_error_) {
+            on_error_(error);
+        }
+        if (on_disconnected_) {
+            on_disconnected_();
+        }
+
+        if (config_.auto_reconnect && config_.reconnect_attempts > 0) {
+            attemptReconnect();
         }
     }
 
     void attemptReconnect() {
+        std::unique_lock lock(mutex_);
         if (state_ == ConnectionState::Reconnecting) {
             return;
         }
 
-        changeState(ConnectionState::Reconnecting);
+        changeStateLocked(ConnectionState::Reconnecting);
+        lock.unlock();
 
-        // Use the backoff calculator for delay
         auto delay = backoff_calculator_.nextDelay();
+        spdlog::info("Attempting reconnection in {} ms...", delay.count());
 
-        logInfo("Attempting reconnection in " + std::to_string(delay.count()) +
-                "ms...");
+        auto timer = std::make_shared<asio::steady_timer>(io_context_);
+        timer->expires_after(delay);
+        timer->async_wait([this, timer](const asio::error_code& ec) {
+            if (ec) {
+                return;
+            }
 
-        // Schedule reconnection attempt
-        auto reconnect_timer =
-            std::make_shared<asio::steady_timer>(io_context_);
-        reconnect_timer->expires_after(delay);
-        reconnect_timer->async_wait(
-            [this, reconnect_timer](const asio::error_code& ec) {
-                if (!ec && state_ == ConnectionState::Reconnecting) {
-                    // Try to connect again
-                    connect(last_host_, last_port_, config_.connect_timeout);
-                }
-            });
+            std::shared_lock lock(mutex_);
+            if (state_ != ConnectionState::Reconnecting) {
+                return;
+            }
+            lock.unlock();
+
+            connect(last_host_, last_port_, config_.connect_timeout);
+        });
     }
 
-    void changeState(ConnectionState new_state) {
+    void changeStateLocked(ConnectionState new_state) {
         if (state_ != new_state) {
-            ConnectionState old_state = state_;
+            auto old_state = state_;
             state_ = new_state;
 
             if (on_state_changed_) {
@@ -1011,64 +799,161 @@ private:
         }
     }
 
-    void logInfo(const std::string& message) {
-        std::cout << "[INFO] TcpClient: " << message << std::endl;
+    void receiveInternal(
+        size_t size, std::optional<std::chrono::milliseconds> timeout,
+        std::shared_ptr<std::promise<std::vector<char>>> promise) {
+        std::shared_lock lock(mutex_);
+
+        if (state_ != ConnectionState::Connected) {
+            promise->set_value({});
+            return;
+        }
+        lock.unlock();
+
+        auto buffer = std::make_shared<std::vector<char>>(size);
+        auto actual_timeout = timeout.value_or(config_.read_timeout);
+
+        auto timer = std::make_shared<asio::steady_timer>(io_context_);
+        timer->expires_after(actual_timeout);
+
+        auto completed = std::make_shared<std::atomic<bool>>(false);
+
+        timer->async_wait(
+            [this, completed, promise](const asio::error_code& ec) {
+                if (ec == asio::error::operation_aborted ||
+                    completed->exchange(true)) {
+                    return;
+                }
+                socket_->cancel();
+                promise->set_value({});
+            });
+
+        socket_->asyncRead(asio::buffer(*buffer),
+                           [this, buffer, timer, completed, promise](
+                               const asio::error_code& ec, std::size_t bytes) {
+                               if (completed->exchange(true)) {
+                                   return;
+                               }
+                               timer->cancel();
+
+                               if (ec) {
+                                   promise->set_value({});
+                                   return;
+                               }
+
+                               stats_.total_bytes_received += bytes;
+                               stats_.updateLastActivityTime();
+
+                               buffer->resize(bytes);
+                               promise->set_value(std::move(*buffer));
+                           });
     }
 
-    void logError(const std::string& message) {
-        std::cerr << "[ERROR] TcpClient: " << message << std::endl;
-        last_error_ = message;
+    void receiveUntilInternal(
+        char delimiter, std::optional<std::chrono::milliseconds> timeout,
+        std::shared_ptr<std::promise<std::string>> promise) {
+        std::shared_lock lock(mutex_);
+
+        if (state_ != ConnectionState::Connected) {
+            promise->set_value({});
+            return;
+        }
+        lock.unlock();
+
+        auto buffer = std::make_shared<asio::streambuf>();
+        auto actual_timeout = timeout.value_or(config_.read_timeout);
+
+        auto timer = std::make_shared<asio::steady_timer>(io_context_);
+        timer->expires_after(actual_timeout);
+
+        auto completed = std::make_shared<std::atomic<bool>>(false);
+
+        timer->async_wait(
+            [this, completed, promise](const asio::error_code& ec) {
+                if (ec == asio::error::operation_aborted ||
+                    completed->exchange(true)) {
+                    return;
+                }
+                socket_->cancel();
+                promise->set_value({});
+            });
+
+        socket_->asyncReadUntil(
+            *buffer, delimiter,
+            [this, buffer, timer, completed, promise](
+                const asio::error_code& ec, std::size_t bytes) {
+                if (completed->exchange(true)) {
+                    return;
+                }
+                timer->cancel();
+
+                if (ec) {
+                    promise->set_value({});
+                    return;
+                }
+
+                stats_.total_bytes_received += bytes;
+                stats_.updateLastActivityTime();
+
+                std::string data(asio::buffers_begin(buffer->data()),
+                                 asio::buffers_begin(buffer->data()) + bytes);
+                buffer->consume(bytes);
+                promise->set_value(std::move(data));
+            });
     }
 
     // Configuration
-    ConnectionConfig config_;
+    TcpClientConfig config_;
     ProxyConfig proxy_config_;
 
-    // Core networking components
+    // Core networking
     asio::io_context io_context_;
     asio::executor_work_guard<asio::io_context::executor_type> work_guard_;
     asio::ssl::context ssl_context_;
-    std::unique_ptr<asio::ip::tcp::socket> plain_socket_;
-    std::unique_ptr<ssl_socket_t> ssl_socket_;
+    std::unique_ptr<SocketWrapper> socket_;
     std::thread io_thread_;
 
-    // State management
-    mutable std::mutex mutex_;
+    // State management - use shared_mutex for read-heavy workloads
+    mutable std::shared_mutex mutex_;
     ConnectionState state_;
     std::string last_error_;
     std::string last_host_;
     int last_port_{0};
 
-    // Timers
+    // Timers and backoff
     std::unique_ptr<asio::steady_timer> heartbeat_timer_;
     BackoffCalculator backoff_calculator_;
 
-    // Buffers and data
+    // Buffers
     std::vector<char> receive_buffer_;
-    std::vector<char> heartbeat_data_{'P', 'I', 'N', 'G'};
+    std::vector<char> heartbeat_data_{DEFAULT_HEARTBEAT_DATA.begin(),
+                                      DEFAULT_HEARTBEAT_DATA.end()};
 
-    // Statistics
+    // Statistics (thread-safe via atomics)
     ConnectionStats stats_;
 
     // Properties
     std::unordered_map<std::string, std::string> properties_;
 
     // Callbacks
-    OnConnectingCallback on_connecting_;
-    OnConnectedCallback on_connected_;
-    OnDisconnectedCallback on_disconnected_;
-    OnDataReceivedCallback on_data_received_;
-    OnErrorCallback on_error_;
-    OnStateChangedCallback on_state_changed_;
-    OnHeartbeatCallback on_heartbeat_;
+    TcpClient::OnConnectingCallback on_connecting_;
+    TcpClient::OnConnectedCallback on_connected_;
+    TcpClient::OnDisconnectedCallback on_disconnected_;
+    TcpClient::OnDataReceivedCallback on_data_received_;
+    TcpClient::OnErrorCallback on_error_;
+    TcpClient::OnStateChangedCallback on_state_changed_;
+    TcpClient::OnHeartbeatCallback on_heartbeat_;
 };
 
-// Implementation of TcpClient methods that delegate to Impl
+// TcpClient public implementation
 
-TcpClient::TcpClient(const ConnectionConfig& config)
+TcpClient::TcpClient(const TcpClientConfig& config)
     : impl_(std::make_unique<Impl>(config)) {}
 
 TcpClient::~TcpClient() = default;
+
+TcpClient::TcpClient(TcpClient&&) noexcept = default;
+TcpClient& TcpClient::operator=(TcpClient&&) noexcept = default;
 
 bool TcpClient::connect(const std::string& host, int port,
                         std::optional<std::chrono::milliseconds> timeout) {
@@ -1091,15 +976,13 @@ void TcpClient::setHeartbeatInterval(std::chrono::milliseconds interval,
     impl_->setHeartbeatInterval(interval, data);
 }
 
-bool TcpClient::send(const std::vector<char>& data) {
-    return impl_->send(data);
-}
+bool TcpClient::send(std::span<const char> data) { return impl_->send(data); }
 
-bool TcpClient::sendString(const std::string& data) {
+bool TcpClient::sendString(std::string_view data) {
     return impl_->sendString(data);
 }
 
-bool TcpClient::sendWithTimeout(const std::vector<char>& data,
+bool TcpClient::sendWithTimeout(std::span<const char> data,
                                 std::chrono::milliseconds timeout) {
     return impl_->sendWithTimeout(data, timeout);
 }
@@ -1115,7 +998,7 @@ std::future<std::string> TcpClient::receiveUntil(
 }
 
 std::future<std::vector<char>> TcpClient::requestResponse(
-    const std::vector<char>& request, size_t response_size,
+    std::span<const char> request, size_t response_size,
     std::optional<std::chrono::milliseconds> timeout) {
     return impl_->requestResponse(request, response_size, timeout);
 }
@@ -1140,7 +1023,7 @@ std::string TcpClient::getErrorMessage() const {
     return impl_->getErrorMessage();
 }
 
-const ConnectionStats& TcpClient::getStats() const { return impl_->getStats(); }
+ConnectionStats TcpClient::getStats() const { return impl_->getStats(); }
 
 void TcpClient::resetStats() { impl_->resetStats(); }
 
@@ -1158,35 +1041,32 @@ std::string TcpClient::getProperty(const std::string& key) const {
     return impl_->getProperty(key);
 }
 
-void TcpClient::setOnConnectingCallback(const OnConnectingCallback& callback) {
-    impl_->setOnConnectingCallback(callback);
+void TcpClient::setOnConnectingCallback(OnConnectingCallback callback) {
+    impl_->setOnConnectingCallback(std::move(callback));
 }
 
-void TcpClient::setOnConnectedCallback(const OnConnectedCallback& callback) {
-    impl_->setOnConnectedCallback(callback);
+void TcpClient::setOnConnectedCallback(OnConnectedCallback callback) {
+    impl_->setOnConnectedCallback(std::move(callback));
 }
 
-void TcpClient::setOnDisconnectedCallback(
-    const OnDisconnectedCallback& callback) {
-    impl_->setOnDisconnectedCallback(callback);
+void TcpClient::setOnDisconnectedCallback(OnDisconnectedCallback callback) {
+    impl_->setOnDisconnectedCallback(std::move(callback));
 }
 
-void TcpClient::setOnDataReceivedCallback(
-    const OnDataReceivedCallback& callback) {
-    impl_->setOnDataReceivedCallback(callback);
+void TcpClient::setOnDataReceivedCallback(OnDataReceivedCallback callback) {
+    impl_->setOnDataReceivedCallback(std::move(callback));
 }
 
-void TcpClient::setOnErrorCallback(const OnErrorCallback& callback) {
-    impl_->setOnErrorCallback(callback);
+void TcpClient::setOnErrorCallback(OnErrorCallback callback) {
+    impl_->setOnErrorCallback(std::move(callback));
 }
 
-void TcpClient::setOnStateChangedCallback(
-    const OnStateChangedCallback& callback) {
-    impl_->setOnStateChangedCallback(callback);
+void TcpClient::setOnStateChangedCallback(OnStateChangedCallback callback) {
+    impl_->setOnStateChangedCallback(std::move(callback));
 }
 
-void TcpClient::setOnHeartbeatCallback(const OnHeartbeatCallback& callback) {
-    impl_->setOnHeartbeatCallback(callback);
+void TcpClient::setOnHeartbeatCallback(OnHeartbeatCallback callback) {
+    impl_->setOnHeartbeatCallback(std::move(callback));
 }
 
 }  // namespace atom::async::connection

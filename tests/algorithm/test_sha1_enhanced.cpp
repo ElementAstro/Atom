@@ -3,12 +3,13 @@
 #include <spdlog/spdlog.h>
 #include <algorithm>
 #include <chrono>
+#include <future>
 #include <random>
 #include <string>
-#include <vector>
 #include <thread>
-#include <future>
+#include <vector>
 #include "atom/algorithm/sha1.hpp"
+#include "atom/error/exception.hpp"
 
 using namespace atom::algorithm;
 
@@ -73,7 +74,8 @@ TEST_F(SHA1EnhancedTest, ParallelHashComputation) {
     auto expected2 = hasher2.digest();
     auto expected3 = hasher3.digest();
 
-    // Test parallel computation (manual implementation since template is complex)
+    // Test parallel computation (manual implementation since template is
+    // complex)
     std::vector<std::future<std::array<uint8_t, SHA1::DIGEST_SIZE>>> futures;
 
     futures.push_back(std::async(std::launch::async, [&data1]() {
@@ -107,7 +109,7 @@ TEST_F(SHA1EnhancedTest, ParallelHashComputation) {
 TEST_F(SHA1EnhancedTest, SIMDOptimization) {
 #ifdef __AVX2__
     // Test with large data to trigger SIMD path
-    const size_t dataSize = 1024 * 1024; // 1MB
+    const size_t dataSize = 1024 * 1024;  // 1MB
     auto largeData = generateRandomData(dataSize, 12345);
 
     // Hash with potential SIMD optimization
@@ -120,7 +122,7 @@ TEST_F(SHA1EnhancedTest, SIMDOptimization) {
     // Hash in smaller chunks to potentially avoid SIMD
     SHA1 chunkHasher;
     auto startChunk = std::chrono::high_resolution_clock::now();
-    const size_t chunkSize = 63; // Odd size to avoid block alignment
+    const size_t chunkSize = 63;  // Odd size to avoid block alignment
     for (size_t i = 0; i < largeData.size(); i += chunkSize) {
         size_t currentChunkSize = std::min(chunkSize, largeData.size() - i);
         chunkHasher.update(largeData.data() + i, currentChunkSize);
@@ -131,8 +133,10 @@ TEST_F(SHA1EnhancedTest, SIMDOptimization) {
     // Results should be identical regardless of processing method
     expectEqualDigests(simdDigest, chunkDigest);
 
-    auto simdTime = std::chrono::duration_cast<std::chrono::microseconds>(endSIMD - startSIMD);
-    auto chunkTime = std::chrono::duration_cast<std::chrono::microseconds>(endChunk - startChunk);
+    auto simdTime = std::chrono::duration_cast<std::chrono::microseconds>(
+        endSIMD - startSIMD);
+    auto chunkTime = std::chrono::duration_cast<std::chrono::microseconds>(
+        endChunk - startChunk);
 
     spdlog::info("SIMD-optimized hashing: {} μs, Chunked hashing: {} μs",
                  simdTime.count(), chunkTime.count());
@@ -144,10 +148,9 @@ TEST_F(SHA1EnhancedTest, SIMDOptimization) {
 // Test with various block boundary conditions
 TEST_F(SHA1EnhancedTest, BlockBoundaryConditions) {
     // Test data sizes around block boundaries (64 bytes)
-    std::vector<size_t> testSizes = {
-        0, 1, 55, 56, 63, 64, 65, 119, 120, 127, 128, 129,
-        191, 192, 193, 255, 256, 257, 1023, 1024, 1025
-    };
+    std::vector<size_t> testSizes = {0,   1,   55,  56,  63,   64,   65,
+                                     119, 120, 127, 128, 129,  191,  192,
+                                     193, 255, 256, 257, 1023, 1024, 1025};
 
     for (size_t size : testSizes) {
         auto data = createTestData(size);
@@ -168,9 +171,10 @@ TEST_F(SHA1EnhancedTest, BlockBoundaryConditions) {
 
         // Verify digest is not all zeros (except for empty input)
         bool allZeros = std::all_of(digest1.begin(), digest1.end(),
-                                   [](uint8_t b) { return b == 0; });
+                                    [](uint8_t b) { return b == 0; });
         if (size > 0) {
-            EXPECT_FALSE(allZeros) << "Digest should not be all zeros for size " << size;
+            EXPECT_FALSE(allZeros)
+                << "Digest should not be all zeros for size " << size;
         }
     }
 }
@@ -233,7 +237,7 @@ TEST_F(SHA1EnhancedTest, ThreadSafety) {
 
 // Test performance with large data
 TEST_F(SHA1EnhancedTest, LargeDataPerformance) {
-    const size_t dataSize = 100 * 1024 * 1024; // 100MB
+    const size_t dataSize = 100 * 1024 * 1024;  // 100MB
     auto largeData = generateRandomData(dataSize);
 
     auto startTime = std::chrono::high_resolution_clock::now();
@@ -247,14 +251,14 @@ TEST_F(SHA1EnhancedTest, LargeDataPerformance) {
         endTime - startTime);
 
     double throughput = static_cast<double>(dataSize) / (1024 * 1024) /
-                       (duration.count() / 1000.0);
+                        (duration.count() / 1000.0);
 
     spdlog::info("SHA1 hashing of {}MB took {} ms (throughput: {:.2f} MB/s)",
                  dataSize / (1024 * 1024), duration.count(), throughput);
 
     // Verify we got a valid digest
     bool allZeros = std::all_of(digest.begin(), digest.end(),
-                               [](uint8_t b) { return b == 0; });
+                                [](uint8_t b) { return b == 0; });
     EXPECT_FALSE(allZeros);
 }
 
@@ -322,14 +326,14 @@ TEST_F(SHA1EnhancedTest, ErrorHandling) {
     EXPECT_NO_THROW(hasher.update(nullptr, 0));
 
     // Null pointer with non-zero length should throw
-    EXPECT_THROW(hasher.update(nullptr, 5), std::invalid_argument);
+    EXPECT_THROW(hasher.update(nullptr, 5), atom::error::InvalidArgument);
 
     // Valid operations after error should still work
     auto data = stringToBytes("test data");
     EXPECT_NO_THROW(hasher.update(data));
     EXPECT_NO_THROW({
         auto result = hasher.digest();
-        (void)result; // Suppress unused variable warning
+        (void)result;  // Suppress unused variable warning
     });
 }
 

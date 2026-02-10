@@ -1,6 +1,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "atom/connection/tcp/async_tcpclient.hpp"
+#include "atom/connection/tcp/tcp_common.hpp"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -14,6 +15,7 @@
 #include <thread>
 
 using namespace atom::async::connection;
+using namespace atom::connection;  // For common types from tcp_common.hpp
 using namespace std::chrono_literals;
 
 class MockAsyncServer {
@@ -58,7 +60,7 @@ private:
         if (serverSocket_ == -1)
             return;
 
-        struct sockaddr_in serverAddr {};
+        struct sockaddr_in serverAddr{};
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_addr.s_addr = INADDR_ANY;
         serverAddr.sin_port = htons(port_);
@@ -77,7 +79,7 @@ private:
         }
 
         while (!stop_) {
-            struct sockaddr_in clientAddr {};
+            struct sockaddr_in clientAddr{};
             socklen_t clientLen = sizeof(clientAddr);
 
             int clientSocket = accept(

@@ -19,139 +19,22 @@ namespace atom::algorithm {
     return {std::begin(eight_directions), std::end(eight_directions)};
 }
 
-// 修正：提供非模板函数的完整实现
+// Specialized BFS flood fill - delegates to template version
 usize FloodFill::fillBFS(std::vector<std::vector<i32>>& grid, i32 start_x,
                          i32 start_y, i32 target_color, i32 fill_color,
                          Connectivity conn) {
-    // 直接实现而不是调用模板版本
-    spdlog::info("Starting specialized BFS Flood Fill at position ({}, {})",
-                 start_x, start_y);
-
-    usize filled_cells = 0;  // Counter for filled cells
-
-    try {
-        if (grid.empty() || grid[0].empty()) {
-            THROW_INVALID_ARGUMENT("Grid cannot be empty");
-        }
-
-        i32 rows = static_cast<i32>(grid.size());
-        i32 cols = static_cast<i32>(grid[0].size());
-
-        if (start_x < 0 || start_x >= rows || start_y < 0 || start_y >= cols) {
-            THROW_INVALID_ARGUMENT("Starting coordinates out of bounds");
-        }
-
-        if (grid[static_cast<usize>(start_x)][static_cast<usize>(start_y)] !=
-                target_color ||
-            target_color == fill_color) {
-            spdlog::warn(
-                "Start position does not match target color or target color is "
-                "the same as fill color");
-            return filled_cells;
-        }
-
-        const auto directions = getDirections(conn);
-        std::queue<std::pair<i32, i32>> toVisitQueue;
-
-        toVisitQueue.emplace(start_x, start_y);
-        grid[static_cast<usize>(start_x)][static_cast<usize>(start_y)] =
-            fill_color;
-        filled_cells++;
-
-        while (!toVisitQueue.empty()) {
-            auto [x, y] = toVisitQueue.front();
-            toVisitQueue.pop();
-            spdlog::debug("Filling position ({}, {})", x, y);
-
-            for (const auto& [dx, dy] : directions) {
-                i32 newX = x + dx;
-                i32 newY = y + dy;
-
-                if (newX >= 0 && newX < rows && newY >= 0 && newY < cols &&
-                    grid[static_cast<usize>(newX)][static_cast<usize>(newY)] ==
-                        target_color) {
-                    grid[static_cast<usize>(newX)][static_cast<usize>(newY)] =
-                        fill_color;
-                    filled_cells++;
-                    toVisitQueue.emplace(newX, newY);
-                    spdlog::debug("Adding position ({}, {}) to queue", newX,
-                                  newY);
-                }
-            }
-        }
-
-        return filled_cells;
-    } catch (const std::exception& e) {
-        spdlog::error("Exception in fillBFS: {}", e.what());
-        throw;
-    }
+    // Delegate to the template version to avoid code duplication
+    return fillBFS<std::vector<std::vector<i32>>>(
+        grid, start_x, start_y, target_color, fill_color, conn);
 }
 
+// Specialized DFS flood fill - delegates to template version
 usize FloodFill::fillDFS(std::vector<std::vector<i32>>& grid, i32 start_x,
                          i32 start_y, i32 target_color, i32 fill_color,
                          Connectivity conn) {
-    // 直接实现而不是调用模板版本
-    spdlog::info("Starting specialized DFS Flood Fill at position ({}, {})",
-                 start_x, start_y);
-
-    usize filled_cells = 0;
-
-    try {
-        if (grid.empty() || grid[0].empty()) {
-            THROW_INVALID_ARGUMENT("Grid cannot be empty");
-        }
-
-        i32 rows = static_cast<i32>(grid.size());
-        i32 cols = static_cast<i32>(grid[0].size());
-
-        if (start_x < 0 || start_x >= rows || start_y < 0 || start_y >= cols) {
-            THROW_INVALID_ARGUMENT("Starting coordinates out of bounds");
-        }
-
-        if (grid[static_cast<usize>(start_x)][static_cast<usize>(start_y)] !=
-                target_color ||
-            target_color == fill_color) {
-            spdlog::warn(
-                "Start position does not match target color or target color is "
-                "the same as fill color");
-            return filled_cells;
-        }
-
-        auto directions = getDirections(conn);
-        std::stack<std::pair<i32, i32>> toVisitStack;
-
-        toVisitStack.emplace(start_x, start_y);
-        grid[static_cast<usize>(start_x)][static_cast<usize>(start_y)] =
-            fill_color;
-        filled_cells++;
-
-        while (!toVisitStack.empty()) {
-            auto [x, y] = toVisitStack.top();
-            toVisitStack.pop();
-            spdlog::debug("Filling position ({}, {})", x, y);
-
-            for (auto [dx, dy] : directions) {
-                i32 newX = x + dx;
-                i32 newY = y + dy;
-
-                if (newX >= 0 && newX < rows && newY >= 0 && newY < cols &&
-                    grid[static_cast<usize>(newX)][static_cast<usize>(newY)] ==
-                        target_color) {
-                    grid[static_cast<usize>(newX)][static_cast<usize>(newY)] =
-                        fill_color;
-                    filled_cells++;
-                    toVisitStack.emplace(newX, newY);
-                    spdlog::debug("Adding position ({}, {}) to stack", newX,
-                                  newY);
-                }
-            }
-        }
-
-        return filled_cells;
-    } catch (const std::exception& e) {
-        spdlog::error("Exception in fillDFS: {}", e.what());
-        throw;
-    }
+    // Delegate to the template version to avoid code duplication
+    return fillDFS<std::vector<std::vector<i32>>>(
+        grid, start_x, start_y, target_color, fill_color, conn);
 }
 
 // Implementation of SIMD and block optimization methods

@@ -13,7 +13,7 @@
 #include <unistd.h>
 #endif
 
-using namespace atom::async::connection;
+using namespace atom::connection;
 using namespace std::chrono_literals;
 
 class AsyncFifoClientTest : public ::testing::Test {
@@ -27,7 +27,7 @@ protected:
         // Create FIFO for testing
         mkfifo(fifo_path_.c_str(), 0666);
 #endif
-        client_ = std::make_unique<FifoClient>(fifo_path_);
+        client_ = std::make_unique<AsyncFifoClient>(fifo_path_);
     }
 
     void TearDown() override {
@@ -39,7 +39,7 @@ protected:
     }
 
     std::string fifo_path_;
-    std::unique_ptr<FifoClient> client_;
+    std::unique_ptr<AsyncFifoClient> client_;
 };
 
 #ifndef _WIN32  // FIFO operations are more complex on Windows
@@ -423,7 +423,7 @@ TEST_F(AsyncFifoClientTest, WriteReadCycle) {
 
 TEST_F(AsyncFifoClientTest, ConstructorWithPath) {
     // Test that constructor accepts the path correctly
-    EXPECT_NO_THROW(FifoClient testClient(fifo_path_));
+    EXPECT_NO_THROW(AsyncFifoClient testClient(fifo_path_));
 }
 
 TEST_F(AsyncFifoClientTest, ThreadSafety) {

@@ -1,5 +1,5 @@
 // message_bus_bindings.cpp
-#include "atom/async/message_bus.hpp"
+#include "atom/async/messaging/message_bus.hpp"
 
 #include <pybind11/chrono.h>
 #include <pybind11/functional.h>

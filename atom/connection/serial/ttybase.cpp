@@ -1,5 +1,6 @@
 #include "ttybase.hpp"
 
+#include <array>
 #include <atomic>
 #include <cerrno>
 #include <chrono>
@@ -7,10 +8,13 @@
 #include <cstring>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <queue>
+#include <shared_mutex>
 #include <stdexcept>
 #include <system_error>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #ifdef _WIN32
@@ -29,71 +33,122 @@
 #include <spdlog/spdlog.h>
 #include "atom/error/exception.hpp"
 
+namespace atom::connection {
+
+namespace {
+
+#ifndef _WIN32
+// Baud rate lookup table for Unix platforms
+struct BaudRateEntry {
+    uint32_t rate;
+    speed_t speed;
+};
+
+constexpr std::array<BaudRateEntry, 20> BAUD_RATE_TABLE = {{
+    {0, B0},         {50, B50},         {75, B75},         {110, B110},
+    {134, B134},     {150, B150},       {200, B200},       {300, B300},
+    {600, B600},     {1200, B1200},     {1800, B1800},     {2400, B2400},
+    {4800, B4800},   {9600, B9600},     {19200, B19200},   {38400, B38400},
+    {57600, B57600}, {115200, B115200}, {230400, B230400},
+}};
+
+[[nodiscard]] constexpr auto findBaudRate(uint32_t bitRate) noexcept
+    -> std::optional<speed_t> {
+    for (const auto& entry : BAUD_RATE_TABLE) {
+        if (entry.rate == bitRate) {
+            return entry.speed;
+        }
+    }
+    return std::nullopt;
+}
+#endif
+
+}  // anonymous namespace
+
 class TTYBase::Impl {
 public:
     explicit Impl(std::string_view driverName)
         : m_PortFD(-1),
           m_Debug(false),
           m_DriverName(std::string(driverName)),
-          m_IsRunning(false) {}
+          m_IsRunning(false),
+          m_ShouldExit(false) {}
 
     ~Impl() noexcept {
-        try {
-            stopAsyncRead();
-            if (m_PortFD != -1) {
-                (void)disconnect();
-            }
-        } catch (...) {
-            // Silently catch any exceptions in destructor
+        // Signal exit first without holding lock to avoid deadlock
+        m_ShouldExit.store(true, std::memory_order_release);
+
+        // Join thread outside of any lock
+        if (m_WorkerThread.joinable()) {
+            m_WorkerThread.join();
+        }
+
+        m_IsRunning.store(false, std::memory_order_release);
+
+        // Now safe to disconnect
+        if (m_PortFD != -1) {
+            (void)disconnectInternal();
+        }
+    }
+
+    // Helper: Set Windows comm timeouts
+#ifdef _WIN32
+    [[nodiscard]]
+    bool setWindowsTimeouts(HANDLE hPort, uint32_t timeoutMs) noexcept {
+        COMMTIMEOUTS timeouts = {};
+        timeouts.ReadIntervalTimeout = timeoutMs;
+        timeouts.ReadTotalTimeoutConstant = timeoutMs;
+        timeouts.ReadTotalTimeoutMultiplier = 0;
+        timeouts.WriteTotalTimeoutConstant = timeoutMs;
+        timeouts.WriteTotalTimeoutMultiplier = 0;
+        return SetCommTimeouts(hPort, &timeouts) != 0;
+    }
+#endif
+
+    // Helper: Validate port is open
+    [[nodiscard]]
+    bool validatePortOpen() const noexcept {
+        return m_PortFD != -1;
+    }
+
+    // Helper: Log debug message
+    template <typename... Args>
+    void debugLog(spdlog::level::level_enum level,
+                  fmt::format_string<Args...> fmt, Args&&... args) {
+        if (m_Debug) {
+            spdlog::log(level, fmt, std::forward<Args>(args)...);
         }
     }
 
     [[nodiscard]]
     TTYResponse checkTimeout(uint8_t timeout) {
-        if (m_PortFD == -1) {
+        if (!validatePortOpen()) {
             return TTYResponse::Errno;
         }
 
 #ifdef _WIN32
-        COMMTIMEOUTS timeouts = {};
-        timeouts.ReadIntervalTimeout = timeout * 1000;
-        timeouts.ReadTotalTimeoutConstant = timeout * 1000;
-        timeouts.ReadTotalTimeoutMultiplier = 0;
-        timeouts.WriteTotalTimeoutConstant = timeout * 1000;
-        timeouts.WriteTotalTimeoutMultiplier = 0;
-
-        HANDLE hPort = reinterpret_cast<HANDLE>(m_PortFD);
-        if (!SetCommTimeouts(hPort, &timeouts))
+        auto hPort = reinterpret_cast<HANDLE>(m_PortFD);
+        if (!setWindowsTimeouts(hPort, static_cast<uint32_t>(timeout) * 1000)) {
             return TTYResponse::Errno;
-
+        }
         return TTYResponse::OK;
 #else
-        struct timeval tv;
         fd_set readout;
-        int retval;
-
         FD_ZERO(&readout);
         FD_SET(m_PortFD, &readout);
 
-        tv.tv_sec = timeout;
-        tv.tv_usec = 0;
-
-        retval = select(m_PortFD + 1, &readout, nullptr, nullptr, &tv);
+        struct timeval tv = {timeout, 0};
+        int retval = select(m_PortFD + 1, &readout, nullptr, nullptr, &tv);
 
         if (retval > 0) {
             return TTYResponse::OK;
         }
         if (retval == -1) {
             if (errno == EINTR) {
-                // Signal interrupt, not a fatal error
-                if (m_Debug) {
-                    spdlog::info("select() interrupted by signal");
-                }
+                debugLog(spdlog::level::info, "select() interrupted by signal");
                 return TTYResponse::Timeout;
             }
-            if (m_Debug) {
-                spdlog::error("select() error: {}", strerror(errno));
-            }
+            debugLog(spdlog::level::err, "select() error: {}", strerror(errno));
             return TTYResponse::SelectError;
         }
         return TTYResponse::Timeout;
@@ -107,92 +162,63 @@ public:
             return TTYResponse::ParamError;
         }
 
-        try {
-            if (m_PortFD == -1) {
-                throw std::system_error(errno, std::system_category(),
-                                        "Invalid port descriptor");
-            }
-
+        if (!validatePortOpen()) {
             nbytesRead = 0;
-            const uint32_t nbytes = static_cast<uint32_t>(buffer.size());
+            return TTYResponse::Errno;
+        }
+
+        nbytesRead = 0;
+        const auto nbytes = static_cast<uint32_t>(buffer.size());
 
 #ifdef _WIN32
-            DWORD bytesRead = 0;
-            HANDLE hPort = reinterpret_cast<HANDLE>(m_PortFD);
+        auto hPort = reinterpret_cast<HANDLE>(m_PortFD);
+        if (!setWindowsTimeouts(hPort, static_cast<uint32_t>(timeout) * 1000)) {
+            return TTYResponse::Errno;
+        }
 
-            COMMTIMEOUTS timeouts = {};
-            timeouts.ReadIntervalTimeout = timeout * 1000;
-            timeouts.ReadTotalTimeoutConstant = timeout * 1000;
-            timeouts.ReadTotalTimeoutMultiplier = 0;
-            timeouts.WriteTotalTimeoutConstant = timeout * 1000;
-            timeouts.WriteTotalTimeoutMultiplier = 0;
+        DWORD bytesRead = 0;
+        if (!ReadFile(hPort, buffer.data(), nbytes, &bytesRead, nullptr)) {
+            debugLog(spdlog::level::err, "ReadFile error: {}", GetLastError());
+            return TTYResponse::ReadError;
+        }
 
-            if (!SetCommTimeouts(hPort, &timeouts)) {
-                return TTYResponse::Errno;
+        nbytesRead = bytesRead;
+        return TTYResponse::OK;
+#else
+        uint32_t numBytesToRead = nbytes;
+
+        while (numBytesToRead > 0) {
+            if (auto response = checkTimeout(timeout);
+                response != TTYResponse::OK) {
+                if (response == TTYResponse::Timeout) {
+                    debugLog(spdlog::level::info,
+                             "Read operation timed out after reading {} bytes",
+                             nbytesRead);
+                }
+                return response;
             }
 
-            if (!ReadFile(hPort, buffer.data(), nbytes, &bytesRead, nullptr)) {
-                auto error = GetLastError();
-                if (m_Debug) {
-                    spdlog::error("ReadFile error: {}", error);
+            auto bytesRead =
+                ::read(m_PortFD, buffer.data() + nbytesRead, numBytesToRead);
+
+            if (bytesRead < 0) {
+                if (errno == EINTR) {
+                    continue;  // Interrupted, retry
                 }
+                debugLog(spdlog::level::err, "Read error: {}", strerror(errno));
                 return TTYResponse::ReadError;
             }
 
-            nbytesRead = bytesRead;
-            return TTYResponse::OK;
-#else
-            uint32_t numBytesToRead = nbytes;
-            int bytesRead = 0;
-            TTYResponse timeoutResponse = TTYResponse::OK;
-
-            while (numBytesToRead > 0) {
-                if ((timeoutResponse = checkTimeout(timeout)) !=
-                    TTYResponse::OK) {
-                    if (m_Debug && timeoutResponse == TTYResponse::Timeout) {
-                        spdlog::info(
-                            "Read operation timed out after reading {} bytes",
-                            nbytesRead);
-                    }
-                    return timeoutResponse;
-                }
-
-                bytesRead = ::read(m_PortFD, buffer.data() + nbytesRead,
-                                   numBytesToRead);
-
-                if (bytesRead < 0) {
-                    if (errno == EINTR) {
-                        // System call interrupted, retry
-                        continue;
-                    }
-                    if (m_Debug) {
-                        spdlog::error("Read error: {}", strerror(errno));
-                    }
-                    return TTYResponse::ReadError;
-                }
-
-                if (bytesRead == 0) {
-                    // End of file reached
-                    break;
-                }
-
-                nbytesRead += bytesRead;
-                numBytesToRead -= bytesRead;
+            if (bytesRead == 0) {
+                break;  // EOF
             }
 
-            return TTYResponse::OK;
-#endif
-        } catch (const std::system_error& e) {
-            if (m_Debug) {
-                spdlog::error("System error during read: {}", e.what());
-            }
-            return TTYResponse::Errno;
-        } catch (const std::exception& e) {
-            if (m_Debug) {
-                spdlog::error("Exception during read: {}", e.what());
-            }
-            return TTYResponse::ReadError;
+            nbytesRead += static_cast<uint32_t>(bytesRead);
+            numBytesToRead -= static_cast<uint32_t>(bytesRead);
         }
+
+        return TTYResponse::OK;
+#endif
     }
 
     [[nodiscard]]
@@ -202,55 +228,74 @@ public:
             return TTYResponse::ParamError;
         }
 
-        try {
-            if (m_PortFD == -1) {
-                throw std::system_error(errno, std::system_category(),
-                                        "Invalid port descriptor");
-            }
-
+        if (!validatePortOpen()) {
             nbytesRead = 0;
-            std::fill(buffer.begin(), buffer.end(), 0);
-            const size_t nsize = buffer.size();
-
-            while (nbytesRead < nsize) {
-                if (auto timeoutResponse = checkTimeout(timeout);
-                    timeoutResponse != TTYResponse::OK) {
-                    return timeoutResponse;
-                }
-
-                uint8_t readChar;
-                int bytesRead = ::read(m_PortFD, &readChar, 1);
-
-                if (bytesRead < 0) {
-                    if (errno == EINTR) {
-                        continue;
-                    }
-                    return TTYResponse::ReadError;
-                }
-
-                if (bytesRead == 0) {
-                    break;
-                }
-
-                buffer[nbytesRead++] = readChar;
-
-                if (readChar == stopByte) {
-                    return TTYResponse::OK;
-                }
-            }
-
-            return TTYResponse::Overflow;
-        } catch (const std::system_error& e) {
-            if (m_Debug) {
-                spdlog::error("System error during readSection: {}", e.what());
-            }
             return TTYResponse::Errno;
-        } catch (const std::exception& e) {
-            if (m_Debug) {
-                spdlog::error("Exception during readSection: {}", e.what());
-            }
-            return TTYResponse::ReadError;
         }
+
+        nbytesRead = 0;
+        const auto nsize = static_cast<uint32_t>(buffer.size());
+
+#ifdef _WIN32
+        auto hPort = reinterpret_cast<HANDLE>(m_PortFD);
+        if (!setWindowsTimeouts(hPort, static_cast<uint32_t>(timeout) * 1000)) {
+            return TTYResponse::Errno;
+        }
+
+        while (nbytesRead < nsize) {
+            uint8_t readChar = 0;
+            DWORD bytesRead = 0;
+
+            if (!ReadFile(hPort, &readChar, 1, &bytesRead, nullptr)) {
+                debugLog(spdlog::level::err,
+                         "ReadFile error in readSection: {}", GetLastError());
+                return TTYResponse::ReadError;
+            }
+
+            if (bytesRead == 0) {
+                return TTYResponse::Timeout;
+            }
+
+            buffer[nbytesRead++] = readChar;
+
+            if (readChar == stopByte) {
+                return TTYResponse::OK;
+            }
+        }
+
+        return TTYResponse::Overflow;
+#else
+        while (nbytesRead < nsize) {
+            if (auto response = checkTimeout(timeout);
+                response != TTYResponse::OK) {
+                return response;
+            }
+
+            uint8_t readChar = 0;
+            auto bytesRead = ::read(m_PortFD, &readChar, 1);
+
+            if (bytesRead < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                debugLog(spdlog::level::err, "Read error in readSection: {}",
+                         strerror(errno));
+                return TTYResponse::ReadError;
+            }
+
+            if (bytesRead == 0) {
+                break;
+            }
+
+            buffer[nbytesRead++] = readChar;
+
+            if (readChar == stopByte) {
+                return TTYResponse::OK;
+            }
+        }
+
+        return TTYResponse::Overflow;
+#endif
     }
 
     [[nodiscard]]
@@ -261,457 +306,333 @@ public:
             return TTYResponse::OK;
         }
 
-        try {
-            if (m_PortFD == -1) {
-                throw std::system_error(errno, std::system_category(),
-                                        "Invalid port descriptor");
-            }
+        if (!validatePortOpen()) {
+            nbytesWritten = 0;
+            return TTYResponse::Errno;
+        }
 
 #ifdef _WIN32
-            DWORD bytesWritten;
-            HANDLE hPort = reinterpret_cast<HANDLE>(m_PortFD);
+        auto hPort = reinterpret_cast<HANDLE>(m_PortFD);
+        DWORD bytesWritten = 0;
 
-            if (!WriteFile(hPort, buffer.data(),
-                           static_cast<DWORD>(buffer.size()), &bytesWritten,
-                           nullptr)) {
-                auto error = GetLastError();
-                if (m_Debug) {
-                    spdlog::error("WriteFile error: {}", error);
+        if (!WriteFile(hPort, buffer.data(), static_cast<DWORD>(buffer.size()),
+                       &bytesWritten, nullptr)) {
+            debugLog(spdlog::level::err, "WriteFile error: {}", GetLastError());
+            return TTYResponse::WriteError;
+        }
+
+        nbytesWritten = bytesWritten;
+        return TTYResponse::OK;
+#else
+        nbytesWritten = 0;
+        auto remaining = static_cast<uint32_t>(buffer.size());
+
+        while (remaining > 0) {
+            auto bytesW =
+                ::write(m_PortFD, buffer.data() + nbytesWritten, remaining);
+
+            if (bytesW < 0) {
+                if (errno == EINTR) {
+                    continue;  // Interrupted, retry
                 }
+                debugLog(spdlog::level::err, "Write error: {}",
+                         strerror(errno));
                 return TTYResponse::WriteError;
             }
 
-            nbytesWritten = bytesWritten;
-            return TTYResponse::OK;
-#else
-            int bytesW = 0;
-            nbytesWritten = 0;
-            uint32_t remaining = static_cast<uint32_t>(buffer.size());
-
-            while (remaining > 0) {
-                bytesW =
-                    ::write(m_PortFD, buffer.data() + nbytesWritten, remaining);
-
-                if (bytesW < 0) {
-                    if (errno == EINTR) {
-                        // Interrupted system call, retry
-                        continue;
-                    }
-                    if (m_Debug) {
-                        spdlog::error("Write error: {}", strerror(errno));
-                    }
-                    return TTYResponse::WriteError;
-                }
-
-                nbytesWritten += bytesW;
-                remaining -= bytesW;
-            }
-
-            return TTYResponse::OK;
-#endif
-        } catch (const std::system_error& e) {
-            if (m_Debug) {
-                spdlog::error("System error during write: {}", e.what());
-            }
-            return TTYResponse::Errno;
-        } catch (const std::exception& e) {
-            if (m_Debug) {
-                spdlog::error("Exception during write: {}", e.what());
-            }
-            return TTYResponse::WriteError;
+            nbytesWritten += static_cast<uint32_t>(bytesW);
+            remaining -= static_cast<uint32_t>(bytesW);
         }
+
+        return TTYResponse::OK;
+#endif
     }
 
     [[nodiscard]]
     TTYResponse connect(std::string_view device, uint32_t bitRate,
                         uint8_t wordSize, uint8_t parity, uint8_t stopBits) {
-        try {
-            if (device.empty()) {
-                THROW_INVALID_ARGUMENT("Device name cannot be empty");
-            }
+        // Validate parameters
+        if (device.empty()) {
+            debugLog(spdlog::level::err, "Device name cannot be empty");
+            return TTYResponse::ParamError;
+        }
 
-            if (wordSize < 5 || wordSize > 8) {
-                THROW_INVALID_ARGUMENT(
-                    "Word size must be between 5 and 8 bits");
-            }
+        if (wordSize < 5 || wordSize > 8) {
+            debugLog(spdlog::level::err,
+                     "Word size must be between 5 and 8 bits");
+            return TTYResponse::ParamError;
+        }
 
-            if (parity > 2) {
-                THROW_INVALID_ARGUMENT("Invalid parity value");
-            }
+        if (parity > 2) {
+            debugLog(spdlog::level::err, "Invalid parity value: {}", parity);
+            return TTYResponse::ParamError;
+        }
 
-            if (stopBits != 1 && stopBits != 2) {
-                THROW_INVALID_ARGUMENT("Stop bits must be 1 or 2");
-            }
+        if (stopBits != 1 && stopBits != 2) {
+            debugLog(spdlog::level::err, "Stop bits must be 1 or 2");
+            return TTYResponse::ParamError;
+        }
 
 #ifdef _WIN32
-            std::string devicePath(device);
-
-            if (devicePath.find("COM") != std::string::npos &&
-                devicePath.find("\\.") != 0 &&
-                std::stoi(devicePath.substr(3)) > 9) {
-                devicePath = "\\." + devicePath;
-            }
-
-            HANDLE hSerial = CreateFileA(
-                devicePath.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
-                OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-
-            if (hSerial == INVALID_HANDLE_VALUE) {
-                auto error = GetLastError();
-                if (m_Debug) {
-                    spdlog::error("Failed to open port {}: Error code {}",
-                                  devicePath, error);
-                }
-                return TTYResponse::PortFailure;
-            }
-
-            DCB dcbSerialParams = {};
-            dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
-
-            if (!GetCommState(hSerial, &dcbSerialParams)) {
-                CloseHandle(hSerial);
-                if (m_Debug) {
-                    spdlog::error("Failed to get comm state for {}",
-                                  devicePath);
-                }
-                return TTYResponse::PortFailure;
-            }
-
-            dcbSerialParams.BaudRate = bitRate;
-            dcbSerialParams.ByteSize = wordSize;
-            dcbSerialParams.StopBits =
-                (stopBits == 1) ? ONESTOPBIT : TWOSTOPBITS;
-
-            switch (parity) {
-                case 0:  // None
-                    dcbSerialParams.Parity = NOPARITY;
-                    break;
-                case 1:  // Even
-                    dcbSerialParams.Parity = EVENPARITY;
-                    break;
-                case 2:  // Odd
-                    dcbSerialParams.Parity = ODDPARITY;
-                    break;
-            }
-
-            dcbSerialParams.fOutxCtsFlow = FALSE;
-            dcbSerialParams.fRtsControl = RTS_CONTROL_DISABLE;
-            dcbSerialParams.fOutX = FALSE;
-            dcbSerialParams.fInX = FALSE;
-
-            if (!SetCommState(hSerial, &dcbSerialParams)) {
-                auto error = GetLastError();
-                CloseHandle(hSerial);
-                if (m_Debug) {
-                    spdlog::error("Failed to set comm state for {}: Error {}",
-                                  devicePath, error);
-                }
-                return TTYResponse::PortFailure;
-            }
-
-            // Set timeouts
-            COMMTIMEOUTS timeouts = {};
-            timeouts.ReadIntervalTimeout = MAXDWORD;
-            timeouts.ReadTotalTimeoutMultiplier = 0;
-            timeouts.ReadTotalTimeoutConstant = 0;
-            timeouts.WriteTotalTimeoutMultiplier = 0;
-            timeouts.WriteTotalTimeoutConstant = 0;
-
-            if (!SetCommTimeouts(hSerial, &timeouts)) {
-                CloseHandle(hSerial);
-                if (m_Debug) {
-                    spdlog::error("Failed to set comm timeouts for {}",
-                                  devicePath);
-                }
-                return TTYResponse::PortFailure;
-            }
-
-            m_PortFD = reinterpret_cast<intptr_t>(hSerial);
-            return TTYResponse::OK;
+        return connectWindows(device, bitRate, wordSize, parity, stopBits);
 #else
-            int tFd = open(std::string(device).c_str(),
-                           O_RDWR | O_NOCTTY | O_NONBLOCK);
-            if (tFd == -1) {
-                if (m_Debug) {
-                    spdlog::error("Error opening {}: {}", device.data(),
-                                  strerror(errno));
-                }
-                return TTYResponse::PortFailure;
-            }
-
-            // Clear O_NONBLOCK flag for blocking I/O
-            int flags = fcntl(tFd, F_GETFL, 0);
-            if (flags == -1 || fcntl(tFd, F_SETFL, flags & ~O_NONBLOCK) == -1) {
-                if (m_Debug) {
-                    spdlog::error("Error clearing O_NONBLOCK flag: {}",
-                                  strerror(errno));
-                }
-                close(tFd);
-                return TTYResponse::PortFailure;
-            }
-
-            termios ttySetting{};
-            if (tcgetattr(tFd, &ttySetting) == -1) {
-                if (m_Debug) {
-                    spdlog::error("Error getting {} tty attributes: {}",
-                                  device.data(), strerror(errno));
-                }
-                close(tFd);
-                return TTYResponse::PortFailure;
-            }
-
-            speed_t bps;
-            switch (bitRate) {
-                case 0:
-                    bps = B0;
-                    break;
-                case 50:
-                    bps = B50;
-                    break;
-                case 75:
-                    bps = B75;
-                    break;
-                case 110:
-                    bps = B110;
-                    break;
-                case 134:
-                    bps = B134;
-                    break;
-                case 150:
-                    bps = B150;
-                    break;
-                case 200:
-                    bps = B200;
-                    break;
-                case 300:
-                    bps = B300;
-                    break;
-                case 600:
-                    bps = B600;
-                    break;
-                case 1200:
-                    bps = B1200;
-                    break;
-                case 1800:
-                    bps = B1800;
-                    break;
-                case 2400:
-                    bps = B2400;
-                    break;
-                case 4800:
-                    bps = B4800;
-                    break;
-                case 9600:
-                    bps = B9600;
-                    break;
-                case 19200:
-                    bps = B19200;
-                    break;
-                case 38400:
-                    bps = B38400;
-                    break;
-                case 57600:
-                    bps = B57600;
-                    break;
-                case 115200:
-                    bps = B115200;
-                    break;
-                case 230400:
-                    bps = B230400;
-                    break;
-                default:
-                    if (m_Debug) {
-                        spdlog::error("connect: {} is not a valid bit rate.",
-                                      bitRate);
-                    }
-                    close(tFd);
-                    return TTYResponse::ParamError;
-            }
-
-            if ((cfsetispeed(&ttySetting, bps) < 0) ||
-                (cfsetospeed(&ttySetting, bps) < 0)) {
-                if (m_Debug) {
-                    spdlog::error("connect: failed setting bit rate: {}",
-                                  strerror(errno));
-                }
-                close(tFd);
-                return TTYResponse::PortFailure;
-            }
-
-            ttySetting.c_cflag &=
-                ~(CSIZE | CSTOPB | PARENB | PARODD | HUPCL | CRTSCTS);
-            ttySetting.c_cflag |= (CLOCAL | CREAD);
-
-            switch (wordSize) {
-                case 5:
-                    ttySetting.c_cflag |= CS5;
-                    break;
-                case 6:
-                    ttySetting.c_cflag |= CS6;
-                    break;
-                case 7:
-                    ttySetting.c_cflag |= CS7;
-                    break;
-                case 8:
-                    ttySetting.c_cflag |= CS8;
-                    break;
-                default:
-                    if (m_Debug) {
-                        spdlog::error(
-                            "connect: {} is not a valid data bit count.",
-                            wordSize);
-                    }
-                    close(tFd);
-                    return TTYResponse::ParamError;
-            }
-
-            if (parity == 1) {
-                ttySetting.c_cflag |= PARENB;
-            } else if (parity == 2) {
-                ttySetting.c_cflag |= PARENB | PARODD;
-            }
-
-            if (stopBits == 2) {
-                ttySetting.c_cflag |= CSTOPB;
-            }
-
-            ttySetting.c_iflag &= ~(PARMRK | ISTRIP | IGNCR | ICRNL | INLCR |
-                                    IXOFF | IXON | IXANY);
-            ttySetting.c_iflag |= INPCK | IGNPAR | IGNBRK;
-
-            // Raw output
-            ttySetting.c_oflag &= ~(OPOST | ONLCR);
-
-            ttySetting.c_lflag &=
-                ~(ICANON | ECHO | ECHOE | ISIG | IEXTEN | NOFLSH | TOSTOP);
-            ttySetting.c_lflag |= NOFLSH;
-
-            ttySetting.c_cc[VMIN] = 1;
-            ttySetting.c_cc[VTIME] = 0;
-
-            tcflush(tFd, TCIOFLUSH);
-
-            cfmakeraw(&ttySetting);
-
-            // Apply settings
-            if (tcsetattr(tFd, TCSANOW, &ttySetting) != 0) {
-                if (m_Debug) {
-                    spdlog::error("Failed to set terminal attributes: {}",
-                                  strerror(errno));
-                }
-                close(tFd);
-                return TTYResponse::PortFailure;
-            }
-
-            m_PortFD = tFd;
-
-            return TTYResponse::OK;
+        return connectUnix(device, bitRate, wordSize, parity, stopBits);
 #endif
-        } catch (const std::invalid_argument& e) {
-            if (m_Debug) {
-                spdlog::error("Invalid argument during connect: {}", e.what());
+    }
+
+private:
+#ifdef _WIN32
+    [[nodiscard]]
+    TTYResponse connectWindows(std::string_view device, uint32_t bitRate,
+                               uint8_t wordSize, uint8_t parity,
+                               uint8_t stopBits) {
+        std::string devicePath(device);
+
+        // Handle COM ports > 9
+        if (devicePath.find("COM") != std::string::npos &&
+            devicePath.find("\\\\.\\") != 0) {
+            try {
+                if (std::stoi(devicePath.substr(3)) > 9) {
+                    devicePath = "\\\\.\\" + devicePath;
+                }
+            } catch (...) {
+                // Not a standard COM port format, use as-is
             }
-            return TTYResponse::ParamError;
-        } catch (const std::system_error& e) {
-            if (m_Debug) {
-                spdlog::error("System error during connect: {}", e.what());
-            }
-            return TTYResponse::Errno;
-        } catch (const std::exception& e) {
-            if (m_Debug) {
-                spdlog::error("Exception during connect: {}", e.what());
-            }
+        }
+
+        HANDLE hSerial =
+            CreateFileA(devicePath.c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+                        nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+
+        if (hSerial == INVALID_HANDLE_VALUE) {
+            debugLog(spdlog::level::err,
+                     "Failed to open port {}: Error code {}", devicePath,
+                     GetLastError());
             return TTYResponse::PortFailure;
         }
-    }
 
+        DCB dcbSerialParams = {};
+        dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
+
+        if (!GetCommState(hSerial, &dcbSerialParams)) {
+            CloseHandle(hSerial);
+            debugLog(spdlog::level::err, "Failed to get comm state for {}",
+                     devicePath);
+            return TTYResponse::PortFailure;
+        }
+
+        dcbSerialParams.BaudRate = bitRate;
+        dcbSerialParams.ByteSize = wordSize;
+        dcbSerialParams.StopBits = (stopBits == 1) ? ONESTOPBIT : TWOSTOPBITS;
+
+        // Parity: 0=None, 1=Even, 2=Odd
+        constexpr BYTE parityMap[] = {NOPARITY, EVENPARITY, ODDPARITY};
+        dcbSerialParams.Parity = parityMap[parity];
+
+        dcbSerialParams.fOutxCtsFlow = FALSE;
+        dcbSerialParams.fRtsControl = RTS_CONTROL_DISABLE;
+        dcbSerialParams.fOutX = FALSE;
+        dcbSerialParams.fInX = FALSE;
+
+        if (!SetCommState(hSerial, &dcbSerialParams)) {
+            auto error = GetLastError();
+            CloseHandle(hSerial);
+            debugLog(spdlog::level::err,
+                     "Failed to set comm state for {}: Error {}", devicePath,
+                     error);
+            return TTYResponse::PortFailure;
+        }
+
+        // Set default timeouts (non-blocking reads)
+        COMMTIMEOUTS timeouts = {};
+        timeouts.ReadIntervalTimeout = MAXDWORD;
+        timeouts.ReadTotalTimeoutMultiplier = 0;
+        timeouts.ReadTotalTimeoutConstant = 0;
+        timeouts.WriteTotalTimeoutMultiplier = 0;
+        timeouts.WriteTotalTimeoutConstant = 0;
+
+        if (!SetCommTimeouts(hSerial, &timeouts)) {
+            CloseHandle(hSerial);
+            debugLog(spdlog::level::err, "Failed to set comm timeouts for {}",
+                     devicePath);
+            return TTYResponse::PortFailure;
+        }
+
+        m_PortFD = reinterpret_cast<intptr_t>(hSerial);
+        return TTYResponse::OK;
+    }
+#else
+    [[nodiscard]]
+    TTYResponse connectUnix(std::string_view device, uint32_t bitRate,
+                            uint8_t wordSize, uint8_t parity,
+                            uint8_t stopBits) {
+        int tFd =
+            open(std::string(device).c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
+        if (tFd == -1) {
+            debugLog(spdlog::level::err, "Error opening {}: {}", device,
+                     strerror(errno));
+            return TTYResponse::PortFailure;
+        }
+
+        // Clear O_NONBLOCK flag for blocking I/O
+        int flags = fcntl(tFd, F_GETFL, 0);
+        if (flags == -1 || fcntl(tFd, F_SETFL, flags & ~O_NONBLOCK) == -1) {
+            debugLog(spdlog::level::err, "Error clearing O_NONBLOCK flag: {}",
+                     strerror(errno));
+            close(tFd);
+            return TTYResponse::PortFailure;
+        }
+
+        termios ttySetting{};
+        if (tcgetattr(tFd, &ttySetting) == -1) {
+            debugLog(spdlog::level::err, "Error getting {} tty attributes: {}",
+                     device, strerror(errno));
+            close(tFd);
+            return TTYResponse::PortFailure;
+        }
+
+        // Use lookup table for baud rate
+        auto bps = findBaudRate(bitRate);
+        if (!bps) {
+            debugLog(spdlog::level::err, "connect: {} is not a valid bit rate",
+                     bitRate);
+            close(tFd);
+            return TTYResponse::ParamError;
+        }
+
+        if (cfsetispeed(&ttySetting, *bps) < 0 ||
+            cfsetospeed(&ttySetting, *bps) < 0) {
+            debugLog(spdlog::level::err, "connect: failed setting bit rate: {}",
+                     strerror(errno));
+            close(tFd);
+            return TTYResponse::PortFailure;
+        }
+
+        ttySetting.c_cflag &=
+            ~(CSIZE | CSTOPB | PARENB | PARODD | HUPCL | CRTSCTS);
+        ttySetting.c_cflag |= (CLOCAL | CREAD);
+
+        // Word size mapping
+        constexpr tcflag_t wordSizeMap[] = {CS5, CS6, CS7, CS8};
+        ttySetting.c_cflag |= wordSizeMap[wordSize - 5];
+
+        // Parity
+        if (parity == 1) {
+            ttySetting.c_cflag |= PARENB;
+        } else if (parity == 2) {
+            ttySetting.c_cflag |= PARENB | PARODD;
+        }
+
+        // Stop bits
+        if (stopBits == 2) {
+            ttySetting.c_cflag |= CSTOPB;
+        }
+
+        ttySetting.c_iflag &=
+            ~(PARMRK | ISTRIP | IGNCR | ICRNL | INLCR | IXOFF | IXON | IXANY);
+        ttySetting.c_iflag |= INPCK | IGNPAR | IGNBRK;
+
+        // Raw output
+        ttySetting.c_oflag &= ~(OPOST | ONLCR);
+
+        ttySetting.c_lflag &=
+            ~(ICANON | ECHO | ECHOE | ISIG | IEXTEN | NOFLSH | TOSTOP);
+        ttySetting.c_lflag |= NOFLSH;
+
+        ttySetting.c_cc[VMIN] = 1;
+        ttySetting.c_cc[VTIME] = 0;
+
+        tcflush(tFd, TCIOFLUSH);
+        cfmakeraw(&ttySetting);
+
+        if (tcsetattr(tFd, TCSANOW, &ttySetting) != 0) {
+            debugLog(spdlog::level::err,
+                     "Failed to set terminal attributes: {}", strerror(errno));
+            close(tFd);
+            return TTYResponse::PortFailure;
+        }
+
+        m_PortFD = tFd;
+        return TTYResponse::OK;
+    }
+#endif
+
+public:
     [[nodiscard]]
     TTYResponse disconnect() noexcept {
-        try {
-            stopAsyncRead();
-
-            if (m_PortFD == -1) {
-                return TTYResponse::OK;  // Already disconnected
-            }
-
-#ifdef _WIN32
-            // Windows-specific disconnection with error handling
-            HANDLE hPort = reinterpret_cast<HANDLE>(m_PortFD);
-            if (!CloseHandle(hPort)) {
-                auto error = GetLastError();
-                if (m_Debug) {
-                    spdlog::error("Error closing handle: {}", error);
-                }
-                return TTYResponse::Errno;
-            }
-
-            m_PortFD = -1;
-            return TTYResponse::OK;
-#else
-            // Flush any pending data
-            tcflush(m_PortFD, TCIOFLUSH);
-
-            if (close(m_PortFD) != 0) {
-                if (m_Debug) {
-                    spdlog::error("Error closing port: {}", strerror(errno));
-                }
-                return TTYResponse::Errno;
-            }
-
-            m_PortFD = -1;
-            return TTYResponse::OK;
-#endif
-        } catch (const std::exception& e) {
-            if (m_Debug) {
-                spdlog::error("Exception during disconnect: {}", e.what());
-            }
-            return TTYResponse::Errno;
-        }
+        stopAsyncRead();
+        return disconnectInternal();
     }
 
+private:
+    // Internal disconnect without stopping async read (used by destructor)
+    [[nodiscard]]
+    TTYResponse disconnectInternal() noexcept {
+        if (m_PortFD == -1) {
+            return TTYResponse::OK;  // Already disconnected
+        }
+
+#ifdef _WIN32
+        auto hPort = reinterpret_cast<HANDLE>(m_PortFD);
+        if (!CloseHandle(hPort)) {
+            debugLog(spdlog::level::err, "Error closing handle: {}",
+                     GetLastError());
+            m_PortFD = -1;
+            return TTYResponse::Errno;
+        }
+        m_PortFD = -1;
+        return TTYResponse::OK;
+#else
+        tcflush(m_PortFD, TCIOFLUSH);
+
+        if (close(m_PortFD) != 0) {
+            debugLog(spdlog::level::err, "Error closing port: {}",
+                     strerror(errno));
+            m_PortFD = -1;
+            return TTYResponse::Errno;
+        }
+        m_PortFD = -1;
+        return TTYResponse::OK;
+#endif
+    }
+
+public:
     void setDebug(bool enabled) noexcept {
         m_Debug = enabled;
-        if (m_Debug)
-            spdlog::info("Debugging enabled for {}", m_DriverName);
-        else
-            spdlog::info("Debugging disabled for {}", m_DriverName);
+        debugLog(spdlog::level::info, "Debugging {} for {}",
+                 enabled ? "enabled" : "disabled", m_DriverName);
     }
 
     [[nodiscard]]
     std::string getErrorMessage(TTYResponse code) const noexcept {
-        try {
-            switch (code) {
-                case TTYResponse::OK:
-                    return "No error";
-                case TTYResponse::ReadError:
-                    return "Read error: " + std::string(strerror(errno));
-                case TTYResponse::WriteError:
-                    return "Write error: " + std::string(strerror(errno));
-                case TTYResponse::SelectError:
-                    return "Select error: " + std::string(strerror(errno));
-                case TTYResponse::Timeout:
-                    return "Timeout error";
-                case TTYResponse::PortFailure:
-                    if (errno == EACCES) {
-                        return "Port failure: Access denied. Try adding your "
-                               "user "
-                               "to the dialout group and restart "
-                               "(sudo adduser $USER dialout)";
-                    } else {
-                        return "Port failure: " + std::string(strerror(errno)) +
-                               ". Check if device is connected to this port.";
-                    }
-                case TTYResponse::ParamError:
-                    return "Parameter error";
-                case TTYResponse::Errno:
-                    return "Error: " + std::string(strerror(errno));
-                case TTYResponse::Overflow:
-                    return "Read overflow error";
-                default:
-                    return "Unknown error";
-            }
-        } catch (...) {
-            return "Error retrieving error message";
+        switch (code) {
+            case TTYResponse::OK:
+                return "No error";
+            case TTYResponse::ReadError:
+                return "Read error: " + std::string(strerror(errno));
+            case TTYResponse::WriteError:
+                return "Write error: " + std::string(strerror(errno));
+            case TTYResponse::SelectError:
+                return "Select error: " + std::string(strerror(errno));
+            case TTYResponse::Timeout:
+                return "Timeout error";
+            case TTYResponse::PortFailure:
+#ifndef _WIN32
+                if (errno == EACCES) {
+                    return "Port failure: Access denied. Try adding your user "
+                           "to the dialout group (sudo adduser $USER dialout)";
+                }
+#endif
+                return "Port failure: " + std::string(strerror(errno)) +
+                       ". Check if device is connected to this port.";
+            case TTYResponse::ParamError:
+                return "Parameter error";
+            case TTYResponse::Errno:
+                return "Error: " + std::string(strerror(errno));
+            case TTYResponse::Overflow:
+                return "Read overflow error";
+            default:
+                return "Unknown error";
         }
     }
 
@@ -726,8 +647,6 @@ public:
     }
 
     void startAsyncRead() {
-        std::lock_guard<std::mutex> lock(m_Mutex);
-
         if (m_IsRunning.load(std::memory_order_acquire) || m_PortFD == -1) {
             return;
         }
@@ -735,76 +654,22 @@ public:
         m_IsRunning.store(true, std::memory_order_release);
         m_ShouldExit.store(false, std::memory_order_release);
 
-        // Start worker thread
-        m_WorkerThread = std::thread([this]() {
-            std::vector<uint8_t> buffer(m_ReadBufferSize);
+        m_WorkerThread = std::thread([this]() { asyncReadLoop(); });
 
-            while (!m_ShouldExit.load(std::memory_order_acquire)) {
-                if (m_PortFD == -1) {
-                    // Port closed, sleep and try again
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    continue;
-                }
-
-                // Check if data is available
-                fd_set readSet;
-                FD_ZERO(&readSet);
-                FD_SET(m_PortFD, &readSet);
-
-                struct timeval tv;
-                tv.tv_sec = 0;
-                tv.tv_usec = 100000;  // 100ms timeout
-
-                int result =
-                    select(m_PortFD + 1, &readSet, nullptr, nullptr, &tv);
-
-                if (result > 0) {
-                    // Data available
-                    uint32_t bytesRead = 0;
-                    TTYResponse response = read(buffer, 0, bytesRead);
-
-                    if (response == TTYResponse::OK && bytesRead > 0) {
-                        // Process data
-                        if (m_DataCallback) {
-                            // Call callback directly
-                            m_DataCallback(buffer, bytesRead);
-                        } else {
-                            // Queue data for later processing
-                            std::vector<uint8_t> data(
-                                buffer.begin(), buffer.begin() + bytesRead);
-                            {
-                                std::lock_guard<std::mutex> asyncLock(
-                                    m_AsyncMutex);
-                                m_DataQueue.push(std::move(data));
-                            }
-                            m_AsyncCV.notify_one();
-                        }
-                    }
-                } else if (result < 0 && errno != EINTR) {
-                    // Error occurred
-                    if (m_Debug) {
-                        spdlog::error("Async read select error: {}",
-                                      strerror(errno));
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                }
-            }
-        });
-
-        if (m_Debug) {
-            spdlog::info("Started async operations for {}", m_DriverName);
-        }
+        debugLog(spdlog::level::info, "Started async operations for {}",
+                 m_DriverName);
     }
 
     void stopAsyncRead() {
-        std::lock_guard<std::mutex> lock(m_Mutex);
-
         if (!m_IsRunning.load(std::memory_order_acquire)) {
             return;
         }
 
         m_ShouldExit.store(true, std::memory_order_release);
         m_IsRunning.store(false, std::memory_order_release);
+
+        // Notify waiting threads
+        m_AsyncCV.notify_all();
 
         if (m_WorkerThread.joinable()) {
             m_WorkerThread.join();
@@ -817,14 +682,13 @@ public:
             std::swap(m_DataQueue, empty);
         }
 
-        if (m_Debug) {
-            spdlog::info("Stopped async operations for {}", m_DriverName);
-        }
+        debugLog(spdlog::level::info, "Stopped async operations for {}",
+                 m_DriverName);
     }
 
     void setDataCallback(
         std::function<void(const std::vector<uint8_t>&, size_t)> callback) {
-        std::lock_guard<std::mutex> lock(m_Mutex);
+        std::lock_guard<std::shared_mutex> lock(m_CallbackMutex);
         m_DataCallback = std::move(callback);
     }
 
@@ -834,7 +698,6 @@ public:
         std::unique_lock<std::mutex> lock(m_AsyncMutex);
 
         if (m_DataQueue.empty()) {
-            // Wait for data with timeout
             auto result = m_AsyncCV.wait_for(lock, timeout, [this]() {
                 return !m_DataQueue.empty() ||
                        !m_IsRunning.load(std::memory_order_acquire);
@@ -856,30 +719,94 @@ public:
 
     void setReadBufferSize(size_t size) {
         if (size > 0) {
-            std::lock_guard<std::mutex> lock(m_Mutex);
-            m_ReadBufferSize = size;
+            m_ReadBufferSize.store(size, std::memory_order_release);
         }
     }
 
 private:
+    // Async read worker loop
+    void asyncReadLoop() {
+        std::vector<uint8_t> buffer(
+            m_ReadBufferSize.load(std::memory_order_acquire));
+
+        while (!m_ShouldExit.load(std::memory_order_acquire)) {
+            if (m_PortFD == -1) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                continue;
+            }
+
+#ifdef _WIN32
+            // Windows: Use overlapped I/O or polling
+            uint32_t bytesRead = 0;
+            auto response = read(std::span<uint8_t>(buffer), 0, bytesRead);
+
+            if (response == TTYResponse::OK && bytesRead > 0) {
+                processAsyncData(buffer, bytesRead);
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+#else
+            // Unix: Use select for efficient waiting
+            fd_set readSet;
+            FD_ZERO(&readSet);
+            FD_SET(m_PortFD, &readSet);
+
+            struct timeval tv = {0, 100000};  // 100ms timeout
+            int result = select(m_PortFD + 1, &readSet, nullptr, nullptr, &tv);
+
+            if (result > 0) {
+                uint32_t bytesRead = 0;
+                auto response = read(std::span<uint8_t>(buffer), 0, bytesRead);
+
+                if (response == TTYResponse::OK && bytesRead > 0) {
+                    processAsyncData(buffer, bytesRead);
+                }
+            } else if (result < 0 && errno != EINTR) {
+                debugLog(spdlog::level::err, "Async read select error: {}",
+                         strerror(errno));
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+#endif
+        }
+    }
+
+    // Process data received in async read
+    void processAsyncData(const std::vector<uint8_t>& buffer,
+                          uint32_t bytesRead) {
+        // Thread-safe callback access
+        std::shared_lock<std::shared_mutex> lock(m_CallbackMutex);
+        if (m_DataCallback) {
+            m_DataCallback(buffer, bytesRead);
+        } else {
+            lock.unlock();
+            // Queue data for later processing
+            std::vector<uint8_t> data(buffer.begin(),
+                                      buffer.begin() + bytesRead);
+            {
+                std::lock_guard<std::mutex> asyncLock(m_AsyncMutex);
+                m_DataQueue.push(std::move(data));
+            }
+            m_AsyncCV.notify_one();
+        }
+    }
+
     // Member variables
-    int m_PortFD{-1};          ///< File descriptor for TTY port
-    bool m_Debug{false};       ///< Flag indicating if debugging is enabled
-    std::string m_DriverName;  ///< Driver name for this TTY
-    std::atomic<bool>
-        m_IsRunning;  ///< Flag indicating if async operations are running
-
-    // Mutex for thread safety
-    std::mutex m_Mutex;
-
-    // Members for async operations
-    std::thread m_WorkerThread;
+    int m_PortFD{-1};
+    bool m_Debug{false};
+    std::string m_DriverName;
+    std::atomic<bool> m_IsRunning{false};
     std::atomic<bool> m_ShouldExit{false};
+    std::atomic<size_t> m_ReadBufferSize{1024};
+
+    // Thread-safe callback with shared_mutex for reader-writer pattern
+    mutable std::shared_mutex m_CallbackMutex;
     std::function<void(const std::vector<uint8_t>&, size_t)> m_DataCallback;
+
+    // Async read thread and data queue
+    std::thread m_WorkerThread;
     std::condition_variable m_AsyncCV;
     std::mutex m_AsyncMutex;
     std::queue<std::vector<uint8_t>> m_DataQueue;
-    size_t m_ReadBufferSize{1024};
 };
 
 // TTYBase implementation using delegation to Impl class
@@ -913,11 +840,19 @@ TTYBase::TTYResponse TTYBase::readSection(std::span<uint8_t> buffer,
 
 TTYBase::TTYResponse TTYBase::write(std::span<const uint8_t> buffer,
                                     uint32_t& nbytesWritten) {
+    if (!m_pImpl) {
+        nbytesWritten = 0;
+        return TTYResponse::Errno;
+    }
     return m_pImpl->write(buffer, nbytesWritten);
 }
 
 TTYBase::TTYResponse TTYBase::writeString(std::string_view string,
                                           uint32_t& nbytesWritten) {
+    if (!m_pImpl) {
+        nbytesWritten = 0;
+        return TTYResponse::Errno;
+    }
     return m_pImpl->write(
         std::span<const uint8_t>(
             reinterpret_cast<const uint8_t*>(string.data()), string.size()),
@@ -926,18 +861,28 @@ TTYBase::TTYResponse TTYBase::writeString(std::string_view string,
 
 std::future<std::pair<TTYBase::TTYResponse, uint32_t>> TTYBase::readAsync(
     std::span<uint8_t> buffer, uint8_t timeout) {
+    if (!m_pImpl) {
+        return std::async(std::launch::deferred, []() {
+            return std::make_pair(TTYResponse::Errno, uint32_t{0});
+        });
+    }
     return std::async(std::launch::async, [this, buffer, timeout]() {
         uint32_t bytesRead = 0;
-        TTYResponse response = this->read(buffer, timeout, bytesRead);
+        auto response = this->read(buffer, timeout, bytesRead);
         return std::make_pair(response, bytesRead);
     });
 }
 
 std::future<std::pair<TTYBase::TTYResponse, uint32_t>> TTYBase::writeAsync(
     std::span<const uint8_t> buffer) {
+    if (!m_pImpl) {
+        return std::async(std::launch::deferred, []() {
+            return std::make_pair(TTYResponse::Errno, uint32_t{0});
+        });
+    }
     return std::async(std::launch::async, [this, buffer]() {
         uint32_t bytesWritten = 0;
-        TTYResponse response = this->write(buffer, bytesWritten);
+        auto response = this->write(buffer, bytesWritten);
         return std::make_pair(response, bytesWritten);
     });
 }
@@ -986,20 +931,37 @@ bool TTYBase::isConnected() const noexcept {
     return m_pImpl->isConnected();
 }
 
-void TTYBase::startAsyncRead() { m_pImpl->startAsyncRead(); }
+void TTYBase::startAsyncRead() {
+    if (m_pImpl) {
+        m_pImpl->startAsyncRead();
+    }
+}
 
-void TTYBase::stopAsyncRead() { m_pImpl->stopAsyncRead(); }
+void TTYBase::stopAsyncRead() {
+    if (m_pImpl) {
+        m_pImpl->stopAsyncRead();
+    }
+}
 
 void TTYBase::setDataCallback(
     std::function<void(const std::vector<uint8_t>&, size_t)> callback) {
-    m_pImpl->setDataCallback(std::move(callback));
+    if (m_pImpl) {
+        m_pImpl->setDataCallback(std::move(callback));
+    }
 }
 
 bool TTYBase::getQueuedData(std::vector<uint8_t>& data,
                             std::chrono::milliseconds timeout) {
+    if (!m_pImpl) {
+        return false;
+    }
     return m_pImpl->getQueuedData(data, timeout);
 }
 
 void TTYBase::setReadBufferSize(size_t size) {
-    m_pImpl->setReadBufferSize(size);
+    if (m_pImpl) {
+        m_pImpl->setReadBufferSize(size);
+    }
 }
+
+}  // namespace atom::connection

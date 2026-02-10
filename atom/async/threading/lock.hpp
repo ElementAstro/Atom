@@ -18,8 +18,9 @@ Description: Some useful spinlock implementations
 #include <atomic>
 #include <chrono>
 #include <concepts>
-#include <functional>
+#include <limits>
 #include <source_location>
+#include <string>
 #include <thread>
 #include <version>
 
@@ -38,7 +39,7 @@ Description: Some useful spinlock implementations
 #if defined(_WIN32) || defined(_WIN64)
 #define ATOM_PLATFORM_WINDOWS
 #include <synchapi.h>
-#include "../../../cmake/WindowsCompat.hpp"
+#include "atom/platform/windows_compat.hpp"
 #elif defined(__APPLE__)
 #define ATOM_PLATFORM_MACOS
 #include <dispatch/dispatch.h>
@@ -86,6 +87,56 @@ namespace atom::async {
 #endif
 
 /**
+ * @brief Configuration for exponential backoff algorithm
+ */
+struct BackoffConfig {
+    uint32_t initial_backoff = 1;
+    uint32_t max_backoff = 1024;
+    uint32_t yield_threshold_ratio =
+        2;  // Yield when backoff >= max_backoff / ratio
+};
+
+/**
+ * @brief Exponential backoff utility for lock acquisition
+ *
+ * This function implements an exponential backoff algorithm that spins
+ * with increasing delays and yields to the scheduler when contention is high.
+ *
+ * @tparam TryAcquireFn A callable that returns true if lock acquired
+ * @param try_acquire Function that attempts to acquire the lock
+ * @param config Backoff configuration parameters
+ */
+template <typename TryAcquireFn>
+    requires std::invocable<TryAcquireFn> &&
+             std::same_as<std::invoke_result_t<TryAcquireFn>, bool>
+void exponentialBackoffSpin(TryAcquireFn &&try_acquire,
+                            const BackoffConfig &config = {}) noexcept {
+    uint32_t backoff_count = config.initial_backoff;
+    const uint32_t yield_threshold =
+        config.max_backoff / config.yield_threshold_ratio;
+
+    while (true) {
+        // Perform exponential backoff spinning
+        for (uint32_t i = 0; i < backoff_count; ++i) {
+            cpu_relax();
+        }
+
+        // Try to acquire the lock
+        if (try_acquire()) {
+            return;
+        }
+
+        // Increase backoff time (capped at maximum)
+        backoff_count = std::min(backoff_count * 2, config.max_backoff);
+
+        // Yield to scheduler if spinning for too long
+        if (backoff_count >= yield_threshold) {
+            std::this_thread::yield();
+        }
+    }
+}
+
+/**
  * @brief Lock concept, defines the basic requirements for a lock type
  */
 template <typename T>
@@ -112,16 +163,112 @@ concept SharedLock = Lock<T> && requires(T lock) {
 };
 
 /**
+ * @brief Base exception class for all async/threading related errors
+ *
+ * Provides source location information for better debugging.
+ * All threading-related exceptions should inherit from this class.
+ */
+class AsyncException : public std::runtime_error {
+public:
+    explicit AsyncException(
+        const std::string &message,
+        std::source_location loc = std::source_location::current())
+        : std::runtime_error(formatMessage(message, loc)),
+          file_(loc.file_name()),
+          function_(loc.function_name()),
+          line_(loc.line()) {}
+
+    [[nodiscard]] const char *file() const noexcept { return file_; }
+    [[nodiscard]] const char *function() const noexcept { return function_; }
+    [[nodiscard]] uint32_t line() const noexcept { return line_; }
+
+protected:
+    static std::string formatMessage(const std::string &message,
+                                     const std::source_location &loc) {
+        return message + " [" + loc.file_name() + ":" +
+               std::to_string(loc.line()) + " in " + loc.function_name() + "]";
+    }
+
+private:
+    const char *file_;
+    const char *function_;
+    uint32_t line_;
+};
+
+/**
  * @brief Error handling utility class for lock exceptions
  */
-class LockError : public std::runtime_error {
+class LockError : public AsyncException {
 public:
     explicit LockError(
         const std::string &message,
         std::source_location loc = std::source_location::current())
-        : std::runtime_error(std::string(message) + " [" + loc.file_name() +
-                             ":" + std::to_string(loc.line()) + " in " +
-                             loc.function_name() + "]") {}
+        : AsyncException(message, loc) {}
+};
+
+/**
+ * @brief Abstract interface for locks providing type-safe polymorphism
+ *
+ * This interface allows different lock implementations to be used
+ * interchangeably through a common base class.
+ */
+class ILock {
+public:
+    virtual ~ILock() = default;
+
+    /**
+     * @brief Acquires the lock
+     */
+    virtual void lock() = 0;
+
+    /**
+     * @brief Releases the lock
+     */
+    virtual void unlock() = 0;
+
+    /**
+     * @brief Tries to acquire the lock without blocking
+     * @return true if the lock was acquired, false otherwise
+     */
+    [[nodiscard]] virtual bool tryLock() = 0;
+
+    // Non-copyable, non-movable
+    ILock() = default;
+    ILock(const ILock &) = delete;
+    ILock &operator=(const ILock &) = delete;
+    ILock(ILock &&) = delete;
+    ILock &operator=(ILock &&) = delete;
+};
+
+/**
+ * @brief Wrapper to adapt any lock type to ILock interface
+ * @tparam LockType The underlying lock type
+ */
+template <typename LockType>
+    requires Lock<LockType>
+class LockAdapter final : public ILock {
+    LockType lock_;
+
+public:
+    LockAdapter() = default;
+
+    void lock() override { lock_.lock(); }
+    void unlock() override { lock_.unlock(); }
+
+    [[nodiscard]] bool tryLock() override {
+        if constexpr (TryableLock<LockType>) {
+            return lock_.tryLock();
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * @brief Gets a reference to the underlying lock
+     * @return Reference to the underlying lock
+     */
+    [[nodiscard]] LockType &underlying() noexcept { return lock_; }
+    [[nodiscard]] const LockType &underlying() const noexcept { return lock_; }
 };
 
 // A cache line padding helper class to avoid false sharing
@@ -187,14 +334,38 @@ public:
     template <class Rep, class Period>
     [[nodiscard]] auto tryLock(
         const std::chrono::duration<Rep, Period> &timeout) noexcept -> bool {
-        auto start = std::chrono::steady_clock::now();
-        while (!tryLock()) {
-            if (std::chrono::steady_clock::now() - start > timeout) {
+        // Fast path: try once without timing overhead
+        if (tryLock()) {
+            return true;
+        }
+
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        uint32_t spin_count = 0;
+        constexpr uint32_t SPINS_BEFORE_YIELD = 64;
+        constexpr uint32_t SPINS_BEFORE_TIME_CHECK = 16;
+
+        while (true) {
+            // Batch spinning to reduce clock queries
+            for (uint32_t i = 0; i < SPINS_BEFORE_TIME_CHECK; ++i) {
+                if (tryLock()) {
+                    return true;
+                }
+                cpu_relax();
+            }
+
+            // Check timeout periodically
+            if (std::chrono::steady_clock::now() >= deadline) {
                 return false;
             }
-            cpu_relax();
+
+            spin_count += SPINS_BEFORE_TIME_CHECK;
+
+            // Yield after extended spinning to reduce CPU usage
+            if (spin_count >= SPINS_BEFORE_YIELD) {
+                std::this_thread::yield();
+                spin_count = 0;
+            }
         }
-        return true;
     }
 
     // C++20 compatible wait interface
@@ -238,6 +409,9 @@ class TicketSpinlock : public NonCopyable {
 
     // Maximum spin count before yielding the CPU to prevent excessive CPU usage
     static constexpr uint32_t MAX_SPIN_COUNT = 1000;
+
+    // Allow TicketSpinlockAdapter to access private members
+    friend class TicketSpinlockAdapter;
 
 public:
     /**
@@ -307,10 +481,17 @@ public:
      * @return true if the lock was acquired, false otherwise
      */
     [[nodiscard]] auto tryLock() noexcept -> bool {
-        auto expected = serving_.load(std::memory_order_acquire);
-        if (ticket_.load(std::memory_order_acquire) == expected) {
-            auto my_ticket = ticket_.fetch_add(1, std::memory_order_acq_rel);
-            return my_ticket == expected;
+        // Use compare_exchange to atomically check and increment ticket
+        // This avoids the ABA problem where ticket is incremented even on
+        // failure
+        auto current_serving = serving_.load(std::memory_order_acquire);
+        auto expected_ticket = current_serving;
+
+        // Only increment ticket if it equals serving (lock is available)
+        if (ticket_.compare_exchange_strong(
+                expected_ticket, current_serving + 1, std::memory_order_acq_rel,
+                std::memory_order_relaxed)) {
+            return true;
         }
         return false;
     }
@@ -323,6 +504,37 @@ public:
     [[nodiscard]] auto waitingThreads() const noexcept -> uint64_t {
         return ticket_.load(std::memory_order_acquire) -
                serving_.load(std::memory_order_acquire);
+    }
+};
+
+/**
+ * @brief Specialized adapter for TicketSpinlock which has non-standard unlock
+ * interface
+ *
+ * TicketSpinlock requires a ticket parameter for unlock(), so it needs a
+ * special adapter that tracks the current ticket internally.
+ */
+class TicketSpinlockAdapter final : public ILock {
+    TicketSpinlock lock_;
+    uint64_t current_ticket_{0};
+
+public:
+    TicketSpinlockAdapter() = default;
+
+    void lock() override { current_ticket_ = lock_.lock(); }
+    void unlock() override { lock_.unlock(current_ticket_); }
+
+    [[nodiscard]] bool tryLock() override {
+        if (lock_.tryLock()) {
+            current_ticket_ = lock_.serving_.load(std::memory_order_acquire);
+            return true;
+        }
+        return false;
+    }
+
+    [[nodiscard]] TicketSpinlock &underlying() noexcept { return lock_; }
+    [[nodiscard]] const TicketSpinlock &underlying() const noexcept {
+        return lock_;
     }
 };
 
@@ -865,10 +1077,10 @@ public:
 #else
         std::lock_guard<std::mutex> lock(mutex_);
         count_ += update;
-        if (update == 1) {
+        // Notify exactly 'update' waiters instead of all waiters
+        // This reduces spurious wakeups when releasing multiple resources
+        for (std::ptrdiff_t i = 0; i < update; ++i) {
             cv_.notify_one();
-        } else {
-            cv_.notify_all();
         }
 #endif
     }
@@ -920,7 +1132,7 @@ using BinarySemaphore = CountingSemaphore<1>;
  * @brief Factory for creating appropriate lock types based on configuration
  *
  * Allows selecting different lock implementations at runtime while maintaining
- * a consistent interface.
+ * a consistent interface through the ILock abstract base class.
  */
 class LockFactory {
 public:
@@ -963,19 +1175,31 @@ public:
      * @brief Creates a lock of the specified type, wrapped in a unique_ptr
      *
      * @param type The type of lock to create
-     * @return A std::unique_ptr to the created lock
+     * @return A std::unique_ptr<ILock> to the created lock
      * @throws std::invalid_argument if the lock type is invalid
      */
-    static auto createLock(LockType type)
-        -> std::unique_ptr<void, std::function<void(void *)>>;
+    [[nodiscard]] static auto createLock(LockType type)
+        -> std::unique_ptr<ILock>;
 
     /**
      * @brief Creates the most optimal lock implementation for the platform
      *
-     * @return A std::unique_ptr to the lock optimized for the current platform
+     * @return A std::unique_ptr<ILock> to the lock optimized for the current
+     * platform
      */
-    static auto createOptimizedLock()
-        -> std::unique_ptr<void, std::function<void(void *)>>;
+    [[nodiscard]] static auto createOptimizedLock() -> std::unique_ptr<ILock>;
+
+    /**
+     * @brief Creates a lock of a specific type (type-safe version)
+     *
+     * @tparam LockType The lock type to create
+     * @return A std::unique_ptr to the created LockAdapter
+     */
+    template <typename LockT>
+        requires Lock<LockT>
+    [[nodiscard]] static auto create() -> std::unique_ptr<LockAdapter<LockT>> {
+        return std::make_unique<LockAdapter<LockT>>();
+    }
 };
 
 }  // namespace atom::async

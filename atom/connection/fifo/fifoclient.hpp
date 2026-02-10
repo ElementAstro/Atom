@@ -15,88 +15,17 @@ Description: FIFO Client
 #ifndef ATOM_CONNECTION_FIFOCLIENT_HPP
 #define ATOM_CONNECTION_FIFOCLIENT_HPP
 
-#include <chrono>
 #include <concepts>
-#include <functional>
 #include <future>
 #include <memory>
-#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <vector>
 
-#include "atom/type/expected.hpp"
+#include "fifo_common.hpp"
 
 namespace atom::connection {
-
-/**
- * @brief Error codes specific to FIFO operations
- */
-enum class FifoError {
-    OpenFailed,
-    ReadFailed,
-    WriteFailed,
-    Timeout,
-    InvalidOperation,
-    NotOpen,
-    ConnectionLost,
-    MessageTooLarge,
-    CompressionFailed,
-    EncryptionFailed,
-    DecryptionFailed
-};
-
-// make_error_code is defined in fifoclient.cpp
-[[nodiscard]] std::error_code make_error_code(FifoError e);
-
-/**
- * @brief Enum representing message priority levels
- */
-enum class MessagePriority { Low, Normal, High, Critical };
-
-/**
- * @brief Structure to hold client statistics
- */
-struct ClientStats {
-    size_t messages_sent = 0;
-    size_t messages_failed = 0;
-    size_t bytes_sent = 0;
-    size_t bytes_received = 0;
-    double avg_write_latency_ms = 0.0;
-    double avg_read_latency_ms = 0.0;
-    size_t reconnect_attempts = 0;
-    size_t successful_reconnects = 0;
-    size_t avg_compression_ratio = 0;
-};
-
-/**
- * @brief Configuration options for the FIFO client
- */
-struct ClientConfig {
-    size_t read_buffer_size = 4096;
-    size_t max_message_size = 1024 * 1024;
-    bool auto_reconnect = true;
-    int max_reconnect_attempts = 5;
-    std::chrono::milliseconds reconnect_delay{500};
-    std::optional<std::chrono::milliseconds> default_timeout{5000};
-    bool enable_compression = false;
-    size_t compression_threshold = 1024;
-    bool enable_encryption = false;
-};
-
-/**
- * @brief Type for operation completion callbacks
- */
-using OperationCallback = std::function<void(
-    bool success, std::error_code error_code, size_t bytes_transferred)>;
-
-/**
- * @brief Type for connection status callbacks
- */
-using ConnectionCallback =
-    std::function<void(bool connected, std::error_code error_code)>;
 
 /**
  * @brief A concept for types that can be written to a FIFO

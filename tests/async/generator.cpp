@@ -21,7 +21,7 @@ using namespace atom::async;
 using namespace std::chrono_literals;
 
 // Helper function to convert integers to appropriate types for testing
-template<typename T>
+template <typename T>
 T makeTestValue(int value) {
     if constexpr (std::is_same_v<T, std::string>) {
         return std::to_string(value);
@@ -309,6 +309,7 @@ TEST(TwoWayGeneratorVoidReceiveTest, ExceptionHandling) {
     EXPECT_TRUE(gen.done());
 }
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
 // Test fixture for ConcurrentGenerator
 template <typename T>
 class ConcurrentGeneratorTest : public ::testing::Test {};
@@ -607,6 +608,7 @@ TEST(LockFreeTwoWayGeneratorVoidReceiveTest, ConcurrentNext) {
     }
     EXPECT_TRUE(gen.done());
 }
+#endif  // ATOM_USE_BOOST_LOCKFREE
 
 #ifdef ATOM_USE_BOOST_LOCKS
 // Test fixture for ThreadSafeGenerator
@@ -738,7 +740,8 @@ TEST_F(GeneratorEnhancedTest, LargeGeneratorMemoryUsage) {
     // Process generator in chunks to test memory stability
     for ([[maybe_unused]] const auto& val : gen) {
         count++;
-        if (count >= 50000) break;  // Process half
+        if (count >= 50000)
+            break;  // Process half
     }
 
     EXPECT_EQ(count, 50000);
@@ -750,7 +753,10 @@ TEST_F(GeneratorEnhancedTest, GeneratorResourceCleanup) {
     struct TestResource {
         std::atomic<int>* counter;
         TestResource(std::atomic<int>* c) : counter(c) {}
-        ~TestResource() { if (counter) counter->fetch_add(1); }
+        ~TestResource() {
+            if (counter)
+                counter->fetch_add(1);
+        }
     };
 
     {
@@ -789,7 +795,8 @@ TEST_F(GeneratorEnhancedTest, GeneratorPerformance) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Sum of 0 to 99999 = 99999 * 100000 / 2 = 4999950000
     EXPECT_EQ(sum, 4999950000LL);
@@ -881,6 +888,7 @@ TEST_F(GeneratorEnhancedTest, IteratorPostIncrement) {
     EXPECT_EQ(*it, 20);      // Iterator has advanced
 }
 
+#ifdef ATOM_USE_BOOST_LOCKFREE
 // Concurrent generator tests
 TEST_F(GeneratorEnhancedTest, ConcurrentGeneratorStress) {
     auto gen_func = []() -> Generator<int> {
@@ -929,6 +937,7 @@ TEST_F(GeneratorEnhancedTest, ConcurrentGeneratorStress) {
         EXPECT_EQ(consumed_values[i], i);
     }
 }
+#endif  // ATOM_USE_BOOST_LOCKFREE
 
 // Integration with other async components
 TEST_F(GeneratorEnhancedTest, GeneratorWithFutures) {
