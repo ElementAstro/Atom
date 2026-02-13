@@ -14,44 +14,30 @@ set_project("atom")
 set_version("1.0.0")
 set_license("GPL-3.0")
 
--- Set languages
-set_languages("c11", "cxx17")
+-- Set languages (match CMake C++20)
+set_languages("c11", "cxx20")
 
--- Add build modes
-add_rules("mode.debug", "mode.release")
+-- Add build modes (inherit from parent)
+add_rules("mode.debug", "mode.release", "mode.minsizerel", "mode.releasedbg")
+
+-- =============================================================================
+-- Platform Detection Helper (shared with parent)
+-- =============================================================================
+
+function is_windows_like()
+    return is_plat("windows") or is_plat("mingw") or is_plat("msys")
+end
 
 -- =============================================================================
 -- Configuration Options
 -- =============================================================================
 
--- Python support option
-option("python")
-    set_default(false)
-    set_description("Build Atom with Python support")
-    set_showmenu(true)
-option_end()
-
--- Module build options
+-- Module build options are inherited from parent configuration
 local modules = {
-    "algorithm", "async", "components", "connection", "containers", 
-    "error", "io", "log", "memory", "meta", "search", "secret", 
+    "algorithm", "async", "components", "connection", "containers",
+    "error", "image", "io", "log", "memory", "meta", "search", "secret",
     "serial", "sysinfo", "system", "type", "utils", "web"
 }
-
-for _, module in ipairs(modules) do
-    option(module)
-        set_default(false)
-        set_description("Build " .. module .. " module")
-        set_showmenu(true)
-    option_end()
-end
-
--- Tests option
-option("tests")
-    set_default(false)
-    set_description("Build tests")
-    set_showmenu(true)
-option_end()
 
 -- Unified library option
 option("unified")
@@ -61,20 +47,15 @@ option("unified")
 option_end()
 
 -- =============================================================================
--- Python Support Configuration
+-- Common Compile Options for All Modules
 -- =============================================================================
 
-if has_config("python") then
-    add_requires("python3", "pybind11")
-    
-    after_load(function ()
-        local python = find_tool("python3")
-        if python then
-            print("Found Python: " .. python.program)
-        else
-            raise("Python not found")
-        end
-    end)
+-- Add common compile definitions (matching CMake)
+add_defines("SPDLOG_COMPILED_LIB", "SPDLOG_FMT_EXTERNAL")
+
+-- Platform-specific definitions
+if is_windows_like() then
+    add_defines("_WIN32_WINNT=0x0A00", "WINVER=0x0A00", "NOMINMAX", "WIN32_LEAN_AND_MEAN")
 end
 
 -- =============================================================================
@@ -83,7 +64,8 @@ end
 
 if is_plat("linux") then
     -- Linux-specific dependencies
-    add_requires("pkgconfig::libsystemd", {optional = true})
+    local use_system_packages = has_config("use_system_packages")
+    add_requires("pkgconfig::libsystemd", {optional = true, system = use_system_packages})
 end
 
 -- =============================================================================
@@ -94,7 +76,7 @@ end
 function check_module_directory(name, dir_name)
     local module_path = path.join(".", dir_name)
     local xmake_file = path.join(module_path, "xmake.lua")
-    
+
     if os.isdir(module_path) and os.isfile(xmake_file) then
         return true
     else
@@ -108,21 +90,20 @@ function check_module_directory(name, dir_name)
 end
 
 -- Global module registry
-if not _G.ATOM_MODULES then
-    _G.ATOM_MODULES = {}
-end
+local atom_modules = {}
 
 -- =============================================================================
 -- Module Inclusion Logic
 -- =============================================================================
 
 local valid_modules = {}
+local build_all = has_config("build_all")
 
 for _, module in ipairs(modules) do
-    if has_config(module) then
+    if build_all or has_config("build_" .. module) then
         if check_module_directory(module, module) then
             table.insert(valid_modules, module)
-            table.insert(_G.ATOM_MODULES, "atom-" .. module)
+            table.insert(atom_modules, "atom-" .. module)
             print("Building " .. module .. " module")
         else
             print("Skipping " .. module .. " module due to missing or invalid directory")
@@ -131,8 +112,8 @@ for _, module in ipairs(modules) do
 end
 
 -- Add tests if enabled
-if has_config("tests") then
-    if os.isdir("tests") then
+if has_config("build_tests") then
+    if os.isdir("tests") and os.isfile(path.join(os.scriptdir(), "tests", "xmake.lua")) then
         table.insert(valid_modules, "tests")
         print("Building tests")
     end
@@ -150,31 +131,45 @@ for _, module in ipairs(valid_modules) do
 end
 
 -- Include tests separately if needed
-if has_config("tests") and os.isdir("tests") then
+if has_config("build_tests") and os.isdir("tests") and os.isfile(path.join(os.scriptdir(), "tests", "xmake.lua")) then
     includes("tests")
+end
+
+-- =============================================================================
+-- Add Extra Components
+-- =============================================================================
+
+-- Add extra components directory if it exists
+if os.isdir("extra") and os.isfile(path.join("extra", "xmake.lua")) then
+    print("Adding extra components directory")
+    includes("extra")
+else
+    print("Skipping extra components directory as it does not exist or does not contain xmake.lua")
 end
 
 -- =============================================================================
 -- Create Combined Library
 -- =============================================================================
 
-if has_config("unified") and #_G.ATOM_MODULES > 0 then
+if has_config("unified") and #atom_modules > 0 then
     target("atom-unified")
         set_kind("phony")
-        
+
         -- Add all module dependencies
-        for _, module in ipairs(_G.ATOM_MODULES) do
+        for _, module in ipairs(atom_modules) do
             add_deps(module)
         end
-        
+
         after_build(function (target)
-            print("Created unified Atom library with modules: " .. table.concat(_G.ATOM_MODULES, ", "))
+            print("Created unified Atom library with modules: " .. table.concat(atom_modules, ", "))
         end)
-    
+    target_end()
+
     -- Create atom alias target
     target("atom")
         set_kind("phony")
         add_deps("atom-unified")
+    target_end()
 end
 
 -- =============================================================================
@@ -187,19 +182,19 @@ task("install-all")
         usage = "xmake install-all",
         description = "Install all Atom modules"
     }
-    
+
     on_run(function ()
-        for _, module in ipairs(_G.ATOM_MODULES) do
+        for _, module in ipairs(atom_modules) do
             os.exec("xmake install " .. module)
         end
         print("All Atom modules installed successfully")
     end)
+task_end()
 
-after_load(function ()
-    print("Atom modules configuration completed successfully")
-    if #_G.ATOM_MODULES > 0 then
-        print("Active modules: " .. table.concat(_G.ATOM_MODULES, ", "))
-    else
-        print("No modules enabled for building")
-    end
-end)
+-- Print configuration summary
+print("Atom modules configuration completed successfully")
+if #atom_modules > 0 then
+    print("Active modules: " .. table.concat(atom_modules, ", "))
+else
+    print("No modules enabled for building")
+end

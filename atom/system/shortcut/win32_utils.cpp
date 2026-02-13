@@ -1,12 +1,18 @@
 #include "win32_utils.h"
 
+#include <spdlog/spdlog.h>
 #include <algorithm>
 #include <string>
 #include <unordered_set>
 #include <vector>
-#include <spdlog/spdlog.h>
 
 // clang-format off
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #include <tlhelp32.h>
 #include <psapi.h>
@@ -19,10 +25,9 @@ namespace win32_utils {
  * @brief Known keyboard hook DLL modules commonly used by applications
  */
 static const std::unordered_set<std::string> knownHookDlls = {
-    "HOOK.DLL",         "KBDHOOK.DLL",          "KEYHOOK.DLL",  
-    "INPUTHOOK.DLL",    "WINHOOK.DLL",          "LLKEYBOARD.DLL", 
-    "KEYMAGIC.DLL",     "HOOKSPY.DLL",          "KEYBOARDHOOK.DLL", 
-    "INPUTMANAGERHOOK.DLL", "UIHOOK.DLL"};
+    "HOOK.DLL",         "KBDHOOK.DLL",          "KEYHOOK.DLL",  "INPUTHOOK.DLL",
+    "WINHOOK.DLL",      "LLKEYBOARD.DLL",       "KEYMAGIC.DLL", "HOOKSPY.DLL",
+    "KEYBOARDHOOK.DLL", "INPUTMANAGERHOOK.DLL", "UIHOOK.DLL"};
 
 std::vector<std::string> getProcessesWithKeyboardHooks() {
     std::vector<std::string> result;
@@ -33,14 +38,17 @@ std::vector<std::string> getProcessesWithKeyboardHooks() {
         return result;
     }
 
-    PROCESSENTRY32 processEntry = {sizeof(PROCESSENTRY32)};
+    PROCESSENTRY32 processEntry = {};
+    processEntry.dwSize = sizeof(PROCESSENTRY32);
 
     if (Process32First(snapshot, &processEntry)) {
         do {
             if (checkProcessForKeyboardHook(processEntry.th32ProcessID)) {
-                const std::string processName = getProcessName(processEntry.th32ProcessID);
+                const std::string processName =
+                    getProcessName(processEntry.th32ProcessID);
                 result.push_back(processName);
-                spdlog::debug("Found process with keyboard hook: {}", processName);
+                spdlog::debug("Found process with keyboard hook: {}",
+                              processName);
             }
         } while (Process32Next(snapshot, &processEntry));
     }
@@ -55,8 +63,8 @@ bool checkProcessForKeyboardHook(DWORD processId) {
         return false;
     }
 
-    const HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
-                                       FALSE, processId);
+    const HANDLE hProcess = OpenProcess(
+        PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processId);
     if (!hProcess) {
         return false;
     }
@@ -69,14 +77,16 @@ bool checkProcessForKeyboardHook(DWORD processId) {
         const DWORD moduleCount = needed / sizeof(HMODULE);
         for (DWORD i = 0; i < moduleCount; ++i) {
             char moduleName[MAX_PATH];
-            if (GetModuleFileNameExA(hProcess, modules[i], moduleName, sizeof(moduleName))) {
+            if (GetModuleFileNameExA(hProcess, modules[i], moduleName,
+                                     sizeof(moduleName))) {
                 std::string name = moduleName;
                 const size_t pos = name.find_last_of("\\/");
                 if (pos != std::string::npos) {
                     name = name.substr(pos + 1);
                 }
 
-                std::transform(name.begin(), name.end(), name.begin(), ::toupper);
+                std::transform(name.begin(), name.end(), name.begin(),
+                               ::toupper);
 
                 if (isHookingModule(name)) {
                     result = true;
@@ -93,8 +103,8 @@ bool checkProcessForKeyboardHook(DWORD processId) {
 std::string getProcessName(DWORD processId) {
     std::string result = "Unknown Process";
 
-    const HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
-                                       FALSE, processId);
+    const HANDLE hProcess = OpenProcess(
+        PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processId);
     if (hProcess) {
         char name[MAX_PATH];
         if (GetModuleFileNameExA(hProcess, NULL, name, sizeof(name))) {

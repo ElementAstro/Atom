@@ -1,0 +1,51 @@
+# CMakeLists.txt for crontab module
+
+set(ATOM_SYSTEM_CRONTAB_SOURCES
+    crontab/cron_job.cpp
+    crontab/cron_validation.cpp
+    crontab/cron_system.cpp
+    crontab/cron_storage.cpp
+    crontab/cron_manager.cpp
+    crontab/cron_manager_query.cpp
+    crontab/cron_manager_batch.cpp
+    crontab/cron_scheduler.cpp
+    crontab/cron_monitor.cpp
+    crontab/cron_security.cpp
+    crontab/cron_config.cpp
+    crontab/cron_cache.cpp
+    crontab/cron_thread_pool.cpp)
+
+set(ATOM_SYSTEM_CRONTAB_HEADERS
+    crontab/cron_types.hpp
+    crontab/cron_job.hpp
+    crontab/cron_validation.hpp
+    crontab/cron_system.hpp
+    crontab/cron_storage.hpp
+    crontab/cron_manager.hpp
+    crontab/cron_manager_types.hpp
+    crontab/cron_manager_query.hpp
+    crontab/cron_manager_batch.hpp
+    crontab/cron_scheduler.hpp
+    crontab/cron_monitor.hpp
+    crontab/cron_monitor_types.hpp
+    crontab/cron_security.hpp
+    crontab/cron_security_types.hpp
+    crontab/cron_config.hpp
+    crontab/cron_event_types.hpp
+    crontab/cron_metrics_types.hpp
+    crontab/cron_cache.hpp
+    crontab/cron_thread_pool.hpp)
+
+# Add sources to parent target
+target_sources(atom-static PRIVATE ${ATOM_SYSTEM_CRONTAB_SOURCES})
+target_sources(atom-shared PRIVATE ${ATOM_SYSTEM_CRONTAB_SOURCES})
+
+# Install headers
+install(FILES ${ATOM_SYSTEM_CRONTAB_HEADERS}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/system/crontab)
+
+# Add tests subdirectory
+option(BUILD_CRON_TESTS "Build cron system tests" ON)
+if(BUILD_CRON_TESTS AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  add_subdirectory(tests)
+endif()

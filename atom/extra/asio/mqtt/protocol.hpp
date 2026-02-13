@@ -1,7 +1,7 @@
 #pragma once
 
-#include <asio.hpp>
-#include <asio/ssl.hpp>
+#include <span>
+#include "../asio_compatibility.hpp"
 #include "types.hpp"
 
 /**
@@ -108,14 +108,14 @@ public:
  */
 class TCPTransport : public ITransport {
 private:
-    asio::ip::tcp::socket socket_;  ///< Underlying TCP socket.
+    tcp::socket socket_;  ///< Underlying TCP socket.
 
 public:
     /**
      * @brief Construct a TCPTransport with the given io_context.
      * @param io_context The ASIO I/O context to use.
      */
-    explicit TCPTransport(asio::io_context& io_context) : socket_(io_context) {}
+    explicit TCPTransport(net::io_context& io_context) : socket_(io_context) {}
 
     /**
      * @copydoc ITransport::async_connect
@@ -149,31 +149,31 @@ public:
 inline void TCPTransport::async_connect(
     const std::string& host, uint16_t port,
     std::function<void(ErrorCode)> callback) {
-    asio::ip::tcp::resolver resolver(socket_.get_executor());
+    tcp::resolver resolver(socket_.get_executor());
     resolver.async_resolve(
         host, std::to_string(port),
         [this, callback = std::move(callback)](
             const std::error_code& resolve_ec,
-            const asio::ip::tcp::resolver::results_type& results) {
+            const tcp::resolver::results_type& results) {
             if (resolve_ec) {
                 callback(ErrorCode::SERVER_UNAVAILABLE);
                 return;
             }
-            asio::async_connect(socket_, results,
-                                [callback](const std::error_code& connect_ec,
-                                           const asio::ip::tcp::endpoint&) {
-                                    callback(connect_ec
-                                                 ? ErrorCode::SERVER_UNAVAILABLE
-                                                 : ErrorCode::SUCCESS);
-                                });
+            net::async_connect(socket_, results,
+                               [callback](const std::error_code& connect_ec,
+                                          const tcp::endpoint&) {
+                                   callback(connect_ec
+                                                ? ErrorCode::SERVER_UNAVAILABLE
+                                                : ErrorCode::SUCCESS);
+                               });
         });
 }
 
 inline void TCPTransport::async_write(
     std::span<const uint8_t> data,
     std::function<void(ErrorCode, size_t)> callback) {
-    asio::async_write(
-        socket_, asio::buffer(data.data(), data.size()),
+    net::async_write(
+        socket_, net::buffer(data.data(), data.size()),
         [callback = std::move(callback)](const std::error_code& ec,
                                          size_t bytes_transferred) {
             callback(ec ? ErrorCode::UNSPECIFIED_ERROR : ErrorCode::SUCCESS,
@@ -185,7 +185,7 @@ inline void TCPTransport::async_read(
     std::span<uint8_t> buffer,
     std::function<void(ErrorCode, size_t)> callback) {
     socket_.async_read_some(
-        asio::buffer(buffer.data(), buffer.size()),
+        net::buffer(buffer.data(), buffer.size()),
         [callback = std::move(callback)](const std::error_code& ec,
                                          size_t bytes_transferred) {
             callback(ec ? ErrorCode::UNSPECIFIED_ERROR : ErrorCode::SUCCESS,
@@ -195,11 +195,12 @@ inline void TCPTransport::async_read(
 
 inline void TCPTransport::close() {
     std::error_code ec;
-    auto res = socket_.close(ec);
+    socket_.close(ec);
 }
 
 inline bool TCPTransport::is_open() const { return socket_.is_open(); }
 
+#ifdef USE_SSL
 /**
  * @class TLSTransport
  * @brief Concrete implementation of ITransport using SSL/TLS over TCP.
@@ -209,8 +210,7 @@ inline bool TCPTransport::is_open() const { return socket_.is_open(); }
  */
 class TLSTransport : public ITransport {
 private:
-    asio::ssl::stream<asio::ip::tcp::socket>
-        ssl_socket_;  ///< Underlying SSL/TLS socket.
+    ssl::stream<tcp::socket> ssl_socket_;  ///< Underlying SSL/TLS socket.
 
 public:
     /**
@@ -219,7 +219,7 @@ public:
      * @param io_context The ASIO I/O context to use.
      * @param ssl_context The ASIO SSL context to use.
      */
-    TLSTransport(asio::io_context& io_context, asio::ssl::context& ssl_context)
+    TLSTransport(net::io_context& io_context, ssl_context& ssl_context)
         : ssl_socket_(io_context, ssl_context) {}
 
     /**
@@ -254,27 +254,27 @@ public:
 inline void TLSTransport::async_connect(
     const std::string& host, uint16_t port,
     std::function<void(ErrorCode)> callback) {
-    asio::ip::tcp::resolver resolver(ssl_socket_.get_executor());
+    tcp::resolver resolver(ssl_socket_.get_executor());
     resolver.async_resolve(
         host, std::to_string(port),
         [this, host, callback = std::move(callback)](
             const std::error_code& resolve_ec,
-            const asio::ip::tcp::resolver::results_type& results) {
+            const tcp::resolver::results_type& results) {
             if (resolve_ec) {
                 callback(ErrorCode::SERVER_UNAVAILABLE);
                 return;
             }
-            asio::async_connect(
+            net::async_connect(
                 ssl_socket_.lowest_layer(), results,
                 [this, host, callback](const std::error_code& connect_ec,
-                                       const asio::ip::tcp::endpoint&) {
+                                       const tcp::endpoint&) {
                     if (connect_ec) {
                         callback(ErrorCode::SERVER_UNAVAILABLE);
                         return;
                     }
                     // Perform SSL handshake
                     ssl_socket_.async_handshake(
-                        asio::ssl::stream_base::client,
+                        ssl::stream_base::client,
                         [callback](const std::error_code& handshake_ec) {
                             callback(handshake_ec ? ErrorCode::NOT_AUTHORIZED
                                                   : ErrorCode::SUCCESS);
@@ -286,8 +286,8 @@ inline void TLSTransport::async_connect(
 inline void TLSTransport::async_write(
     std::span<const uint8_t> data,
     std::function<void(ErrorCode, size_t)> callback) {
-    asio::async_write(
-        ssl_socket_, asio::buffer(data.data(), data.size()),
+    net::async_write(
+        ssl_socket_, net::buffer(data.data(), data.size()),
         [callback = std::move(callback)](const std::error_code& ec,
                                          size_t bytes_transferred) {
             callback(ec ? ErrorCode::UNSPECIFIED_ERROR : ErrorCode::SUCCESS,
@@ -299,7 +299,7 @@ inline void TLSTransport::async_read(
     std::span<uint8_t> buffer,
     std::function<void(ErrorCode, size_t)> callback) {
     ssl_socket_.async_read_some(
-        asio::buffer(buffer.data(), buffer.size()),
+        net::buffer(buffer.data(), buffer.size()),
         [callback = std::move(callback)](const std::error_code& ec,
                                          size_t bytes_transferred) {
             callback(ec ? ErrorCode::UNSPECIFIED_ERROR : ErrorCode::SUCCESS,
@@ -309,11 +309,12 @@ inline void TLSTransport::async_read(
 
 inline void TLSTransport::close() {
     std::error_code ec;
-    auto res = ssl_socket_.lowest_layer().close(ec);
+    ssl_socket_.lowest_layer().close(ec);
 }
 
 inline bool TLSTransport::is_open() const {
     return ssl_socket_.lowest_layer().is_open();
 }
+#endif  // USE_SSL
 
 }  // namespace mqtt

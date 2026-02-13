@@ -5,11 +5,17 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(uuid, m) {
     m.doc() = "UUID module for the atom package";
+
+    m.attr("UUID_SIZE") = atom::extra::boost::UUID_SIZE;
+    m.attr("BASE64_RESERVE_SIZE") = atom::extra::boost::BASE64_RESERVE_SIZE;
+    m.attr("BASE64_ENCODED_SIZE") = atom::extra::boost::BASE64_ENCODED_SIZE;
+    m.attr("TIMESTAMP_DIVISOR") = atom::extra::boost::TIMESTAMP_DIVISOR;
+    m.attr("UUID_EPOCH") = atom::extra::boost::UUID_EPOCH;
+    m.attr("HAS_V1") = ATOM_EXTRA_BOOST_UUID_HAS_V1;
 
     // Register exception translations
     py::register_exception_translator([](std::exception_ptr p) {
@@ -42,7 +48,7 @@ Examples:
     >>> id1 = uuid.UUID()
     >>> print(id1.to_string())
     550e8400-e29b-41d4-a716-446655440000
-    
+
     >>> # Create UUID from string
     >>> id2 = uuid.UUID("550e8400-e29b-41d4-a716-446655440000")
     >>> print(id2.format())

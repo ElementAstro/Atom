@@ -1,0 +1,105 @@
+# Atom Project - Development Guidelines
+
+## Project Overview
+
+**Atom** is a C++20/C++23 foundational library for astronomical software. This document provides AI assistants with development rules and context.
+
+## Project Structure
+
+- `atom/` — C++ core library, organized by domain (algorithm, async, io, etc.)
+- `python/` — Pybind11 bindings and the `atom` Python package
+- `tests/` — GoogleTest test suite (CMake/CTest integration)
+- `docs/` — Sphinx documentation; `doc/` — Doxygen configuration
+- `cmake/`, `scripts/`, `example/`, `extra/` — Build infrastructure
+
+## Build Commands
+
+```bash
+# CMake presets (primary)
+cmake --preset release && cmake --build --preset release -j
+
+# Tests
+cmake --preset debug && cmake --build --preset debug -j && ctest --preset default --output-on-failure
+
+# Scripts
+./scripts/build.sh --release --tests    # Unix
+scripts\build.bat --release --tests     # Windows
+```
+
+## Coding Style
+
+### C++ Conventions
+
+- **Indentation**: 4 spaces, 80-column soft limit
+- **Format**: clang-format (see `.clang-format`)
+- **Naming**:
+  - Variables/functions: `snake_case`
+  - Classes/namespaces: `PascalCase`
+  - Constants: `UPPER_SNAKE_CASE`
+  - Private members: `trailing_underscore_`
+  - Files: `lower_snake_case.[cpp|hpp]`
+- **Documentation**: Doxygen comments for public APIs
+
+### Python Conventions
+
+- Black (88 cols), isort, Ruff, MyPy
+- Run: `pre-commit run -a`
+
+## Module Development
+
+### Adding New Code
+
+1. Select appropriate module under `atom/`
+2. Add headers in module root or subdirectories
+3. Update module's `CMakeLists.txt`
+4. Add tests under `tests/<module>/`
+5. Add examples under `example/<module>/`
+6. Update `CLAUDE.md` if needed
+
+### Dependencies
+
+- Check `cmake/ModuleDependenciesData.cmake` before changes
+- Use `find_package()` with `QUIET` for optional deps
+- Conditionally compile with `#ifdef` checks
+
+## Testing Guidelines
+
+- Use GoogleTest; place tests under `tests/<module>/`
+- Run via CTest: `ctest -R <module>_.*`
+- Include edge cases and failure paths
+- Aim to keep coverage healthy
+
+## Error Handling
+
+```cpp
+#include "atom/error/error.hpp"
+
+try {
+    // Your code
+} catch (const atom::error::Exception& e) {
+    ATOM_ERROR("Operation failed: {}", e.what());
+}
+```
+
+## Logging
+
+```cpp
+#include "atom/log/log.hpp"
+
+ATOM_INFO("Processing: {}", filename);
+ATOM_WARN("High memory: {} MB", usage);
+ATOM_ERROR("Failed: {}", error);
+```
+
+## Commit Guidelines
+
+- Short imperative subject (≤72 chars)
+- Descriptive body when needed
+- Reference issues (`#123`)
+- Ensure `pre-commit` passes and CI is green
+
+## Security
+
+- Never commit secrets; use env vars
+- Requires CMake ≥3.21, modern compiler (MSVC 2022/GCC/Clang)
+- C/C++ deps via vcpkg/Conan; Python ≥3.8

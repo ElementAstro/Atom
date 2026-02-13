@@ -16,15 +16,14 @@
 
 #include "atom/memory/short_alloc.hpp"
 
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
 }
 
-// Helper function to measure execution time
-template <typename Func>
+// Helper function to measure execution timetemplate <typename Func>
 double measureTime(Func&& func) {
     auto start = std::chrono::high_resolution_clock::now();
     func();
@@ -33,78 +32,78 @@ double measureTime(Func&& func) {
     return duration.count();
 }
 
-// Small class for allocation testing
-class TestObject {
+// Small class for allocation testingclass TestObject {
 public:
-    TestObject() : value_(0), data_() { constructionCount++; }
+TestObject() : value_(0), data_() { constructionCount++; }
 
-    explicit TestObject(int val) : value_(val), data_() {
-        std::fill(data_.begin(), data_.end(), static_cast<char>(val % 256));
-        constructionCount++;
-    }
+explicit TestObject(int val) : value_(val), data_() {
+    std::fill(data_.begin(), data_.end(), static_cast<char>(val % 256));
+    constructionCount++;
+}
 
-    ~TestObject() { destructionCount++; }
+~TestObject() { destructionCount++; }
 
-    int getValue() const { return value_; }
+int getValue() const { return value_; }
 
-    void setValue(int value) {
-        value_ = value;
-        std::fill(data_.begin(), data_.end(), static_cast<char>(value % 256));
-    }
+void setValue(int value) {
+    value_ = value;
+    std::fill(data_.begin(), data_.end(), static_cast<char>(value % 256));
+}
 
-    static void resetCounters() {
-        constructionCount = 0;
-        destructionCount = 0;
-    }
+static void resetCounters() {
+    constructionCount = 0;
+    destructionCount = 0;
+}
 
-    static int getConstructionCount() { return constructionCount; }
-    static int getDestructionCount() { return destructionCount; }
+static int getConstructionCount() { return constructionCount; }
+static int getDestructionCount() { return destructionCount; }
 
 private:
-    int value_;
-    std::array<char, 128> data_;  // Make the object reasonably sized
+int value_;
+std::array<char, 128> data_;  // Make the object reasonably sized
 
-    static inline int constructionCount = 0;
-    static inline int destructionCount = 0;
-};
+static inline int constructionCount = 0;
+static inline int destructionCount = 0;
+}
+;
 
-// Large object for testing different allocation sizes
-class LargeObject {
+// Large object for testing different allocation sizesclass LargeObject {
 public:
-    LargeObject() : data_(1024, 0) {}
-    explicit LargeObject(int val) : data_(1024, static_cast<char>(val % 256)) {}
+LargeObject() : data_(1024, 0) {}
+explicit LargeObject(int val) : data_(1024, static_cast<char>(val % 256)) {}
 
-    std::vector<char>& getData() { return data_; }
-    const std::vector<char>& getData() const { return data_; }
+std::vector<char>& getData() { return data_; }
+const std::vector<char>& getData() const { return data_; }
 
 private:
-    std::vector<char> data_;  // 1KB of data
-};
+std::vector<char> data_;  // 1KB of data
+}
+;
 
-// Custom structure to test with Arena directly
-struct CustomStruct {
-    int id;
-    double values[16];
-    char name[64];
-    bool active;
+// Custom structure to test with Arena directlystruct CustomStruct {
+int id;
+double values[16];
+char name[64];
+bool active;
 
-    CustomStruct() : id(0), active(false) {
-        std::fill_n(values, 16, 0.0);
-        std::fill_n(name, 64, '\0');
-    }
+CustomStruct() : id(0), active(false) {
+    std::fill_n(values, 16, 0.0);
+    std::fill_n(name, 64, '\0');
+}
 
-    CustomStruct(int i, const std::string& n) : id(i), active(true) {
-        std::fill_n(values, 16, static_cast<double>(i));
-        std::strncpy(name, n.c_str(), 63);
-        name[63] = '\0';  // Ensure null termination
-    }
+CustomStruct(int i, const std::string& n) : id(i), active(true) {
+    std::fill_n(values, 16, static_cast<double>(i));
+    std::strncpy(name, n.c_str(), 63);
+    name[63] = '\0';  // Ensure null termination
+}
 
-    void print() const {
-        std::cout << "CustomStruct { id: " << id << ", name: \"" << name
-                  << "\", active: " << (active ? "true" : "false") << " }"
-                  << std::endl;
-    }
-};
+void print() const {
+    std::cout << "CustomStruct { id: " << id << ", name: \"" << name
+              << "\", active: " << (active ? "true" : "false") << " }"
+              << std::endl;
+}
+}
+;
 
 int main() {
     std::cout << "SHORT ALLOCATOR COMPREHENSIVE EXAMPLES\n";
@@ -184,11 +183,11 @@ int main() {
     constexpr size_t ContainerArenaSize = 32 * 1024;
     atom::memory::Arena<ContainerArenaSize> containerArena;
 
-    // Create vector using ShortAlloc - 修复括号初始化语法
+    // Create vector using ShortAlloc
     std::cout << "Creating vector with ShortAlloc..." << std::endl;
     using IntVectorAlloc = atom::memory::ShortAlloc<int, ContainerArenaSize>;
     std::vector<int, IntVectorAlloc> shortVector{
-        IntVectorAlloc(containerArena)};
+        IntVectorAlloc{containerArena}};
 
     // Add elements to vector
     std::cout << "Adding elements to vector..." << std::endl;
@@ -201,11 +200,11 @@ int main() {
     std::cout << "Arena used after vector allocation: " << containerArena.used()
               << " bytes" << std::endl;
 
-    // Create a string using ShortAlloc - 修复括号初始化语法
+    // Create a string using ShortAlloc
     std::cout << "\nCreating string with ShortAlloc..." << std::endl;
     using CharAlloc = atom::memory::ShortAlloc<char, ContainerArenaSize>;
     std::basic_string<char, std::char_traits<char>, CharAlloc> shortString{
-        CharAlloc(containerArena)};
+        CharAlloc{containerArena}};
 
     // Set string value
     shortString =
@@ -215,12 +214,12 @@ int main() {
     std::cout << "Arena used after string allocation: " << containerArena.used()
               << " bytes" << std::endl;
 
-    // Create a map using ShortAlloc - 修复括号初始化语法
+    // Create a map using ShortAlloc
     std::cout << "\nCreating map with ShortAlloc..." << std::endl;
     using MapAlloc = atom::memory::ShortAlloc<std::pair<const int, std::string>,
                                               ContainerArenaSize>;
     std::map<int, std::string, std::less<int>, MapAlloc> shortMap{
-        MapAlloc(containerArena)};
+        MapAlloc{containerArena}};
 
     // Add elements to map
     std::cout << "Adding elements to map..." << std::endl;
@@ -742,11 +741,11 @@ int main() {
 
     std::cout << "  Time taken: " << stdTime << " ms" << std::endl;
 
-    // Test vector with short allocator - 修复括号初始化语法
+    // Test vector with short allocator
     std::cout << "\nShortAlloc allocator:" << std::endl;
     double shortTime = measureTime([&]() {
         std::vector<TestObject, PerfObjectAlloc> shortVector{
-            PerfObjectAlloc(perfArena)};
+            PerfObjectAlloc{perfArena}};
         shortVector.reserve(numElements);
 
         for (int i = 0; i < numElements; ++i) {
@@ -825,22 +824,22 @@ int main() {
     using MapPairAlloc =
         atom::memory::ShortAlloc<std::pair<const ShortString, LargeObject>,
                                  AdvancedArenaSize>;
-    // String with custom allocator - 修复括号初始化语法
+    // String with custom allocator
     std::cout << "Creating strings with ShortAlloc..." << std::endl;
 
-    ShortString str1{StringAlloc(advancedArena)};
+    ShortString str1{StringAlloc{advancedArena}};
     str1 = "This is a string with a custom allocator";
 
-    ShortString str2{StringAlloc(advancedArena)};
+    ShortString str2{StringAlloc{advancedArena}};
     str2 = "This is another string with the same arena";
 
     std::cout << "String 1: " << str1 << std::endl;
     std::cout << "String 2: " << str2 << std::endl;
 
-    // Vector of large objects - 修复括号初始化语法
+    // Vector of large objects
     std::cout << "\nCreating vector of large objects..." << std::endl;
     std::vector<LargeObject, VectorAlloc> largeVector{
-        VectorAlloc(advancedArena)};
+        VectorAlloc{advancedArena}};
 
     for (int i = 0; i < 10; ++i) {
         largeVector.emplace_back(i);
@@ -850,23 +849,23 @@ int main() {
     std::cout << "First element data size: " << largeVector[0].getData().size()
               << " bytes" << std::endl;
 
-    // Map with custom strings and large objects - 修复括号初始化语法
+    // Map with custom strings and large objects
     std::cout << "\nCreating map with custom strings and large objects..."
               << std::endl;
 
     std::map<ShortString, LargeObject, std::less<ShortString>, MapPairAlloc>
-        complexMap{MapPairAlloc(advancedArena)};
+        complexMap{MapPairAlloc{advancedArena}};
 
-    complexMap[ShortString("key1", StringAlloc(advancedArena))] =
+    complexMap[ShortString{"key1", StringAlloc{advancedArena}}] =
         LargeObject(1);
-    complexMap[ShortString("key2", StringAlloc(advancedArena))] =
+    complexMap[ShortString{"key2", StringAlloc{advancedArena}}] =
         LargeObject(2);
-    complexMap[ShortString("key3", StringAlloc(advancedArena))] =
+    complexMap[ShortString{"key3", StringAlloc{advancedArena}}] =
         LargeObject(3);
 
     std::cout << "Map size: " << complexMap.size() << std::endl;
 
-    // Create a nested data structure - 修复括号初始化语法
+    // Create a nested data structure
     std::cout << "\nCreating nested data structure..." << std::endl;
 
     using NestedVectorAlloc = atom::memory::ShortAlloc<
@@ -876,12 +875,12 @@ int main() {
     std::vector<
         std::vector<int, atom::memory::ShortAlloc<int, AdvancedArenaSize>>,
         NestedVectorAlloc>
-        nestedVector{NestedVectorAlloc(advancedArena)};
+        nestedVector{NestedVectorAlloc{advancedArena}};
 
     for (int i = 0; i < 5; ++i) {
         std::vector<int, atom::memory::ShortAlloc<int, AdvancedArenaSize>>
-            innerVec{atom::memory::ShortAlloc<int, AdvancedArenaSize>(
-                advancedArena)};
+            innerVec{atom::memory::ShortAlloc<int, AdvancedArenaSize>{
+                advancedArena}};
 
         for (int j = 0; j < 5; ++j) {
             innerVec.push_back(i * 10 + j);

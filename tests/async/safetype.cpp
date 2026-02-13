@@ -1,8 +1,9 @@
 #include "atom/async/safetype.hpp"
+
 #include <gtest/gtest.h>
-#include <algorithm>
 #include <thread>
 #include <vector>
+#include "exception.hpp"
 
 using namespace atom::async;
 
@@ -226,27 +227,28 @@ TEST_F(LockFreeHashTableTest, ConcurrentInsertAndFind) {
     }
 }
 
-TEST_F(LockFreeHashTableTest, Iterator) {
-    table.insert(1, "one");
-    table.insert(2, "two");
-    table.insert(3, "three");
+// LockFreeHashTable does not provide standard iterators.
+// TEST_F(LockFreeHashTableTest, Iterator) {
+//     table.insert(1, "one");
+//     table.insert(2, "two");
+//     table.insert(3, "three");
 
-    auto it = table.begin();
-    std::vector<std::pair<int, std::string>> elements;
-    while (it != table.end()) {
-        elements.push_back(*it);
-        ++it;
-    }
+//     auto it = table.begin();
+//     std::vector<std::pair<int, std::string>> elements;
+//     while (it != table.end()) {
+//         elements.push_back(*it);
+//         ++it;
+//     }
 
-    std::vector<std::pair<int, std::string>> expected = {
-        {1, "one"}, {2, "two"}, {3, "three"}};
+//     std::vector<std::pair<int, std::string>> expected = {
+//         {1, "one"}, {2, "two"}, {3, "three"}};
 
-    EXPECT_EQ(elements.size(), expected.size());
-    for (const auto& elem : expected) {
-        EXPECT_NE(std::find(elements.begin(), elements.end(), elem),
-                  elements.end());
-    }
-}
+//     EXPECT_EQ(elements.size(), expected.size());
+//     for (const auto& elem : expected) {
+//         EXPECT_NE(std::find(elements.begin(), elements.end(), elem),
+//                   elements.end());
+//     }
+// }
 
 class ThreadSafeVectorTest : public ::testing::Test {
 protected:
@@ -293,20 +295,13 @@ TEST_F(ThreadSafeVectorTest, AtMethod) {
     vec.pushBack(2);
     vec.pushBack(3);
 
-    auto value = vec.at(0);
-    ASSERT_TRUE(value.has_value());
-    EXPECT_EQ(value.value(), 1);
+    // The 'at' method returns T and throws on error, not std::optional
+    EXPECT_EQ(vec.at(0), 1);
+    EXPECT_EQ(vec.at(1), 2);
+    EXPECT_EQ(vec.at(2), 3);
 
-    value = vec.at(1);
-    ASSERT_TRUE(value.has_value());
-    EXPECT_EQ(value.value(), 2);
-
-    value = vec.at(2);
-    ASSERT_TRUE(value.has_value());
-    EXPECT_EQ(value.value(), 3);
-
-    value = vec.at(3);
-    EXPECT_FALSE(value.has_value());
+    // Test out of bounds access throws
+    EXPECT_THROW(vec.at(3), atom::error::OutOfRange);
 }
 
 TEST_F(ThreadSafeVectorTest, Clear) {
@@ -459,20 +454,21 @@ TEST_F(LockFreeListTest, PopFront) {
     EXPECT_FALSE(value.has_value());
 }
 
-TEST_F(LockFreeListTest, Iterator) {
-    list.pushFront(1);
-    list.pushFront(2);
-    list.pushFront(3);
+// LockFreeList does not provide standard iterators.
+// TEST_F(LockFreeListTest, Iterator) {
+//     list.pushFront(1);
+//     list.pushFront(2);
+//     list.pushFront(3);
 
-    auto it = list.begin();
-    EXPECT_EQ(*it, 3);
-    ++it;
-    EXPECT_EQ(*it, 2);
-    ++it;
-    EXPECT_EQ(*it, 1);
-    ++it;
-    EXPECT_EQ(it, list.end());
-}
+//     auto it = list.begin();
+//     EXPECT_EQ(*it, 3);
+//     ++it;
+//     EXPECT_EQ(*it, 2);
+//     ++it;
+//     EXPECT_EQ(*it, 1);
+//     ++it;
+//     EXPECT_EQ(it, list.end());
+// }
 
 TEST_F(LockFreeListTest, ConcurrentPushAndPop) {
     const int numThreads = 4;
@@ -511,7 +507,8 @@ TEST_F(LockFreeListTest, FrontEmptyList) {
     EXPECT_FALSE(value.has_value());
 }
 
-TEST_F(LockFreeListTest, IterateEmptyList) {
-    auto it = list.begin();
-    EXPECT_EQ(it, list.end());
-}
+// LockFreeList does not provide standard iterators.
+// TEST_F(LockFreeListTest, IterateEmptyList) {
+//     auto it = list.begin();
+//     EXPECT_EQ(it, list.end());
+// }

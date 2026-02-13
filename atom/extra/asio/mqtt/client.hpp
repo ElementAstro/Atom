@@ -1,7 +1,5 @@
 #pragma once
 
-#include <asio.hpp>
-#include <asio/ssl.hpp>
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -9,10 +7,10 @@
 #include <shared_mutex>
 #include <thread>
 #include <unordered_map>
+#include "../asio_compatibility.hpp"
 #include "packet.hpp"
 #include "protocol.hpp"
 #include "types.hpp"
-
 
 /**
  * @file client.hpp
@@ -45,10 +43,12 @@ namespace mqtt {
 class Client {
 private:
     // Core components
-    asio::io_context
+    net::io_context
         io_context_;  ///< ASIO I/O context for all async operations.
-    std::unique_ptr<asio::ssl::context>
+#ifdef USE_SSL
+    std::unique_ptr<ssl_context>
         ssl_context_;  ///< SSL context for TLS connections.
+#endif
     std::unique_ptr<ITransport>
         transport_;  ///< Network transport (TCP or TLS).
     std::unique_ptr<std::thread>
@@ -79,9 +79,9 @@ private:
                                  ///< callback.
 
     // Keep-alive mechanism
-    std::unique_ptr<asio::steady_timer>
+    std::unique_ptr<net::steady_timer>
         keep_alive_timer_;  ///< Timer for keep-alive interval.
-    std::unique_ptr<asio::steady_timer>
+    std::unique_ptr<net::steady_timer>
         ping_timeout_timer_;  ///< Timer for ping response timeout.
     std::chrono::steady_clock::time_point
         last_packet_received_;  ///< Timestamp of last received packet.
@@ -99,7 +99,7 @@ private:
     BinaryBuffer packet_buffer_;  ///< Buffer for assembling packets.
 
     // Reconnection logic
-    std::unique_ptr<asio::steady_timer>
+    std::unique_ptr<net::steady_timer>
         reconnect_timer_;  ///< Timer for reconnection attempts.
     std::chrono::seconds reconnect_delay_{1};  ///< Current reconnect delay.
     static constexpr std::chrono::seconds MAX_RECONNECT_DELAY{
@@ -349,9 +349,9 @@ public:
 
     /**
      * @brief Get a reference to the underlying ASIO IO context.
-     * @return Reference to asio::io_context.
+     * @return Reference to net::io_context.
      */
-    [[nodiscard]] asio::io_context& get_io_context() noexcept {
+    [[nodiscard]] net::io_context& get_io_context() noexcept {
         return io_context_;
     }
 

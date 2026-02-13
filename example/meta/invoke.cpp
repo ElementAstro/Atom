@@ -25,40 +25,39 @@
 using namespace std::chrono_literals;
 using namespace atom::meta;
 
-// Simple class for member function examples
-class Calculator {
+// Simple class for member function examplesclass Calculator {
 public:
-    Calculator(int base = 0) : base_value(base) {}
+Calculator(int base = 0) : base_value(base) {}
 
-    int add(int a, int b) const { return a + b + base_value; }
+int add(int a, int b) const { return a + b + base_value; }
 
-    int subtract(int a, int b) {
-        call_count++;
-        return a - b - base_value;
-    }
-
-    static int multiply(int a, int b) { return a * b; }
-
-    int get_call_count() const { return call_count; }
-
-    int base_value{0};
-
-private:
-    int call_count{0};
-};
-
-// Function with custom validation
-bool is_valid_input(int a, int b) { return a >= 0 && b >= 0; }
-
-// Helper to print a section divider
-void print_section(const std::string& title) {
-    std::cout << "\n==================================================\n";
-    std::cout << "  " << title;
-    std::cout << "\n==================================================\n";
+int subtract(int a, int b) {
+    call_count++;
+    return a - b - base_value;
 }
 
-// Forward declarations for organization
-void demo_basic_invocation();
+static int multiply(int a, int b) { return a * b; }
+
+int get_call_count() const { return call_count; }
+
+int base_value{0};
+
+private:
+int call_count{0};
+}
+;
+
+// Function with custom validationbool is_valid_input(int a, int b) { return a
+// >= 0 && b >= 0; }
+
+// Helper to print a section dividervoid print_section(const std::string& title)
+// {
+std::cout << "\n==================================================\n";
+std::cout << "  " << title;
+std::cout << "\n==================================================\n";
+}
+
+// Forward declarations for organizationvoid demo_basic_invocation();
 void demo_error_handling();
 void demo_memoization_caching();
 void demo_parallel_async();
@@ -66,26 +65,25 @@ void demo_transformation_composition();
 void demo_timeout_retry();
 void demo_instrumentation();
 
-// Main function to run all examples
-int main() {
-    std::cout << "=== atom::meta::invoke Utility Functions Examples ===\n";
+// Main function to run all examplesint main() {
+std::cout << "=== atom::meta::invoke Utility Functions Examples ===\n";
 
-    try {
-        demo_basic_invocation();
-        demo_error_handling();
-        demo_memoization_caching();
-        demo_parallel_async();
-        demo_transformation_composition();
-        demo_timeout_retry();
-        demo_instrumentation();
+try {
+    demo_basic_invocation();
+    demo_error_handling();
+    demo_memoization_caching();
+    demo_parallel_async();
+    demo_transformation_composition();
+    demo_timeout_retry();
+    demo_instrumentation();
 
-        std::cout << "\nAll examples completed successfully!\n";
-    } catch (const std::exception& e) {
-        std::cerr << "\nException caught in main: " << e.what() << std::endl;
-        return 1;
-    }
+    std::cout << "\nAll examples completed successfully!\n";
+} catch (const std::exception& e) {
+    std::cerr << "\nException caught in main: " << e.what() << std::endl;
+    return 1;
+}
 
-    return 0;
+return 0;
 }
 
 //==============================================================================
@@ -155,15 +153,15 @@ void demo_basic_invocation() {
                   << " (includes base value 3)\n";
     }
 
-    // Example 5: delayStaticMemInvoke with static member function
-    std::cout << "\n1.5 delayStaticMemInvoke with static member function\n";
+    // Example 5: delayed call for static member function
+    std::cout << "\n1.5 delayed static member function call\n";
     {
         // Create a delayed static member function invocation
-        auto delayed_multiply =
-            delayStaticMemInvoke<int, int, int>(&Calculator::multiply);
+        // Create a delayed static member function invocation with captured args
+        auto delayed_multiply = delayInvoke(&Calculator::multiply, 6, 7);
 
-        // Call the delayed function
-        int result = delayed_multiply(6, 7);
+        // Call the delayed function (no args needed; they were captured)
+        int result = delayed_multiply();
 
         std::cout << "  Delayed Calculator::multiply(6, 7) = " << result
                   << "\n";
@@ -244,13 +242,16 @@ void demo_error_handling() {
             return static_cast<double>(a) / b;
         };
 
-        double result1 = safeCall(divide, 10, 2);
-        std::cout << "  safeCall(divide, 10, 2) = " << result1 << "\n";
+        auto result1 = safeCall(divide, 10, 2);
+        std::cout << "  safeCall(divide, 10, 2) has value: "
+                  << result1.has_value() << "\n";
+        if (result1) {
+            std::cout << "  Value: " << result1.value() << "\n";
+        }
 
-        double result2 = safeCall(
-            divide, 10, 0);  // This would throw, but safeCall returns 0.0
-        std::cout << "  safeCall(divide, 10, 0) = " << result2
-                  << " (default constructed value)\n";
+        auto result2 = safeCall(divide, 10, 0);
+        std::cout << "  safeCall(divide, 10, 0) has value: "
+                  << result2.has_value() << "\n";
     }
 
     // Example 2: safeCallResult - returns Result<T>
@@ -263,15 +264,15 @@ void demo_error_handling() {
             return static_cast<double>(a) / b;
         };
 
-        auto result1 = safeCallResult(divide, 10, 2);
-        std::cout << "  safeCallResult(divide, 10, 2) has value: "
+        auto result1 = safeCall(divide, 10, 2);
+        std::cout << "  safeCall(divide, 10, 2) has value: "
                   << result1.has_value() << "\n";
         if (result1.has_value()) {
             std::cout << "  Value: " << result1.value() << "\n";
         }
 
-        auto result2 = safeCallResult(divide, 10, 0);
-        std::cout << "  safeCallResult(divide, 10, 0) has value: "
+        auto result2 = safeCall(divide, 10, 0);
+        std::cout << "  safeCall(divide, 10, 0) has value: "
                   << result2.has_value() << "\n";
         if (!result2.has_value()) {
             std::cout << "  Error occurred\n";
@@ -289,18 +290,22 @@ void demo_error_handling() {
             return static_cast<double>(a) / b;
         };
 
-        auto result1 = safeTryCatch(divide, 10, 2);
-        if (std::holds_alternative<double>(result1)) {
-            std::cout << "  safeTryCatch(divide, 10, 2) = "
-                      << std::get<double>(result1) << "\n";
+        auto diag1 = safeTryWithDiagnostics(divide, "divide", 10, 2);
+        if (std::holds_alternative<double>(diag1)) {
+            std::cout << "  safeTryWithDiagnostics(divide, 10, 2) = "
+                      << std::get<double>(diag1) << "\n";
         }
 
-        auto result2 = safeTryCatch(divide, 10, 0);
-        if (std::holds_alternative<std::exception_ptr>(result2)) {
+        auto diag2 = safeTryWithDiagnostics(divide, "divide", 10, 0);
+        if (std::holds_alternative<
+                std::pair<std::exception_ptr, FunctionCallInfo>>(diag2)) {
             try {
-                std::rethrow_exception(std::get<std::exception_ptr>(result2));
+                std::rethrow_exception(
+                    std::get<std::pair<std::exception_ptr, FunctionCallInfo>>(
+                        diag2)
+                        .first);
             } catch (const std::exception& e) {
-                std::cout << "  safeTryCatch(divide, 10, 0) caught: "
+                std::cout << "  safeTryWithDiagnostics(divide, 10, 0) caught: "
                           << e.what() << "\n";
             }
         }
@@ -345,18 +350,17 @@ void demo_error_handling() {
             return static_cast<double>(a) / b;
         };
 
-        double result1 = safeTryCatchOrDefault(divide, -1.0, 10, 2);
-        std::cout << "  safeTryCatchOrDefault(divide, -1.0, 10, 2) = "
-                  << result1 << "\n";
+        double result1 = safeTryOrDefault(divide, -1.0, 10, 2);
+        std::cout << "  safeTryOrDefault(divide, -1.0, 10, 2) = " << result1
+                  << "\n";
 
-        double result2 = safeTryCatchOrDefault(divide, -1.0, 10, 0);
-        std::cout << "  safeTryCatchOrDefault(divide, -1.0, 10, 0) = "
-                  << result2 << " (default value)\n";
+        double result2 = safeTryOrDefault(divide, -1.0, 10, 0);
+        std::cout << "  safeTryOrDefault(divide, -1.0, 10, 0) = " << result2
+                  << " (default value)\n";
     }
 
-    // Example 6: safeTryCatchWithCustomHandler - custom exception handling
-    std::cout
-        << "\n2.6 safeTryCatchWithCustomHandler - custom exception handling\n";
+    // Example 6: safeTryWithDiagnostics - custom exception inspection
+    std::cout << "\n2.6 safeTryWithDiagnostics - custom exception inspection\n";
     {
         auto divide = [](int a, int b) -> double {
             if (b == 0) {
@@ -377,13 +381,17 @@ void demo_error_handling() {
                 }
             };
 
-        double result1 = safeTryCatchWithCustomHandler(divide, handler, 10, 2);
-        std::cout
-            << "  safeTryCatchWithCustomHandler(divide, handler, 10, 2) = "
-            << result1 << "\n";
+        auto diag1b = safeTryWithDiagnostics(divide, "divide", 10, 2);
+        if (std::holds_alternative<double>(diag1b)) {
+            std::cout << "  safeTryWithDiagnostics(divide, 10, 2) = "
+                      << std::get<double>(diag1b) << "\n";
+        }
 
-        double result2 = safeTryCatchWithCustomHandler(divide, handler, 10, 0);
-        std::cout << "  Result after handler: " << result2 << "\n";
+        auto diag2b = safeTryWithDiagnostics(divide, "divide", 10, 0);
+        if (std::holds_alternative<
+                std::pair<std::exception_ptr, FunctionCallInfo>>(diag2b)) {
+            std::cout << "  Result after handler: exception captured\n";
+        }
     }
 }
 
@@ -498,11 +506,8 @@ void demo_parallel_async() {
 
         // Create a batch of argument tuples
         std::vector<std::tuple<int>> args = {
-            {10},
-            {5},
-            {2},
-            {0},
-            {1}  // Includes a value that will cause exception
+            {10}, {5}, {2}, {0}, {1}
+            // Includes a value that will cause exception
         };
 
         std::cout << "  Starting parallel batch with potential exception...\n";

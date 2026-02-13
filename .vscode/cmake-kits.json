@@ -1,0 +1,109 @@
+[
+    {
+        "name": "MSVC 2022 x64",
+        "visualStudio": "17",
+        "visualStudioArchitecture": "amd64",
+        "preferredGenerator": {
+            "name": "Visual Studio 17 2022",
+            "platform": "x64"
+        }
+    },
+    {
+        "name": "MSVC 2022 x64 with vcpkg",
+        "visualStudio": "17",
+        "visualStudioArchitecture": "amd64",
+        "preferredGenerator": {
+            "name": "Visual Studio 17 2022",
+            "platform": "x64"
+        },
+        "toolchainFile": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "cmakeSettings": {
+            "VCPKG_TARGET_TRIPLET": "x64-windows",
+            "VCPKG_HOST_TRIPLET": "x64-windows"
+        }
+    },
+    {
+        "name": "MSVC 2022 x64 Ninja",
+        "visualStudio": "17",
+        "visualStudioArchitecture": "amd64",
+        "preferredGenerator": {
+            "name": "Ninja"
+        }
+    },
+    {
+        "name": "MSYS2 MinGW64 GCC",
+        "compilers": {
+            "C": "D:/msys64/mingw64/bin/gcc.exe",
+            "CXX": "D:/msys64/mingw64/bin/g++.exe"
+        },
+        "preferredGenerator": {
+            "name": "MinGW Makefiles"
+        },
+        "environmentVariables": {
+            "PATH": "D:/msys64/mingw64/bin;${env:PATH}"
+        }
+    },
+    {
+        "name": "MSYS2 MinGW64 Clang",
+        "compilers": {
+            "C": "D:/msys64/mingw64/bin/clang.exe",
+            "CXX": "D:/msys64/mingw64/bin/clang++.exe"
+        },
+        "preferredGenerator": {
+            "name": "MinGW Makefiles"
+        },
+        "environmentVariables": {
+            "PATH": "D:/msys64/mingw64/bin;${env:PATH}"
+        }
+    },
+    {
+        "name": "Clang (Windows)",
+        "compilers": {
+            "C": "clang",
+            "CXX": "clang++"
+        },
+        "preferredGenerator": {
+            "name": "Ninja"
+        }
+    },
+    {
+        "name": "GCC (Linux)",
+        "compilers": {
+            "C": "/usr/bin/gcc",
+            "CXX": "/usr/bin/g++"
+        },
+        "preferredGenerator": {
+            "name": "Ninja"
+        }
+    },
+    {
+        "name": "Clang (Linux)",
+        "compilers": {
+            "C": "/usr/bin/clang",
+            "CXX": "/usr/bin/clang++"
+        },
+        "preferredGenerator": {
+            "name": "Ninja"
+        }
+    },
+    {
+        "name": "AppleClang (macOS)",
+        "compilers": {
+            "C": "/usr/bin/clang",
+            "CXX": "/usr/bin/clang++"
+        },
+        "preferredGenerator": {
+            "name": "Ninja"
+        }
+    },
+    {
+        "name": "Homebrew GCC (macOS)",
+        "compilers": {
+            "C": "/opt/homebrew/bin/gcc-14",
+            "CXX": "/opt/homebrew/bin/g++-14"
+        },
+        "preferredGenerator": {
+            "name": "Ninja"
+        }
+    }
+]

@@ -8,34 +8,33 @@
 
 #include "atom/type/argsview.hpp"
 
-// Custom type for demonstration
-struct Person {
-    std::string name;
-    int age;
+// Custom type for demonstrationstruct Person {
+std::string name;
+int age;
 
-    // Comparators for Person
-    bool operator==(const Person& other) const {
-        return name == other.name && age == other.age;
-    }
-
-    bool operator<(const Person& other) const {
-        return age < other.age || (age == other.age && name < other.name);
-    }
-
-    // Output stream operator for Person
-    friend std::ostream& operator<<(std::ostream& os, const Person& p) {
-        return os << "Person{name='" << p.name << "', age=" << p.age << "}";
-    }
-};
-
-// Template to print section headers
-void print_header(const std::string& title) {
-    std::cout << "\n=== " << title << " ===" << std::endl;
-    std::cout << std::string(title.length() + 8, '=') << std::endl;
+// Comparators for Person
+bool operator==(const Person& other) const {
+    return name == other.name && age == other.age;
 }
 
-// Helper to print tuple contents
-template <typename Tuple, std::size_t... Is>
+bool operator<(const Person& other) const {
+    return age < other.age || (age == other.age && name < other.name);
+}
+
+// Output stream operator for Person
+friend std::ostream& operator<<(std::ostream& os, const Person& p) {
+    return os << "Person{name='" << p.name << "', age=" << p.age << "}";
+}
+}
+;
+
+// Template to print section headersvoid print_header(const std::string& title)
+// {
+std::cout << "\n=== " << title << " ===" << std::endl;
+std::cout << std::string(title.length() + 8, '=') << std::endl;
+}
+
+// Helper to print tuple contentstemplate <typename Tuple, std::size_t... Is>
 void print_tuple_impl(const Tuple& tuple, std::index_sequence<Is...>) {
     ((std::cout << (Is == 0 ? "" : ", ") << std::get<Is>(tuple)), ...);
 }

@@ -11,6 +11,7 @@
 #include <string>
 #include <system_error>
 #include <type_traits>
+#include <utility>
 
 namespace atom::extra::boost {
 
@@ -219,7 +220,7 @@ public:
         if ((hasValue())) [[likely]] {
             return Result<std::invoke_result_t<F, T>>(func(*m_value_));
         }
-        return Result<std::invoke_result_t<F, T>>(Error(m_error_));
+        return Result<std::invoke_result_t<F, T>>(m_error_);
     }
 
     /**
@@ -233,7 +234,7 @@ public:
         if ((hasValue())) [[likely]] {
             return func(*m_value_);
         }
-        return std::invoke_result_t<F, T>(Error(m_error_));
+        return std::invoke_result_t<F, T>(m_error_);
     }
 
 private:

@@ -20,7 +20,8 @@
 #endif
 
 #include <spdlog/spdlog.h>
-#include "atom/system/user.hpp"
+#include "atom/system/info/user.hpp"
+#include "atom/system/process/command.hpp"
 #include "atom/web/time/time_error.hpp"
 
 namespace atom::web {

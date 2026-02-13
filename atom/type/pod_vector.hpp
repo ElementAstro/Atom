@@ -363,7 +363,12 @@ public:
     PodVector(PodVector&& other) noexcept
         : size_(other.size_),
           capacity_(other.capacity_),
-          data_(std::exchange(other.data_, nullptr)) {}
+          data_(std::exchange(other.data_, nullptr)) {
+        // Reset the moved-from object to a valid empty state
+        other.size_ = 0;
+        other.capacity_ = N;
+        other.data_ = nullptr;
+    }
 
     /**
      * @brief Move assignment operator
@@ -378,6 +383,11 @@ public:
             size_ = other.size_;
             capacity_ = other.capacity_;
             data_ = std::exchange(other.data_, nullptr);
+
+            // Reset the moved-from object to a valid empty state
+            other.size_ = 0;
+            other.capacity_ = N;
+            other.data_ = nullptr;
         }
         return *this;
     }
@@ -396,7 +406,7 @@ public:
     void pushBack(ValueT&& t) {
 #ifdef ATOM_USE_BOOST
         try {
-            if (size_ == capacity_) [[unlikely]] {
+            if (data_ == nullptr || size_ == capacity_) [[unlikely]] {
                 reserve(capacity_ * Growth);
             }
             data_[size_++] = std::forward<ValueT>(t);
@@ -404,7 +414,7 @@ public:
             throw PodVectorException();
         }
 #else
-        if (size_ == capacity_) [[unlikely]] {
+        if (data_ == nullptr || size_ == capacity_) [[unlikely]] {
             reserve(capacity_ * Growth);
         }
         data_[size_++] = std::forward<ValueT>(t);
@@ -420,7 +430,7 @@ public:
     void emplaceBack(Args&&... args) {
 #ifdef ATOM_USE_BOOST
         try {
-            if (size_ == capacity_) [[unlikely]] {
+            if (data_ == nullptr || size_ == capacity_) [[unlikely]] {
                 reserve(capacity_ * Growth);
             }
             new (&data_[size_++]) T(std::forward<Args>(args)...);
@@ -428,7 +438,7 @@ public:
             throw PodVectorException();
         }
 #else
-        if (size_ == capacity_) [[unlikely]] {
+        if (data_ == nullptr || size_ == capacity_) [[unlikely]] {
             reserve(capacity_ * Growth);
         }
         new (&data_[size_++]) T(std::forward<Args>(args)...);
@@ -502,15 +512,25 @@ public:
      * @brief Accesses element at specified index
      * @param index Index of the element
      * @return Reference to the element
+     * @throws std::out_of_range if index is out of bounds
      */
-    constexpr auto operator[](int index) -> T& { return data_[index]; }
+    constexpr auto operator[](int index) -> T& {
+        if (index < 0 || index >= size_) {
+            throw std::out_of_range("PodVector index out of range");
+        }
+        return data_[index];
+    }
 
     /**
      * @brief Accesses element at specified index (const version)
      * @param index Index of the element
      * @return Const reference to the element
+     * @throws std::out_of_range if index is out of bounds
      */
     constexpr auto operator[](int index) const -> const T& {
+        if (index < 0 || index >= size_) {
+            throw std::out_of_range("PodVector index out of range");
+        }
         return data_[index];
     }
 
@@ -547,14 +567,26 @@ public:
     /**
      * @brief Accesses the last element
      * @return Reference to the last element
+     * @throws std::runtime_error if vector is empty
      */
-    constexpr auto back() -> T& { return data_[size_ - 1]; }
+    constexpr auto back() -> T& {
+        if (size_ == 0) {
+            throw std::runtime_error("PodVector is empty");
+        }
+        return data_[size_ - 1];
+    }
 
     /**
      * @brief Accesses the last element (const version)
      * @return Const reference to the last element
+     * @throws std::runtime_error if vector is empty
      */
-    constexpr auto back() const -> const T& { return data_[size_ - 1]; }
+    constexpr auto back() const -> const T& {
+        if (size_ == 0) {
+            throw std::runtime_error("PodVector is empty");
+        }
+        return data_[size_ - 1];
+    }
 
     /**
      * @brief Checks if the vector is empty

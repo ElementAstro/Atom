@@ -1,0 +1,435 @@
+---
+name: Release
+
+"on":
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g., 1.0.0)"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark as pre-release"
+        required: false
+        type: boolean
+        default: false
+
+env:
+  BUILD_TYPE: Release
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
+jobs:
+  # Create release builds for all platforms
+  build-release:
+    name: Build Release (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+    strategy:
+      matrix:
+        include:
+          # Linux x64 release
+          - name: "Linux x64"
+            os: ubuntu-latest
+            preset: release
+            build_preset: release
+            triplet: x64-linux
+            arch: x64
+            artifact_name: atom-linux-x64
+
+          # Windows x64 release
+          - name: "Windows x64"
+            os: windows-latest
+            preset: release-vs
+            build_preset: release-vs
+            triplet: x64-windows
+            arch: x64
+            artifact_name: atom-windows-x64
+
+          # macOS Intel release
+          - name: "macOS x64"
+            os: macos-13
+            preset: release
+            build_preset: release
+            triplet: x64-osx
+            arch: x64
+            artifact_name: atom-macos-x64
+
+          # macOS Apple Silicon release
+          - name: "macOS ARM64"
+            os: macos-14
+            preset: release
+            build_preset: release
+            triplet: arm64-osx
+            arch: arm64
+            artifact_name: atom-macos-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: "dbe35ceb30c688bf72e952ab23778e009a578f18"
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg
+            ~/.cache/vcpkg
+          key: ${{ runner.os }}-${{ matrix.arch }}-vcpkg-release-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-vcpkg-release-
+
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: >-
+            ${{ runner.os }}-${{ matrix.arch }}-release-${{ matrix.preset }}-
+            ${{ hashFiles('CMakeLists.txt', 'cmake/**', 'CMakePresets.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-release-${{ matrix.preset }}-
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential ninja-build \
+            libssl-dev zlib1g-dev libsqlite3-dev \
+            libfmt-dev libreadline-dev \
+            python3-dev doxygen graphviz
+
+      - name: Install system dependencies (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install ninja openssl zlib sqlite3 fmt readline python3 doxygen graphviz
+
+      - name: Install system dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install ninja doxygen.install graphviz
+
+      - name: Configure with CMakePresets
+        run: |
+          cmake --preset ${{ matrix.preset }} \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DUSE_VCPKG=ON \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
+            -DATOM_BUILD_ALL=ON \
+            -DATOM_BUILD_EXAMPLES=ON \
+            -DATOM_BUILD_TESTS=ON \
+            -DATOM_BUILD_PYTHON_BINDINGS=ON \
+            -DATOM_BUILD_DOCS=ON \
+            -DCMAKE_INSTALL_PREFIX=install
+
+      - name: Build with CMakePresets
+        run: cmake --build --preset ${{ matrix.build_preset }} --parallel
+
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure --parallel --timeout 300
+
+      - name: Install
+        run: cmake --install build --config Release
+
+      - name: Create distribution packages
+        shell: bash
+        run: |
+          # Create comprehensive distribution packages
+          python scripts/build-and-package.py \
+            --source . \
+            --output dist \
+            --build-type release \
+            --no-tests \
+            --verbose
+
+          # Create platform-specific packages
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            # Create Debian and RPM packages
+            ./scripts/package-manager.sh create-deb
+            ./scripts/package-manager.sh create-rpm
+
+            # Create AppImage (if tools available)
+            if command -v linuxdeploy &> /dev/null; then
+              echo "Creating AppImage..."
+              # AppImage creation logic would go here
+            fi
+          elif [ "${{ matrix.os }}" = "windows-latest" ]; then
+            # Create Windows installer packages
+            if command -v candle &> /dev/null; then
+              echo "Creating MSI installer..."
+              # WiX installer creation logic would go here
+            fi
+          elif [[ "${{ matrix.os }}" == macos-* ]]; then
+            # Create macOS packages
+            echo "Creating macOS packages..."
+            # DMG and PKG creation logic would go here
+          fi
+
+          # Create portable distribution
+          python scripts/create-portable.py \
+            --source . \
+            --output dist \
+            --build-type Release
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/
+          retention-days: 30
+
+  # Create Python wheels
+  build-wheels:
+    name: Build Python Wheels
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.16.2
+        env:
+          CIBW_BUILD: cp38-* cp39-* cp310-* cp311-*
+          CIBW_SKIP: "*-win32 *-manylinux_i686"
+          CIBW_BEFORE_BUILD: |
+            pip install pybind11 numpy
+          CIBW_BUILD_VERBOSITY: 1
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+          retention-days: 30
+
+  # Generate documentation
+  build-docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen graphviz
+
+      - name: Generate documentation
+        run: |
+          doxygen Doxyfile
+
+      - name: Upload documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: docs/
+          retention-days: 30
+
+  # Create GitHub release
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-release, build-wheels, build-docs]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version and changelog
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Extract changelog for this version
+          if [ -f CHANGELOG.md ]; then
+            awk "/^## \[$VERSION\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md > release_notes.md
+          else
+            echo "Release $VERSION" > release_notes.md
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release_assets
+          find artifacts/ -name "*.tar.gz" -o -name "*.zip" -o -name "*.whl" | xargs -I {} cp {} release_assets/
+
+          # Create checksums
+          cd release_assets
+          sha256sum * > checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          body_path: release_notes.md
+          files: release_assets/*
+          draft: false
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Deploy documentation to GitHub Pages
+  deploy-docs:
+    name: Deploy Documentation
+    runs-on: ubuntu-latest
+    needs: build-docs
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Download documentation
+        uses: actions/download-artifact@v4
+        with:
+          name: documentation
+          path: docs/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: docs/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
+
+  # Publish Python packages
+  publish-python:
+    name: Publish Python Packages
+    runs-on: ubuntu-latest
+    needs: build-wheels
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    environment: release
+
+    steps:
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: wheels/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: wheels/
+
+  # Create vcpkg port
+  create-vcpkg-port:
+    name: Create vcpkg Port
+    runs-on: ubuntu-latest
+    needs: create-release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create vcpkg port files
+        run: |
+          mkdir -p vcpkg-port/ports/atom
+
+          # Create portfile.cmake
+          cat > vcpkg-port/ports/atom/portfile.cmake << 'EOF'
+          vcpkg_from_github(
+              OUT_SOURCE_PATH SOURCE_PATH
+              REPO ElementAstro/Atom
+              REF v${{ steps.version.outputs.version }}
+              SHA512 0  # Will be updated automatically
+              HEAD_REF main
+          )
+
+          vcpkg_cmake_configure(
+              SOURCE_PATH "${SOURCE_PATH}"
+              OPTIONS
+                  -DATOM_BUILD_EXAMPLES=OFF
+                  -DATOM_BUILD_TESTS=OFF
+          )
+
+          vcpkg_cmake_build()
+          vcpkg_cmake_install()
+
+          vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/atom)
+          vcpkg_fixup_pkgconfig()
+
+          file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+          file(INSTALL "${SOURCE_PATH}/LICENSE" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)
+          EOF
+
+          # Create vcpkg.json
+          cat > vcpkg-port/ports/atom/vcpkg.json << EOF
+          {
+            "name": "atom",
+            "version": "${{ steps.version.outputs.version }}",
+            "description": "Foundational library for astronomical software",
+            "homepage": "https://github.com/ElementAstro/Atom",
+            "dependencies": [
+              "openssl",
+              "zlib",
+              "sqlite3",
+              "fmt"
+            ]
+          }
+          EOF
+
+      - name: Upload vcpkg port
+        uses: actions/upload-artifact@v4
+        with:
+          name: vcpkg-port
+          path: vcpkg-port/
+          retention-days: 30

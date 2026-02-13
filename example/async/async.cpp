@@ -6,8 +6,8 @@
 #include <string>
 #include <thread>
 
+#include <spdlog/spdlog.h>  // Use spdlog for logging
 #include "atom/async/async.hpp"
-#include "loguru.hpp"  // Include loguru header
 
 using namespace atom::async;
 using namespace std::chrono_literals;
@@ -21,23 +21,25 @@ std::string getThreadIdStr() {
 
 // Simple task function: sleep and return a result
 int simpleTask(int id, int sleepTime) {
-    LOG_F(INFO, "Starting task #{}, sleeping for {}ms", id, sleepTime);
+    spdlog::info("Task #{} is starting and will sleep for {} milliseconds.", id,
+                 sleepTime);
     std::this_thread::sleep_for(std::chrono::milliseconds(sleepTime));
-    LOG_F(INFO, "Completed task #{}", id);
+    spdlog::info("Task #{} has completed execution.", id);
     return id * 100;
 }
 
 // Task that throws an exception
 void errorTask() {
-    LOG_F(INFO, "Starting task that will fail");
+    spdlog::info("Starting a task that will intentionally throw an exception.");
     std::this_thread::sleep_for(100ms);
-    LOG_F(INFO, "Throwing exception");
+    spdlog::info("Throwing a test exception from errorTask.");
     throw std::runtime_error("This is a test exception");
 }
 
 // Example 1: Basic usage
 void basicUsageExample() {
-    LOG_F(INFO, "\n===== Example 1: Basic Usage =====");
+    spdlog::info(
+        "===== Example 1: Demonstrating Basic AsyncWorker Usage =====");
 
     // Create AsyncWorker instance
     AsyncWorker<int> worker;
@@ -47,121 +49,136 @@ void basicUsageExample() {
     worker.setPreferredCPU(0);  // Prefer running on the first CPU core
 
     // Start async task
-    LOG_F(INFO, "Starting async task");
-    worker.startAsync(simpleTask, 1, 500);
+    spdlog::info("Launching an asynchronous task using AsyncWorker.");
+    worker.startAsync(static_cast<int (*)(int, int)>(simpleTask), 1, 500);
 
     // Check task status
-    LOG_F(INFO, "Task is active: %s", worker.isActive() ? "yes" : "no");
-    LOG_F(INFO, "Task is done: %s", worker.isDone() ? "yes" : "no");
+    spdlog::info("Is the task currently active? {}",
+                 worker.isActive() ? "yes" : "no");
+    spdlog::info("Has the task completed? {}", worker.isDone() ? "yes" : "no");
 
     // Wait for task to complete and get result
-    LOG_F(INFO, "Waiting for task to complete");
+    spdlog::info("Waiting for the asynchronous task to complete.");
     int result = worker.getResult();
-    LOG_F(INFO, "Task result: {}", result);
+    spdlog::info("The result returned by the task is: {}", result);
 
     // Check status again
-    LOG_F(INFO, "Task is active: %s", worker.isActive() ? "yes" : "no");
-    LOG_F(INFO, "Task is done: %s", worker.isDone() ? "yes" : "no");
+    spdlog::info("Is the task currently active after completion? {}",
+                 worker.isActive() ? "yes" : "no");
+    spdlog::info("Has the task completed after result retrieval? {}",
+                 worker.isDone() ? "yes" : "no");
 }
 
 // Example 2: Callbacks and timeouts
 void callbackAndTimeoutExample() {
-    LOG_F(INFO, "\n===== Example 2: Callbacks and Timeouts =====");
+    spdlog::info(
+        "===== Example 2: Using Callbacks and Timeouts with AsyncWorker =====");
 
     // Create AsyncWorker instance
     AsyncWorker<int> worker;
 
     // Set callback function
-    worker.setCallback(
-        [](int result) { LOG_F(INFO, "Callback called, result: {}", result); });
+    worker.setCallback([](int result) {
+        spdlog::info("Callback executed after task completion. Result: {}",
+                     result);
+    });
 
     // Set timeout
     worker.setTimeout(2s);
 
     // Start async task
-    LOG_F(INFO, "Starting async task (fast task)");
-    worker.startAsync(simpleTask, 2, 300);
+    spdlog::info("Starting an asynchronous task that should complete quickly.");
+    worker.startAsync(static_cast<int (*)(int, int)>(simpleTask), 2, 300);
 
     // Wait for task to complete (triggers callback)
-    LOG_F(INFO, "Waiting for task to complete (with callback)");
+    spdlog::info(
+        "Waiting for the task to complete and callback to be triggered.");
     worker.waitForCompletion();
-    LOG_F(INFO, "Task and callback completed");
+    spdlog::info("Task and callback execution have finished.");
 
     // Test with timeout
     AsyncWorker<int> slowWorker;
     slowWorker.setTimeout(1s);  // Set 1 second timeout
 
-    LOG_F(INFO, "Starting long-running task (timeout test)");
-    slowWorker.startAsync(simpleTask, 3, 2000);  // Task takes 2 seconds
+    spdlog::info("Starting a long-running task to test timeout functionality.");
+    slowWorker.startAsync(static_cast<int (*)(int, int)>(simpleTask), 3,
+                          2000);  // Task takes 2 seconds
 
     try {
-        LOG_F(INFO, "Waiting for task, should timeout");
+        spdlog::info(
+            "Waiting for the long-running task. Expecting a timeout "
+            "exception.");
         slowWorker.waitForCompletion();  // This should timeout
-        LOG_F(INFO, "This line should not be executed");
+        spdlog::info("This line should not be reached if timeout occurs.");
     } catch (const TimeoutException& e) {
-        LOG_F(INFO, "Caught expected timeout exception: %s", e.what());
+        spdlog::warn("TimeoutException caught as expected: {}", e.what());
     }
 }
 
 // Example 3: Managing multiple tasks with AsyncWorkerManager
 void managerExample() {
-    LOG_F(INFO,
-          "\n===== Example 3: AsyncWorkerManager Multi-task Management =====");
+    spdlog::info(
+        "===== Example 3: Managing Multiple Async Tasks with "
+        "AsyncWorkerManager =====");
 
     // Create manager
     AsyncWorkerManager<int> manager;
 
     // Create multiple workers
-    LOG_F(INFO, "Creating and starting multiple async tasks");
+    spdlog::info("Creating and starting multiple asynchronous tasks.");
     std::vector<std::shared_ptr<AsyncWorker<int>>> workers;
 
     // Add 3 tasks
     for (int i = 1; i <= 3; i++) {
-        LOG_F(INFO, "Creating task #{}", i);
-        auto worker = manager.createWorker(simpleTask, i, i * 200);
+        spdlog::info("Creating and launching task #{}.", i);
+        auto worker = manager.createWorker(
+            static_cast<int (*)(int, int)>(simpleTask), i, i * 200);
         workers.push_back(worker);
     }
 
     // Check manager status
-    LOG_F(INFO, "Number of tasks in manager: %zu", manager.size());
-    LOG_F(INFO, "All tasks completed: %s", manager.allDone() ? "yes" : "no");
+    spdlog::info("Current number of tasks managed: {}", manager.size());
+    spdlog::info("Are all tasks completed? {}",
+                 manager.allDone() ? "yes" : "no");
 
     // Wait for all tasks to complete
-    LOG_F(INFO, "Waiting for all tasks to complete");
+    spdlog::info("Waiting for all managed tasks to complete.");
     manager.waitForAll();
 
     // Check status after completion
-    LOG_F(INFO, "All tasks completed: %s", manager.allDone() ? "yes" : "no");
+    spdlog::info("All tasks have completed: {}",
+                 manager.allDone() ? "yes" : "no");
 
     // Get all results
-    LOG_F(INFO, "Getting all task results:");
+    spdlog::info("Retrieving results from all completed tasks:");
     for (size_t i = 0; i < workers.size(); i++) {
         int result = workers[i]->getResult();
-        LOG_F(INFO, "Task #%zu result: {}", i + 1, result);
+        spdlog::info("Result from task #{}: {}", i + 1, result);
     }
 
     // Clean up completed tasks
     size_t removed = manager.pruneCompletedWorkers();
-    LOG_F(INFO, "Removed %zu completed tasks", removed);
-    LOG_F(INFO, "Remaining tasks in manager: %zu", manager.size());
+    spdlog::info("Removed {} completed tasks from the manager.", removed);
+    spdlog::info("Number of remaining tasks in manager: {}", manager.size());
 }
 
 // Example 4: Task cancellation
 void cancellationExample() {
-    LOG_F(INFO, "\n===== Example 4: Task Cancellation =====");
+    spdlog::info("===== Example 4: Demonstrating Task Cancellation =====");
 
     // Create manager
     AsyncWorkerManager<int> manager;
 
     // Create a long-running task
-    LOG_F(INFO, "Creating long-running task");
+    spdlog::info(
+        "Creating a long-running task for cancellation demonstration.");
     auto longTask = manager.createWorker([] {
-        LOG_F(INFO, "Starting long task");
+        spdlog::info("Long-running task has started.");
         for (int i = 0; i < 5; i++) {
-            LOG_F(INFO, "Long task step {}/5", i + 1);
+            spdlog::info("Long-running task progress: step {}/5.", i + 1);
             std::this_thread::sleep_for(500ms);
         }
-        LOG_F(INFO, "Long task completed");
+        spdlog::info("Long-running task has completed.");
         return 9999;
     });
 
@@ -169,112 +186,127 @@ void cancellationExample() {
     std::this_thread::sleep_for(700ms);
 
     // Cancel single task
-    LOG_F(INFO, "Cancelling long task");
+    spdlog::info("Cancelling the long-running task.");
     manager.cancel(longTask);
 
     // Check task status
-    LOG_F(INFO, "Task is active: %s", longTask->isActive() ? "yes" : "no");
-    LOG_F(INFO, "Task is done: %s", longTask->isDone() ? "yes" : "no");
+    spdlog::info("Is the long-running task still active? {}",
+                 longTask->isActive() ? "yes" : "no");
+    spdlog::info("Has the long-running task completed? {}",
+                 longTask->isDone() ? "yes" : "no");
 
     // Create multiple tasks and then cancel all
-    LOG_F(INFO, "Creating multiple new tasks");
+    spdlog::info("Creating multiple new tasks for bulk cancellation.");
     for (int i = 1; i <= 3; i++) {
-        auto worker = manager.createWorker(
-            simpleTask, i, 2000);  // Each task runs for 2 seconds
+        auto worker =
+            manager.createWorker(static_cast<int (*)(int, int)>(simpleTask), i,
+                                 2000);  // Each task runs for 2 seconds
     }
 
-    LOG_F(INFO, "Number of tasks in manager: %zu", manager.size());
+    spdlog::info("Total number of tasks in manager: {}", manager.size());
 
     // Wait for tasks to start
     std::this_thread::sleep_for(300ms);
 
     // Cancel all tasks
-    LOG_F(INFO, "Cancelling all tasks");
+    spdlog::info("Cancelling all tasks managed by AsyncWorkerManager.");
     manager.cancelAll();
 
-    LOG_F(INFO, "All tasks completed: %s", manager.allDone() ? "yes" : "no");
+    spdlog::info("All tasks have completed after cancellation: {}",
+                 manager.allDone() ? "yes" : "no");
 }
 
 // Example 5: Exception handling
 void exceptionHandlingExample() {
-    LOG_F(INFO, "\n===== Example 5: Exception Handling =====");
+    spdlog::info("===== Example 5: Exception Handling in AsyncWorker =====");
 
     // Exception - getting result from uninitialized worker
     AsyncWorker<int> uninitialized;
     try {
-        LOG_F(INFO, "Attempting to get result from uninitialized worker");
+        spdlog::info(
+            "Attempting to retrieve result from an uninitialized AsyncWorker.");
         int result = uninitialized.getResult();
-        LOG_F(INFO, "This line should not be executed");
+        spdlog::info(
+            "This line should not be executed if exception is thrown.");
     } catch (const std::exception& e) {
-        LOG_F(INFO, "Expected exception: %s", e.what());
+        spdlog::warn("Expected exception caught: {}", e.what());
     }
 
     // Exception - task throws internally
     AsyncWorker<void> errorWorker;
-    errorWorker.startAsync(errorTask);
+    errorWorker.startAsync(static_cast<void (*)()>(errorTask));
 
     try {
-        LOG_F(INFO, "Waiting for task that will throw an exception");
+        spdlog::info(
+            "Waiting for a task that will throw an exception internally.");
         errorWorker.waitForCompletion();
-        LOG_F(INFO, "This line should not be executed");
+        spdlog::info(
+            "This line should not be executed if exception is thrown.");
     } catch (const std::exception& e) {
-        LOG_F(INFO, "Caught task exception: %s", e.what());
+        spdlog::warn("Exception caught from task: {}", e.what());
     }
 
     // Exception - setting null callback
     AsyncWorker<int> callbackWorker;
     try {
-        LOG_F(INFO, "Attempting to set null callback function");
+        spdlog::info("Attempting to set a null callback function.");
         callbackWorker.setCallback(nullptr);
-        LOG_F(INFO, "This line should not be executed");
+        spdlog::info(
+            "This line should not be executed if exception is thrown.");
     } catch (const std::exception& e) {
-        LOG_F(INFO, "Expected exception: %s", e.what());
+        spdlog::warn("Expected exception caught when setting null callback: {}",
+                     e.what());
     }
 
     // Exception - setting negative timeout
     AsyncWorker<int> timeoutWorker;
     try {
-        LOG_F(INFO, "Attempting to set negative timeout value");
+        spdlog::info("Attempting to set a negative timeout value.");
         timeoutWorker.setTimeout(-1s);
-        LOG_F(INFO, "This line should not be executed");
+        spdlog::info(
+            "This line should not be executed if exception is thrown.");
     } catch (const std::exception& e) {
-        LOG_F(INFO, "Expected exception: %s", e.what());
+        spdlog::warn(
+            "Expected exception caught when setting negative timeout: {}",
+            e.what());
     }
 }
 
 // Example 6: Task validation
 void taskValidationExample() {
-    LOG_F(INFO, "\n===== Example 6: Task Validation =====");
+    spdlog::info("===== Example 6: Validating Task Results =====");
 
     // Create task
     AsyncWorker<int> worker;
-    worker.startAsync(simpleTask, 6, 300);
+    worker.startAsync(static_cast<int (*)(int, int)>(simpleTask), 6, 300);
 
     // Wait for task to complete
-    LOG_F(INFO, "Waiting for task to complete");
+    spdlog::info("Waiting for the task to complete before validation.");
     worker.waitForCompletion();
 
     // Validate result with validator
     bool isValid = worker.validate([](int result) {
-        LOG_F(INFO, "Validating result: {}", result);
+        spdlog::info("Validating task result: {}", result);
         return result == 600;  // Should be 6 * 100 = 600
     });
 
-    LOG_F(INFO, "Validation result is valid: %s", isValid ? "yes" : "no");
+    spdlog::info("Validation result: Is the task result valid? {}",
+                 isValid ? "yes" : "no");
 
     // Use validator that doesn't meet conditions
     bool isInvalid = worker.validate([](int result) {
-        LOG_F(INFO, "Validating result: {}", result);
+        spdlog::info("Validating task result with a failing condition: {}",
+                     result);
         return result > 1000;  // 600 should not be greater than 1000
     });
 
-    LOG_F(INFO, "Failed condition validation result: %s",
-          isInvalid ? "yes" : "no");
+    spdlog::info("Validation result with failing condition: {}",
+                 isInvalid ? "yes" : "no");
 }
 
 // Example 7: asyncRetry usage
 void asyncRetryExample() {
-    LOG_F(INFO, "\n===== Example 7: asyncRetry Retry Mechanism =====");
+    spdlog::info("===== Example 7: Demonstrating asyncRetry Mechanism =====");
 
     // Create a function that fails the first few times
     int attemptsNeeded = 3;
@@ -282,23 +314,27 @@ void asyncRetryExample() {
 
     auto flakeyFunction = [&]() -> std::string {
         currentAttempt++;
-        LOG_F(INFO,
-              "Attempting to execute unstable function, current attempt: {}",
-              currentAttempt);
+        spdlog::info(
+            "Attempting to execute an unstable function. Current attempt: {}",
+            currentAttempt);
 
         if (currentAttempt < attemptsNeeded) {
-            LOG_F(INFO, "Function failed, will retry");
+            spdlog::warn("Function failed on attempt {}. Will retry.",
+                         currentAttempt);
             throw std::runtime_error("Deliberate failure, attempt #" +
                                      std::to_string(currentAttempt));
         }
 
-        LOG_F(INFO, "Function executed successfully");
+        spdlog::info("Function executed successfully on attempt {}.",
+                     currentAttempt);
         return "Successful result on attempt " + std::to_string(currentAttempt);
     };
 
     try {
         // Create retry logic
-        LOG_F(INFO, "Starting async operation with retry (fixed interval)");
+        spdlog::info(
+            "Starting asynchronous operation with retry (fixed interval "
+            "strategy).");
         auto future = asyncRetry(
             flakeyFunction,                  // Function to execute
             5,                               // Maximum number of attempts
@@ -306,22 +342,22 @@ void asyncRetryExample() {
             BackoffStrategy::FIXED,          // Use fixed interval
             1s,                              // Maximum total delay
             [](const std::string& result) {  // Success callback
-                LOG_F(INFO, "Success callback: %s", result.c_str());
+                spdlog::info("Success callback executed. Result: {}", result);
             },
             [](const std::exception& e) {  // Exception callback
-                LOG_F(INFO, "Exception occurred: %s", e.what());
+                spdlog::warn("Exception occurred during retry: {}", e.what());
             },
             []() {  // Completion callback
-                LOG_F(INFO, "Operation completed callback");
+                spdlog::info("Operation completed callback executed.");
             });
 
         // Wait for result
-        LOG_F(INFO, "Waiting for retry operation result");
+        spdlog::info("Waiting for the result of the retry operation.");
         std::string result = future.get();
-        LOG_F(INFO, "Final result: %s", result.c_str());
+        spdlog::info("Final result from asyncRetry: {}", result);
 
     } catch (const std::exception& e) {
-        LOG_F(INFO, "Operation ultimately failed: %s", e.what());
+        spdlog::error("The retry operation ultimately failed: {}", e.what());
     }
 
     // Reset counter and try with exponential backoff strategy
@@ -329,8 +365,9 @@ void asyncRetryExample() {
     attemptsNeeded = 4;
 
     try {
-        LOG_F(INFO,
-              "\nStarting async operation with retry (exponential backoff)");
+        spdlog::info(
+            "Starting asynchronous operation with retry (exponential backoff "
+            "strategy).");
         auto future = asyncRetry(
             flakeyFunction,                  // Function to execute
             5,                               // Maximum number of attempts
@@ -338,87 +375,90 @@ void asyncRetryExample() {
             BackoffStrategy::EXPONENTIAL,    // Use exponential backoff
             10s,                             // Maximum total delay
             [](const std::string& result) {  // Success callback
-                LOG_F(INFO, "Success callback: %s", result.c_str());
+                spdlog::info("Success callback executed. Result: {}", result);
             },
             [](const std::exception& e) {  // Exception callback
-                LOG_F(INFO, "Exception occurred: %s", e.what());
+                spdlog::warn("Exception occurred during retry: {}", e.what());
             },
             []() {  // Completion callback
-                LOG_F(INFO, "Operation completed callback");
+                spdlog::info("Operation completed callback executed.");
             });
 
         // Wait for result
-        LOG_F(INFO, "Waiting for retry operation result");
+        spdlog::info("Waiting for the result of the retry operation.");
         std::string result = future.get();
-        LOG_F(INFO, "Final result: %s", result.c_str());
+        spdlog::info("Final result from asyncRetry: {}", result);
 
     } catch (const std::exception& e) {
-        LOG_F(INFO, "Operation ultimately failed: %s", e.what());
+        spdlog::error("The retry operation ultimately failed: {}", e.what());
     }
 }
 
 // Example 8: Task coroutine usage (C++20 feature)
 Task<int> exampleCoroutine(int value) {
-    LOG_F(INFO, "Coroutine started, initial value: {}", value);
+    spdlog::info("Coroutine has started with initial value: {}", value);
 
     // Simulate async operation
     std::this_thread::sleep_for(500ms);
     value += 100;
-    LOG_F(INFO, "Coroutine intermediate value: {}", value);
+    spdlog::info("Coroutine intermediate value after addition: {}", value);
 
     // Simulate another async operation
     std::this_thread::sleep_for(500ms);
     value *= 2;
-    LOG_F(INFO, "Coroutine final value: {}", value);
+    spdlog::info("Coroutine final value after multiplication: {}", value);
 
     co_return value;
 }
 
 void coroutineExample() {
-    LOG_F(INFO, "\n===== Example 8: Task Coroutine Usage =====");
+    spdlog::info(
+        "===== Example 8: Demonstrating Coroutine Usage with Task =====");
 
     try {
-        LOG_F(INFO, "Starting coroutine task");
+        spdlog::info("Starting coroutine task with Task<int>.");
         auto task = exampleCoroutine(42);
 
-        LOG_F(INFO, "Coroutine started, waiting for result");
+        spdlog::info("Coroutine started. Awaiting result.");
         int result = task.await_result();
-        LOG_F(INFO, "Coroutine result: {}", result);
+        spdlog::info("Coroutine completed successfully. Result: {}", result);
 
     } catch (const std::exception& e) {
-        LOG_F(INFO, "Coroutine execution failed: %s", e.what());
+        spdlog::error("Coroutine execution failed with exception: {}",
+                      e.what());
     }
 
     // Error handling coroutine example
     auto errorCoroutine = []() -> Task<int> {
-        LOG_F(INFO, "Starting coroutine that will fail");
+        spdlog::info(
+            "Starting coroutine that will intentionally throw an exception.");
         std::this_thread::sleep_for(300ms);
-        LOG_F(INFO, "Coroutine throwing exception");
+        spdlog::info("Coroutine is about to throw an exception.");
         throw std::runtime_error("Test exception in coroutine");
         co_return 0;  // Will never reach here
     };
 
     try {
-        LOG_F(INFO, "Starting coroutine that will fail");
+        spdlog::info("Starting coroutine expected to fail with an exception.");
         auto task = errorCoroutine();
 
-        LOG_F(INFO, "Waiting for coroutine result (expected to fail)");
+        spdlog::info("Awaiting result from coroutine that should fail.");
         task.await_result();  // Use the return value to fix the 'unused
                               // variable' warning
-        LOG_F(INFO, "This line should not be executed");
+        spdlog::info(
+            "This line should not be executed if exception is thrown.");
     } catch (const std::exception& e) {
-        LOG_F(INFO, "Caught coroutine exception: %s", e.what());
+        spdlog::warn("Caught exception from coroutine: {}", e.what());
     }
 }
 
 // Main function
 int main(int argc, char* argv[]) {
-    // Initialize loguru
-    loguru::init(argc, argv);
+    // Initialize spdlog (no explicit init needed for basic usage)
 
-    LOG_F(INFO, "=============================================");
-    LOG_F(INFO, "     AsyncWorker/AsyncWorkerManager Examples     ");
-    LOG_F(INFO, "=============================================");
+    spdlog::info("=============================================");
+    spdlog::info("     AsyncWorker and AsyncWorkerManager Examples     ");
+    spdlog::info("=============================================");
 
     try {
         // Run all examples
@@ -431,9 +471,10 @@ int main(int argc, char* argv[]) {
         asyncRetryExample();
         coroutineExample();
 
-        LOG_F(INFO, "\nAll examples completed successfully!");
+        spdlog::info("All example demonstrations have completed successfully.");
     } catch (const std::exception& e) {
-        LOG_F(ERROR, "Caught unhandled exception: %s", e.what());
+        spdlog::error("An unhandled exception was caught in main: {}",
+                      e.what());
         return 1;
     }
 

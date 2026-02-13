@@ -91,9 +91,3 @@ SpacesInSquareBrackets: false
 Standard: Auto
 TabWidth: 8
 UseTab: Never
----
-Language: JavaScript
-DisableFormat: true
----
-Language: Json
-DisableFormat: true

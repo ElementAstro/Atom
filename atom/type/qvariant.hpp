@@ -66,7 +66,8 @@ public:
      */
     template <typename T>
     explicit VariantWrapper(T&& value) noexcept(
-        std::is_nothrow_constructible_v<VariantType, T>);
+        std::is_nothrow_constructible_v<VariantType, T>)
+        requires(!std::is_same_v<std::decay_t<T>, VariantWrapper<Types...>>);
 
     /**
      * @brief Copy constructor with thread safety.
@@ -104,7 +105,8 @@ public:
      */
     template <typename T>
     auto operator=(T&& value) noexcept(
-        std::is_nothrow_assignable_v<VariantType, T>) -> VariantWrapper&;
+        std::is_nothrow_assignable_v<VariantType, T>) -> VariantWrapper&
+        requires(!std::is_same_v<std::decay_t<T>, VariantWrapper>);
 
     /**
      * @brief Gets the name of the type currently held by the variant.
@@ -217,15 +219,8 @@ public:
     template <typename Func>
     auto withThreadSafety(Func&& func) const -> decltype(auto);
 
-    /**
-     * @brief Stream insertion operator for VariantWrapper.
-     * @param outputStream The output stream
-     * @param variantWrapper The VariantWrapper to output
-     * @return Reference to the output stream
-     */
-    friend auto operator<<(std::ostream& outputStream,
-                           const VariantWrapper& variantWrapper)
-        -> std::ostream&;
+    // Note: Stream operator is implemented as a non-friend template function
+    // below
 
     /**
      * @brief Default destructor.
@@ -252,7 +247,9 @@ VariantWrapper<Types...>::
 template <typename... Types>
 template <typename T>
 VariantWrapper<Types...>::VariantWrapper(T&& value) noexcept(
-    std::is_nothrow_constructible_v<VariantType, T>) {
+    std::is_nothrow_constructible_v<VariantType, T>)
+    requires(!std::is_same_v<std::decay_t<T>, VariantWrapper<Types...>>)
+{
     static_assert(
         is_valid_type_v<T> || std::is_same_v<std::decay_t<T>, std::monostate>,
         "Type not supported by this VariantWrapper");
@@ -295,7 +292,9 @@ auto VariantWrapper<Types...>::operator=(VariantWrapper&& other) noexcept
 template <typename... Types>
 template <typename T>
 auto VariantWrapper<Types...>::operator=(T&& value) noexcept(
-    std::is_nothrow_assignable_v<VariantType, T>) -> VariantWrapper& {
+    std::is_nothrow_assignable_v<VariantType, T>) -> VariantWrapper&
+    requires(!std::is_same_v<std::decay_t<T>, VariantWrapper>)
+{
     static_assert(
         is_valid_type_v<T> || std::is_same_v<std::decay_t<T>, std::monostate>,
         "Type not supported by this VariantWrapper");
@@ -539,6 +538,12 @@ auto VariantWrapper<Types...>::withThreadSafety(Func&& func) const
     return std::forward<Func>(func)();
 }
 
+/**
+ * @brief Stream insertion operator for VariantWrapper.
+ * @param outputStream The output stream
+ * @param variantWrapper The VariantWrapper to output
+ * @return Reference to the output stream
+ */
 template <typename... Types>
 auto operator<<(std::ostream& outputStream,
                 const VariantWrapper<Types...>& variantWrapper)

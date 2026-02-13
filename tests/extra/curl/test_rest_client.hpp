@@ -10,7 +10,6 @@
 #include "atom/extra/curl/mock_server.hpp"  // Assume we have a mock server implementation
 #include "atom/extra/curl/rest_client.hpp"
 
-
 using namespace atom::extra::curl;
 using ::testing::HasSubstr;
 using ::testing::StartsWith;

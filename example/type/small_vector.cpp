@@ -17,20 +17,20 @@
 #include <string>
 #include <vector>
 
-// Helper function to print section headers
-void printSection(const std::string& title) {
-    std::cout << "\n==========================================" << std::endl;
-    std::cout << "  " << title << std::endl;
-    std::cout << "==========================================" << std::endl;
+// Helper function to print section headersvoid printSection(const std::string&
+// title) {
+std::cout << "\n==========================================" << std::endl;
+std::cout << "  " << title << std::endl;
+std::cout << "==========================================" << std::endl;
 }
 
-// Helper function to print subsection headers
-void printSubsection(const std::string& title) {
-    std::cout << "\n--- " << title << " ---" << std::endl;
+// Helper function to print subsection headersvoid printSubsection(const
+// std::string& title) {
+std::cout << "\n--- " << title << " ---" << std::endl;
 }
 
-// Helper function to display SmallVector contents
-template <typename T, std::size_t N, typename Allocator = std::allocator<T>>
+// Helper function to display SmallVector contentstemplate <typename T,
+// std::size_t N, typename Allocator = std::allocator<T>>
 void printVector(const SmallVector<T, N, Allocator>& vec,
                  const std::string& name) {
     std::cout << name << " (size=" << vec.size()
@@ -49,8 +49,7 @@ void printVector(const SmallVector<T, N, Allocator>& vec,
     std::cout << "]" << std::endl;
 }
 
-// Helper function to measure performance
-template <typename Func>
+// Helper function to measure performancetemplate <typename Func>
 double measureTime(Func&& func) {
     auto start = std::chrono::high_resolution_clock::now();
     func();
@@ -58,8 +57,7 @@ double measureTime(Func&& func) {
     return std::chrono::duration<double, std::micro>(end - start).count();
 }
 
-// Custom allocator for testing
-template <typename T>
+// Custom allocator for testingtemplate <typename T>
 class TrackingAllocator {
 public:
     using value_type = T;
@@ -120,77 +118,75 @@ size_t TrackingAllocator<T>::total_bytes_allocated = 0;
 template <typename T>
 size_t TrackingAllocator<T>::total_bytes_deallocated = 0;
 
-// Custom class for testing with non-trivial types
-class TestObject {
+// Custom class for testing with non-trivial typesclass TestObject {
 public:
-    TestObject() : value_(0) { constructor_calls++; }
+TestObject() : value_(0) { constructor_calls++; }
 
-    TestObject(int val) : value_(val) { constructor_calls++; }
+TestObject(int val) : value_(val) { constructor_calls++; }
 
-    TestObject(const TestObject& other) : value_(other.value_) {
-        copy_constructor_calls++;
+TestObject(const TestObject& other) : value_(other.value_) {
+    copy_constructor_calls++;
+}
+
+TestObject(TestObject&& other) noexcept : value_(other.value_) {
+    move_constructor_calls++;
+    other.value_ = -1;
+}
+
+~TestObject() { destructor_calls++; }
+
+TestObject& operator=(const TestObject& other) {
+    if (this != &other) {
+        value_ = other.value_;
+        copy_assignment_calls++;
     }
+    return *this;
+}
 
-    TestObject(TestObject&& other) noexcept : value_(other.value_) {
-        move_constructor_calls++;
+TestObject& operator=(TestObject&& other) noexcept {
+    if (this != &other) {
+        value_ = other.value_;
         other.value_ = -1;
+        move_assignment_calls++;
     }
+    return *this;
+}
 
-    ~TestObject() { destructor_calls++; }
+bool operator==(const TestObject& other) const {
+    return value_ == other.value_;
+}
 
-    TestObject& operator=(const TestObject& other) {
-        if (this != &other) {
-            value_ = other.value_;
-            copy_assignment_calls++;
-        }
-        return *this;
-    }
+bool operator!=(const TestObject& other) const { return !(*this == other); }
 
-    TestObject& operator=(TestObject&& other) noexcept {
-        if (this != &other) {
-            value_ = other.value_;
-            other.value_ = -1;
-            move_assignment_calls++;
-        }
-        return *this;
-    }
+bool operator<(const TestObject& other) const { return value_ < other.value_; }
 
-    bool operator==(const TestObject& other) const {
-        return value_ == other.value_;
-    }
+friend std::ostream& operator<<(std::ostream& os, const TestObject& obj) {
+    return os << obj.value_;
+}
 
-    bool operator!=(const TestObject& other) const { return !(*this == other); }
+int getValue() const { return value_; }
 
-    bool operator<(const TestObject& other) const {
-        return value_ < other.value_;
-    }
+// Static counters for tracking operations
+static void resetCounters() {
+    constructor_calls = 0;
+    copy_constructor_calls = 0;
+    move_constructor_calls = 0;
+    destructor_calls = 0;
+    copy_assignment_calls = 0;
+    move_assignment_calls = 0;
+}
 
-    friend std::ostream& operator<<(std::ostream& os, const TestObject& obj) {
-        return os << obj.value_;
-    }
-
-    int getValue() const { return value_; }
-
-    // Static counters for tracking operations
-    static void resetCounters() {
-        constructor_calls = 0;
-        copy_constructor_calls = 0;
-        move_constructor_calls = 0;
-        destructor_calls = 0;
-        copy_assignment_calls = 0;
-        move_assignment_calls = 0;
-    }
-
-    static size_t constructor_calls;
-    static size_t copy_constructor_calls;
-    static size_t move_constructor_calls;
-    static size_t destructor_calls;
-    static size_t copy_assignment_calls;
-    static size_t move_assignment_calls;
+static size_t constructor_calls;
+static size_t copy_constructor_calls;
+static size_t move_constructor_calls;
+static size_t destructor_calls;
+static size_t copy_assignment_calls;
+static size_t move_assignment_calls;
 
 private:
-    int value_;
-};
+int value_;
+}
+;
 
 size_t TestObject::constructor_calls = 0;
 size_t TestObject::copy_constructor_calls = 0;

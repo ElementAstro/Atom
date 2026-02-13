@@ -1,4 +1,4 @@
-#include "atom/algorithm/hash.hpp"
+#include "atom/algorithm/hash/hash.hpp"
 
 #include <any>
 #include <array>

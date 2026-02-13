@@ -4,7 +4,7 @@
 #include <gtest/gtest.h>
 #include <thread>
 #include <vector>
-#include "cache.hpp"
+#include "atom/search/cache/cache.hpp"
 
 using namespace atom::search;
 
@@ -82,7 +82,8 @@ TEST_F(ResourceCacheTest, EvictOldest) {
 TEST_F(ResourceCacheTest, IsExpired) {
     cache->insert("key1", 1, std::chrono::seconds(1));
     std::this_thread::sleep_for(std::chrono::seconds(2));
-    EXPECT_TRUE(cache->isExpired("key1"));
+    // After expiration, the key should no longer be in the cache
+    EXPECT_FALSE(cache->contains("key1"));
 }
 
 TEST_F(ResourceCacheTest, AsyncLoad) {
@@ -103,8 +104,17 @@ TEST_F(ResourceCacheTest, SetMaxSize) {
 TEST_F(ResourceCacheTest, SetExpirationTime) {
     cache->insert("key1", 1, std::chrono::seconds(10));
     cache->setExpirationTime("key1", std::chrono::seconds(1));
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    EXPECT_TRUE(cache->isExpired("key1"));
+
+    // Wait with timeout protection
+    auto start = std::chrono::steady_clock::now();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+    auto elapsed = std::chrono::steady_clock::now() - start;
+
+    // Ensure we didn't hang
+    EXPECT_LT(elapsed, std::chrono::seconds(2));
+
+    // After expiration, the key should no longer be in the cache
+    EXPECT_FALSE(cache->contains("key1"));
 }
 
 TEST_F(ResourceCacheTest, InsertBatch) {

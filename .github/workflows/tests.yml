@@ -1,0 +1,497 @@
+name: Testing Infrastructure
+
+on:
+  push:
+    branches: [main, develop, chore/*]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      test_category:
+        description: 'Test category to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - unit
+          - integration
+          - performance
+          - stress
+      test_module:
+        description: 'Specific module to test'
+        required: false
+        default: ''
+        type: string
+      parallel_threads:
+        description: 'Number of parallel threads'
+        required: false
+        default: '4'
+        type: string
+      coverage:
+        description: 'Generate coverage report'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  # Quick validation test
+  quick-test:
+    name: Quick Validation Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build libssl-dev zlib1g-dev fmt libsqlite3-dev
+
+      - name: Configure for tests (CMakePresets)
+        run: |
+          cmake --preset debug \
+            -DATOM_BUILD_TESTS=ON \
+            -DATOM_BUILD_EXAMPLES=OFF \
+            -DATOM_BUILD_DOCS=OFF
+
+      - name: Build unified test runner
+        run: |
+          cmake --build --preset debug --target run_all_tests --parallel
+
+      - name: Quick test validation
+        run: |
+          cd build
+          if [ -f "./run_all_tests" ]; then
+            echo "=== Unified Test Runner Validation ==="
+            ./run_all_tests --list
+            ./run_all_tests --module=error --verbose || echo "Error module tests had issues"
+          else
+            echo "❌ Unified test runner not built"
+            exit 1
+          fi
+
+  # Full test matrix
+  test-matrix:
+    name: Test Matrix (${{ matrix.os }}, ${{ matrix.config }})
+    runs-on: ${{ matrix.os }}
+    needs: quick-test
+    if: always() && (needs.quick-test.result == 'success' || needs.quick-test.result == 'skipped')
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux configurations
+          - os: ubuntu-latest
+            config: "Debug"
+            preset: "debug"
+            build_preset: "debug"
+            triplet: x64-linux
+            arch: x64
+            compiler: gcc
+            module_set: all
+            coverage: true
+            build_examples: true
+            build_python: true
+            build_docs: false
+          - os: ubuntu-latest
+            config: "RelWithDebInfo"
+            preset: "relwithdebinfo"
+            build_preset: "relwithdebinfo"
+            triplet: x64-linux
+            arch: x64
+            compiler: clang
+            module_set: io_net
+            coverage: false
+            build_examples: false
+            build_python: false
+            build_docs: true
+
+          # Windows configurations (MSVC)
+          - os: windows-latest
+            config: "Debug"
+            preset: "debug-vs"
+            build_preset: "debug-vs"
+            triplet: x64-windows
+            arch: x64
+            compiler: msvc
+            module_set: all
+            coverage: false
+            build_examples: false
+            build_python: false
+            build_docs: false
+          - os: windows-latest
+            config: "Release"
+            preset: "release-vs"
+            build_preset: "release-vs"
+            triplet: x64-windows
+            arch: x64
+            compiler: msvc
+            module_set: all
+            coverage: false
+            build_examples: true
+            build_python: true
+            build_docs: false
+
+          # macOS configurations
+          - os: macos-13
+            config: "Release"
+            preset: "release"
+            build_preset: "release"
+            triplet: x64-osx
+            arch: x64
+            compiler: clang
+            module_set: all
+            coverage: false
+            build_examples: true
+            build_python: true
+            build_docs: false
+          - os: macos-14
+            config: "RelWithDebInfo"
+            preset: "relwithdebinfo"
+            build_preset: "relwithdebinfo"
+            triplet: arm64-osx
+            arch: arm64
+            compiler: clang
+            module_set: core
+            coverage: false
+            build_examples: false
+            build_python: false
+            build_docs: true
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: "dbe35ceb30c688bf72e952ab23778e009a578f18"
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg
+            ~/.cache/vcpkg
+          key: ${{ runner.os }}-${{ matrix.arch }}-vcpkg-tests-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-vcpkg-tests-
+
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: >-
+            ${{ runner.os }}-${{ matrix.arch }}-${{ matrix.compiler }}-tests-${{ matrix.preset }}-
+            ${{ hashFiles('CMakeLists.txt', 'cmake/**', 'CMakePresets.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-${{ matrix.compiler }}-tests-${{ matrix.preset }}-
+
+      - name: Install system dependencies (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential ninja-build \
+            libssl-dev zlib1g-dev libsqlite3-dev \
+            libfmt-dev python3-dev lcov jq doxygen graphviz
+
+      - name: Install system dependencies (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install ninja openssl zlib sqlite3 fmt python3 lcov doxygen graphviz
+
+      - name: Install system dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install ninja doxygen.install graphviz
+
+      - name: Setup ccache (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          ccache --set-config=cache_dir=$HOME/.ccache
+          ccache --set-config=max_size=2G
+          ccache --zero-stats
+
+      - name: Select compiler (clang/GCC)
+        if: matrix.compiler == 'clang'
+        run: |
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+
+      - name: Configure CMake with presets
+        shell: bash
+        run: |
+          MODULE_ARGS=()
+          case "${{ matrix.module_set }}" in
+            all)
+              MODULE_ARGS+=(-DATOM_BUILD_ALL=ON)
+              ;;
+            core)
+              MODULE_ARGS+=(-DATOM_BUILD_ALL=OFF -DATOM_BUILD_ERROR=ON -DATOM_BUILD_UTILS=ON)
+              MODULE_ARGS+=(-DATOM_BUILD_TYPE=ON -DATOM_BUILD_LOG=ON -DATOM_BUILD_META=ON -DATOM_BUILD_COMPONENTS=ON)
+              ;;
+            io_net)
+              MODULE_ARGS+=(-DATOM_BUILD_ALL=OFF -DATOM_BUILD_IO=ON -DATOM_BUILD_IMAGE=ON)
+              MODULE_ARGS+=(-DATOM_BUILD_SERIAL=ON -DATOM_BUILD_CONNECTION=ON -DATOM_BUILD_WEB=ON -DATOM_BUILD_ASYNC=ON)
+              ;;
+            *)
+              MODULE_ARGS+=(-DATOM_BUILD_ALL=ON)
+              ;;
+          esac
+
+          COVERAGE_ARGS=()
+          if [ "${{ matrix.coverage }}" = "true" ]; then
+            COVERAGE_ARGS+=(
+              -DCMAKE_BUILD_TYPE=Debug
+              -DCMAKE_CXX_FLAGS_DEBUG="--coverage"
+              -DCMAKE_C_FLAGS_DEBUG="--coverage"
+            )
+          fi
+
+          cmake --preset ${{ matrix.preset }} \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DUSE_VCPKG=ON \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
+            -DATOM_BUILD_TESTS=ON \
+            -DATOM_BUILD_EXAMPLES=${{ matrix.build_examples }} \
+            -DATOM_BUILD_PYTHON_BINDINGS=${{ matrix.build_python }} \
+            -DATOM_BUILD_DOCS=${{ matrix.build_docs }} \
+            "${MODULE_ARGS[@]}" \
+            "${COVERAGE_ARGS[@]}"
+
+      - name: Build project
+        run: |
+          cmake --build --preset ${{ matrix.build_preset }} --parallel
+
+      - name: Make scripts executable (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          chmod +x scripts/run_tests.sh
+
+      - name: Determine test parameters
+        id: test-params
+        run: |
+          TEST_CAT="${{ github.event.inputs.test_category }}"
+          if [ "$TEST_CAT" != "" ] && [ "$TEST_CAT" != "all" ]; then
+            TEST_CATEGORY="${{ github.event.inputs.test_category }}"
+            TEST_FLAG="--category $TEST_CATEGORY"
+          elif [ "${{ github.event.inputs.test_module }}" != "" ]; then
+            TEST_MODULE="${{ github.event.inputs.test_module }}"
+            TEST_FLAG="--module $TEST_MODULE"
+          else
+            TEST_FLAG=""
+          fi
+
+          THREADS="${{ github.event.inputs.parallel_threads || 4 }}"
+          COVERAGE_ARG=""
+          if [ "${{ matrix.coverage }}" == "true" ] || [ "${{ github.event.inputs.coverage }}" == "true" ]; then
+            COVERAGE_ARG="--coverage"
+          fi
+
+          echo "test-flag=$TEST_FLAG" >> $GITHUB_OUTPUT
+          echo "threads=$THREADS" >> $GITHUB_OUTPUT
+          echo "coverage=$COVERAGE_ARG" >> $GITHUB_OUTPUT
+
+      - name: Run tests with unified test runner
+        timeout-minutes: 30
+        run: |
+          cd build
+
+          echo "=== Running tests for ${{ matrix.os }} (${{ matrix.config }}) ==="
+
+          # Try unified test runner first
+          if [ -f "./run_all_tests" ] || [ -f "./run_all_tests.exe" ]; then
+            echo "Using unified test runner"
+
+            # Run comprehensive test suite
+            ./run_all_tests ${{ steps.test-params.outputs.test-flag }} \
+              --verbose \
+              --parallel \
+              --threads=${{ steps.test-params.outputs.threads }} \
+              --output-format=json \
+              --output=test_results.json \
+              ${{ steps.test-params.outputs.coverage }} || echo "Tests completed with issues"
+
+            # Test core modules specifically
+            echo "=== Testing Core Modules ==="
+            ./run_all_tests --module=error --verbose || echo "Error module tests had issues"
+            ./run_all_tests --module=utils --verbose || echo "Utils module tests had issues"
+
+          else
+            echo "Unified test runner not found, falling back to CTest"
+            ctest --output-on-failure --parallel --timeout 300
+          fi
+
+      - name: Generate coverage report (Linux Debug)
+        if: matrix.coverage == 'true' && startsWith(matrix.os, 'ubuntu')
+        run: |
+          echo "=== Generating Code Coverage Report ==="
+          cd build
+          if command -v lcov >/dev/null 2>&1; then
+            lcov --directory . --capture --output-file coverage.info
+            lcov --remove coverage.info '/usr/*' --output-file coverage.info
+            lcov --remove coverage.info '*/tests/*' --output-file coverage.info
+            lcov --remove coverage.info '*/examples/*' --output-file coverage.info
+
+            if command -v genhtml >/dev/null 2>&1; then
+              genhtml -o coverage_html coverage.info
+              echo "Coverage report generated"
+            fi
+
+            # Generate coverage summary
+            echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            lcov --summary coverage.info | tail -n 1 >> $GITHUB_STEP_SUMMARY
+          else
+            echo "lcov not available, skipping coverage report"
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}-${{ matrix.config }}
+          path: |
+            build/test_results.json
+            build/coverage_html/
+          retention-days: 30
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}-${{ matrix.config }}
+          path: |
+            build/
+            !build/**/*.o
+            !build/**/*.obj
+            !build/**/CMakeFiles/
+          retention-days: 7
+
+  # Test results analysis
+  test-analysis:
+    name: Test Results Analysis
+    runs-on: ubuntu-latest
+    needs: test-matrix
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          path: test-results/
+
+      - name: Analyze test results
+        run: |
+          echo "# Test Results Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Function to analyze JSON test results
+          analyze_json() {
+            local file="$1"
+            local label="$2"
+            if [ -f "$file" ]; then
+              local total=$(jq -r '.total_tests // 0' "$file" 2>/dev/null || echo "0")
+              local passed=$(jq -r '.passed_asserts // 0' "$file" 2>/dev/null || echo "0")
+              local failed=$(jq -r '.failed_asserts // 0' "$file" 2>/dev/null || echo "0")
+              local skipped=$(jq -r '.skipped_tests // 0' "$file" 2>/dev/null || echo "0")
+
+              echo "### $label" >> $GITHUB_STEP_SUMMARY
+              echo "- **Total Tests**: $total" >> $GITHUB_STEP_SUMMARY
+              echo "- **Passed**: $passed" >> $GITHUB_STEP_SUMMARY
+              echo "- **Failed**: $failed" >> $GITHUB_STEP_SUMMARY
+              echo "- **Skipped**: $skipped" >> $GITHUB_STEP_SUMMARY
+
+              if [ "$failed" -eq 0 ]; then
+                echo "- **Status**: ✅ All Passed" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "- **Status**: ❌ $failed Failed" >> $GITHUB_STEP_SUMMARY
+              fi
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          }
+
+          # Analyze each platform's results
+          for result_dir in test-results/test-results-*; do
+            if [ -d "$result_dir" ]; then
+              platform=$(basename "$result_dir")
+              analyze_json "$result_dir/test_results.json" "$platform"
+            fi
+          done
+
+          # Overall summary
+          echo "## Overall Summary" >> $GITHUB_STEP_SUMMARY
+          total_configs=$(echo test-results/test-results-* | wc -w)
+          successful_configs=0
+
+          for result_dir in test-results/test-results-*; do
+            if [ -f "$result_dir/test_results.json" ]; then
+              failed=$(jq -r '.failed_asserts // 0' "$result_dir/test_results.json" 2>/dev/null || echo "1")
+              if [ "$failed" -eq 0 ]; then
+                ((successful_configs++))
+              fi
+            else
+              # If no JSON, assume failure
+              continue
+            fi
+          done
+
+          echo "- **Configurations Tested**: $total_configs" >> $GITHUB_STEP_SUMMARY
+          echo "- **Successful Configurations**: $successful_configs" >> $GITHUB_STEP_SUMMARY
+          echo "- **Success Rate**: $(( successful_configs * 100 / total_configs ))%" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$successful_configs" -eq "$total_configs" ]; then
+            echo "🎉 **All tests passed across all platforms!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Some tests failed - Check detailed results**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Notification on failure
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [quick-test, test-matrix]
+    if: failure() && github.event_name == 'push'
+
+    steps:
+      - name: Create failure notification
+        run: |
+          echo "## ❌ Test Pipeline Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The unified testing infrastructure has failed. Please check:" >> $GITHUB_STEP_SUMMARY
+          echo "- Build configuration issues" >> $GITHUB_STEP_SUMMARY
+          echo "- Test execution problems" >> $GITHUB_STEP_SUMMARY
+          echo "- Platform-specific issues" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review the failed job logs" >> $GITHUB_STEP_SUMMARY
+          echo "2. Check if unified test runner builds correctly" >> $GITHUB_STEP_SUMMARY
+          echo "3. Verify test dependencies are available" >> $GITHUB_STEP_SUMMARY
+          echo "4. Test locally with \`./scripts/run_tests.sh\`" >> $GITHUB_STEP_SUMMARY

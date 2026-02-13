@@ -5,12 +5,12 @@
  * @brief Thread-safe event queue for broadcasting
  */
 
-#include "../event.hpp"
-#include "event_store.hpp"
 #include <atomic>
 #include <mutex>
 #include <optional>
 #include <queue>
+#include "../event.hpp"
+#include "event_store.hpp"
 
 namespace atom::extra::asio::sse {
 
@@ -19,7 +19,7 @@ namespace atom::extra::asio::sse {
  */
 class EventQueue {
 public:
-    explicit EventQueue(EventStore& event_store, bool persist_events);
+    explicit EventQueue(ServerEventStore& event_store, bool persist_events);
 
     void push_event(Event event);
     bool has_events() const;
@@ -29,8 +29,8 @@ private:
     std::queue<Event> events_;
     std::mutex mutex_;
     std::atomic<bool> event_available_{false};
-    EventStore& event_store_;
+    ServerEventStore& event_store_;
     bool persist_events_;
 };
 
-} // namespace sse_server
+}  // namespace atom::extra::asio::sse

@@ -1,0 +1,218 @@
+name: Coverage Analysis
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run coverage analysis daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  BUILD_TYPE: Debug
+  COVERAGE_MINIMUM: 75
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          ninja-build \
+          lcov \
+          gcovr \
+          python3-dev \
+          python3-pip \
+          libgtest-dev \
+          libgmock-dev \
+          pkg-config
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-benchmark coverage[toml]
+
+    - name: Configure CMake with coverage
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+          -DATOM_ENABLE_COVERAGE=ON \
+          -DATOM_COVERAGE_HTML=ON \
+          -DATOM_BUILD_TESTS=ON \
+          -DATOM_BUILD_PYTHON_BINDINGS=ON \
+          -G Ninja
+
+    - name: Build project
+      run: cmake --build build --parallel
+
+    - name: Run C++ tests with coverage
+      run: |
+        cd build
+        ctest --output-on-failure --parallel
+        make coverage-capture coverage-html
+
+    - name: Run Python tests with coverage
+      run: |
+        python -m pytest python/tests/ \
+          --cov=atom \
+          --cov=python \
+          --cov-report=xml:coverage/python/coverage.xml \
+          --cov-report=html:coverage/python/html \
+          --cov-branch \
+          --cov-fail-under=$COVERAGE_MINIMUM
+
+    - name: Generate unified coverage report
+      run: |
+        python scripts/unified_coverage.py
+
+    - name: Generate coverage badges
+      run: |
+        python scripts/coverage_badge.py --output markdown > coverage_badges.md
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage/python/coverage.xml,./build/coverage/coverage_cleaned.info
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Upload coverage artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-reports
+        path: |
+          coverage/
+          build/coverage/
+        retention-days: 30
+
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+
+          // Read coverage data
+          const coverageFile = 'coverage/unified/coverage.json';
+          if (!fs.existsSync(coverageFile)) {
+            console.log('Coverage file not found');
+            return;
+          }
+
+          const coverage = JSON.parse(fs.readFileSync(coverageFile, 'utf8'));
+          const overall = coverage.overall.coverage_percentage;
+          const cpp = coverage.cpp.coverage_percentage;
+          const python = coverage.python.coverage_percentage;
+
+          // Read badges
+          let badges = '';
+          if (fs.existsSync('coverage_badges.md')) {
+            badges = fs.readFileSync('coverage_badges.md', 'utf8').trim();
+          }
+
+          const comment = `## 📊 Coverage Report
+
+          ${badges}
+
+          | Language | Coverage | Lines Covered | Total Lines |
+          |----------|----------|---------------|-------------|
+          | **Overall** | **${overall.toFixed(1)}%** | ${coverage.overall.covered_lines.toLocaleString()} | ${coverage.overall.total_lines.toLocaleString()} |
+          | C++ | ${cpp.toFixed(1)}% | ${coverage.cpp.covered_lines.toLocaleString()} | ${coverage.cpp.total_lines.toLocaleString()} |
+          | Python | ${python.toFixed(1)}% | ${coverage.python.covered_lines.toLocaleString()} | ${coverage.python.total_lines.toLocaleString()} |
+
+          📈 [View detailed coverage report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          ${overall >= process.env.COVERAGE_MINIMUM ? '✅' : '❌'} Coverage ${overall >= process.env.COVERAGE_MINIMUM ? 'meets' : 'below'} minimum threshold of ${process.env.COVERAGE_MINIMUM}%
+          `;
+
+          // Find existing comment
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+
+          const existingComment = comments.find(comment =>
+            comment.body.includes('📊 Coverage Report')
+          );
+
+          if (existingComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existingComment.id,
+              body: comment
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+          }
+
+    - name: Check coverage threshold
+      run: |
+        python -c "
+        import json
+        import sys
+
+        with open('coverage/unified/coverage.json', 'r') as f:
+            data = json.load(f)
+
+        overall = data['overall']['coverage_percentage']
+        threshold = float('${{ env.COVERAGE_MINIMUM }}')
+
+        print(f'Overall coverage: {overall:.1f}%')
+        print(f'Minimum threshold: {threshold}%')
+
+        if overall < threshold:
+            print(f'❌ Coverage {overall:.1f}% is below minimum threshold {threshold}%')
+            sys.exit(1)
+        else:
+            print(f'✅ Coverage {overall:.1f}% meets minimum threshold {threshold}%')
+        "
+
+  coverage-report:
+    runs-on: ubuntu-latest
+    needs: coverage
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download coverage artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: coverage-reports
+        path: coverage-reports/
+
+    - name: Deploy coverage to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: coverage-reports/unified
+        destination_dir: coverage
+        keep_files: false

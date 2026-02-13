@@ -25,13 +25,13 @@
 using namespace atom::meta;
 using namespace atom::type;  // 添加type命名空间
 
-// Helper function to print section headers
-void printHeader(const std::string& title) {
-    std::cout << "\n=========================================================="
-              << std::endl;
-    std::cout << "  " << title << std::endl;
-    std::cout << "=========================================================="
-              << std::endl;
+// Helper function to print section headersvoid printHeader(const std::string&
+// title) {
+std::cout << "\n=========================================================="
+          << std::endl;
+std::cout << "  " << title << std::endl;
+std::cout << "=========================================================="
+          << std::endl;
 }
 
 std::string errorToString(const FFIError& error) {
@@ -51,8 +51,7 @@ std::string errorToString(const FFIError& error) {
     }
 }
 
-// Helper to print error results
-template <typename T>
+// Helper to print error resultstemplate <typename T>
 void printResult(const FFIResult<T>& result, const std::string& description) {
     std::cout << std::left << std::setw(40) << description;
     if (result) {
@@ -63,54 +62,54 @@ void printResult(const FFIResult<T>& result, const std::string& description) {
     }
 }
 
-// Example custom struct that implements FFI type layout
-struct ExampleStruct : public FFITypeLayoutGenerator<ExampleStruct> {
-    int x;
-    double y;
-    char* z;
+// Example custom struct that implements FFI type layoutstruct ExampleStruct :
+// public FFITypeLayoutGenerator<ExampleStruct> {
+int x;
+double y;
+char* z;
 
-    static void defineFFITypeLayout(ffi_type& layout) {
-        static ffi_type* elements[] = {
-            &ffi_type_sint32,   // for int x
-            &ffi_type_double,   // for double y
-            &ffi_type_pointer,  // for char* z
-            nullptr             // terminator
-        };
+static void defineFFITypeLayout(ffi_type& layout) {
+    static ffi_type* elements[] = {
+        &ffi_type_sint32,   // for int x
+        &ffi_type_double,   // for double y
+        &ffi_type_pointer,  // for char* z
+        nullptr             // terminator
+    };
 
-        layout.size = 0;
-        layout.alignment = 0;
-        layout.type = FFI_TYPE_STRUCT;
-        layout.elements = elements;
-    }
-};
+    layout.size = 0;
+    layout.alignment = 0;
+    layout.type = FFI_TYPE_STRUCT;
+    layout.elements = elements;
+}
+}
+;
 
-// Sample callback function
-int sampleCallback(int a, int b) {
-    std::cout << "Callback called with: " << a << ", " << b << std::endl;
-    return a + b;
+// Sample callback functionint sampleCallback(int a, int b) {
+std::cout << "Callback called with: " << a << ", " << b << std::endl;
+return a + b;
 }
 
-// Define a mock library interface for demonstration
-class MockLibraryInterface {
+// Define a mock library interface for demonstrationclass MockLibraryInterface {
 public:
-    virtual ~MockLibraryInterface() = default;
-    virtual int add(int a, int b) = 0;
-    virtual void performTask(const char* taskName) = 0;
-};
+virtual ~MockLibraryInterface() = default;
+virtual int add(int a, int b) = 0;
+virtual void performTask(const char* taskName) = 0;
+}
+;
 
-// Mock implementation for example
-class MockLibraryImpl : public MockLibraryInterface {
+// Mock implementation for exampleclass MockLibraryImpl : public
+// MockLibraryInterface {
 public:
-    int add(int a, int b) override { return a + b; }
+int add(int a, int b) override { return a + b; }
 
-    void performTask(const char* taskName) override {
-        std::cout << "Performing task: " << taskName << std::endl;
-    }
-};
+void performTask(const char* taskName) override {
+    std::cout << "Performing task: " << taskName << std::endl;
+}
+}
+;
 
-// Factory function
-extern "C" MockLibraryInterface* createMockLibrary() {
-    return new MockLibraryImpl();
+// Factory functionextern "C" MockLibraryInterface* createMockLibrary() {
+return new MockLibraryImpl();
 }
 
 int main() {
@@ -360,7 +359,7 @@ int main() {
         std::cout << R"(
          DynamicLibrary myLibrary("path/to/library.so", {});
          auto mockObjectResult = myLibrary.createObject<MockLibraryInterface>("createMockLibrary");
-         
+
          if (mockObjectResult) {
              MockLibraryInterface& mockObj = *mockObjectResult.value();
              int sum = mockObj.add(10, 20);

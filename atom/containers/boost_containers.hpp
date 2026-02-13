@@ -14,9 +14,10 @@ Description: Boost High-Performance Containers
 
 #pragma once
 
-#include "../macro.hpp"
+#include "../macro.hpp"  // IWYU pragma: keep
 
-// 只有在定义了ATOM_USE_BOOST_CONTAINER宏且Boost容器库可用时才启用
+// Enable only if ATOM_USE_BOOST_CONTAINER macro is defined and Boost container
+// library is available
 #if defined(ATOM_HAS_BOOST_CONTAINER)
 
 #include <boost/container/flat_map.hpp>
@@ -26,90 +27,94 @@ Description: Boost High-Performance Containers
 #include <boost/container/stable_vector.hpp>
 #include <boost/container/static_vector.hpp>
 #include <boost/container/string.hpp>
+#include <boost/container/vector.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/unordered_set.hpp>
-
 
 namespace atom {
 namespace containers {
 
 /**
- * @brief 高性能平面映射（flat_map）实现
+ * @brief High-performance flat_map implementation
  *
- * boost::container::flat_map是一个基于排序向量的关联容器，
- * 比标准map具有更好的缓存局部性和内存使用效率。
- * 适用于频繁查询但较少修改的场景。
+ * boost::container::flat_map is an associative container based on a sorted
+ * vector, offering better cache locality and memory efficiency than std::map.
+ * Suitable for scenarios with frequent queries but infrequent modifications.
  */
 template <typename Key, typename T, typename Compare = std::less<Key>>
 using flat_map = boost::container::flat_map<Key, T, Compare>;
 
 /**
- * @brief 高性能平面集合（flat_set）实现
+ * @brief High-performance flat_set implementation
  *
- * boost::container::flat_set是一个基于排序向量的关联容器，
- * 比标准set具有更好的缓存局部性和内存使用效率。
- * 适用于频繁查询但较少修改的场景。
+ * boost::container::flat_set is an associative container based on a sorted
+ * vector, offering better cache locality and memory efficiency than std::set.
+ * Suitable for scenarios with frequent queries but infrequent modifications.
  */
 template <typename Key, typename Compare = std::less<Key>>
 using flat_set = boost::container::flat_set<Key, Compare>;
 
 /**
- * @brief 小型向量（small_vector）实现
+ * @brief Small vector implementation
  *
- * 适用于大小通常较小的向量，避免小型数据的堆分配。
- * 内部有一个固定大小的缓冲区，只有当元素数量超过这个缓冲区时才会使用堆分配。
+ * Suitable for vectors that are usually small, avoiding heap allocation for
+ * small data. Internally has a fixed-size buffer, only using heap allocation
+ * when the number of elements exceeds this buffer.
  *
- * @tparam T 元素类型
- * @tparam N 内部缓冲区大小（元素个数）
+ * @tparam T Element type
+ * @tparam N Internal buffer size (number of elements)
  */
 template <typename T, std::size_t N>
 using small_vector = boost::container::small_vector<T, N>;
 
 /**
- * @brief 静态向量（static_vector）实现
+ * @brief Static vector implementation
  *
- * 固定最大大小的向量，所有内存在栈上分配。
- * 永远不会使用堆内存，非常适合实时系统或性能关键型代码。
+ * Vector with a fixed maximum size, all memory allocated on the stack.
+ * Never uses heap memory, ideal for real-time systems or performance-critical
+ * code.
  *
- * @tparam T 元素类型
- * @tparam N 最大元素个数
+ * @tparam T Element type
+ * @tparam N Maximum number of elements
  */
 template <typename T, std::size_t N>
 using static_vector = boost::container::static_vector<T, N>;
 
 /**
- * @brief 稳定向量（stable_vector）实现
+ * @brief Stable vector implementation
  *
- * 提供稳定的迭代器和引用，即使在插入和删除操作后也不会失效。
- * 适用于需要保持迭代器有效性的场景。
+ * Provides stable iterators and references, which remain valid even after
+ * insertions and deletions. Suitable for scenarios where iterator validity must
+ * be preserved.
  */
 template <typename T>
 using stable_vector = boost::container::stable_vector<T>;
 
 /**
- * @brief 高性能字符串实现
+ * @brief High-performance string implementation
  *
- * 使用小字符串优化(SSO)和自定义内存管理
+ * Uses small string optimization (SSO) and custom memory management.
  */
 using bstring = boost::container::string;
 
 /**
- * @brief 高性能无序映射实现
+ * @brief High-performance unordered map implementation
  *
- * 比std::unordered_map有更好的性能特性，特别是在高并发环境下。
+ * Offers better performance characteristics than std::unordered_map, especially
+ * in highly concurrent environments.
  */
 template <typename Key, typename T, typename Hash = boost::hash<Key>,
           typename Pred = std::equal_to<Key>>
 using fast_unordered_map = boost::unordered_map<Key, T, Hash, Pred>;
 
 /**
- * @brief 高性能无序集合实现
+ * @brief High-performance unordered set implementation
  */
 template <typename Key, typename Hash = boost::hash<Key>,
           typename Pred = std::equal_to<Key>>
 using fast_unordered_set = boost::unordered_set<Key, Hash, Pred>;
 
-// PMR内存资源使用示例
+// Example usage of PMR (Polymorphic Memory Resource)
 namespace pmr {
 template <typename T>
 using polymorphic_allocator = boost::container::pmr::polymorphic_allocator<T>;

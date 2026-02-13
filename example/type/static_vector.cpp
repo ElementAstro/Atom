@@ -17,83 +17,81 @@
 #include <iostream>
 #include <string>
 
-// Define a custom type to demonstrate StaticVector with non-POD types
-class Widget {
+// Define a custom type to demonstrate StaticVector with non-POD typesclass
+// Widget {
 private:
-    int id_;
-    std::string name_;
+int id_;
+std::string name_;
 
 public:
-    Widget() : id_(0), name_("Default") {
-        std::cout << "Widget default constructed: " << name_ << std::endl;
-    }
+Widget() : id_(0), name_("Default") {
+    std::cout << "Widget default constructed: " << name_ << std::endl;
+}
 
-    Widget(int id, std::string name) : id_(id), name_(std::move(name)) {
-        std::cout << "Widget constructed: " << name_ << " (ID: " << id_ << ")"
-                  << std::endl;
-    }
+Widget(int id, std::string name) : id_(id), name_(std::move(name)) {
+    std::cout << "Widget constructed: " << name_ << " (ID: " << id_ << ")"
+              << std::endl;
+}
 
-    Widget(const Widget& other) : id_(other.id_), name_(other.name_) {
-        std::cout << "Widget copy constructed: " << name_ << std::endl;
-    }
+Widget(const Widget& other) : id_(other.id_), name_(other.name_) {
+    std::cout << "Widget copy constructed: " << name_ << std::endl;
+}
 
-    Widget(Widget&& other) noexcept
-        : id_(other.id_), name_(std::move(other.name_)) {
-        std::cout << "Widget move constructed: " << name_ << std::endl;
+Widget(Widget&& other) noexcept
+    : id_(other.id_), name_(std::move(other.name_)) {
+    std::cout << "Widget move constructed: " << name_ << std::endl;
+    other.id_ = -1;
+}
+
+Widget& operator=(const Widget& other) {
+    if (this != &other) {
+        id_ = other.id_;
+        name_ = other.name_;
+        std::cout << "Widget copy assigned: " << name_ << std::endl;
+    }
+    return *this;
+}
+
+Widget& operator=(Widget&& other) noexcept {
+    if (this != &other) {
+        id_ = other.id_;
+        name_ = std::move(other.name_);
         other.id_ = -1;
+        std::cout << "Widget move assigned: " << name_ << std::endl;
     }
-
-    Widget& operator=(const Widget& other) {
-        if (this != &other) {
-            id_ = other.id_;
-            name_ = other.name_;
-            std::cout << "Widget copy assigned: " << name_ << std::endl;
-        }
-        return *this;
-    }
-
-    Widget& operator=(Widget&& other) noexcept {
-        if (this != &other) {
-            id_ = other.id_;
-            name_ = std::move(other.name_);
-            other.id_ = -1;
-            std::cout << "Widget move assigned: " << name_ << std::endl;
-        }
-        return *this;
-    }
-
-    ~Widget() {
-        std::cout << "Widget destroyed: " << name_ << " (ID: " << id_ << ")"
-                  << std::endl;
-    }
-
-    int getId() const { return id_; }
-    const std::string& getName() const { return name_; }
-
-    void setName(const std::string& name) { name_ = name; }
-
-    bool operator==(const Widget& other) const {
-        return id_ == other.id_ && name_ == other.name_;
-    }
-};
-
-// Formatter for Widget to use with iostream
-std::ostream& operator<<(std::ostream& os, const Widget& widget) {
-    return os << "Widget{" << widget.getId() << ", \"" << widget.getName()
-              << "\"}";
+    return *this;
 }
 
-// Helper function to print section headers
-void printSection(const std::string& title) {
-    std::cout << "\n================================================"
-              << std::endl;
-    std::cout << "  " << title << std::endl;
-    std::cout << "================================================"
+~Widget() {
+    std::cout << "Widget destroyed: " << name_ << " (ID: " << id_ << ")"
               << std::endl;
 }
 
-// Helper function to print a StaticVector's content
-template <typename T, std::size_t Capacity, std::size_t Alignment>
+int getId() const { return id_; }
+const std::string& getName() const { return name_; }
+
+void setName(const std::string& name) { name_ = name; }
+
+bool operator==(const Widget& other) const {
+    return id_ == other.id_ && name_ == other.name_;
+}
+}
+;
+
+// Formatter for Widget to use with iostreamstd::ostream&
+// operator<<(std::ostream& os, const Widget& widget) {
+return os << "Widget{" << widget.getId() << ", \"" << widget.getName() << "\"}";
+}
+
+// Helper function to print section headersvoid printSection(const std::string&
+// title) {
+std::cout << "\n================================================" << std::endl;
+std::cout << "  " << title << std::endl;
+std::cout << "================================================" << std::endl;
+}
+
+// Helper function to print a StaticVector's contenttemplate <typename T,
+// std::size_t Capacity, std::size_t Alignment>
 void printVector(const atom::type::StaticVector<T, Capacity, Alignment>& vec,
                  const std::string& label = "Vector contents") {
     std::cout << label << " (size=" << vec.size()

@@ -1,0 +1,47 @@
+[
+    // ===== Build Shortcuts =====
+    {
+        "key": "ctrl+shift+b",
+        "command": "workbench.action.tasks.runTask",
+        "args": "CMake: Build (Debug)"
+    },
+    {
+        "key": "ctrl+alt+b",
+        "command": "workbench.action.tasks.runTask",
+        "args": "CMake: Build (Release)"
+    },
+    {
+        "key": "ctrl+shift+c",
+        "command": "workbench.action.tasks.runTask",
+        "args": "CMake: Configure (Debug)"
+    },
+    // ===== Test Shortcuts =====
+    {
+        "key": "ctrl+shift+t",
+        "command": "workbench.action.tasks.runTask",
+        "args": "CTest: Run All Tests (Debug)"
+    },
+    // ===== Clean Shortcuts =====
+    {
+        "key": "ctrl+shift+x",
+        "command": "workbench.action.tasks.runTask",
+        "args": "Clean: Build Directory"
+    },
+    // ===== CMake Tools =====
+    {
+        "key": "f7",
+        "command": "cmake.build"
+    },
+    {
+        "key": "shift+f7",
+        "command": "cmake.buildTarget"
+    },
+    {
+        "key": "ctrl+f5",
+        "command": "cmake.launchTarget"
+    },
+    {
+        "key": "f5",
+        "command": "cmake.debugTarget"
+    }
+]

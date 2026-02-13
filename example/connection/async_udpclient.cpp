@@ -8,8 +8,8 @@
 using namespace atom::async::connection;
 
 int main() {
-    // Create an instance of UdpClient
-    UdpClient client;
+    // Create an instance of AsyncUdpClient
+    AsyncUdpClient client;
 
     // Bind the client to a specific port
     int port = 12345;

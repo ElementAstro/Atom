@@ -1,5 +1,5 @@
 #include "archiver.h"
-#include "atom/io/compress.hpp"
+#include "atom/io/compression/compress.hpp"
 
 #include <algorithm>
 #include <regex>

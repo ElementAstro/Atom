@@ -36,8 +36,17 @@ Description: A Small Vector Implementation with optional Boost support
 
 #if defined(__cpp_lib_hardware_interference_size) && \
     !defined(ATOM_DISABLE_CACHE_OPTIMIZATION)
+#ifdef __has_include
+#if __has_include(<new>)
+#include <new>
 constexpr std::size_t ATOM_CACHELINE_SIZE =
     std::hardware_destructive_interference_size;
+#else
+constexpr std::size_t ATOM_CACHELINE_SIZE = 64;  // Common cache line size
+#endif
+#else
+constexpr std::size_t ATOM_CACHELINE_SIZE = 64;  // Common cache line size
+#endif
 #else
 constexpr std::size_t ATOM_CACHELINE_SIZE = 64;  // Common cache line size
 #endif
@@ -476,8 +485,8 @@ public:
         return emplace(pos, std::move(value));
     }
 
-    auto insert(const_iterator pos, size_type count, const T& value)
-        -> iterator {
+    auto insert(const_iterator pos, size_type count,
+                const T& value) -> iterator {
         if (count == 0) {
             return const_cast<iterator>(pos);
         }

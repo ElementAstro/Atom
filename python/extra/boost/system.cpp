@@ -153,7 +153,7 @@ Examples:
     >>> result = system.make_result(success_func)
     >>> print(result.value())
     Success!
-    
+
     >>> def error_func():
     ...     raise ValueError("Something went wrong")
     >>> result = system.make_result(error_func)
@@ -208,7 +208,7 @@ Examples:
     >>> result = system.ResultVoid()
     >>> print(result.has_value())
     True
-    
+
     >>> # Creating a failed void result
     >>> error_result = system.ResultVoid(system.Error(1, system.generic_category()))
     >>> print(error_result.has_value())
@@ -239,7 +239,7 @@ Examples:
     >>> result = system.ResultInt(42)
     >>> print(result.value())
     42
-    
+
     >>> # Creating a failed result
     >>> error_result = system.ResultInt(system.Error(1, system.generic_category()))
     >>> print(error_result.has_value())
@@ -317,9 +317,8 @@ Examples:
             .def("__bool__", &ResultT::operator bool,
                  "Checks if the Result has a value.");
         /*
-        TODO: Fix the __str__ method to return a string representation of the Result object.
-        .def("__str__", [](const ResultT& r) {
-        if (r.hasValue()) {
+        TODO: Fix the __str__ method to return a string representation of the
+    Result object. .def("__str__", [](const ResultT& r) { if (r.hasValue()) {
             // Cast the value to py::object first
             py::object value_obj = py::cast(r.value());
             // Then convert the py::object to its Python string representation

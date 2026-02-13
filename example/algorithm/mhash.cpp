@@ -1,4 +1,4 @@
-#include "atom/algorithm/mhash.hpp"
+#include "atom/algorithm/hash/mhash.hpp"
 
 #include <iostream>
 #include <string>
@@ -26,8 +26,8 @@ int main() {
     std::vector<int> set2 = {4, 5, 6, 7, 8};
 
     // Compute MinHash signatures for the sets
-    std::vector<size_t> signature1 = minHash.computeSignature(set1);
-    std::vector<size_t> signature2 = minHash.computeSignature(set2);
+    auto signature1 = minHash.computeSignature(set1);
+    auto signature2 = minHash.computeSignature(set2);
 
     // Print MinHash signatures
     std::cout << "MinHash Signature for Set 1: ";
@@ -52,8 +52,9 @@ int main() {
     const uint8_t input[] = "Hello, World!";
     size_t length = sizeof(input) - 1;
 
-    // Compute keccak256 hash
-    std::array<uint8_t, K_HASH_SIZE> hash = keccak256(input, length);
+    // Compute keccak256 hash using span
+    std::array<uint8_t, K_HASH_SIZE> hash =
+        keccak256(std::span<const uint8_t>(input, length));
 
     // Print keccak256 hash
     std::cout << "Keccak256 Hash: ";

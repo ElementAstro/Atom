@@ -18,84 +18,82 @@
 
 #include "atom/meta/vany.hpp"
 
-// Class that will be used to demonstrate custom class behavior with Any
-class Person {
+// Class that will be used to demonstrate custom class behavior with Anyclass
+// Person {
 private:
-    std::string name_;
-    int age_;
+std::string name_;
+int age_;
 
 public:
-    Person(std::string name, int age) : name_(std::move(name)), age_(age) {}
+Person(std::string name, int age) : name_(std::move(name)), age_(age) {}
 
-    std::string getName() const { return name_; }
-    int getAge() const { return age_; }
+std::string getName() const { return name_; }
+int getAge() const { return age_; }
 
-    // Provide custom string representation
-    friend std::ostream& operator<<(std::ostream& os, const Person& person) {
-        os << "Person{name='" << person.name_ << "', age=" << person.age_
-           << "}";
-        return os;
-    }
+// Provide custom string representation
+friend std::ostream& operator<<(std::ostream& os, const Person& person) {
+    os << "Person{name='" << person.name_ << "', age=" << person.age_ << "}";
+    return os;
+}
 
-    // Provide custom equality operator
-    bool operator==(const Person& other) const {
-        return name_ == other.name_ && age_ == other.age_;
-    }
-};
+// Provide custom equality operator
+bool operator==(const Person& other) const {
+    return name_ == other.name_ && age_ == other.age_;
+}
+}
+;
 
-// Large class that won't fit in the small object optimization buffer
-class LargeClass {
+// Large class that won't fit in the small object optimization bufferclass
+// LargeClass {
 private:
-    std::array<double, 100> data_;
-    std::string name_;
+std::array<double, 100> data_;
+std::string name_;
 
 public:
-    LargeClass(std::string name) : name_(std::move(name)) {
-        // Initialize with some values
-        for (size_t i = 0; i < data_.size(); ++i) {
-            data_[i] = static_cast<double>(i);
-        }
+LargeClass(std::string name) : name_(std::move(name)) {
+    // Initialize with some values
+    for (size_t i = 0; i < data_.size(); ++i) {
+        data_[i] = static_cast<double>(i);
     }
+}
 
-    std::string getName() const { return name_; }
+std::string getName() const { return name_; }
 
-    double sum() const {
-        return std::accumulate(data_.begin(), data_.end(), 0.0);
-    }
+double sum() const { return std::accumulate(data_.begin(), data_.end(), 0.0); }
 
-    friend std::ostream& operator<<(std::ostream& os, const LargeClass& obj) {
-        os << "LargeClass{name='" << obj.name_
-           << "', data size=" << obj.data_.size() << "}";
-        return os;
-    }
+friend std::ostream& operator<<(std::ostream& os, const LargeClass& obj) {
+    os << "LargeClass{name='" << obj.name_
+       << "', data size=" << obj.data_.size() << "}";
+    return os;
+}
 
-    bool operator==(const LargeClass& other) const {
-        return name_ == other.name_ && data_ == other.data_;
-    }
-};
+bool operator==(const LargeClass& other) const {
+    return name_ == other.name_ && data_ == other.data_;
+}
+}
+;
 
-// Non-copyable class to test move semantics
-class NonCopyable {
+// Non-copyable class to test move semanticsclass NonCopyable {
 private:
-    std::unique_ptr<int> value_;
+std::unique_ptr<int> value_;
 
 public:
-    explicit NonCopyable(int val) : value_(std::make_unique<int>(val)) {}
-    NonCopyable(const NonCopyable&) = delete;
-    NonCopyable& operator=(const NonCopyable&) = delete;
-    NonCopyable(NonCopyable&&) noexcept = default;
-    NonCopyable& operator=(NonCopyable&&) noexcept = default;
+explicit NonCopyable(int val) : value_(std::make_unique<int>(val)) {}
+NonCopyable(const NonCopyable&) = delete;
+NonCopyable& operator=(const NonCopyable&) = delete;
+NonCopyable(NonCopyable&&) noexcept = default;
+NonCopyable& operator=(NonCopyable&&) noexcept = default;
 
-    int getValue() const { return *value_; }
+int getValue() const { return *value_; }
 
-    friend std::ostream& operator<<(std::ostream& os, const NonCopyable& obj) {
-        os << "NonCopyable{value=" << *obj.value_ << "}";
-        return os;
-    }
-};
+friend std::ostream& operator<<(std::ostream& os, const NonCopyable& obj) {
+    os << "NonCopyable{value=" << *obj.value_ << "}";
+    return os;
+}
+}
+;
 
-// Custom container class to test iteration
-template <typename T>
+// Custom container class to test iterationtemplate <typename T>
 class CustomContainer {
 private:
     std::vector<T> data_;
@@ -121,9 +119,9 @@ public:
     }
 };
 
-// Utility function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n=== " << title << " ===\n";
+// Utility function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n=== " << title << " ===\n";
 }
 
 int main() {

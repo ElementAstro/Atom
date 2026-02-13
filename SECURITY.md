@@ -22,7 +22,7 @@
 
 感谢您对Lithium项目安全的关注和支持！
 
-# Security Policy
+## Security Policy
 
 ## Supported Versions
 

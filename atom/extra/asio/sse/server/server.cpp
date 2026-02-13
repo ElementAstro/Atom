@@ -1,4 +1,8 @@
 #include "server.hpp"
+
+// Check if nlohmann-json is available
+#if __has_include(<nlohmann/json.hpp>)
+
 #include <spdlog/spdlog.h>
 #include <atomic>
 
@@ -110,8 +114,10 @@ net::awaitable<void> SSEServer::accept_connections() {
             }
         }
 
-        auto [ec, socket] =
-            co_await as_tuple_awaitable(acceptor_.async_accept());
+        // Use as_tuple completion token for proper error handling
+        tcp::socket socket(io_context_);
+        auto [ec] = co_await acceptor_.async_accept(
+            socket, net::as_tuple(net::use_awaitable));
 
         if (ec) {
             SPDLOG_ERROR("Accept error: {}", ec.message());
@@ -179,3 +185,5 @@ std::string generate_id() {
 }
 
 }  // namespace atom::extra::asio::sse
+
+#endif  // __has_include(<nlohmann/json.hpp>)

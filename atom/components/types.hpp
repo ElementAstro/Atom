@@ -1,46 +1,15 @@
-/*
- * types.hpp
+/**
+ * @file types.hpp
+ * @brief Backwards compatibility header for component types.
  *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ * @deprecated This header location is deprecated. Please use
+ * "atom/components/core/types.hpp" instead.
  */
 
-/*************************************************
+#ifndef ATOM_COMPONENT_TYPES_COMPAT_HPP
+#define ATOM_COMPONENT_TYPES_COMPAT_HPP
 
-Date: 2024-3-1
+// Forward to the new location
+#include "core/types.hpp"
 
-Description: Basic Component Types Definition and Some Utilities
-
-**************************************************/
-
-#ifndef ATOM_COMPONENT_TYPES_HPP
-#define ATOM_COMPONENT_TYPES_HPP
-
-#include "atom/meta/enum.hpp"
-
-enum class ComponentType {
-    NONE,
-    SHARED,
-    SHARED_INJECTED,
-    SCRIPT,
-    EXECUTABLE,
-    TASK,
-    LAST_ENUM_VALUE
-};
-
-template <>
-struct atom::meta::EnumTraits<ComponentType> {
-    static constexpr std::array<ComponentType, 7> VALUES = {
-        ComponentType::NONE,
-        ComponentType::SHARED,
-        ComponentType::SHARED_INJECTED,
-        ComponentType::SCRIPT,
-        ComponentType::EXECUTABLE,
-        ComponentType::TASK,
-        ComponentType::LAST_ENUM_VALUE};
-
-    static constexpr std::array<std::string_view, 7> NAMES = {
-        "NONE",       "SHARED", "SHARED_INJECTED", "SCRIPT",
-        "EXECUTABLE", "TASK",   "LAST_ENUM_VALUE"};
-};
-
-#endif  // ATOM_COMPONENT_TYPES_HPP
+#endif  // ATOM_COMPONENT_TYPES_COMPAT_HPP

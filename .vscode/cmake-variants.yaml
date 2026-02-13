@@ -1,0 +1,98 @@
+# CMake build variants for VS Code CMake Tools
+# This file defines build type variants and feature toggles
+
+buildType:
+  default: debug
+  description: Build type
+  choices:
+    debug:
+      short: Debug
+      long: Debug build with full debug info and assertions
+      buildType: Debug
+    release:
+      short: Release
+      long: Optimized release build
+      buildType: Release
+    relwithdebinfo:
+      short: RelDebInfo
+      long: Release with debug symbols
+      buildType: RelWithDebInfo
+    minsizerel:
+      short: MinSize
+      long: Minimum size release
+      buildType: MinSizeRel
+
+tests:
+  default: "on"
+  description: Build tests
+  choices:
+    "on":
+      short: +Tests
+      long: Build with tests enabled
+      settings:
+        ATOM_BUILD_TESTS: "ON"
+    "off":
+      short: -Tests
+      long: Build without tests
+      settings:
+        ATOM_BUILD_TESTS: "OFF"
+
+examples:
+  default: "on"
+  description: Build examples
+  choices:
+    "on":
+      short: +Examples
+      long: Build with examples enabled
+      settings:
+        ATOM_BUILD_EXAMPLES: "ON"
+    "off":
+      short: -Examples
+      long: Build without examples
+      settings:
+        ATOM_BUILD_EXAMPLES: "OFF"
+
+python:
+  default: "off"
+  description: Build Python bindings
+  choices:
+    "on":
+      short: +Python
+      long: Build with Python bindings
+      settings:
+        ATOM_BUILD_PYTHON: "ON"
+    "off":
+      short: -Python
+      long: Build without Python bindings
+      settings:
+        ATOM_BUILD_PYTHON: "OFF"
+
+docs:
+  default: "off"
+  description: Build documentation
+  choices:
+    "on":
+      short: +Docs
+      long: Build with documentation
+      settings:
+        ATOM_BUILD_DOCS: "ON"
+    "off":
+      short: -Docs
+      long: Build without documentation
+      settings:
+        ATOM_BUILD_DOCS: "OFF"
+
+shared:
+  default: "on"
+  description: Build shared libraries
+  choices:
+    "on":
+      short: Shared
+      long: Build shared libraries
+      settings:
+        BUILD_SHARED_LIBS: "ON"
+    "off":
+      short: Static
+      long: Build static libraries
+      settings:
+        BUILD_SHARED_LIBS: "OFF"

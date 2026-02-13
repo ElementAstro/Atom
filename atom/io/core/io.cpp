@@ -1,0 +1,229 @@
+/*
+ * io.cpp
+ *
+ * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ */
+
+#include "io.hpp"
+#include "path_utils.hpp"
+
+#include <algorithm>
+#include <string_view>
+
+#include <spdlog/spdlog.h>
+#include "atom/error/exception.hpp"
+#include "atom/type/json.hpp"
+
+// Sub-component headers for template instantiations
+#include "atom/io/core/types.hpp"
+#include "atom/io/core/file_query.hpp"
+#include "atom/io/core/file_ops.hpp"
+#include "atom/io/core/directory_ops.hpp"
+#include "atom/io/core/directory_walk.hpp"
+#include "atom/io/core/file_split_merge.hpp"
+
+#ifdef __linux
+#include <dirent.h>
+#include <sys/stat.h>
+#endif
+
+using json = nlohmann::json;
+
+namespace atom::io {
+
+// These non-templated functions are kept in the .cpp file
+auto convertToLinuxPath(std::string_view windows_path) -> std::string {
+    try {
+        std::string linuxPath(windows_path);
+        std::ranges::replace(linuxPath, '\\', '/');
+
+        // Convert drive letter to lowercase (e.g. C: -> c:)
+        if (linuxPath.length() >= 2 && linuxPath[1] == ':') {
+            linuxPath[0] = std::tolower(linuxPath[0]);
+        }
+
+        return linuxPath;
+    } catch (const std::exception& e) {
+        spdlog::error("Error converting to Linux path: {}", e.what());
+        return std::string(windows_path);
+    }
+}
+
+auto convertToWindowsPath(std::string_view linux_path) -> std::string {
+    try {
+        std::string windowsPath(linux_path);
+        std::ranges::replace(windowsPath, '/', '\\');
+
+        // Convert drive letter to uppercase (e.g. c: -> C:)
+        if (windowsPath.length() >= 2 && std::islower(windowsPath[0]) &&
+            windowsPath[1] == ':') {
+            windowsPath[0] = std::toupper(windowsPath[0]);
+        }
+
+        return windowsPath;
+    } catch (const std::exception& e) {
+        spdlog::error("Error converting to Windows path: {}", e.what());
+        return std::string(linux_path);
+    }
+}
+
+auto normPath(std::string_view raw_path) -> std::string {
+    try {
+        // Normalize path separators first
+        std::string path(raw_path);
+        char preferred_separator = fs::path::preferred_separator;
+
+        if (preferred_separator == '/') {
+            std::ranges::replace(path, '\\', '/');
+        } else {
+            std::ranges::replace(path, '/', '\\');
+        }
+
+        fs::path normalized;
+        fs::path input_path(path);
+
+        // Handle absolute paths specially
+        bool is_absolute = input_path.is_absolute();
+
+        for (const auto& part : input_path) {
+            std::string part_str = part.string();
+
+            if (part_str == ".") {
+                // Skip current directory markers
+                continue;
+            } else if (part_str == "..") {
+                // Go up one level if not at root already
+                if (!normalized.empty() && normalized.filename() != "..") {
+                    normalized = normalized.parent_path();
+                } else if (!is_absolute) {
+                    // Can't go up further if at root of absolute path
+                    normalized /= part;
+                }
+            } else {
+                normalized /= part;
+            }
+        }
+
+        std::string result = normalized.string();
+        if (result.empty() && is_absolute) {
+            // Return root path for absolute paths that normalize to empty
+            result = preferred_separator == '/' ? "/" : "C:\\";
+        }
+
+        return result;
+    } catch (const std::exception& e) {
+        spdlog::error("Error normalizing path: {}", e.what());
+        return std::string(raw_path);
+    }
+}
+
+auto isFolderNameValid(std::string_view folderName) -> bool {
+    return detail::isFolderNameValid(folderName);
+}
+
+auto isFileNameValid(std::string_view fileName) -> bool {
+    return detail::isFileNameValid(fileName);
+}
+
+auto getExecutableNameFromPath(std::string_view path) -> std::string {
+    if (path.empty()) {
+        THROW_INVALID_ARGUMENT("The provided path is empty");
+    }
+
+    try {
+        // Platform-independent path separator detection
+        const std::string path_separators =
+#ifdef _WIN32
+            "/\\";
+#else
+            "/";
+#endif
+
+        size_t lastSlashPos = path.find_last_of(path_separators);
+
+        if (lastSlashPos == std::string_view::npos) {
+            if (path.find('.') == std::string_view::npos) {
+                THROW_INVALID_ARGUMENT(
+                    "The provided path does not contain a valid file name with "
+                    "extension");
+            }
+            return std::string(path);
+        }
+
+        std::string fileName(path.substr(lastSlashPos + 1));
+
+        if (fileName.empty()) {
+            THROW_INVALID_ARGUMENT(
+                "The provided path ends with a separator and contains no file "
+                "name");
+        }
+
+        size_t dotPos = fileName.find_last_of('.');
+        if (dotPos == std::string::npos) {
+            THROW_INVALID_ARGUMENT(
+                "The file name does not contain an extension");
+        }
+
+        return fileName;
+    } catch (const atom::error::Exception&) {
+        throw;
+    } catch (const std::exception& e) {
+        THROW_RUNTIME_ERROR(std::string("Error extracting executable name: ") +
+                            e.what());
+    }
+}
+
+// Explicit template instantiations for common types
+template bool isFolderExists<std::string>(const std::string& folderPath);
+template bool isFileExists<std::string>(const std::string& filePath);
+template std::uintmax_t fileSize<std::string>(const std::string& path);
+template void splitFile<std::string, std::string>(
+    const std::string& filePath, std::size_t chunkSize,
+    const std::string& outputPattern);
+template void mergeFiles<std::string>(const std::string& outputFilePath,
+                                      std::span<const std::string> partFiles);
+template bool createDirectory<std::string>(const std::string& path);
+template bool removeDirectory<std::string>(const std::string& path);
+template bool copyFile<std::string, std::string>(const std::string& src_path,
+                                                 const std::string& dst_path);
+template bool moveFile<std::string, std::string>(const std::string& src_path,
+                                                 const std::string& dst_path);
+template bool renameFile<std::string, std::string>(const std::string& old_path,
+                                                   const std::string& new_path);
+template bool removeFile<std::string>(const std::string& path);
+template bool createSymlink<std::string, std::string>(
+    const std::string& target_path, const std::string& symlink_path);
+template bool removeSymlink<std::string>(const std::string& path);
+template std::string jwalk<std::string>(const std::string& root);
+template void fwalk<std::string>(
+    const std::string& root,
+    const std::function<void(const fs::path&)>& callback);
+template bool isFolderEmpty<std::string>(const std::string& folderPath);
+template bool isAbsolutePath<std::string>(const std::string& path);
+template bool changeWorkingDirectory<std::string>(
+    const std::string& directoryPath);
+template std::pair<std::string, std::string> getFileTimes<std::string>(
+    const std::string& filePath);
+template bool isExecutableFile<std::string, std::string>(
+    const std::string& fileName, const std::string& fileExt);
+template std::size_t getFileSize<std::string>(const std::string& filePath);
+template bool truncateFile<std::string>(const std::string& path,
+                                        std::streamsize size);
+template auto checkPathType<std::string>(const std::string& path) -> PathType;
+template auto countLinesInFile<std::string>(const std::string& filePath)
+    -> std::optional<int>;
+template auto searchExecutableFiles<std::string>(const std::string& dir,
+                                                 std::string_view searchStr)
+    -> std::vector<fs::path>;
+
+// Instantiations for const char*
+template bool isFolderExists<const char*>(const char* const& folderPath);
+template bool isFileExists<const char*>(const char* const& filePath);
+template std::uintmax_t fileSize<const char*>(const char* const& path);
+
+// Instantiations for fs::path
+template bool isFolderExists<fs::path>(const fs::path& folderPath);
+template bool isFileExists<fs::path>(const fs::path& filePath);
+template std::uintmax_t fileSize<fs::path>(const fs::path& path);
+
+}  // namespace atom::io

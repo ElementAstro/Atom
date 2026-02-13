@@ -6,7 +6,6 @@
 #include <thread>
 #include <vector>
 
-
 #include "atom/type/static_vector.hpp"
 
 using namespace atom::type;

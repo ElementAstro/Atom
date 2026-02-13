@@ -5,7 +5,6 @@
 #include <system_error>
 #include "error.h"
 
-
 using modern_log::log_error_category;
 using modern_log::LogError;
 using modern_log::LogErrorCategory;

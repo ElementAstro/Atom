@@ -76,7 +76,8 @@ std::string Shortcut::toString() const {
                 ss << static_cast<char>(result & 0xFF);
             } else {
                 ss << "0x" << std::hex << vkCode;
-            }        }
+            }
+        }
     }
 
     return ss.str();

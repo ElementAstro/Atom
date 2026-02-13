@@ -20,7 +20,6 @@ Description: Log Manager for centralized logging configuration and access
 #include "atomlog.hpp"
 #include "mmap_logger.hpp"
 
-
 #include <filesystem>
 #include <memory>
 #include <optional>

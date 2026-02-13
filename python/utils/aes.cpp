@@ -193,4 +193,11 @@ Examples:
     >>> from atom.utils import aes
     >>> hash_value = aes.calculate_sha512("hello world")
 )");
+
+    // Expose constants from the C++ header
+    m.attr("ZLIB_BUFFER_SIZE") = atom::utils::ZLIB_BUFFER_SIZE;
+    m.attr("FILE_BUFFER_SIZE") = atom::utils::FILE_BUFFER_SIZE;
+    m.attr("AES_IV_SIZE") = atom::utils::AES_IV_SIZE;
+    m.attr("AES_TAG_SIZE") = atom::utils::AES_TAG_SIZE;
+    m.attr("MIN_KEY_SIZE") = atom::utils::MIN_KEY_SIZE;
 }

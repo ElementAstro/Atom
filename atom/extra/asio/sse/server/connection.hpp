@@ -14,7 +14,6 @@
 #include "metrics.hpp"
 #include "server_config.hpp"
 
-
 #include <chrono>
 #include <memory>
 #include <string>
@@ -30,15 +29,17 @@ public:
 
 #ifdef USE_SSL
     static pointer create(net::io_context& io_context, ssl_context& ssl_ctx,
-                          EventQueue& event_queue, EventStore& event_store,
+                          EventQueue& event_queue,
+                          ServerEventStore& event_store,
                           AuthService& auth_service, ServerMetrics& metrics,
                           const ServerConfig& config);
 
     ssl::stream<tcp::socket>& socket();
 #else
     static pointer create(net::io_context& io_context, EventQueue& event_queue,
-                          EventStore& event_store, AuthService& auth_service,
-                          ServerMetrics& metrics, const ServerConfig& config);
+                          ServerEventStore& event_store,
+                          AuthService& auth_service, ServerMetrics& metrics,
+                          const ServerConfig& config);
 
     tcp::socket& socket();
 #endif
@@ -51,22 +52,24 @@ public:
 private:
 #ifdef USE_SSL
     explicit SSEConnection(net::io_context& io_context, ssl_context& ssl_ctx,
-                           EventQueue& event_queue, EventStore& event_store,
+                           EventQueue& event_queue,
+                           ServerEventStore& event_store,
                            AuthService& auth_service, ServerMetrics& metrics,
                            const ServerConfig& config);
 
     ssl::stream<tcp::socket> ssl_socket_;
 #else
     explicit SSEConnection(net::io_context& io_context, EventQueue& event_queue,
-                           EventStore& event_store, AuthService& auth_service,
-                           ServerMetrics& metrics, const ServerConfig& config);
+                           ServerEventStore& event_store,
+                           AuthService& auth_service, ServerMetrics& metrics,
+                           const ServerConfig& config);
 
     tcp::socket socket_;
 #endif
 
     net::streambuf buffer_;
     EventQueue& event_queue_;
-    EventStore& event_store_;
+    ServerEventStore& event_store_;
     AuthService& auth_service_;
     ServerMetrics& metrics_;
     const ServerConfig& config_;

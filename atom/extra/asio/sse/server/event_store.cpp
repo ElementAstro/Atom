@@ -10,13 +10,14 @@ using json = nlohmann::json;
 
 namespace atom::extra::asio::sse {
 
-EventStore::EventStore(const std::string& store_path, size_t max_events)
+ServerEventStore::ServerEventStore(const std::string& store_path,
+                                   size_t max_events)
     : store_path_(store_path), max_events_(max_events) {
     std::filesystem::create_directories(store_path_);
     load_events();
 }
 
-void EventStore::store_event(const Event& event) {
+void ServerEventStore::store_event(const Event& event) {
     std::unique_lock lock(mutex_);
 
     events_.push_back(event);
@@ -28,8 +29,8 @@ void EventStore::store_event(const Event& event) {
     persist_event(event);
 }
 
-std::vector<Event> EventStore::get_events(size_t limit,
-                                          const std::string& event_type) const {
+std::vector<Event> ServerEventStore::get_events(
+    size_t limit, const std::string& event_type) const {
     std::shared_lock lock(mutex_);
 
     std::vector<Event> result;
@@ -46,7 +47,67 @@ std::vector<Event> EventStore::get_events(size_t limit,
     return result;
 }
 
-std::vector<Event> EventStore::get_events_since(
+std::vector<Event> ServerEventStore::get_events_after_id(
+    const std::string& last_event_id, size_t limit,
+    const std::string& channel) const {
+    std::shared_lock lock(mutex_);
+
+    std::vector<Event> result;
+    if (limit == 0) {
+        return result;
+    }
+
+    bool found = false;
+    for (const auto& event : events_) {
+        if (!found) {
+            if (event.id() == last_event_id) {
+                found = true;
+            }
+            continue;
+        }
+
+        if (!channel.empty()) {
+            auto meta_channel = event.get_metadata("channel");
+            if (!meta_channel || *meta_channel != channel) {
+                continue;
+            }
+        }
+
+        result.push_back(event);
+        if (result.size() >= limit) {
+            break;
+        }
+    }
+
+    return result;
+}
+
+std::vector<Event> ServerEventStore::get_recent_events_for_channel(
+    size_t limit, const std::string& channel) const {
+    std::shared_lock lock(mutex_);
+
+    std::vector<Event> result;
+    size_t count = 0;
+
+    for (auto it = events_.rbegin(); it != events_.rend() && count < limit;
+         ++it) {
+        if (channel.empty()) {
+            result.push_back(*it);
+            ++count;
+            continue;
+        }
+
+        auto meta_channel = it->get_metadata("channel");
+        if (meta_channel && *meta_channel == channel) {
+            result.push_back(*it);
+            ++count;
+        }
+    }
+
+    return result;
+}
+
+std::vector<Event> ServerEventStore::get_events_since(
     uint64_t timestamp, const std::string& event_type) const {
     std::shared_lock lock(mutex_);
 
@@ -62,7 +123,7 @@ std::vector<Event> EventStore::get_events_since(
     return result;
 }
 
-void EventStore::clear() {
+void ServerEventStore::clear() {
     std::unique_lock lock(mutex_);
     events_.clear();
 
@@ -76,7 +137,7 @@ void EventStore::clear() {
     }
 }
 
-void EventStore::load_events() {
+void ServerEventStore::load_events() {
     try {
         std::vector<std::filesystem::path> event_files;
         for (const auto& entry :
@@ -124,7 +185,7 @@ void EventStore::load_events() {
     }
 }
 
-void EventStore::persist_event(const Event& event) {
+void ServerEventStore::persist_event(const Event& event) {
     try {
         json j = {{"id", event.id()},
                   {"event_type", event.event_type()},

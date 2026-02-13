@@ -281,9 +281,7 @@ TEST_F(IndestructibleTest, DestructionGuard) {
     EXPECT_EQ(Counter::constructor_count, 1);
     EXPECT_EQ(Counter::destructor_count, 0);
 
-    {
-        destruction_guard<TestClass> guard(ptr);
-    }
+    { destruction_guard<TestClass> guard(ptr); }
     // After scope exit, guard should call destroy_at
     EXPECT_EQ(Counter::destructor_count, 1);
 

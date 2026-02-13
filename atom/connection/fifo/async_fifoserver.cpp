@@ -1,0 +1,230 @@
+#include "async_fifoserver.hpp"
+
+#include <spdlog/spdlog.h>
+#include <asio.hpp>
+#include <filesystem>
+#include <functional>
+#include <future>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <thread>
+
+#include "fifo_platform.hpp"
+
+#ifdef _WIN32
+#include <asio/windows/stream_handle.hpp>
+#else
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <asio/posix/stream_descriptor.hpp>
+#endif
+
+namespace atom::connection {
+
+class AsyncFifoServer::Impl {
+public:
+    explicit Impl(std::string_view fifoPath)
+        : fifoPath_(fifoPath),
+          io_context_(),
+#ifdef _WIN32
+          pipe_(io_context_),
+          pipeHandle_(INVALID_HANDLE_VALUE),
+#else
+          pipe_(io_context_),
+#endif
+          running_(false) {
+    }
+
+    ~Impl() {
+        stop();
+#ifdef _WIN32
+        if (pipeHandle_ != INVALID_HANDLE_VALUE) {
+            DisconnectNamedPipe(pipeHandle_);
+            CloseHandle(pipeHandle_);
+        }
+#else
+        std::filesystem::remove(fifoPath_);
+#endif
+    }
+
+    void start(MessageHandler handler) {
+        if (running_) {
+            return;
+        }
+
+        handler_ = std::move(handler);
+        running_ = true;
+
+#ifdef _WIN32
+        // Create Windows named pipe
+        std::string pipeName =
+            "\\\\.\\pipe\\" +
+            std::filesystem::path(fifoPath_).filename().string();
+        pipeHandle_ = CreateNamedPipeA(
+            pipeName.c_str(), PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+            PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+            PIPE_UNLIMITED_INSTANCES,
+            4096,  // Output buffer size
+            4096,  // Input buffer size
+            0,     // Default timeout
+            nullptr);
+
+        if (pipeHandle_ == INVALID_HANDLE_VALUE) {
+            spdlog::error("Failed to create named pipe: {}", GetLastError());
+            throw std::runtime_error("Failed to create named pipe");
+        }
+
+        // Assign to ASIO stream handle
+        pipe_.assign(pipeHandle_);
+        spdlog::info("Windows named pipe created: {}", pipeName);
+#else
+        if (mkfifo(fifoPath_.c_str(), 0666) == -1 && errno != EEXIST) {
+            spdlog::error("Failed to create FIFO: {}", strerror(errno));
+            throw std::runtime_error("Failed to create FIFO");
+        }
+#endif
+
+        io_thread_ = std::thread([this] { io_context_.run(); });
+        acceptConnection();
+    }
+
+    void stop() {
+        if (!running_) {
+            return;
+        }
+
+        running_ = false;
+        io_context_.stop();
+        if (io_thread_.joinable()) {
+            io_thread_.join();
+        }
+    }
+
+    void setClientHandler(ClientHandler handler) {
+        clientHandler_ = std::move(handler);
+    }
+
+    void setErrorHandler(ErrorHandler handler) {
+        errorHandler_ = std::move(handler);
+    }
+
+    auto write(std::string_view data) -> std::future<bool> {
+        auto promise = std::make_shared<std::promise<bool>>();
+        auto future = promise->get_future();
+
+        asio::async_write(pipe_, asio::buffer(data),
+                          [this, promise](const asio::error_code &ec, size_t) {
+                              if (ec) {
+                                  if (errorHandler_) {
+                                      errorHandler_(ec);
+                                  }
+                                  promise->set_value(false);
+                              } else {
+                                  promise->set_value(true);
+                              }
+                          });
+
+        return future;
+    }
+
+    [[nodiscard]] auto isRunning() const -> bool { return running_; }
+
+    [[nodiscard]] auto getPath() const -> std::string { return fifoPath_; }
+
+    void cancel() { pipe_.cancel(); }
+
+private:
+    void acceptConnection() {
+#ifdef _WIN32
+        // Windows-specific implementation for named pipes
+#else
+        int fd = open(fifoPath_.c_str(), O_RDWR | O_NONBLOCK);
+        if (fd == -1) {
+            if (errorHandler_) {
+                errorHandler_({errno, std::system_category()});
+            }
+            return;
+        }
+        pipe_.assign(fd);
+#endif
+        if (clientHandler_) {
+            clientHandler_(ClientEvent::Connected);
+        }
+        readMessage();
+    }
+
+    void readMessage() {
+        asio::async_read_until(
+            pipe_, asio::dynamic_buffer(buffer_), '\n',
+            [this](const asio::error_code &ec, size_t length) {
+                if (!ec) {
+                    std::string message(buffer_.substr(0, length));
+                    buffer_.erase(0, length);
+                    if (handler_) {
+                        handler_(message);
+                    }
+                    readMessage();  // Continue reading
+                } else {
+                    if (clientHandler_) {
+                        clientHandler_(ClientEvent::Disconnected);
+                    }
+                    if (ec != asio::error::eof) {
+                        if (errorHandler_) {
+                            errorHandler_(ec);
+                        }
+                    }
+                }
+            });
+    }
+
+    std::string fifoPath_;
+    asio::io_context io_context_;
+#ifdef _WIN32
+    asio::windows::stream_handle pipe_;
+    HANDLE pipeHandle_;
+#else
+    asio::posix::stream_descriptor pipe_;
+#endif
+    std::thread io_thread_;
+    std::string buffer_;
+    MessageHandler handler_;
+    ClientHandler clientHandler_;
+    ErrorHandler errorHandler_;
+    bool running_ = false;
+};
+
+AsyncFifoServer::AsyncFifoServer(std::string_view fifoPath)
+    : pimpl_(std::make_unique<Impl>(fifoPath)) {}
+
+AsyncFifoServer::~AsyncFifoServer() = default;
+
+void AsyncFifoServer::start(MessageHandler handler) { pimpl_->start(handler); }
+
+void AsyncFifoServer::stop() { pimpl_->stop(); }
+
+void AsyncFifoServer::setClientHandler(ClientHandler handler) {
+    pimpl_->setClientHandler(std::move(handler));
+}
+
+void AsyncFifoServer::setErrorHandler(ErrorHandler handler) {
+    pimpl_->setErrorHandler(std::move(handler));
+}
+
+auto AsyncFifoServer::write(std::string_view data) -> std::future<bool> {
+    return pimpl_->write(data);
+}
+
+auto AsyncFifoServer::writeSync(std::string_view data) -> bool {
+    return write(data).get();
+}
+
+bool AsyncFifoServer::isRunning() const { return pimpl_->isRunning(); }
+
+auto AsyncFifoServer::getPath() const -> std::string {
+    return pimpl_->getPath();
+}
+
+void AsyncFifoServer::cancel() { pimpl_->cancel(); }
+
+}  // namespace atom::connection

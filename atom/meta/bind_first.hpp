@@ -158,7 +158,6 @@ template <typename O, typename Ret, typename P1, typename... Param>
  * \return Bound function
  */
 template <typename F, typename O>
-    requires Invocable<F, O>
 [[nodiscard]] constexpr auto bindFirst(F&& func, O&& object) {
     return [func = std::forward<F>(func), object = std::forward<O>(object)](
                auto&&... param) -> decltype(auto) {
@@ -177,8 +176,7 @@ template <typename F, typename O>
  * \return Function that returns reference to the member variable
  */
 template <typename O, typename T, typename Class>
-[[nodiscard]] constexpr auto bindMember(T Class::* member,
-                                        O&& object) noexcept {
+[[nodiscard]] constexpr auto bindMember(T Class::*member, O&& object) noexcept {
     return [member, object = std::forward<O>(object)]() -> T& {
         return removeConstPointer(getPointer(object))->*member;
     };
@@ -315,6 +313,137 @@ template <typename O, typename Ret, typename... Param>
         return (object.get()->*func)(std::forward<Param>(param)...);
     };
 }
+
+//==============================================================================
+// C++23 Enhanced Binding Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for bindable callables
+ */
+template <typename F>
+concept Bindable =
+    std::is_invocable_v<F> || std::is_member_function_pointer_v<F>;
+
+/**
+ * @brief Concept for member functions
+ */
+template <typename F, typename Class>
+concept MemberFunctionOf = std::is_member_function_pointer_v<F> &&
+                           requires { typename std::invoke_result<F, Class>; };
+
+/**
+ * @brief Bind with automatic type deduction
+ */
+template <typename Callable, typename FirstArg>
+    requires Bindable<Callable>
+[[nodiscard]] auto autoBind(Callable&& callable, FirstArg&& first_arg) {
+    return bindFirst(std::forward<Callable>(callable),
+                     std::forward<FirstArg>(first_arg));
+}
+
+/**
+ * @brief Bind with weak_ptr for safe lifetime management
+ */
+template <typename O, typename Ret, typename... Param>
+[[nodiscard]] auto bindFirstWeak(Ret (O::*func)(Param...),
+                                 std::weak_ptr<O> object) {
+    return [func, object](Param... param) -> std::optional<Ret> {
+        if (auto shared = object.lock()) {
+            return (shared.get()->*func)(std::forward<Param>(param)...);
+        }
+        return std::nullopt;
+    };
+}
+
+/**
+ * @brief Bind returning optional for nullable first arg
+ */
+template <typename Callable, typename FirstArg>
+[[nodiscard]] auto bindFirstOptional(Callable&& callable,
+                                     std::optional<FirstArg> first_arg) {
+    return
+        [callable = std::forward<Callable>(callable),
+         first_arg = std::move(first_arg)](auto&&... args)
+            -> std::optional<
+                std::invoke_result_t<Callable, FirstArg, decltype(args)...>> {
+            if (first_arg) {
+                return std::invoke(callable, *first_arg,
+                                   std::forward<decltype(args)>(args)...);
+            }
+            return std::nullopt;
+        };
+}
+
+/**
+ * @brief Bind with lazy evaluation of first argument
+ */
+template <typename Callable, typename FirstArgFactory>
+    requires std::invocable<FirstArgFactory>
+[[nodiscard]] auto bindFirstLazy(Callable&& callable,
+                                 FirstArgFactory&& factory) {
+    return [callable = std::forward<Callable>(callable),
+            factory = std::forward<FirstArgFactory>(factory)](auto&&... args) {
+        return std::invoke(callable, factory(),
+                           std::forward<decltype(args)>(args)...);
+    };
+}
+
+/**
+ * @brief Bind multiple arguments at once
+ */
+template <typename Callable, typename... BoundArgs>
+[[nodiscard]] auto bindMultiple(Callable&& callable,
+                                BoundArgs&&... bound_args) {
+    return [callable = std::forward<Callable>(callable),
+            ... args = std::forward<BoundArgs>(bound_args)](auto&&... rest) {
+        return std::invoke(callable, args...,
+                           std::forward<decltype(rest)>(rest)...);
+    };
+}
+
+/**
+ * @brief Bind registry for named bindings
+ */
+class BindingRegistry {
+    std::unordered_map<std::string, std::function<void()>> bindings_;
+    mutable std::shared_mutex mutex_;
+
+public:
+    template <typename Callable, typename... Args>
+    void registerBinding(std::string_view name, Callable&& callable,
+                         Args&&... args) {
+        auto bound = bindFirst(std::forward<Callable>(callable),
+                               std::forward<Args>(args)...);
+        std::unique_lock lock(mutex_);
+        bindings_[std::string(name)] = std::move(bound);
+    }
+
+    bool invoke(std::string_view name) const {
+        std::shared_lock lock(mutex_);
+        auto it = bindings_.find(std::string(name));
+        if (it != bindings_.end()) {
+            it->second();
+            return true;
+        }
+        return false;
+    }
+
+    [[nodiscard]] std::vector<std::string> getBindingNames() const {
+        std::shared_lock lock(mutex_);
+        std::vector<std::string> result;
+        result.reserve(bindings_.size());
+        for (const auto& [name, _] : bindings_) {
+            result.push_back(name);
+        }
+        return result;
+    }
+
+    static BindingRegistry& getInstance() {
+        static BindingRegistry instance;
+        return instance;
+    }
+};
 
 }  // namespace atom::meta
 

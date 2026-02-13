@@ -271,23 +271,11 @@ private:
         }
 
         for (const auto& observer : localObservers) {
-            try {
-                observer(oldVal, newVal);
-            } catch (const std::exception& e) {
-                THROW_EXCEPTION("Exception in observer: ", e.what());
-            } catch (...) {
-                THROW_EXCEPTION("Unknown exception in observer.");
-            }
+            observer(oldVal, newVal);
         }
 
         if (localOnChangeCallback) {
-            try {
-                localOnChangeCallback(newVal);
-            } catch (const std::exception& e) {
-                THROW_EXCEPTION("Exception in onChangeCallback: ", e.what());
-            } catch (...) {
-                THROW_EXCEPTION("Unknown exception in onChangeCallback.");
-            }
+            localOnChangeCallback(newVal);
         }
     }
 

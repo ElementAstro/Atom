@@ -4,6 +4,7 @@
 #include <curl/curl.h>
 #include <chrono>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -604,6 +605,7 @@ private:
     std::optional<std::string> password_;
     /** @brief The multipart form to send with the request. */
     curl_mime* form_ = nullptr;
+    std::shared_ptr<MultipartFormMimeHolder> multipart_form_holder_;
     /** @brief The cookies to send with the request. */
     std::vector<Cookie> cookies_;
     /** @brief The cookie jar to use for the request. */

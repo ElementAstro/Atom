@@ -7,8 +7,8 @@
 #include <thread>
 #include <vector>
 
-// Simple free functions for demonstration
-int add(int a, int b) { return a + b; }
+// Simple free functions for demonstrationint add(int a, int b) { return a + b;
+// }
 
 double multiply(double a, double b) { return a * b; }
 
@@ -25,60 +25,57 @@ int incrementAndReturn(int& value) {
     return value;
 }
 
-// Noexcept function example
-bool isPositive(int value) noexcept { return value > 0; }
+// Noexcept function examplebool isPositive(int value) noexcept { return value >
+// 0; }
 
-// Function that might throw
-double divide(double a, double b) {
-    if (b == 0.0) {
-        throw std::runtime_error("Division by zero");
-    }
-    return a / b;
+// Function that might throwdouble divide(double a, double b) {
+if (b == 0.0) {
+    throw std::runtime_error("Division by zero");
+}
+return a / b;
 }
 
-// A class with member functions
-class Calculator {
+// A class with member functionsclass Calculator {
 public:
-    Calculator() : result_(0) {}
+Calculator() : result_(0) {}
 
-    int add(int a, int b) {
-        result_ = a + b;
-        return result_;
-    }
+int add(int a, int b) {
+    result_ = a + b;
+    return result_;
+}
 
-    double multiply(double a, double b) const { return a * b; }
+double multiply(double a, double b) const { return a * b; }
 
-    int getResult() const { return result_; }
+int getResult() const { return result_; }
 
-    void reset() { result_ = 0; }
+void reset() { result_ = 0; }
 
-    // Noexcept member function
-    bool hasResult() const noexcept { return result_ != 0; }
+// Noexcept member function
+bool hasResult() const noexcept { return result_ != 0; }
 
 private:
-    int result_;
-};
+int result_;
+}
+;
 
-// A long-running function for async examples
-int slowCalculation(int a, int b) {
-    std::cout << "Starting slow calculation..." << std::endl;
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    std::cout << "Finished slow calculation" << std::endl;
-    return a * b;
+// A long-running function for async examplesint slowCalculation(int a, int b) {
+std::cout << "Starting slow calculation..." << std::endl;
+std::this_thread::sleep_for(std::chrono::seconds(2));
+std::cout << "Finished slow calculation" << std::endl;
+return a * b;
 }
 
-// Function that transforms the result of another function
-std::string formatResult(int value) {
-    return "Result: " + std::to_string(value);
+// Function that transforms the result of another functionstd::string
+// formatResult(int value) {
+return "Result: " + std::to_string(value);
 }
 
-// Helper function to print JSON with indentation
-void printJson(const nlohmann::json& j) {
-    std::cout << std::setw(4) << j << std::endl;
+// Helper function to print JSON with indentationvoid printJson(const
+// nlohmann::json& j) {
+std::cout << std::setw(4) << j << std::endl;
 }
 
-// Helper function for error handling
-template <typename Func>
+// Helper function for error handlingtemplate <typename Func>
 void tryOperation(const std::string& description, Func operation) {
     std::cout << "Attempting: " << description << std::endl;
     try {

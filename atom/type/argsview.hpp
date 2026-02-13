@@ -26,8 +26,7 @@
 namespace atom {
 
 #ifdef ATOM_USE_BOOST
-using string_type =
-    std::string;
+using string_type = std::string;
 template <typename T>
 using optional_type = boost::optional<T>;
 template <typename... Args>
@@ -409,8 +408,8 @@ constexpr auto get(ArgsView<Args...> args_view) -> decltype(auto) {
  * @return false otherwise.
  */
 template <typename... Args1, typename... Args2>
-constexpr auto operator==(ArgsView<Args1...> lhs,
-                          ArgsView<Args2...> rhs) -> bool {
+constexpr auto operator==(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
+    -> bool {
     return lhs.size() == rhs.size() &&
            lhs.apply([&rhs](const auto&... lhs_args) {
                return rhs.apply([&lhs_args...](const auto&... rhs_args) {
@@ -430,8 +429,8 @@ constexpr auto operator==(ArgsView<Args1...> lhs,
  * @return false if lhs is equal to rhs.
  */
 template <typename... Args1, typename... Args2>
-constexpr auto operator!=(ArgsView<Args1...> lhs,
-                          ArgsView<Args2...> rhs) -> bool {
+constexpr auto operator!=(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
+    -> bool {
     return !(lhs == rhs);
 }
 
@@ -446,8 +445,8 @@ constexpr auto operator!=(ArgsView<Args1...> lhs,
  * @return false otherwise.
  */
 template <typename... Args1, typename... Args2>
-constexpr auto operator<(ArgsView<Args1...> lhs,
-                         ArgsView<Args2...> rhs) -> bool {
+constexpr auto operator<(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
+    -> bool {
     return lhs.apply([&rhs](const auto&... lhs_args) {
         return rhs.apply([&lhs_args...](const auto&... rhs_args) {
             return std::tie(lhs_args...) < std::tie(rhs_args...);
@@ -466,8 +465,8 @@ constexpr auto operator<(ArgsView<Args1...> lhs,
  * @return false otherwise.
  */
 template <typename... Args1, typename... Args2>
-constexpr auto operator<=(ArgsView<Args1...> lhs,
-                          ArgsView<Args2...> rhs) -> bool {
+constexpr auto operator<=(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
+    -> bool {
     return !(rhs < lhs);
 }
 
@@ -482,8 +481,8 @@ constexpr auto operator<=(ArgsView<Args1...> lhs,
  * @return false otherwise.
  */
 template <typename... Args1, typename... Args2>
-constexpr auto operator>(ArgsView<Args1...> lhs,
-                         ArgsView<Args2...> rhs) -> bool {
+constexpr auto operator>(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
+    -> bool {
     return rhs < lhs;
 }
 
@@ -498,8 +497,8 @@ constexpr auto operator>(ArgsView<Args1...> lhs,
  * @return false otherwise.
  */
 template <typename... Args1, typename... Args2>
-constexpr auto operator>=(ArgsView<Args1...> lhs,
-                          ArgsView<Args2...> rhs) -> bool {
+constexpr auto operator>=(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
+    -> bool {
     return !(lhs < rhs);
 }
 

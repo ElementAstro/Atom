@@ -38,7 +38,7 @@ std::string StructuredData::to_json() const {
     return oss.str();
 }
 
-StructuredData StructuredData::from_json(std::string_view json) {
+StructuredData StructuredData::from_json(std::string_view /*json*/) {
     // 简化的JSON解析实现
     // 实际项目中应使用专业的JSON库如nlohmann/json
     StructuredData data;

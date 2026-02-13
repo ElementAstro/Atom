@@ -11,7 +11,6 @@
 #include <thread>
 #include <vector>
 
-
 #include "atom/type/auto_table.hpp"
 
 using namespace atom::type;
@@ -185,7 +184,12 @@ TEST_F(CountingHashTableTest, GetAllEntries) {
         keys.push_back(entry.first);
     }
 
-    EXPECT_THAT(keys, ::testing::UnorderedElementsAre("one", "two", "three"));
+    // Check that we have exactly 3 keys and they are the expected ones
+    EXPECT_EQ(keys.size(), 3);
+    std::sort(keys.begin(), keys.end());
+    std::vector<std::string> expected = {"one", "three", "two"};
+    std::sort(expected.begin(), expected.end());
+    EXPECT_EQ(keys, expected);
 
     // Check that the values are correct
     for (const auto& [key, entryData] : allEntries) {

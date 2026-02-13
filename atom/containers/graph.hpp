@@ -14,514 +14,377 @@ Description: High-performance graph data structure
 
 #pragma once
 
-// Enable only if ATOM_USE_BOOST_GRAPH is defined and Boost Graph Library is
-// available
 #if defined(ATOM_HAS_BOOST_GRAPH)
 
-#include "../macro.hpp"
+#include "../macro.hpp"  // IWYU pragma: keep
 
-#include <boost/graph/adjacency_list.hpp>
-#include <boost/graph/breadth_first_search.hpp>
-#include <boost/graph/depth_first_search.hpp>
-#include <boost/graph/dijkstra_shortest_paths.hpp>
-#include <boost/graph/directed_graph.hpp>
-#include <boost/graph/graph_traits.hpp>
-#include <boost/graph/undirected_graph.hpp>
-#include <boost/property_map/property_map.hpp>
-#include <functional>
+#include <algorithm>
+#include <cstddef>
+#include <limits>
+#include <ranges>
 #include <string>
+#include <string_view>
+#include <type_traits>
 #include <unordered_map>
+#include <utility>
+#include <variant>
 #include <vector>
 
-namespace atom {
-namespace containers {
-namespace graph {
+#include <boost/graph/adjacency_list.hpp>
+#include <boost/graph/dijkstra_shortest_paths.hpp>
+#include <boost/graph/graph_traits.hpp>
+#include <boost/property_map/function_property_map.hpp>
+#include <boost/property_map/property_map.hpp>
+#include <boost/property_map/static_property_map.hpp>
+
+namespace atom::containers::graph {
 
 /**
- * @brief Base class for graph vertex properties
+ * @brief Base class for graph vertex properties.
  *
- * Can be inherited to add custom vertex properties
+ * Can be inherited to add custom vertex properties.
  */
 struct VertexProperties {
-    std::string name;  // Vertex name
-    std::size_t id;    // Vertex ID
-
-    VertexProperties() : id(0) {}
-    explicit VertexProperties(const std::string& n, std::size_t i = 0)
-        : name(n), id(i) {}
+    std::string name{};  ///< Vertex name
+    std::size_t id{};    ///< Vertex identifier
 };
 
 /**
- * @brief Base class for graph edge properties
+ * @brief Base class for graph edge properties.
  *
- * Can be inherited to add custom edge properties
+ * Can be inherited to add custom edge properties.
  */
 struct EdgeProperties {
-    double weight;      // Edge weight
-    std::string label;  // Edge label
-
-    EdgeProperties() : weight(1.0) {}
-    explicit EdgeProperties(double w, const std::string& l = "")
-        : weight(w), label(l) {}
+    double weight{1.0};   ///< Edge weight for shortest-path algorithms
+    std::string label{};  ///< Optional descriptive label
 };
 
 /**
- * @brief Graph options enum
+ * @brief Runtime graph configuration options.
  */
 enum class GraphOptions {
-    Directed,       // Directed graph
-    Undirected,     // Undirected graph
-    Bidirectional,  // Bidirectional graph (optimization for directed graphs)
-    AllowParallelEdges,    // Allow parallel edges
-    DisallowParallelEdges  // Disallow parallel edges
+    Directed,              ///< Directed graph
+    Undirected,            ///< Undirected graph
+    Bidirectional,         ///< Bidirectional graph
+    AllowParallelEdges,    ///< Allow multiple edges between two vertices
+    DisallowParallelEdges  ///< Disallow multiple edges between two vertices
 };
 
 /**
- * @brief High-performance graph implementation
- *
- * Based on the Boost.Graph library, provides efficient graph algorithms and
- * data structures
- *
- * @tparam VertexProperty Vertex property type
- * @tparam EdgeProperty Edge property type
+ * @brief Graph implementation that leverages Boost.Graph while embracing
+ * modern C++ idioms.
  */
 template <typename VertexProperty = VertexProperties,
           typename EdgeProperty = EdgeProperties>
 class Graph {
+    static_assert(std::default_initializable<VertexProperty>,
+                  "VertexProperty must be default constructible");
+    static_assert(std::default_initializable<EdgeProperty>,
+                  "EdgeProperty must be default constructible");
+
 public:
-    // Define graph structure types
-    using DirectedGraph =
-        boost::adjacency_list<boost::vecS,  // Container for external edge list
-                              boost::vecS,  // Container for vertex list
-                              boost::directedS,    // Directed graph
-                              VertexProperty,      // Vertex properties
-                              EdgeProperty,        // Edge properties
-                              boost::no_property,  // Graph properties
-                              boost::listS         // Container for edge list
-                              >;
-
-    using UndirectedGraph =
-        boost::adjacency_list<boost::vecS,  // Container for external edge list
-                              boost::vecS,  // Container for vertex list
-                              boost::undirectedS,  // Undirected graph
-                              VertexProperty,      // Vertex properties
-                              EdgeProperty,        // Edge properties
-                              boost::no_property,  // Graph properties
-                              boost::listS         // Container for edge list
-                              >;
-
-    using BidirectionalGraph =
-        boost::adjacency_list<boost::vecS,  // Container for external edge list
-                              boost::vecS,  // Container for vertex list
-                              boost::bidirectionalS,  // Bidirectional graph
-                              VertexProperty,         // Vertex properties
-                              EdgeProperty,           // Edge properties
-                              boost::no_property,     // Graph properties
-                              boost::listS            // Container for edge list
-                              >;
-
-    // Union for selecting graph type
-    union GraphUnion {
-        DirectedGraph* directed;
-        UndirectedGraph* undirected;
-        BidirectionalGraph* bidirectional;
-
-        GraphUnion() : directed(nullptr) {}
-        ~GraphUnion() {
-        }  // Destructor does nothing, manually managed in the Graph class
-    };
-
-    // Graph type
     enum class GraphType { Directed, Undirected, Bidirectional };
 
-private:
-    GraphUnion graph_;
-    GraphType type_;
-    bool allow_parallel_edges_;
+    Graph() : Graph(GraphType::Directed, false) {}
 
-    // Mapping of vertex names to IDs
-    std::unordered_map<std::string, std::size_t> name_to_vertex_;
+    explicit Graph(GraphType type, bool allow_parallel_edges = false)
+        : graph_(make_graph_variant(type, allow_parallel_edges)),
+          type_(type),
+          allow_parallel_edges_(allow_parallel_edges) {}
 
-public:
-    /**
-     * @brief Constructor
-     *
-     * @param type Graph type
-     * @param allow_parallel_edges Whether parallel edges are allowed
-     */
-    explicit Graph(GraphType type = GraphType::Directed,
-                   bool allow_parallel_edges = false)
-        : type_(type), allow_parallel_edges_(allow_parallel_edges) {
-        switch (type_) {
-            case GraphType::Directed:
-                graph_.directed = new DirectedGraph();
-                break;
-            case GraphType::Undirected:
-                graph_.undirected = new UndirectedGraph();
-                break;
-            case GraphType::Bidirectional:
-                graph_.bidirectional = new BidirectionalGraph();
-                break;
-        }
+    Graph(const Graph&) = default;
+    Graph(Graph&&) noexcept = default;
+    Graph& operator=(const Graph&) = default;
+    Graph& operator=(Graph&&) noexcept = default;
+    ~Graph() = default;
+
+    [[nodiscard]] GraphType type() const noexcept { return type_; }
+
+    [[nodiscard]] bool allows_parallel_edges() const noexcept {
+        return allow_parallel_edges_;
     }
 
-    /**
-     * @brief Destructor
-     */
-    ~Graph() {
-        switch (type_) {
-            case GraphType::Directed:
-                delete graph_.directed;
-                break;
-            case GraphType::Undirected:
-                delete graph_.undirected;
-                break;
-            case GraphType::Bidirectional:
-                delete graph_.bidirectional;
-                break;
-        }
-    }
-
-    // Disable copy
-    Graph(const Graph&) = delete;
-    Graph& operator=(const Graph&) = delete;
-
-    /**
-     * @brief Move constructor
-     */
-    Graph(Graph&& other) noexcept
-        : graph_(other.graph_),
-          type_(other.type_),
-          allow_parallel_edges_(other.allow_parallel_edges_),
-          name_to_vertex_(std::move(other.name_to_vertex_)) {
-        // Prevent double deletion
-        switch (other.type_) {
-            case GraphType::Directed:
-                other.graph_.directed = nullptr;
-                break;
-            case GraphType::Undirected:
-                other.graph_.undirected = nullptr;
-                break;
-            case GraphType::Bidirectional:
-                other.graph_.bidirectional = nullptr;
-                break;
-        }
-    }
-
-    /**
-     * @brief Move assignment operator
-     */
-    Graph& operator=(Graph&& other) noexcept {
-        if (this != &other) {
-            // Release current resources
-            switch (type_) {
-                case GraphType::Directed:
-                    delete graph_.directed;
-                    break;
-                case GraphType::Undirected:
-                    delete graph_.undirected;
-                    break;
-                case GraphType::Bidirectional:
-                    delete graph_.bidirectional;
-                    break;
-            }
-
-            // Move data
-            graph_ = other.graph_;
-            type_ = other.type_;
-            allow_parallel_edges_ = other.allow_parallel_edges_;
-            name_to_vertex_ = std::move(other.name_to_vertex_);
-
-            // Prevent double deletion
-            switch (other.type_) {
-                case GraphType::Directed:
-                    other.graph_.directed = nullptr;
-                    break;
-                case GraphType::Undirected:
-                    other.graph_.undirected = nullptr;
-                    break;
-                case GraphType::Bidirectional:
-                    other.graph_.bidirectional = nullptr;
-                    break;
-            }
-        }
-        return *this;
-    }
-
-    /**
-     * @brief Add a vertex
-     *
-     * @param name Vertex name
-     * @param props Vertex properties
-     * @return std::size_t Vertex ID
-     */
-    std::size_t add_vertex(const std::string& name,
-                           const VertexProperty& props = VertexProperty()) {
-        // Check if the name already exists
-        auto it = name_to_vertex_.find(name);
-        if (it != name_to_vertex_.end()) {
-            return it->second;  // Return existing vertex ID
+    [[nodiscard]] std::size_t add_vertex(
+        std::string_view name, const VertexProperty& props = VertexProperty()) {
+        const std::string name_str(name);
+        if (const auto it = name_to_vertex_.find(name_str);
+            it != name_to_vertex_.end()) {
+            return it->second;
         }
 
-        // Create a vertex with properties
         VertexProperty vertex_props = props;
-        vertex_props.name = name;
+        std::string canonical_name = name_str;
 
-        std::size_t vertex_id = 0;
-        switch (type_) {
-            case GraphType::Directed: {
-                vertex_id = boost::add_vertex(vertex_props, *graph_.directed);
-                vertex_props.id = vertex_id;
-                (*graph_.directed)[vertex_id] = vertex_props;
-                break;
-            }
-            case GraphType::Undirected: {
-                vertex_id = boost::add_vertex(vertex_props, *graph_.undirected);
-                vertex_props.id = vertex_id;
-                (*graph_.undirected)[vertex_id] = vertex_props;
-                break;
-            }
-            case GraphType::Bidirectional: {
-                vertex_id =
-                    boost::add_vertex(vertex_props, *graph_.bidirectional);
-                vertex_props.id = vertex_id;
-                (*graph_.bidirectional)[vertex_id] = vertex_props;
-                break;
-            }
+        if constexpr (requires(VertexProperty& v) { v.name; }) {
+            vertex_props.name = name;
+            canonical_name = vertex_props.name;
         }
 
-        // Store the mapping of name to ID
-        name_to_vertex_[name] = vertex_id;
+        const std::size_t vertex_id = std::visit(
+            [&](auto& g) {
+                const auto descriptor = boost::add_vertex(vertex_props, g);
+                auto& stored = g[descriptor];
+                if constexpr (requires(VertexProperty& v, std::size_t id) {
+                                  v.id = id;
+                              }) {
+                    stored.id = static_cast<std::size_t>(descriptor);
+                }
+                return static_cast<std::size_t>(descriptor);
+            },
+            graph_);
+
+        if (vertex_id >= vertex_names_.size()) {
+            vertex_names_.resize(vertex_id + 1);
+        }
+        vertex_names_[vertex_id] = canonical_name;
+        name_to_vertex_.emplace(vertex_names_[vertex_id], vertex_id);
         return vertex_id;
     }
 
-    /**
-     * @brief Add an edge
-     *
-     * @param source Source vertex name
-     * @param target Target vertex name
-     * @param props Edge properties
-     * @return bool Whether the addition was successful
-     */
-    bool add_edge(const std::string& source, const std::string& target,
+    bool add_edge(std::string_view source, std::string_view target,
                   const EdgeProperty& props = EdgeProperty()) {
-        // Ensure vertices exist
-        std::size_t source_id = add_vertex(source);
-        std::size_t target_id = add_vertex(target);
-
+        const auto source_id = add_vertex(source);
+        const auto target_id = add_vertex(target);
         return add_edge(source_id, target_id, props);
     }
 
-    /**
-     * @brief Add an edge (using vertex IDs)
-     *
-     * @param source_id Source vertex ID
-     * @param target_id Target vertex ID
-     * @param props Edge properties
-     * @return bool Whether the addition was successful
-     */
     bool add_edge(std::size_t source_id, std::size_t target_id,
                   const EdgeProperty& props = EdgeProperty()) {
-        bool success = false;
-        switch (type_) {
-            case GraphType::Directed: {
-                auto result = boost::add_edge(source_id, target_id, props,
-                                              *graph_.directed);
-                success = result.second || allow_parallel_edges_;
-                break;
-            }
-            case GraphType::Undirected: {
-                auto result = boost::add_edge(source_id, target_id, props,
-                                              *graph_.undirected);
-                success = result.second || allow_parallel_edges_;
-                break;
-            }
-            case GraphType::Bidirectional: {
-                auto result = boost::add_edge(source_id, target_id, props,
-                                              *graph_.bidirectional);
-                success = result.second || allow_parallel_edges_;
-                break;
-            }
+        if (source_id >= vertex_count() || target_id >= vertex_count()) {
+            return false;
         }
-        return success;
+
+        return std::visit(
+            [&](auto& g) {
+                const auto [edge, inserted] =
+                    boost::add_edge(source_id, target_id, props, g);
+                (void)edge;
+                return inserted || allow_parallel_edges_;
+            },
+            graph_);
     }
 
-    /**
-     * @brief Get the number of vertices
-     *
-     * @return std::size_t Number of vertices
-     */
-    std::size_t vertex_count() const {
-        switch (type_) {
-            case GraphType::Directed:
-                return boost::num_vertices(*graph_.directed);
-            case GraphType::Undirected:
-                return boost::num_vertices(*graph_.undirected);
-            case GraphType::Bidirectional:
-                return boost::num_vertices(*graph_.bidirectional);
-        }
-        return 0;
+    [[nodiscard]] std::size_t vertex_count() const {
+        return std::visit(
+            [](const auto& g) {
+                return static_cast<std::size_t>(boost::num_vertices(g));
+            },
+            graph_);
     }
 
-    /**
-     * @brief Get the number of edges
-     *
-     * @return std::size_t Number of edges
-     */
-    std::size_t edge_count() const {
-        switch (type_) {
-            case GraphType::Directed:
-                return boost::num_edges(*graph_.directed);
-            case GraphType::Undirected:
-                return boost::num_edges(*graph_.undirected);
-            case GraphType::Bidirectional:
-                return boost::num_edges(*graph_.bidirectional);
-        }
-        return 0;
+    [[nodiscard]] std::size_t edge_count() const {
+        return std::visit(
+            [](const auto& g) {
+                return static_cast<std::size_t>(boost::num_edges(g));
+            },
+            graph_);
     }
 
-    /**
-     * @brief Calculate the shortest path (Dijkstra's algorithm)
-     *
-     * @param source Source vertex name
-     * @param target Target vertex name
-     * @return std::vector<std::string> List of vertex names on the path
-     */
-    std::vector<std::string> shortest_path(const std::string& source,
-                                           const std::string& target) {
-        // Get vertex IDs
-        auto src_it = name_to_vertex_.find(source);
-        auto tgt_it = name_to_vertex_.find(target);
-
-        if (src_it == name_to_vertex_.end() ||
-            tgt_it == name_to_vertex_.end()) {
-            return {};  // Source or target vertex does not exist
+    [[nodiscard]] std::vector<std::string> shortest_path(
+        std::string_view source, std::string_view target) {
+        const auto source_id = get_vertex_id(source);
+        const auto target_id = get_vertex_id(target);
+        if (source_id == invalid_vertex || target_id == invalid_vertex) {
+            return {};
         }
-
-        return shortest_path(src_it->second, tgt_it->second);
+        return shortest_path(source_id, target_id);
     }
 
-    /**
-     * @brief Calculate the shortest path (Dijkstra's algorithm, using vertex
-     * IDs)
-     *
-     * @param source_id Source vertex ID
-     * @param target_id Target vertex ID
-     * @return std::vector<std::string> List of vertex names on the path
-     */
-    std::vector<std::string> shortest_path(std::size_t source_id,
-                                           std::size_t target_id) {
-        std::vector<std::string> path;
-        std::vector<std::size_t> predecessors(vertex_count());
-        std::vector<double> distances(vertex_count());
-
-        switch (type_) {
-            case GraphType::Directed:
-                calculate_shortest_path(*graph_.directed, source_id,
-                                        predecessors, distances);
-                break;
-            case GraphType::Undirected:
-                calculate_shortest_path(*graph_.undirected, source_id,
-                                        predecessors, distances);
-                break;
-            case GraphType::Bidirectional:
-                calculate_shortest_path(*graph_.bidirectional, source_id,
-                                        predecessors, distances);
-                break;
+    [[nodiscard]] std::vector<std::string> shortest_path(
+        std::size_t source_id, std::size_t target_id) {
+        if (source_id >= vertex_count() || target_id >= vertex_count()) {
+            return {};
         }
 
-        // Build the path
-        if (distances[target_id] == std::numeric_limits<double>::max()) {
-            return {};  // Cannot reach the target
-        }
+        const std::vector<std::size_t> path_indices = std::visit(
+            [&](auto& g) {
+                return shortest_path_impl(g, source_id, target_id);
+            },
+            graph_);
 
-        // Trace back from target to source
-        for (std::size_t v = target_id; v != source_id; v = predecessors[v]) {
-            path.push_back(get_vertex_name(v));
-            if (v == predecessors[v])
-                break;  // Prevent loop
+        std::vector<std::string> result;
+        result.reserve(path_indices.size());
+        for (const auto id : path_indices) {
+            result.emplace_back(get_vertex_name(id));
         }
-        path.push_back(get_vertex_name(source_id));
-
-        // Reverse the path to make it from source to target
-        std::reverse(path.begin(), path.end());
-        return path;
+        return result;
     }
 
-    /**
-     * @brief Get vertex name
-     *
-     * @param vertex_id Vertex ID
-     * @return std::string Vertex name
-     */
-    std::string get_vertex_name(std::size_t vertex_id) const {
-        switch (type_) {
-            case GraphType::Directed:
-                return (*graph_.directed)[vertex_id].name;
-            case GraphType::Undirected:
-                return (*graph_.undirected)[vertex_id].name;
-            case GraphType::Bidirectional:
-                return (*graph_.bidirectional)[vertex_id].name;
+    [[nodiscard]] std::string get_vertex_name(std::size_t vertex_id) const {
+        if (vertex_id >= vertex_names_.size()) {
+            return {};
         }
-        return "";
+        return vertex_names_[vertex_id];
     }
 
-    /**
-     * @brief Get vertex ID
-     *
-     * @param name Vertex name
-     * @return std::size_t Vertex ID, returns -1 if it does not exist
-     */
-    std::size_t get_vertex_id(const std::string& name) const {
-        auto it = name_to_vertex_.find(name);
-        if (it != name_to_vertex_.end()) {
+    [[nodiscard]] std::size_t get_vertex_id(std::string_view name) const {
+        const std::string name_str(name);
+        if (const auto it = name_to_vertex_.find(name_str);
+            it != name_to_vertex_.end()) {
             return it->second;
         }
-        return static_cast<std::size_t>(-1);  // Indicates an invalid ID
+        return invalid_vertex;
     }
 
 private:
-    // Helper function to calculate the shortest path
-    template <typename GraphType>
-    void calculate_shortest_path(const GraphType& g, std::size_t source_id,
-                                 std::vector<std::size_t>& predecessors,
-                                 std::vector<double>& distances) {
-        // Initialize
-        predecessors.resize(boost::num_vertices(g));
-        distances.resize(boost::num_vertices(g));
+    static constexpr std::size_t invalid_vertex =
+        std::numeric_limits<std::size_t>::max();
 
-        auto weight_map = boost::get(&EdgeProperty::weight, g);
-        auto predecessor_map = boost::make_iterator_property_map(
-            predecessors.begin(), boost::get(boost::vertex_index, g));
-        auto distance_map = boost::make_iterator_property_map(
-            distances.begin(), boost::get(boost::vertex_index, g));
+    template <bool AllowParallel>
+    using OutEdgeSelector =
+        std::conditional_t<AllowParallel, boost::listS, boost::vecS>;
 
-        // Execute Dijkstra's algorithm
-        boost::dijkstra_shortest_paths(g, source_id,
-                                       boost::predecessor_map(predecessor_map)
-                                           .distance_map(distance_map)
-                                           .weight_map(weight_map));
+    template <bool AllowParallel>
+    using DirectedGraphImpl =
+        boost::adjacency_list<OutEdgeSelector<AllowParallel>, boost::vecS,
+                              boost::directedS, VertexProperty, EdgeProperty,
+                              boost::no_property, boost::listS>;
+
+    template <bool AllowParallel>
+    using UndirectedGraphImpl =
+        boost::adjacency_list<OutEdgeSelector<AllowParallel>, boost::vecS,
+                              boost::undirectedS, VertexProperty, EdgeProperty,
+                              boost::no_property, boost::listS>;
+
+    template <bool AllowParallel>
+    using BidirectionalGraphImpl =
+        boost::adjacency_list<OutEdgeSelector<AllowParallel>, boost::vecS,
+                              boost::bidirectionalS, VertexProperty,
+                              EdgeProperty, boost::no_property, boost::listS>;
+
+    using GraphVariant =
+        std::variant<DirectedGraphImpl<false>, DirectedGraphImpl<true>,
+                     UndirectedGraphImpl<false>, UndirectedGraphImpl<true>,
+                     BidirectionalGraphImpl<false>,
+                     BidirectionalGraphImpl<true>>;
+
+    [[nodiscard]] static GraphVariant make_graph_variant(GraphType type,
+                                                         bool allow_parallel) {
+        if (allow_parallel) {
+            switch (type) {
+                case GraphType::Directed:
+                    return GraphVariant{
+                        std::in_place_type<DirectedGraphImpl<true>>};
+                case GraphType::Undirected:
+                    return GraphVariant{
+                        std::in_place_type<UndirectedGraphImpl<true>>};
+                case GraphType::Bidirectional:
+                    return GraphVariant{
+                        std::in_place_type<BidirectionalGraphImpl<true>>};
+            }
+        }
+
+        switch (type) {
+            case GraphType::Directed:
+                return GraphVariant{
+                    std::in_place_type<DirectedGraphImpl<false>>};
+            case GraphType::Undirected:
+                return GraphVariant{
+                    std::in_place_type<UndirectedGraphImpl<false>>};
+            case GraphType::Bidirectional:
+                return GraphVariant{
+                    std::in_place_type<BidirectionalGraphImpl<false>>};
+        }
+        return GraphVariant{std::in_place_type<DirectedGraphImpl<false>>};
     }
+
+    template <typename Impl>
+    [[nodiscard]] static double extract_edge_weight(
+        const Impl& g, typename boost::graph_traits<Impl>::edge_descriptor e) {
+        const auto& property = g[e];
+        if constexpr (requires { property.weight; }) {
+            return static_cast<double>(property.weight);
+        } else if constexpr (std::is_arithmetic_v<EdgeProperty>) {
+            return static_cast<double>(property);
+        } else {
+            return 1.0;
+        }
+    }
+
+    template <typename Impl>
+    [[nodiscard]] static auto make_weight_map(const Impl& g) {
+        using edge_descriptor =
+            typename boost::graph_traits<Impl>::edge_descriptor;
+        if constexpr (std::is_same_v<EdgeProperty, boost::no_property>) {
+            return boost::make_static_property_map<edge_descriptor>(1.0);
+        } else {
+            return boost::make_function_property_map<edge_descriptor>(
+                [&g](edge_descriptor e) noexcept {
+                    return extract_edge_weight(g, e);
+                });
+        }
+    }
+
+    template <typename Impl>
+    [[nodiscard]] static std::vector<std::size_t> shortest_path_impl(
+        const Impl& g, std::size_t source_id, std::size_t target_id) {
+        const auto vertex_total =
+            static_cast<std::size_t>(boost::num_vertices(g));
+        if (source_id >= vertex_total || target_id >= vertex_total) {
+            return {};
+        }
+
+        using vertex_descriptor =
+            typename boost::graph_traits<Impl>::vertex_descriptor;
+        std::vector<vertex_descriptor> predecessors(vertex_total);
+        std::vector<double> distances(vertex_total,
+                                      std::numeric_limits<double>::infinity());
+
+        const auto index_map = boost::get(boost::vertex_index, g);
+        auto predecessor_map =
+            boost::make_iterator_property_map(predecessors.begin(), index_map);
+        auto distance_map =
+            boost::make_iterator_property_map(distances.begin(), index_map);
+
+        distances[source_id] = 0.0;
+        predecessors[source_id] = static_cast<vertex_descriptor>(source_id);
+
+        const auto weight_map = make_weight_map(g);
+        boost::dijkstra_shortest_paths(
+            g, static_cast<vertex_descriptor>(source_id),
+            boost::predecessor_map(predecessor_map)
+                .distance_map(distance_map)
+                .weight_map(weight_map));
+
+        if (distances[target_id] == std::numeric_limits<double>::infinity()) {
+            return {};
+        }
+
+        std::vector<std::size_t> path;
+        auto current = static_cast<vertex_descriptor>(target_id);
+        while (current != static_cast<vertex_descriptor>(source_id)) {
+            path.push_back(static_cast<std::size_t>(current));
+            const auto predecessor = predecessors[current];
+            if (predecessor == current) {
+                return {};
+            }
+            current = predecessor;
+        }
+        path.push_back(source_id);
+        std::ranges::reverse(path);
+        return path;
+    }
+
+    GraphVariant graph_;
+    GraphType type_;
+    bool allow_parallel_edges_;
+    std::unordered_map<std::string, std::size_t> name_to_vertex_;
+    std::vector<std::string> vertex_names_;
 };
 
 /**
- * @brief Convenience factory function for creating graphs
- *
- * @tparam VertexProperty Vertex property type
- * @tparam EdgeProperty Edge property type
- * @param options Graph options
- * @return Graph<VertexProperty, EdgeProperty> The created graph
+ * @brief Convenience helper to create a graph with a set of options.
  */
 template <typename VertexProperty = VertexProperties,
           typename EdgeProperty = EdgeProperties>
-Graph<VertexProperty, EdgeProperty> create_graph(
+[[nodiscard]] Graph<VertexProperty, EdgeProperty> create_graph(
     std::initializer_list<GraphOptions> options = {}) {
     typename Graph<VertexProperty, EdgeProperty>::GraphType type =
         Graph<VertexProperty, EdgeProperty>::GraphType::Directed;
     bool allow_parallel_edges = false;
 
-    for (auto opt : options) {
-        switch (opt) {
+    for (const auto option : options) {
+        switch (option) {
             case GraphOptions::Directed:
                 type = Graph<VertexProperty, EdgeProperty>::GraphType::Directed;
                 break;
@@ -545,8 +408,6 @@ Graph<VertexProperty, EdgeProperty> create_graph(
     return Graph<VertexProperty, EdgeProperty>(type, allow_parallel_edges);
 }
 
-}  // namespace graph
-}  // namespace containers
-}  // namespace atom
+}  // namespace atom::containers::graph
 
 #endif  // defined(ATOM_HAS_BOOST_GRAPH)

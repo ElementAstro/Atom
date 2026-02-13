@@ -1,4 +1,4 @@
-#include "atom/algorithm/snowflake.hpp"
+#include "atom/algorithm/utils/snowflake.hpp"
 
 #include <iostream>
 

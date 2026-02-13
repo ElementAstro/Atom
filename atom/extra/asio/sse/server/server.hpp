@@ -16,8 +16,13 @@
 
 #include <chrono>
 #include <mutex>
-#include <nlohmann/json.hpp>
 #include <vector>
+
+// Conditionally include nlohmann/json if available
+#if __has_include(<nlohmann/json.hpp>)
+#include <nlohmann/json.hpp>
+#define ATOM_HAS_NLOHMANN_JSON
+#endif
 
 namespace atom::extra::asio::sse {
 
@@ -106,7 +111,7 @@ private:
     /**
      * @brief Persistent event storage.
      */
-    EventStore event_store_;
+    ServerEventStore event_store_;
 
     /**
      * @brief Authentication service for client validation.

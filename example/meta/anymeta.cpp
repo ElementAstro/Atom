@@ -7,47 +7,47 @@
 using namespace atom::meta;
 using namespace std::chrono_literals;
 
-// Sample classes for demonstration
-class Person {
+// Sample classes for demonstrationclass Person {
 private:
-    std::string name_;
-    int age_;
-    std::string address_;
+std::string name_;
+int age_;
+std::string address_;
 
 public:
-    Person() : name_("Unknown"), age_(0), address_("Nowhere") {}
+Person() : name_("Unknown"), age_(0), address_("Nowhere") {}
 
-    Person(std::string name, int age)
-        : name_(std::move(name)), age_(age), address_("Default Address") {}
+Person(std::string name, int age)
+    : name_(std::move(name)), age_(age), address_("Default Address") {}
 
-    Person(std::string name, int age, std::string address)
-        : name_(std::move(name)),
-          age_(std::move(age)),
-          address_(std::move(address)) {}
+Person(std::string name, int age, std::string address)
+    : name_(std::move(name)),
+      age_(std::move(age)),
+      address_(std::move(address)) {}
 
-    // Getters and setters
-    std::string getName() const { return name_; }
-    void setName(const std::string& name) { name_ = name; }
+// Getters and setters
+std::string getName() const { return name_; }
+void setName(const std::string& name) { name_ = name; }
 
-    int getAge() const { return age_; }
-    void setAge(int age) { age_ = age; }
+int getAge() const { return age_; }
+void setAge(int age) { age_ = age; }
 
-    std::string getAddress() const { return address_; }
-    void setAddress(const std::string& address) { address_ = address; }
+std::string getAddress() const { return address_; }
+void setAddress(const std::string& address) { address_ = address; }
 
-    // Methods
-    std::string toString() const {
-        return "Person{name='" + name_ + "', age=" + std::to_string(age_) +
-               ", address='" + address_ + "'}";
-    }
+// Methods
+std::string toString() const {
+    return "Person{name='" + name_ + "', age=" + std::to_string(age_) +
+           ", address='" + address_ + "'}";
+}
 
-    void celebrateBirthday() {
-        age_++;
-        std::cout << name_ << " is now " << age_ << " years old!" << std::endl;
-    }
+void celebrateBirthday() {
+    age_++;
+    std::cout << name_ << " is now " << age_ << " years old!" << std::endl;
+}
 
-    bool isAdult() const { return age_ >= 18; }
-};
+bool isAdult() const { return age_ >= 18; }
+}
+;
 
 class Vehicle {
 private:
@@ -94,393 +94,389 @@ public:
     bool isAntique() const { return year_ < 1980; }
 };
 
-// Helper to print events for demonstration
-class EventLogger {
+// Helper to print events for demonstrationclass EventLogger {
 public:
-    static void logEvent(const std::string& event,
-                         const std::string& objectType, const std::string& id) {
-        std::cout << "[EVENT] " << event << " on " << objectType
-                  << " (ID: " << id << ") at " << getCurrentTimestamp()
-                  << std::endl;
-    }
-
-    static std::string getCurrentTimestamp() {
-        auto now = std::chrono::system_clock::now();
-        auto now_c = std::chrono::system_clock::to_time_t(now);
-        char buf[100] = {0};
-        std::strftime(buf, sizeof(buf), "%H:%M:%S", std::localtime(&now_c));
-        return std::string(buf);
-    }
-};
-
-// Register Person type with the TypeRegistry
-void registerPersonType() {
-    TypeMetadata personMetadata;
-
-    // Register constructors
-    personMetadata.addConstructor(
-        "Person", [](std::vector<BoxedValue> args) -> BoxedValue {
-            if (args.empty()) {
-                return BoxedValue(Person{});  // Default constructor
-            }
-            THROW_NOT_FOUND("Invalid constructor arguments for Person");
-        });
-
-    personMetadata.addConstructor(
-        "Person", [](std::vector<BoxedValue> args) -> BoxedValue {
-            if (args.size() == 2) {
-                auto namePtr = args[0].tryCast<std::string>();
-                auto agePtr = args[1].tryCast<int>();
-                if (namePtr && agePtr) {
-                    return BoxedValue(Person{*namePtr, *agePtr});
-                }
-            }
-            THROW_NOT_FOUND("Invalid constructor arguments for Person");
-        });
-
-    personMetadata.addConstructor(
-        "Person", [](std::vector<BoxedValue> args) -> BoxedValue {
-            if (args.size() == 3) {
-                auto namePtr = args[0].tryCast<std::string>();
-                auto agePtr = args[1].tryCast<int>();
-                auto addressPtr = args[2].tryCast<std::string>();
-                if (namePtr && agePtr && addressPtr) {
-                    return BoxedValue(Person{*namePtr, *agePtr, *addressPtr});
-                }
-            }
-            THROW_NOT_FOUND("Invalid constructor arguments for Person");
-        });
-
-    // Register methods
-    personMetadata.addMethod(
-        "toString", [](std::vector<BoxedValue> args) -> BoxedValue {
-            if (!args.empty()) {
-                if (auto personPtr = args[0].tryCast<Person>()) {
-                    return BoxedValue(personPtr->toString());
-                }
-            }
-            THROW_NOT_FOUND("Invalid arguments for toString method");
-        });
-
-    personMetadata.addMethod(
-        "celebrateBirthday", [](std::vector<BoxedValue> args) -> BoxedValue {
-            if (!args.empty()) {
-                if (auto personPtr = args[0].tryCast<Person>()) {
-                    personPtr->celebrateBirthday();
-                    return BoxedValue();  // Return void
-                }
-            }
-            THROW_NOT_FOUND("Invalid arguments for celebrateBirthday method");
-        });
-
-    personMetadata.addMethod(
-        "isAdult", [](std::vector<BoxedValue> args) -> BoxedValue {
-            if (!args.empty()) {
-                if (auto personPtr = args[0].tryCast<Person>()) {
-                    return BoxedValue(personPtr->isAdult());
-                }
-            }
-            THROW_NOT_FOUND("Invalid arguments for isAdult method");
-        });
-
-    // Register properties
-    personMetadata.addProperty(
-        "name",
-        [](const BoxedValue& obj) -> BoxedValue {  // Getter
-            if (auto personPtr = obj.tryCast<Person>()) {
-                return BoxedValue(personPtr->getName());
-            }
-            THROW_NOT_FOUND("Invalid object for name getter");
-        },
-        [](BoxedValue& obj, const BoxedValue& value) {  // Setter
-            if (auto personPtr = obj.tryCast<Person>()) {
-                if (auto namePtr = value.tryCast<std::string>()) {
-                    personPtr->setName(*namePtr);
-                    return;
-                }
-            }
-            THROW_NOT_FOUND("Invalid object or value for name setter");
-        },
-        BoxedValue(std::string("Unknown")),  // Default value
-        "Person's name"                      // Description
-    );
-
-    personMetadata.addProperty(
-        "age",
-        [](const BoxedValue& obj) -> BoxedValue {  // Getter
-            if (auto personPtr = obj.tryCast<Person>()) {
-                return BoxedValue(personPtr->getAge());
-            }
-            THROW_NOT_FOUND("Invalid object for age getter");
-        },
-        [](BoxedValue& obj, const BoxedValue& value) {  // Setter
-            if (auto personPtr = obj.tryCast<Person>()) {
-                if (auto agePtr = value.tryCast<int>()) {
-                    personPtr->setAge(*agePtr);
-                    return;
-                }
-            }
-            THROW_NOT_FOUND("Invalid object or value for age setter");
-        },
-        BoxedValue(0),           // Default value
-        "Person's age in years"  // Description
-    );
-
-    personMetadata.addProperty(
-        "address",
-        [](const BoxedValue& obj) -> BoxedValue {  // Getter
-            if (auto personPtr = obj.tryCast<Person>()) {
-                return BoxedValue(personPtr->getAddress());
-            }
-            THROW_NOT_FOUND("Invalid object for address getter");
-        },
-        [](BoxedValue& obj, const BoxedValue& value) {  // Setter
-            if (auto personPtr = obj.tryCast<Person>()) {
-                if (auto addrPtr = value.tryCast<std::string>()) {
-                    personPtr->setAddress(*addrPtr);
-                    return;
-                }
-            }
-            THROW_NOT_FOUND("Invalid object or value for address setter");
-        },
-        BoxedValue(std::string("Nowhere")),  // Default value
-        "Person's residential address"       // Description
-    );
-
-    // Register events
-    personMetadata.addEvent("onCreate", "Triggered when a person is created");
-    personMetadata.addEvent("onUpdate",
-                            "Triggered when a person's data is updated");
-    personMetadata.addEvent("onDelete", "Triggered when a person is deleted");
-    personMetadata.addEvent("onBirthday",
-                            "Triggered when a person celebrates a birthday");
-
-    // Add event listeners
-    personMetadata.addEventListener(
-        "onCreate",
-        [](BoxedValue& obj, const std::vector<BoxedValue>& args) {
-            if (auto personPtr = obj.tryCast<Person>()) {
-                std::string id = !args.empty() && args[0].tryCast<std::string>()
-                                     ? *args[0].tryCast<std::string>()
-                                     : "unknown";
-                EventLogger::logEvent("Created", "Person", id);
-            }
-        },
-        10);  // High priority
-
-    personMetadata.addEventListener(
-        "onUpdate", [](BoxedValue& obj, const std::vector<BoxedValue>& args) {
-            if (auto personPtr = obj.tryCast<Person>()) {
-                std::string id = !args.empty() && args[0].tryCast<std::string>()
-                                     ? *args[0].tryCast<std::string>()
-                                     : "unknown";
-                std::string field =
-                    args.size() > 1 && args[1].tryCast<std::string>()
-                        ? *args[1].tryCast<std::string>()
-                        : "unknown";
-                EventLogger::logEvent("Updated " + field, "Person", id);
-            }
-        });
-
-    personMetadata.addEventListener(
-        "onBirthday", [](BoxedValue& obj,
-                         [[maybe_unused]] const std::vector<BoxedValue>& args) {
-            if (auto personPtr = obj.tryCast<Person>()) {
-                std::string name = personPtr->getName();
-                int age = personPtr->getAge();
-                std::cout << "🎂 Happy Birthday to " << name << "! Now " << age
-                          << " years old!" << std::endl;
-            }
-        });
-
-    // Register type in the global registry
-    TypeRegistry::instance().registerType("Person", std::move(personMetadata));
+static void logEvent(const std::string& event, const std::string& objectType,
+                     const std::string& id) {
+    std::cout << "[EVENT] " << event << " on " << objectType << " (ID: " << id
+              << ") at " << getCurrentTimestamp() << std::endl;
 }
 
-// Register Vehicle type with the TypeRegistry
-void registerVehicleType() {
-    TypeMetadata vehicleMetadata;
+static std::string getCurrentTimestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto now_c = std::chrono::system_clock::to_time_t(now);
+    char buf[100] = {0};
+    std::strftime(buf, sizeof(buf), "%H:%M:%S", std::localtime(&now_c));
+    return std::string(buf);
+}
+}
+;
 
-    // Register constructors
-    vehicleMetadata.addConstructor(
-        "Vehicle", [](std::vector<BoxedValue> args) -> BoxedValue {
-            if (args.empty()) {
-                return BoxedValue(Vehicle{});  // Default constructor
-            }
-            THROW_NOT_FOUND("Invalid constructor arguments for Vehicle");
-        });
+// Register Person type with the TypeRegistryvoid registerPersonType() {
+TypeMetadata personMetadata;
 
-    vehicleMetadata.addConstructor(
-        "Vehicle", [](std::vector<BoxedValue> args) -> BoxedValue {
-            if (args.size() == 3) {
-                auto makePtr = args[0].tryCast<std::string>();
-                auto modelPtr = args[1].tryCast<std::string>();
-                auto yearPtr = args[2].tryCast<int>();
-                if (makePtr && modelPtr && yearPtr) {
-                    return BoxedValue(Vehicle{*makePtr, *modelPtr, *yearPtr});
-                }
-            }
-            THROW_NOT_FOUND("Invalid constructor arguments for Vehicle");
-        });
+// Register constructors
+personMetadata.addConstructor(
+    "Person", [](std::vector<BoxedValue> args) -> BoxedValue {
+        if (args.empty()) {
+            return BoxedValue(Person{});  // Default constructor
+        }
+        THROW_NOT_FOUND("Invalid constructor arguments for Person");
+    });
 
-    // Register methods
-    vehicleMetadata.addMethod(
-        "toString", [](std::vector<BoxedValue> args) -> BoxedValue {
-            if (!args.empty()) {
-                if (auto vehiclePtr = args[0].tryCast<Vehicle>()) {
-                    return BoxedValue(vehiclePtr->toString());
-                }
+personMetadata.addConstructor(
+    "Person", [](std::vector<BoxedValue> args) -> BoxedValue {
+        if (args.size() == 2) {
+            auto namePtr = args[0].tryCast<std::string>();
+            auto agePtr = args[1].tryCast<int>();
+            if (namePtr && agePtr) {
+                return BoxedValue(Person{*namePtr, *agePtr});
             }
-            THROW_NOT_FOUND("Invalid arguments for toString method");
-        });
+        }
+        THROW_NOT_FOUND("Invalid constructor arguments for Person");
+    });
 
-    vehicleMetadata.addMethod(
-        "drive", [](std::vector<BoxedValue> args) -> BoxedValue {
-            if (args.size() >= 2) {
-                auto vehiclePtr = args[0].tryCast<Vehicle>();
-                auto distancePtr = args[1].tryCast<double>();
-                if (vehiclePtr && distancePtr) {
-                    vehiclePtr->drive(*distancePtr);
-                    return BoxedValue();  // Return void
-                }
+personMetadata.addConstructor(
+    "Person", [](std::vector<BoxedValue> args) -> BoxedValue {
+        if (args.size() == 3) {
+            auto namePtr = args[0].tryCast<std::string>();
+            auto agePtr = args[1].tryCast<int>();
+            auto addressPtr = args[2].tryCast<std::string>();
+            if (namePtr && agePtr && addressPtr) {
+                return BoxedValue(Person{*namePtr, *agePtr, *addressPtr});
             }
-            THROW_NOT_FOUND("Invalid arguments for drive method");
-        });
+        }
+        THROW_NOT_FOUND("Invalid constructor arguments for Person");
+    });
 
-    vehicleMetadata.addMethod(
-        "isAntique", [](std::vector<BoxedValue> args) -> BoxedValue {
-            if (!args.empty()) {
-                if (auto vehiclePtr = args[0].tryCast<Vehicle>()) {
-                    return BoxedValue(vehiclePtr->isAntique());
-                }
+// Register methods
+personMetadata.addMethod(
+    "toString", [](std::vector<BoxedValue> args) -> BoxedValue {
+        if (!args.empty()) {
+            if (auto personPtr = args[0].tryCast<Person>()) {
+                return BoxedValue(personPtr->toString());
             }
-            THROW_NOT_FOUND("Invalid arguments for isAntique method");
-        });
+        }
+        THROW_NOT_FOUND("Invalid arguments for toString method");
+    });
 
-    // Register properties
-    vehicleMetadata.addProperty(
-        "make",
-        [](const BoxedValue& obj) -> BoxedValue {  // Getter
-            if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
-                return BoxedValue(vehiclePtr->getMake());
+personMetadata.addMethod(
+    "celebrateBirthday", [](std::vector<BoxedValue> args) -> BoxedValue {
+        if (!args.empty()) {
+            if (auto personPtr = args[0].tryCast<Person>()) {
+                personPtr->celebrateBirthday();
+                return BoxedValue();  // Return void
             }
-            THROW_NOT_FOUND("Invalid object for make getter");
-        },
-        [](BoxedValue& obj, const BoxedValue& value) {  // Setter
-            if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
-                if (auto makePtr = value.tryCast<std::string>()) {
-                    vehiclePtr->setMake(*makePtr);
-                    return;
-                }
-            }
-            THROW_NOT_FOUND("Invalid object or value for make setter");
-        },
-        BoxedValue(std::string("Unknown")),  // Default value
-        "Vehicle manufacturer name"          // Description
-    );
+        }
+        THROW_NOT_FOUND("Invalid arguments for celebrateBirthday method");
+    });
 
-    vehicleMetadata.addProperty(
-        "model",
-        [](const BoxedValue& obj) -> BoxedValue {  // Getter
-            if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
-                return BoxedValue(vehiclePtr->getModel());
+personMetadata.addMethod(
+    "isAdult", [](std::vector<BoxedValue> args) -> BoxedValue {
+        if (!args.empty()) {
+            if (auto personPtr = args[0].tryCast<Person>()) {
+                return BoxedValue(personPtr->isAdult());
             }
-            THROW_NOT_FOUND("Invalid object for model getter");
-        },
-        [](BoxedValue& obj, const BoxedValue& value) {  // Setter
-            if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
-                if (auto modelPtr = value.tryCast<std::string>()) {
-                    vehiclePtr->setModel(*modelPtr);
-                    return;
-                }
-            }
-            THROW_NOT_FOUND("Invalid object or value for model setter");
-        },
-        BoxedValue(std::string("Unknown")),  // Default value
-        "Vehicle model name"                 // Description
-    );
+        }
+        THROW_NOT_FOUND("Invalid arguments for isAdult method");
+    });
 
-    vehicleMetadata.addProperty(
-        "year",
-        [](const BoxedValue& obj) -> BoxedValue {  // Getter
-            if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
-                return BoxedValue(vehiclePtr->getYear());
+// Register properties
+personMetadata.addProperty(
+    "name",
+    [](const BoxedValue& obj) -> BoxedValue {  // Getter
+        if (auto personPtr = obj.tryCast<Person>()) {
+            return BoxedValue(personPtr->getName());
+        }
+        THROW_NOT_FOUND("Invalid object for name getter");
+    },
+    [](BoxedValue& obj, const BoxedValue& value) {  // Setter
+        if (auto personPtr = obj.tryCast<Person>()) {
+            if (auto namePtr = value.tryCast<std::string>()) {
+                personPtr->setName(*namePtr);
+                return;
             }
-            THROW_NOT_FOUND("Invalid object for year getter");
-        },
-        [](BoxedValue& obj, const BoxedValue& value) {  // Setter
-            if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
-                if (auto yearPtr = value.tryCast<int>()) {
-                    vehiclePtr->setYear(*yearPtr);
-                    return;
-                }
-            }
-            THROW_NOT_FOUND("Invalid object or value for year setter");
-        },
-        BoxedValue(0),                // Default value
-        "Vehicle manufacturing year"  // Description
-    );
+        }
+        THROW_NOT_FOUND("Invalid object or value for name setter");
+    },
+    BoxedValue(std::string("Unknown")),  // Default value
+    "Person's name"                      // Description
+);
 
-    vehicleMetadata.addProperty(
-        "mileage",
-        [](const BoxedValue& obj) -> BoxedValue {  // Getter
-            if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
-                return BoxedValue(vehiclePtr->getMileage());
+personMetadata.addProperty(
+    "age",
+    [](const BoxedValue& obj) -> BoxedValue {  // Getter
+        if (auto personPtr = obj.tryCast<Person>()) {
+            return BoxedValue(personPtr->getAge());
+        }
+        THROW_NOT_FOUND("Invalid object for age getter");
+    },
+    [](BoxedValue& obj, const BoxedValue& value) {  // Setter
+        if (auto personPtr = obj.tryCast<Person>()) {
+            if (auto agePtr = value.tryCast<int>()) {
+                personPtr->setAge(*agePtr);
+                return;
             }
-            THROW_NOT_FOUND("Invalid object for mileage getter");
-        },
-        [](BoxedValue& obj, const BoxedValue& value) {  // Setter
-            if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
-                if (auto mileagePtr = value.tryCast<double>()) {
-                    vehiclePtr->setMileage(*mileagePtr);
-                    return;
-                }
+        }
+        THROW_NOT_FOUND("Invalid object or value for age setter");
+    },
+    BoxedValue(0),           // Default value
+    "Person's age in years"  // Description
+);
+
+personMetadata.addProperty(
+    "address",
+    [](const BoxedValue& obj) -> BoxedValue {  // Getter
+        if (auto personPtr = obj.tryCast<Person>()) {
+            return BoxedValue(personPtr->getAddress());
+        }
+        THROW_NOT_FOUND("Invalid object for address getter");
+    },
+    [](BoxedValue& obj, const BoxedValue& value) {  // Setter
+        if (auto personPtr = obj.tryCast<Person>()) {
+            if (auto addrPtr = value.tryCast<std::string>()) {
+                personPtr->setAddress(*addrPtr);
+                return;
             }
-            THROW_NOT_FOUND("Invalid object or value for mileage setter");
-        },
-        BoxedValue(0.0),                     // Default value
-        "Vehicle odometer reading in miles"  // Description
-    );
+        }
+        THROW_NOT_FOUND("Invalid object or value for address setter");
+    },
+    BoxedValue(std::string("Nowhere")),  // Default value
+    "Person's residential address"       // Description
+);
 
-    // Register events
-    vehicleMetadata.addEvent("onCreate", "Triggered when a vehicle is created");
-    vehicleMetadata.addEvent("onDrive", "Triggered when a vehicle is driven");
-    vehicleMetadata.addEvent("onMaintenance",
-                             "Triggered when a vehicle receives maintenance");
+// Register events
+personMetadata.addEvent("onCreate", "Triggered when a person is created");
+personMetadata.addEvent("onUpdate",
+                        "Triggered when a person's data is updated");
+personMetadata.addEvent("onDelete", "Triggered when a person is deleted");
+personMetadata.addEvent("onBirthday",
+                        "Triggered when a person celebrates a birthday");
 
-    // Add event listeners
-    vehicleMetadata.addEventListener(
-        "onCreate", [](BoxedValue& obj, const std::vector<BoxedValue>& args) {
-            if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
-                std::string id = !args.empty() && args[0].tryCast<std::string>()
-                                     ? *args[0].tryCast<std::string>()
-                                     : "unknown";
-                std::cout << "[Vehicle Created] " << vehiclePtr->getMake()
-                          << " " << vehiclePtr->getModel() << " ("
-                          << vehiclePtr->getYear() << ")" << std::endl;
-                EventLogger::logEvent("Created", "Vehicle", id);
-            }
-        });
+// Add event listeners
+personMetadata.addEventListener(
+    "onCreate",
+    [](BoxedValue& obj, const std::vector<BoxedValue>& args) {
+        if (auto personPtr = obj.tryCast<Person>()) {
+            std::string id = !args.empty() && args[0].tryCast<std::string>()
+                                 ? *args[0].tryCast<std::string>()
+                                 : "unknown";
+            EventLogger::logEvent("Created", "Person", id);
+        }
+    },
+    10);  // High priority
 
-    vehicleMetadata.addEventListener(
-        "onDrive", [](BoxedValue& obj, const std::vector<BoxedValue>& args) {
-            if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
-                double distance = args.size() > 0 && args[0].tryCast<double>()
-                                      ? *args[0].tryCast<double>()
-                                      : 0.0;
-                std::cout << "[Vehicle Driven] " << vehiclePtr->getMake() << " "
-                          << vehiclePtr->getModel() << " driven " << distance
-                          << " miles" << std::endl;
-            }
-        });
+personMetadata.addEventListener(
+    "onUpdate", [](BoxedValue& obj, const std::vector<BoxedValue>& args) {
+        if (auto personPtr = obj.tryCast<Person>()) {
+            std::string id = !args.empty() && args[0].tryCast<std::string>()
+                                 ? *args[0].tryCast<std::string>()
+                                 : "unknown";
+            std::string field =
+                args.size() > 1 && args[1].tryCast<std::string>()
+                    ? *args[1].tryCast<std::string>()
+                    : "unknown";
+            EventLogger::logEvent("Updated " + field, "Person", id);
+        }
+    });
 
-    // Register type in the global registry
-    TypeRegistry::instance().registerType("Vehicle",
-                                          std::move(vehicleMetadata));
+personMetadata.addEventListener(
+    "onBirthday",
+    [](BoxedValue& obj, [[maybe_unused]] const std::vector<BoxedValue>& args) {
+        if (auto personPtr = obj.tryCast<Person>()) {
+            std::string name = personPtr->getName();
+            int age = personPtr->getAge();
+            std::cout << "🎂 Happy Birthday to " << name << "! Now " << age
+                      << " years old!" << std::endl;
+        }
+    });
+
+// Register type in the global registry
+TypeRegistry::instance().registerType("Person", std::move(personMetadata));
 }
 
-// Template based registration example using TypeRegistrar
-template <>
+// Register Vehicle type with the TypeRegistryvoid registerVehicleType() {
+TypeMetadata vehicleMetadata;
+
+// Register constructors
+vehicleMetadata.addConstructor(
+    "Vehicle", [](std::vector<BoxedValue> args) -> BoxedValue {
+        if (args.empty()) {
+            return BoxedValue(Vehicle{});  // Default constructor
+        }
+        THROW_NOT_FOUND("Invalid constructor arguments for Vehicle");
+    });
+
+vehicleMetadata.addConstructor(
+    "Vehicle", [](std::vector<BoxedValue> args) -> BoxedValue {
+        if (args.size() == 3) {
+            auto makePtr = args[0].tryCast<std::string>();
+            auto modelPtr = args[1].tryCast<std::string>();
+            auto yearPtr = args[2].tryCast<int>();
+            if (makePtr && modelPtr && yearPtr) {
+                return BoxedValue(Vehicle{*makePtr, *modelPtr, *yearPtr});
+            }
+        }
+        THROW_NOT_FOUND("Invalid constructor arguments for Vehicle");
+    });
+
+// Register methods
+vehicleMetadata.addMethod(
+    "toString", [](std::vector<BoxedValue> args) -> BoxedValue {
+        if (!args.empty()) {
+            if (auto vehiclePtr = args[0].tryCast<Vehicle>()) {
+                return BoxedValue(vehiclePtr->toString());
+            }
+        }
+        THROW_NOT_FOUND("Invalid arguments for toString method");
+    });
+
+vehicleMetadata.addMethod("drive",
+                          [](std::vector<BoxedValue> args) -> BoxedValue {
+                              if (args.size() >= 2) {
+                                  auto vehiclePtr = args[0].tryCast<Vehicle>();
+                                  auto distancePtr = args[1].tryCast<double>();
+                                  if (vehiclePtr && distancePtr) {
+                                      vehiclePtr->drive(*distancePtr);
+                                      return BoxedValue();  // Return void
+                                  }
+                              }
+                              THROW_NOT_FOUND(
+                                  "Invalid arguments for drive method");
+                          });
+
+vehicleMetadata.addMethod(
+    "isAntique", [](std::vector<BoxedValue> args) -> BoxedValue {
+        if (!args.empty()) {
+            if (auto vehiclePtr = args[0].tryCast<Vehicle>()) {
+                return BoxedValue(vehiclePtr->isAntique());
+            }
+        }
+        THROW_NOT_FOUND("Invalid arguments for isAntique method");
+    });
+
+// Register properties
+vehicleMetadata.addProperty(
+    "make",
+    [](const BoxedValue& obj) -> BoxedValue {  // Getter
+        if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
+            return BoxedValue(vehiclePtr->getMake());
+        }
+        THROW_NOT_FOUND("Invalid object for make getter");
+    },
+    [](BoxedValue& obj, const BoxedValue& value) {  // Setter
+        if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
+            if (auto makePtr = value.tryCast<std::string>()) {
+                vehiclePtr->setMake(*makePtr);
+                return;
+            }
+        }
+        THROW_NOT_FOUND("Invalid object or value for make setter");
+    },
+    BoxedValue(std::string("Unknown")),  // Default value
+    "Vehicle manufacturer name"          // Description
+);
+
+vehicleMetadata.addProperty(
+    "model",
+    [](const BoxedValue& obj) -> BoxedValue {  // Getter
+        if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
+            return BoxedValue(vehiclePtr->getModel());
+        }
+        THROW_NOT_FOUND("Invalid object for model getter");
+    },
+    [](BoxedValue& obj, const BoxedValue& value) {  // Setter
+        if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
+            if (auto modelPtr = value.tryCast<std::string>()) {
+                vehiclePtr->setModel(*modelPtr);
+                return;
+            }
+        }
+        THROW_NOT_FOUND("Invalid object or value for model setter");
+    },
+    BoxedValue(std::string("Unknown")),  // Default value
+    "Vehicle model name"                 // Description
+);
+
+vehicleMetadata.addProperty(
+    "year",
+    [](const BoxedValue& obj) -> BoxedValue {  // Getter
+        if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
+            return BoxedValue(vehiclePtr->getYear());
+        }
+        THROW_NOT_FOUND("Invalid object for year getter");
+    },
+    [](BoxedValue& obj, const BoxedValue& value) {  // Setter
+        if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
+            if (auto yearPtr = value.tryCast<int>()) {
+                vehiclePtr->setYear(*yearPtr);
+                return;
+            }
+        }
+        THROW_NOT_FOUND("Invalid object or value for year setter");
+    },
+    BoxedValue(0),                // Default value
+    "Vehicle manufacturing year"  // Description
+);
+
+vehicleMetadata.addProperty(
+    "mileage",
+    [](const BoxedValue& obj) -> BoxedValue {  // Getter
+        if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
+            return BoxedValue(vehiclePtr->getMileage());
+        }
+        THROW_NOT_FOUND("Invalid object for mileage getter");
+    },
+    [](BoxedValue& obj, const BoxedValue& value) {  // Setter
+        if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
+            if (auto mileagePtr = value.tryCast<double>()) {
+                vehiclePtr->setMileage(*mileagePtr);
+                return;
+            }
+        }
+        THROW_NOT_FOUND("Invalid object or value for mileage setter");
+    },
+    BoxedValue(0.0),                     // Default value
+    "Vehicle odometer reading in miles"  // Description
+);
+
+// Register events
+vehicleMetadata.addEvent("onCreate", "Triggered when a vehicle is created");
+vehicleMetadata.addEvent("onDrive", "Triggered when a vehicle is driven");
+vehicleMetadata.addEvent("onMaintenance",
+                         "Triggered when a vehicle receives maintenance");
+
+// Add event listeners
+vehicleMetadata.addEventListener(
+    "onCreate", [](BoxedValue& obj, const std::vector<BoxedValue>& args) {
+        if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
+            std::string id = !args.empty() && args[0].tryCast<std::string>()
+                                 ? *args[0].tryCast<std::string>()
+                                 : "unknown";
+            std::cout << "[Vehicle Created] " << vehiclePtr->getMake() << " "
+                      << vehiclePtr->getModel() << " (" << vehiclePtr->getYear()
+                      << ")" << std::endl;
+            EventLogger::logEvent("Created", "Vehicle", id);
+        }
+    });
+
+vehicleMetadata.addEventListener(
+    "onDrive", [](BoxedValue& obj, const std::vector<BoxedValue>& args) {
+        if (auto vehiclePtr = obj.tryCast<Vehicle>()) {
+            double distance = args.size() > 0 && args[0].tryCast<double>()
+                                  ? *args[0].tryCast<double>()
+                                  : 0.0;
+            std::cout << "[Vehicle Driven] " << vehiclePtr->getMake() << " "
+                      << vehiclePtr->getModel() << " driven " << distance
+                      << " miles" << std::endl;
+        }
+    });
+
+// Register type in the global registry
+TypeRegistry::instance().registerType("Vehicle", std::move(vehicleMetadata));
+}
+
+// Template based registration example using TypeRegistrartemplate <>
 class TypeRegistrar<std::string> {
 public:
     static void registerType() {

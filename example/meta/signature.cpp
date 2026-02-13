@@ -3,11 +3,11 @@
 #include <iostream>
 #include <string>
 
-// Helper functions to make output prettier
-void printHeader(const std::string& title) {
-    std::cout << "\n============================================\n";
-    std::cout << title << "\n";
-    std::cout << "============================================\n";
+// Helper functions to make output prettiervoid printHeader(const std::string&
+// title) {
+std::cout << "\n============================================\n";
+std::cout << title << "\n";
+std::cout << "============================================\n";
 }
 
 void printSubHeader(const std::string& title) {
@@ -89,61 +89,59 @@ std::string errorCodeToString(atom::meta::ParsingErrorCode code) {
     }
 }
 
-// Function to test parsing a signature
-void testParse(const std::string& description, std::string_view signature) {
-    std::cout << "\n>>> Testing: " << description << "\n";
-    std::cout << "Signature: " << signature << "\n\n";
+// Function to test parsing a signaturevoid testParse(const std::string&
+// description, std::string_view signature) {
+std::cout << "\n>>> Testing: " << description << "\n";
+std::cout << "Signature: " << signature << "\n\n";
 
-    auto result = atom::meta::parseFunctionDefinition(signature);
+auto result = atom::meta::parseFunctionDefinition(signature);
 
-    if (result) {
-        const auto& sig = result.value();
+if (result) {
+    const auto& sig = result.value();
 
-        std::cout << "PARSING SUCCESSFUL\n";
-        std::cout << "Function name: " << sig.getName() << "\n";
+    std::cout << "PARSING SUCCESSFUL\n";
+    std::cout << "Function name: " << sig.getName() << "\n";
 
-        std::cout << "Return type: ";
-        if (sig.getReturnType()) {
-            std::cout << *sig.getReturnType() << "\n";
-        } else {
-            std::cout << "None (void)\n";
-        }
-
-        std::cout << "Modifiers: " << modifierToString(sig.getModifiers())
-                  << "\n";
-
-        if (sig.isTemplated()) {
-            std::cout << "Is templated: Yes\n";
-            if (sig.getTemplateParameters()) {
-                std::cout << "Template parameters: "
-                          << *sig.getTemplateParameters() << "\n";
-            }
-        } else {
-            std::cout << "Is templated: No\n";
-        }
-
-        std::cout << "Is inline: " << (sig.isInline() ? "Yes" : "No") << "\n";
-        std::cout << "Is static: " << (sig.isStatic() ? "Yes" : "No") << "\n";
-        std::cout << "Is explicit: " << (sig.isExplicit() ? "Yes" : "No")
-                  << "\n";
-
-        std::cout << "Parameters (" << sig.getParameters().size() << "):\n";
-        for (const auto& param : sig.getParameters()) {
-            printParameter(param);
-        }
-
-        std::cout << "Documentation:\n";
-        printDocComment(sig.getDocComment());
-
-        std::cout << "Reconstructed signature: " << sig.toString() << "\n";
+    std::cout << "Return type: ";
+    if (sig.getReturnType()) {
+        std::cout << *sig.getReturnType() << "\n";
     } else {
-        const auto& error = result.error();
-        std::cout << "PARSING FAILED\n";
-        // 修复：直接输出错误对象本身，因为Error<ParsingError>没有code/message/position成员
-        std::cout << "Error occurred during parsing\n";
+        std::cout << "None (void)\n";
     }
 
-    std::cout << "--------------------------------------\n";
+    std::cout << "Modifiers: " << modifierToString(sig.getModifiers()) << "\n";
+
+    if (sig.isTemplated()) {
+        std::cout << "Is templated: Yes\n";
+        if (sig.getTemplateParameters()) {
+            std::cout << "Template parameters: " << *sig.getTemplateParameters()
+                      << "\n";
+        }
+    } else {
+        std::cout << "Is templated: No\n";
+    }
+
+    std::cout << "Is inline: " << (sig.isInline() ? "Yes" : "No") << "\n";
+    std::cout << "Is static: " << (sig.isStatic() ? "Yes" : "No") << "\n";
+    std::cout << "Is explicit: " << (sig.isExplicit() ? "Yes" : "No") << "\n";
+
+    std::cout << "Parameters (" << sig.getParameters().size() << "):\n";
+    for (const auto& param : sig.getParameters()) {
+        printParameter(param);
+    }
+
+    std::cout << "Documentation:\n";
+    printDocComment(sig.getDocComment());
+
+    std::cout << "Reconstructed signature: " << sig.toString() << "\n";
+} else {
+    const auto& error = result.error();
+    std::cout << "PARSING FAILED\n";
+    // 修复：直接输出错误对象本身，因为Error<ParsingError>没有code/message/position成员
+    std::cout << "Error occurred during parsing\n";
+}
+
+std::cout << "--------------------------------------\n";
 }
 
 int main() {

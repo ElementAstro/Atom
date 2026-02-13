@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/atom_sysinfo_bios_targets.cmake")
+
+check_required_components(atom_sysinfo_bios)

@@ -1,13 +1,76 @@
 fail_fast: false
 repos:
+  # General pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^(.*\.md|.*\.txt)$
       - id: check-yaml
       - id: check-json
       - id: end-of-file-fixer
+        exclude: ^(.*\.md|.*\.txt)$
       - id: check-added-large-files
+        args: ['--maxkb=1000']
       - id: check-ast
       - id: check-docstring-first
       - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+      - id: check-case-conflict
+      - id: check-symlinks
+      - id: destroyed-symlinks
+
+  # CMake formatting
+  - repo: https://github.com/cheshirekow/cmake-format-precommit
+    rev: v0.6.13
+    hooks:
+      - id: cmake-format
+        args: ['--in-place']
+        files: CMakeLists\.txt$|\.cmake$
+        exclude: ^(build/|vcpkg_installed/)
+
+  # Python formatting and linting
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+        language_version: python3
+        files: \.py$
+        exclude: ^(build/|venv/)
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ['--profile', 'black']
+        files: \.py$
+        exclude: ^(build/|venv/)
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.4
+    hooks:
+      - id: ruff
+        args: ['--fix', '--exit-non-zero-on-fix']
+        files: \.py$
+        exclude: ^(build/|venv/)
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.41.0
+    hooks:
+      - id: markdownlint
+        args: ['--fix']
+        files: \.md$
+        exclude: >-
+          ^(build/|vcpkg_installed/|\.augment/rules/|llmdoc/|\.claude/|
+          example/async/README\.md|README\.md|\.todo_list\.md)
+
+  # YAML linting
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: ['-d', '{extends: default, rules: {line-length: {max: 120}, document-start: disable, truthy: disable}}']
+        files: \.(yaml|yml)$
+        exclude: ^(build/|vcpkg_installed/|tests/components/\.github)

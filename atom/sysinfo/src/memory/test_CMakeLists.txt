@@ -1,0 +1,129 @@
+# CMakeLists.txt for Memory Module Tests
+cmake_minimum_required(VERSION 3.16)
+
+# Test configuration
+set(TEST_TARGET_NAME memory_tests)
+
+# Find required packages
+find_package(GTest REQUIRED)
+find_package(Threads REQUIRED)
+
+# Include directories
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${CMAKE_SOURCE_DIR}/include)
+
+# Test sources
+set(TEST_SOURCES
+    test_memory_comprehensive.cpp
+    memory.cpp
+    common.cpp
+    linux.cpp  # Add platform-specific sources as needed
+)
+
+# Create test executable
+add_executable(${TEST_TARGET_NAME} ${TEST_SOURCES})
+
+# Link libraries
+target_link_libraries(${TEST_TARGET_NAME}
+    GTest::GTest
+    GTest::Main
+    Threads::Threads
+    spdlog::spdlog
+)
+
+# Compiler flags
+target_compile_features(${TEST_TARGET_NAME} PRIVATE cxx_std_20)
+target_compile_options(${TEST_TARGET_NAME} PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -O2
+    -g
+)
+
+# Add test to CTest
+enable_testing()
+add_test(NAME MemoryModuleTests COMMAND ${TEST_TARGET_NAME})
+
+# Custom test targets
+add_custom_target(run_memory_tests
+    COMMAND ${TEST_TARGET_NAME}
+    DEPENDS ${TEST_TARGET_NAME}
+    COMMENT "Running memory module tests"
+)
+
+# Performance test target
+add_custom_target(run_memory_performance_tests
+    COMMAND ${TEST_TARGET_NAME} --gtest_filter="*Performance*"
+    DEPENDS ${TEST_TARGET_NAME}
+    COMMENT "Running memory performance tests"
+)
+
+# Leak detection test target
+add_custom_target(run_memory_leak_tests
+    COMMAND ${TEST_TARGET_NAME} --gtest_filter="*Leak*"
+    DEPENDS ${TEST_TARGET_NAME}
+    COMMENT "Running memory leak detection tests"
+)
+
+# NUMA test target
+add_custom_target(run_numa_tests
+    COMMAND ${TEST_TARGET_NAME} --gtest_filter="*Numa*"
+    DEPENDS ${TEST_TARGET_NAME}
+    COMMENT "Running NUMA topology tests"
+)
+
+# Utility test target
+add_custom_target(run_utility_tests
+    COMMAND ${TEST_TARGET_NAME} --gtest_filter="*Utility*"
+    DEPENDS ${TEST_TARGET_NAME}
+    COMMENT "Running utility function tests"
+)
+
+# Coverage target (if gcov is available)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    find_program(GCOV_PATH gcov)
+    if(GCOV_PATH)
+        target_compile_options(${TEST_TARGET_NAME} PRIVATE --coverage)
+        target_link_options(${TEST_TARGET_NAME} PRIVATE --coverage)
+
+        add_custom_target(memory_coverage
+            COMMAND ${TEST_TARGET_NAME}
+            COMMAND gcov ${TEST_SOURCES}
+            DEPENDS ${TEST_TARGET_NAME}
+            COMMENT "Generating test coverage report"
+        )
+    endif()
+endif()
+
+# Valgrind target (if valgrind is available)
+find_program(VALGRIND_PATH valgrind)
+if(VALGRIND_PATH)
+    add_custom_target(run_memory_tests_valgrind
+        COMMAND ${VALGRIND_PATH} --tool=memcheck --leak-check=full --show-leak-kinds=all
+                --track-origins=yes --verbose ${TEST_TARGET_NAME}
+        DEPENDS ${TEST_TARGET_NAME}
+        COMMENT "Running memory tests with Valgrind"
+    )
+endif()
+
+# Benchmark target
+add_custom_target(run_memory_benchmarks
+    COMMAND ${TEST_TARGET_NAME} --gtest_filter="*Benchmark*"
+    DEPENDS ${TEST_TARGET_NAME}
+    COMMENT "Running memory benchmarks"
+)
+
+# Print test summary
+add_custom_target(test_summary
+    COMMAND echo "Available memory test targets:"
+    COMMAND echo "  run_memory_tests              - Run all tests"
+    COMMAND echo "  run_memory_performance_tests  - Run performance tests only"
+    COMMAND echo "  run_memory_leak_tests         - Run leak detection tests only"
+    COMMAND echo "  run_numa_tests                - Run NUMA tests only"
+    COMMAND echo "  run_utility_tests             - Run utility tests only"
+    COMMAND echo "  run_memory_benchmarks         - Run benchmark tests only"
+    COMMAND echo "  run_memory_tests_valgrind     - Run tests with Valgrind (if available)"
+    COMMAND echo "  memory_coverage               - Generate coverage report (Debug build only)"
+    COMMENT "Memory test targets summary"
+)

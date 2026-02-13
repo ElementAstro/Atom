@@ -1,0 +1,726 @@
+# GitHub Actions workflow for Atom project
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop, master ]
+  pull_request:
+    branches: [ main, master ]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build configuration'
+        required: false
+        default: 'Release'
+        type: choice
+        options:
+        - Release
+        - Debug
+        - RelWithDebInfo
+      enable_tests:
+        description: 'Run tests'
+        required: false
+        default: true
+        type: boolean
+      enable_examples:
+        description: 'Build examples'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  BUILD_TYPE: ${{ github.event.inputs.build_type || 'Release' }}
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  VCPKG_DEFAULT_TRIPLET: "x64-linux"
+
+jobs:
+  # Build validation job
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+    steps:
+    - uses: actions/checkout@v4
+<<<<<<< HEAD
+      with:
+        fetch-depth: 0
+
+=======
+
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+<<<<<<< HEAD
+        cache: 'pip'
+
+=======
+
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
+    - name: Install Python dependencies
+      run: |
+        pip install pyyaml
+
+    - name: Run build validation
+      run: |
+        if [ -f validate-build.py ]; then
+          python validate-build.py
+        else
+          echo "No validation script found, skipping"
+        fi
+
+    - name: Check if should build
+      id: check
+      run: |
+        echo "should_build=true" >> $GITHUB_OUTPUT
+
+  # Matrix build across platforms and configurations
+  build:
+    needs: validate
+    if: needs.validate.outputs.should_build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux builds
+          - name: "Ubuntu 22.04 GCC-12"
+            os: ubuntu-22.04
+            cc: gcc-12
+            cxx: g++-12
+            preset: release
+<<<<<<< HEAD
+            triplet: x64-linux
+
+          - name: "Ubuntu 22.04 GCC-13"
+            os: ubuntu-22.04
+            cc: gcc-13
+            cxx: g++-13
+            preset: release
+            triplet: x64-linux
+
+          - name: "Ubuntu 22.04 Clang-15"
+=======
+
+          - name: "Ubuntu 22.04 Clang"
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
+            os: ubuntu-22.04
+            cc: clang-15
+            cxx: clang++-15
+            preset: release
+<<<<<<< HEAD
+            triplet: x64-linux
+
+          - name: "Ubuntu 22.04 Clang-16"
+=======
+
+          - name: "Ubuntu Debug with Tests"
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
+            os: ubuntu-22.04
+            cc: clang-16
+            cxx: clang++-16
+            preset: release
+            triplet: x64-linux
+
+          - name: "Ubuntu Debug with Tests and Sanitizers"
+            os: ubuntu-22.04
+            cc: gcc-13
+            cxx: g++-13
+            preset: debug-full
+<<<<<<< HEAD
+            triplet: x64-linux
+            enable_tests: true
+            enable_examples: true
+
+          - name: "Ubuntu Coverage Build"
+            os: ubuntu-22.04
+            cc: gcc-13
+            cxx: g++-13
+            preset: coverage
+            triplet: x64-linux
+            enable_coverage: true
+
+=======
+
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
+          # macOS builds
+          - name: "macOS 12 Clang"
+            os: macos-12
+            cc: clang
+            cxx: clang++
+            preset: release
+            triplet: x64-osx
+
+          - name: "macOS 13 Clang"
+            os: macos-13
+            cc: clang
+            cxx: clang++
+            preset: release
+            triplet: x64-osx
+
+          - name: "macOS Latest Clang"
+            os: macos-latest
+            cc: clang
+            cxx: clang++
+            preset: release
+<<<<<<< HEAD
+            triplet: x64-osx
+
+          # Windows MSVC builds
+          - name: "Windows MSVC 2022"
+            os: windows-2022
+            preset: release-vs
+            triplet: x64-windows
+
+          - name: "Windows MSVC 2022 Debug"
+            os: windows-2022
+            preset: debug-vs
+            triplet: x64-windows
+            enable_tests: true
+
+          # Windows MSYS2 MinGW64 builds
+          - name: "Windows MSYS2 MinGW64 GCC"
+=======
+
+          # Windows builds
+          - name: "Windows MSVC"
+            os: windows-latest
+            preset: release
+
+          - name: "Windows MinGW"
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
+            os: windows-latest
+            preset: release-msys2
+            triplet: x64-mingw-dynamic
+            msys2: true
+            msys_env: MINGW64
+
+          - name: "Windows MSYS2 MinGW64 Debug"
+            os: windows-latest
+            preset: debug-msys2
+            triplet: x64-mingw-dynamic
+            msys2: true
+            msys_env: MINGW64
+            enable_tests: true
+
+          - name: "Windows MSYS2 UCRT64"
+            os: windows-latest
+            preset: release-msys2
+            triplet: x64-mingw-dynamic
+            msys2: true
+            msys_env: UCRT64
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.name }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
+
+    - name: Setup MSYS2
+      if: matrix.msys2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: ${{ matrix.msys_env }}
+        update: true
+        install: >
+          git
+          base-devel
+        pacboy: >
+          toolchain:p
+          cmake:p
+          ninja:p
+          pkg-config:p
+          openssl:p
+          zlib:p
+          sqlite3:p
+          readline:p
+          python:p
+          python-pip:p
+
+    - name: Cache vcpkg
+      if: '!matrix.msys2'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ github.workspace }}/vcpkg
+          !${{ github.workspace }}/vcpkg/buildtrees
+          !${{ github.workspace }}/vcpkg/packages
+          !${{ github.workspace }}/vcpkg/downloads
+        key: vcpkg-${{ matrix.triplet }}-${{ hashFiles('vcpkg.json') }}
+        restore-keys: |
+          vcpkg-${{ matrix.triplet }}-
+          vcpkg-${{ matrix.os }}-
+
+    - name: Cache build artifacts
+      uses: actions/cache@v4
+      with:
+        path: |
+          build
+          !build/vcpkg_installed
+          !build/CMakeFiles
+        key: build-${{ matrix.name }}-${{ github.sha }}
+        restore-keys: |
+          build-${{ matrix.name }}-
+
+    - name: Setup vcpkg (Linux/macOS)
+      if: runner.os != 'Windows' && !matrix.msys2
+      run: |
+<<<<<<< HEAD
+        if [ ! -d "vcpkg" ]; then
+          git clone https://github.com/Microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.sh
+        fi
+
+    - name: Setup vcpkg (Windows MSVC)
+      if: runner.os == 'Windows' && !matrix.msys2
+=======
+        git clone https://github.com/Microsoft/vcpkg.git
+        ./vcpkg/bootstrap-vcpkg.sh
+
+    - name: Setup vcpkg (Windows)
+      if: runner.os == 'Windows'
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
+      run: |
+        if (!(Test-Path "vcpkg")) {
+          git clone https://github.com/Microsoft/vcpkg.git
+          .\vcpkg\bootstrap-vcpkg.bat
+        }
+
+    - name: Export GitHub Actions cache environment variables
+      uses: actions/github-script@v6
+      with:
+        script: |
+          core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+          core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+    - name: Install system dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ninja-build ccache pkg-config
+
+        # Install specific compiler versions
+        if [[ "${{ matrix.cc }}" == "clang-15" ]]; then
+          sudo apt-get install -y clang-15 clang++-15
+        elif [[ "${{ matrix.cc }}" == "clang-16" ]]; then
+          sudo apt-get install -y clang-16 clang++-16
+        elif [[ "${{ matrix.cc }}" == "gcc-13" ]]; then
+          sudo apt-get install -y gcc-13 g++-13
+        fi
+
+        # Install platform dependencies
+        sudo apt-get install -y libx11-dev libudev-dev libcurl4-openssl-dev
+
+        # Install coverage tools if needed
+        if [[ "${{ matrix.enable_coverage }}" == "true" ]]; then
+          sudo apt-get install -y lcov gcovr
+        fi
+
+    - name: Install system dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install ninja ccache pkg-config
+
+    - name: Setup ccache
+      if: '!matrix.msys2'
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ${{ matrix.name }}
+        max-size: 2G
+
+    - name: Set up Python (Non-MSYS2)
+      if: '!matrix.msys2'
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install Python build dependencies (Non-MSYS2)
+      if: '!matrix.msys2'
+      run: |
+        pip install --upgrade pip
+        pip install pyyaml numpy pybind11 wheel setuptools
+
+    - name: Install Python build dependencies (MSYS2)
+      if: matrix.msys2
+      shell: msys2 {0}
+      run: |
+        pip install pyyaml numpy pybind11 wheel setuptools
+
+    - name: Configure CMake (Linux/macOS)
+      if: runner.os != 'Windows'
+      env:
+        CC: ${{ matrix.cc }}
+        CXX: ${{ matrix.cxx }}
+        VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+        VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+        CMAKE_C_COMPILER_LAUNCHER: ccache
+        CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      run: |
+        cmake --preset ${{ matrix.preset }} \
+          -DUSE_VCPKG=ON \
+          -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+          -DATOM_BUILD_TESTS=${{ matrix.enable_tests || github.event.inputs.enable_tests || 'ON' }} \
+          -DATOM_BUILD_EXAMPLES=${{ matrix.enable_examples || github.event.inputs.enable_examples || 'ON' }}
+
+    - name: Configure CMake (Windows MSVC)
+      if: runner.os == 'Windows' && !matrix.msys2
+      env:
+        VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+        VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+      run: |
+        cmake --preset ${{ matrix.preset }} `
+          -DUSE_VCPKG=ON `
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+          -DATOM_BUILD_TESTS=${{ matrix.enable_tests || github.event.inputs.enable_tests || 'ON' }} `
+          -DATOM_BUILD_EXAMPLES=${{ matrix.enable_examples || github.event.inputs.enable_examples || 'ON' }}
+
+    - name: Configure CMake (MSYS2)
+      if: matrix.msys2
+      shell: msys2 {0}
+      env:
+        VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+      run: |
+        cmake --preset ${{ matrix.preset }} \
+          -DATOM_BUILD_TESTS=${{ matrix.enable_tests || github.event.inputs.enable_tests || 'ON' }} \
+          -DATOM_BUILD_EXAMPLES=${{ matrix.enable_examples || github.event.inputs.enable_examples || 'ON' }}
+
+    - name: Build (Non-MSYS2)
+      if: '!matrix.msys2'
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel $(nproc 2>/dev/null || echo 4)
+
+    - name: Build (MSYS2)
+      if: matrix.msys2
+      shell: msys2 {0}
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel $(nproc)
+
+    - name: Test (Non-MSYS2)
+      if: '!matrix.msys2 && (matrix.enable_tests == true || github.event.inputs.enable_tests == "true")'
+      working-directory: build
+      run: ctest --output-on-failure --parallel $(nproc 2>/dev/null || echo 2) --build-config ${{ env.BUILD_TYPE }}
+
+    - name: Test (MSYS2)
+      if: 'matrix.msys2 && (matrix.enable_tests == true || github.event.inputs.enable_tests == "true")'
+      shell: msys2 {0}
+      working-directory: build
+      run: ctest --output-on-failure --parallel $(nproc) --build-config ${{ env.BUILD_TYPE }}
+
+    - name: Generate coverage report
+      if: matrix.enable_coverage
+      working-directory: build
+      run: |
+        lcov --capture --directory . --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' --output-file coverage.info
+        lcov --list coverage.info
+
+    - name: Upload coverage to Codecov
+      if: matrix.enable_coverage
+      uses: codecov/codecov-action@v4
+      with:
+        file: build/coverage.info
+        flags: unittests
+        name: codecov-umbrella
+
+    - name: Install (Non-MSYS2)
+      if: '!matrix.msys2'
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} --target install
+
+    - name: Install (MSYS2)
+      if: matrix.msys2
+      shell: msys2 {0}
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} --target install
+
+    - name: Package (Linux)
+      if: runner.os == 'Linux' && contains(matrix.preset, 'release')
+      run: |
+        cd build
+        cpack -G DEB
+        cpack -G TGZ
+
+    - name: Package (Windows MSVC)
+      if: runner.os == 'Windows' && !matrix.msys2 && contains(matrix.preset, 'release')
+      run: |
+        cd build
+        cpack -G NSIS
+        cpack -G ZIP
+
+    - name: Package (MSYS2)
+      if: matrix.msys2 && contains(matrix.preset, 'release')
+      shell: msys2 {0}
+      run: |
+        cd build
+        cpack -G TGZ
+        cpack -G ZIP
+
+    - name: Upload build artifacts
+      if: contains(matrix.preset, 'release') || matrix.enable_tests
+      uses: actions/upload-artifact@v4
+      with:
+        name: atom-${{ matrix.name }}-${{ github.sha }}
+        path: |
+          build/*.deb
+          build/*.tar.gz
+          build/*.zip
+          build/*.exe
+          build/*.msi
+          build/compile_commands.json
+        retention-days: 30
+
+    - name: Upload test results
+      if: matrix.enable_tests && always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.name }}-${{ github.sha }}
+        path: |
+          build/Testing/**/*.xml
+          build/test-results.xml
+        retention-days: 30
+
+  # Python package build
+  python-package:
+    needs: validate
+    if: needs.validate.outputs.should_build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+<<<<<<< HEAD
+        include:
+          # Linux wheels
+          - os: ubuntu-latest
+            python-version: '3.9'
+            arch: x86_64
+          - os: ubuntu-latest
+            python-version: '3.10'
+            arch: x86_64
+          - os: ubuntu-latest
+            python-version: '3.11'
+            arch: x86_64
+          - os: ubuntu-latest
+            python-version: '3.12'
+            arch: x86_64
+          # Windows wheels
+          - os: windows-latest
+            python-version: '3.9'
+            arch: AMD64
+          - os: windows-latest
+            python-version: '3.10'
+            arch: AMD64
+          - os: windows-latest
+            python-version: '3.11'
+            arch: AMD64
+          - os: windows-latest
+            python-version: '3.12'
+            arch: AMD64
+          # macOS wheels
+          - os: macos-latest
+            python-version: '3.9'
+            arch: x86_64
+          - os: macos-latest
+            python-version: '3.10'
+            arch: x86_64
+          - os: macos-latest
+            python-version: '3.11'
+            arch: x86_64
+          - os: macos-latest
+            python-version: '3.12'
+            arch: x86_64
+
+=======
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install build dependencies
+      run: |
+        pip install build wheel pybind11 numpy
+
+    - name: Build Python package
+      run: |
+<<<<<<< HEAD
+        python -m build --wheel
+
+=======
+        python -m build
+
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
+    - name: Test Python package
+      run: |
+        pip install dist/*.whl
+        python -c "import atom; print('Package imported successfully')"
+<<<<<<< HEAD
+
+    - name: Upload Python wheels
+      uses: actions/upload-artifact@v4
+=======
+
+    - name: Upload Python artifacts
+      uses: actions/upload-artifact@v3
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
+      with:
+        name: python-wheels-${{ matrix.os }}-py${{ matrix.python-version }}-${{ matrix.arch }}
+        path: dist/*.whl
+        retention-days: 30
+
+  # Documentation build
+  documentation:
+    runs-on: ubuntu-latest
+<<<<<<< HEAD
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install Doxygen and dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y doxygen graphviz plantuml
+
+    - name: Generate documentation
+      run: |
+        if [ -f Doxyfile ]; then
+          doxygen Doxyfile
+        else
+          echo "No Doxyfile found, creating basic documentation"
+          mkdir -p docs/html
+          echo "<h1>Atom Library Documentation</h1>" > docs/html/index.html
+        fi
+
+=======
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Doxygen
+      run: sudo apt-get install -y doxygen graphviz
+
+    - name: Generate documentation
+      run: doxygen Doxyfile
+
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs/html
+        enable_jekyll: false
+
+  # Performance benchmarks
+  benchmarks:
+    needs: validate
+    if: needs.validate.outputs.should_build == 'true' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup benchmark environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ninja-build gcc-13 g++-13
+
+    - name: Build benchmarks
+      env:
+        CC: gcc-13
+        CXX: g++-13
+      run: |
+        cmake --preset release \
+          -DATOM_BUILD_TESTS=OFF \
+          -DATOM_BUILD_EXAMPLES=OFF \
+          -DATOM_BUILD_BENCHMARKS=ON
+        cmake --build build --parallel
+
+    - name: Run benchmarks
+      run: |
+        cd build
+        find . -name "*benchmark*" -executable -exec {} \;
+
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-results-${{ github.sha }}
+        path: build/benchmark-*.json
+        retention-days: 90
+
+  # Release deployment
+  release:
+    needs: [build, python-package]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+
+    steps:
+<<<<<<< HEAD
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: atom-*
+        merge-multiple: true
+
+    - name: Download Python wheels
+      uses: actions/download-artifact@v4
+      with:
+        pattern: python-wheels-*
+        merge-multiple: true
+
+    - name: Create release assets
+      run: |
+        ls -la
+        find . -name "*.deb" -o -name "*.tar.gz" -o -name "*.zip" -o -name "*.whl" -o -name "*.msi" | head -20
+
+=======
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+
+>>>>>>> 7ca9448dadcbc6c2bb1a7286a72a7abccac61dea
+    - name: Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          **/*.deb
+          **/*.tar.gz
+          **/*.zip
+          **/*.whl
+          **/*.msi
+        generate_release_notes: true
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Status check
+  status:
+    runs-on: ubuntu-latest
+    needs: [build, python-package]
+    if: always()
+
+    steps:
+    - name: Check build status
+      run: |
+        echo "Build Status: ${{ needs.build.result }}"
+        echo "Python Package Status: ${{ needs.python-package.result }}"
+        if [[ "${{ needs.build.result }}" == "failure" ]] || [[ "${{ needs.python-package.result }}" == "failure" ]]; then
+          echo "❌ Build failed"
+          exit 1
+        else
+          echo "✅ Build successful"
+        fi

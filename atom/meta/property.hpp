@@ -257,8 +257,8 @@ public:
      * @param prop The Property object to output.
      * @return std::ostream& The output stream.
      */
-    friend auto operator<<(std::ostream& outputStream, const Property& prop)
-        -> std::ostream& {
+    friend auto operator<<(std::ostream& outputStream,
+                           const Property& prop) -> std::ostream& {
         try {
             outputStream << static_cast<T>(prop);
         } catch (const std::exception&) {
@@ -407,6 +407,171 @@ template <typename T>
 auto makeValueProperty(const T& value) -> Property<T> {
     return Property<T>(value);
 }
+
+//==============================================================================
+// C++23 Enhanced Property Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for property types
+ */
+template <typename T>
+concept PropertyType = std::copy_constructible<T> || std::move_constructible<T>;
+
+/**
+ * @brief Concept for observable properties
+ */
+template <typename T>
+concept Observable = requires(T t) {
+    { t.addObserver(std::declval<std::function<void()>>()) };
+};
+
+/**
+ * @brief Property with validation
+ */
+template <PropertyType T>
+class ValidatedProperty : public Property<T> {
+    std::function<bool(const T&)> validator_;
+    std::string validation_error_;
+
+public:
+    using Property<T>::Property;
+
+    ValidatedProperty& withValidator(
+        std::function<bool(const T&)> validator,
+        std::string_view error_msg = "Validation failed") {
+        validator_ = std::move(validator);
+        validation_error_ = std::string(error_msg);
+        return *this;
+    }
+
+    bool trySet(const T& value) {
+        if (validator_ && !validator_(value)) {
+            return false;
+        }
+        Property<T>::set(value);
+        return true;
+    }
+
+    [[nodiscard]] std::string_view getValidationError() const {
+        return validation_error_;
+    }
+};
+
+/**
+ * @brief Property with history tracking
+ */
+template <PropertyType T, std::size_t HistorySize = 10>
+class HistoricalProperty : public Property<T> {
+    std::array<T, HistorySize> history_;
+    std::size_t history_index_ = 0;
+    std::size_t history_count_ = 0;
+
+public:
+    using Property<T>::Property;
+
+    void set(const T& value) {
+        if (history_count_ < HistorySize) {
+            history_[history_count_++] = Property<T>::get();
+        } else {
+            history_[history_index_] = Property<T>::get();
+            history_index_ = (history_index_ + 1) % HistorySize;
+        }
+        Property<T>::set(value);
+    }
+
+    [[nodiscard]] std::optional<T> getPrevious(std::size_t steps = 1) const {
+        if (steps > history_count_)
+            return std::nullopt;
+        std::size_t idx = (history_index_ + HistorySize - steps) % HistorySize;
+        return history_[idx];
+    }
+
+    bool undo() {
+        if (auto prev = getPrevious()) {
+            Property<T>::set(*prev);
+            if (history_count_ > 0)
+                --history_count_;
+            return true;
+        }
+        return false;
+    }
+};
+
+/**
+ * @brief Computed property (read-only, derived from other values)
+ */
+template <PropertyType T>
+class ComputedProperty {
+    std::function<T()> compute_;
+    mutable std::optional<T> cached_;
+    mutable bool dirty_ = true;
+
+public:
+    explicit ComputedProperty(std::function<T()> compute)
+        : compute_(std::move(compute)) {}
+
+    [[nodiscard]] T get() const {
+        if (dirty_ || !cached_) {
+            cached_ = compute_();
+            dirty_ = false;
+        }
+        return *cached_;
+    }
+
+    void invalidate() { dirty_ = true; }
+
+    operator T() const { return get(); }
+};
+
+/**
+ * @brief Create a computed property
+ */
+template <typename Func>
+auto makeComputed(Func&& compute) {
+    using ReturnType = std::invoke_result_t<Func>;
+    return ComputedProperty<ReturnType>(std::forward<Func>(compute));
+}
+
+/**
+ * @brief Property registry for named properties
+ */
+class PropertyRegistry {
+    std::unordered_map<std::string, std::any> properties_;
+    mutable std::shared_mutex mutex_;
+
+public:
+    template <PropertyType T>
+    void registerProperty(std::string_view name, Property<T>* prop) {
+        std::unique_lock lock(mutex_);
+        properties_[std::string(name)] = prop;
+    }
+
+    template <typename T>
+    Property<T>* getProperty(std::string_view name) {
+        std::shared_lock lock(mutex_);
+        auto it = properties_.find(std::string(name));
+        if (it != properties_.end()) {
+            return std::any_cast<Property<T>*>(it->second);
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] std::vector<std::string> getPropertyNames() const {
+        std::shared_lock lock(mutex_);
+        std::vector<std::string> names;
+        names.reserve(properties_.size());
+        for (const auto& [name, _] : properties_) {
+            names.push_back(name);
+        }
+        return names;
+    }
+
+    static PropertyRegistry& getInstance() {
+        static PropertyRegistry instance;
+        return instance;
+    }
+};
 
 }  // namespace atom::meta
 

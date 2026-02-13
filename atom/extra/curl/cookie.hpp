@@ -20,6 +20,11 @@ namespace atom::extra::curl {
 class Cookie {
 public:
     /**
+     * @brief Default constructor for the Cookie class.
+     */
+    Cookie() = default;
+
+    /**
      * @brief Constructor for the Cookie class.
      *
      * @param name The name of the cookie.

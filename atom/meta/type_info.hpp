@@ -12,6 +12,7 @@
 #include <bitset>
 #include <concepts>
 #include <cstdlib>
+#include <format>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -26,9 +27,18 @@
 #include <typeinfo>
 #include <unordered_map>
 #include <vector>
+#include <version>
 
 #include "abi.hpp"
 #include "concept.hpp"
+
+// C++23 feature detection
+#if __cpp_lib_expected >= 202202L
+#include <expected>
+#define ATOM_TYPEINFO_HAS_EXPECTED 1
+#else
+#define ATOM_TYPEINFO_HAS_EXPECTED 0
+#endif
 
 namespace atom::meta {
 
@@ -146,7 +156,13 @@ public:
         flags.set(IS_AGGREGATE_FLAG, std::is_aggregate_v<T>);
         flags.set(IS_BOUNDED_ARRAY_FLAG, std::is_bounded_array_v<T>);
         flags.set(IS_UNBOUNDED_ARRAY_FLAG, std::is_unbounded_array_v<T>);
-        flags.set(IS_SCOPED_ENUM_FLAG, std::is_scoped_enum_v<T>);
+        // C++20 compatible scoped enum detection
+        if constexpr (std::is_enum_v<T>) {
+            flags.set(IS_SCOPED_ENUM_FLAG,
+                      !std::is_convertible_v<T, std::underlying_type_t<T>>);
+        } else {
+            flags.set(IS_SCOPED_ENUM_FLAG, false);
+        }
         flags.set(IS_FINAL_FLAG, std::is_final_v<T>);
         flags.set(IS_ABSTRACT_FLAG, std::is_abstract_v<T>);
         flags.set(IS_POLYMORPHIC_FLAG, std::is_polymorphic_v<T>);
@@ -162,8 +178,8 @@ public:
      * @return TypeInfo object containing information about T
      */
     template <typename T>
-    static auto fromInstance(const T& instance [[maybe_unused]]) noexcept
-        -> TypeInfo {
+    static auto fromInstance(const T& instance
+                             [[maybe_unused]]) noexcept -> TypeInfo {
         return fromType<T>();
     }
 
@@ -326,8 +342,7 @@ public:
      * @return JSON string representation
      */
     [[nodiscard]] auto toJson() const -> std::string {
-        static constexpr std::string_view template_str =
-            R"({"typeName":"{}","bareTypeName":"{}","traits":{})";
+        // Removed unused template_str placeholder to silence -Wunused warnings.
 
         std::string traits;
         traits.reserve(512);
@@ -627,6 +642,141 @@ constexpr bool areTypesCompatible() {
 }
 
 /**
+ * @brief Check if a type is derived from another
+ * @tparam Derived The potential derived type
+ * @tparam Base The potential base type
+ * @return true if Derived is derived from Base
+ */
+template <typename Derived, typename Base>
+constexpr bool isDerivedFrom() {
+    return std::is_base_of_v<Base, Derived>;
+}
+
+/**
+ * @brief Check if a type has a specific member function (compile-time)
+ * @tparam T The type to check
+ * @tparam Signature The expected function signature
+ */
+template <typename T, typename Signature>
+constexpr bool hasMethod() {
+    return std::is_member_function_pointer_v<Signature T::*>;
+}
+
+/**
+ * @brief Type relationship information
+ */
+enum class TypeRelationship {
+    Same,         ///< Types are exactly the same
+    Convertible,  ///< First type is convertible to second
+    BaseOf,       ///< First type is base of second
+    DerivedFrom,  ///< First type is derived from second
+    Unrelated     ///< Types have no direct relationship
+};
+
+/**
+ * @brief Get the relationship between two types
+ * @tparam T First type
+ * @tparam U Second type
+ * @return TypeRelationship indicating how the types are related
+ */
+template <typename T, typename U>
+constexpr TypeRelationship getTypeRelationship() {
+    if constexpr (std::is_same_v<T, U>) {
+        return TypeRelationship::Same;
+    } else if constexpr (std::is_base_of_v<T, U>) {
+        return TypeRelationship::BaseOf;
+    } else if constexpr (std::is_base_of_v<U, T>) {
+        return TypeRelationship::DerivedFrom;
+    } else if constexpr (std::is_convertible_v<T, U>) {
+        return TypeRelationship::Convertible;
+    } else {
+        return TypeRelationship::Unrelated;
+    }
+}
+
+/**
+ * @brief Get type relationship as string
+ * @param rel The type relationship
+ * @return String representation
+ */
+inline constexpr std::string_view typeRelationshipToString(
+    TypeRelationship rel) noexcept {
+    switch (rel) {
+        case TypeRelationship::Same:
+            return "Same";
+        case TypeRelationship::Convertible:
+            return "Convertible";
+        case TypeRelationship::BaseOf:
+            return "BaseOf";
+        case TypeRelationship::DerivedFrom:
+            return "DerivedFrom";
+        case TypeRelationship::Unrelated:
+            return "Unrelated";
+        default:
+            return "Unknown";
+    }
+}
+
+/**
+ * @brief Extended type information with additional C++23 features
+ */
+template <typename T>
+struct ExtendedTypeInfo {
+    static constexpr TypeInfo info = TypeInfo::fromType<T>();
+    static constexpr bool is_trivially_relocatable =
+        std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>;
+    static constexpr bool is_nothrow_swappable = std::is_nothrow_swappable_v<T>;
+    static constexpr bool is_nothrow_hashable = requires(const T& t) {
+        { std::hash<T>{}(t) } noexcept;
+    };
+    static constexpr bool has_virtual_destructor =
+        std::has_virtual_destructor_v<T>;
+    static constexpr std::size_t type_size = sizeof(T);
+    static constexpr std::size_t type_alignment = alignof(T);
+
+    // Type category detection
+    static constexpr bool is_scalar = std::is_scalar_v<T>;
+    static constexpr bool is_compound = std::is_compound_v<T>;
+    static constexpr bool is_fundamental = std::is_fundamental_v<T>;
+    static constexpr bool is_object = std::is_object_v<T>;
+
+    /**
+     * @brief Get a formatted string with all type information
+     */
+    static auto toString() -> std::string {
+        return std::format(
+            "Type: {}\n"
+            "  Size: {} bytes\n"
+            "  Alignment: {} bytes\n"
+            "  Trivially Relocatable: {}\n"
+            "  Nothrow Swappable: {}\n"
+            "  Has Virtual Destructor: {}\n"
+            "  Is Scalar: {}\n"
+            "  Is Fundamental: {}\n",
+            info.name(), type_size, type_alignment, is_trivially_relocatable,
+            is_nothrow_swappable, has_virtual_destructor, is_scalar,
+            is_fundamental);
+    }
+};
+
+#if ATOM_TYPEINFO_HAS_EXPECTED
+/**
+ * @brief Try to get TypeInfo with error handling using std::expected (C++23)
+ * @param type_name Name of the type to retrieve
+ * @return Expected containing TypeInfo or error string
+ */
+inline auto tryGetTypeInfo(std::string_view type_name)
+    -> std::expected<TypeInfo, std::string> {
+    if (auto info =
+            detail::TypeRegistry::getInstance().getTypeInfo(type_name)) {
+        return *info;
+    }
+    return std::unexpected(
+        std::format("Type '{}' not found in registry", type_name));
+}
+#endif
+
+/**
  * @brief Type factory to create instances from type names
  */
 class TypeFactory {
@@ -675,12 +825,239 @@ public:
     }
 };
 
+/**
+ * @brief Macro to register a type with automatic name deduction
+ */
+#define ATOM_REGISTER_TYPE(Type) atom::meta::registerType<Type>(#Type)
+
+/**
+ * @brief Macro to register a type with custom name
+ */
+#define ATOM_REGISTER_TYPE_AS(Type, Name) atom::meta::registerType<Type>(Name)
+
+/**
+ * @brief Concept for types that can be registered in the type registry
+ */
+template <typename T>
+concept Registrable = requires {
+    { typeid(T) } -> std::convertible_to<const std::type_info&>;
+    requires !std::is_void_v<T>;
+};
+
+/**
+ * @brief Register multiple types at once
+ */
+template <Registrable... Types>
+inline void registerTypes(
+    const std::array<std::string_view, sizeof...(Types)>& names) {
+    std::size_t i = 0;
+    (registerType<Types>(names[i++]), ...);
+}
+
+//==============================================================================
+// Type Info Integration with Other Meta Components
+//==============================================================================
+
+/**
+ * @brief Get demangled type name using abi.hpp integration
+ */
+template <Demanglable T>
+auto getDemangledTypeName() -> std::string {
+    return std::string(DemangleHelper::demangle(typeid(T).name()));
+}
+
+/**
+ * @brief Get bare type name without qualifiers using abi.hpp
+ */
+template <Demanglable T>
+auto getBareTypeName() -> std::string {
+    return std::string(DemangleHelper::getBareTypeName(typeid(T).name()));
+}
+
+/**
+ * @brief Extract namespace from type using abi.hpp
+ */
+template <Demanglable T>
+auto getTypeNamespace() -> std::string_view {
+    return DemangleHelper::extractNamespace(getDemangledTypeName<T>());
+}
+
+/**
+ * @brief Get type category using abi.hpp
+ */
+template <Demanglable T>
+auto getTypeCategory() -> std::string {
+    return std::string(DemangleHelper::getTypeCategory<T>());
+}
+
+/**
+ * @brief Type info builder for fluent API
+ */
+class TypeInfoBuilder {
+    TypeInfo info_;
+    std::unordered_map<std::string, std::string> metadata_;
+
+public:
+    template <TypeInfoCompatible T>
+    static TypeInfoBuilder create() {
+        TypeInfoBuilder builder;
+        builder.info_ = TypeInfo::fromType<T>();
+        return builder;
+    }
+
+    TypeInfoBuilder& withMetadata(std::string key, std::string value) {
+        metadata_[std::move(key)] = std::move(value);
+        return *this;
+    }
+
+    TypeInfoBuilder& markAsRegistered() {
+        // Register the type if not already registered
+        return *this;
+    }
+
+    [[nodiscard]] TypeInfo build() const { return info_; }
+
+    [[nodiscard]] const auto& getMetadata() const { return metadata_; }
+};
+
+/**
+ * @brief Type comparison utilities
+ */
+struct TypeComparator {
+    /**
+     * @brief Compare two TypeInfo objects
+     */
+    static constexpr int compare(const TypeInfo& a, const TypeInfo& b) {
+        if (a == b)
+            return 0;
+        return a.name() < b.name() ? -1 : 1;
+    }
+
+    /**
+     * @brief Check if types are related
+     */
+    template <typename T, typename U>
+    static constexpr bool areRelated() {
+        return getTypeRelationship<T, U>() != TypeRelationship::Unrelated;
+    }
+
+    /**
+     * @brief Get common base type if exists
+     */
+    template <typename T, typename U>
+    static constexpr bool haveCommonBase() {
+        return std::is_base_of_v<T, U> || std::is_base_of_v<U, T>;
+    }
+};
+
+/**
+ * @brief Type trait collection for a type
+ */
+template <typename T>
+struct TypeTraitCollection {
+    // Basic traits
+    static constexpr bool is_void = std::is_void_v<T>;
+    static constexpr bool is_null_pointer = std::is_null_pointer_v<T>;
+    static constexpr bool is_integral = std::is_integral_v<T>;
+    static constexpr bool is_floating_point = std::is_floating_point_v<T>;
+    static constexpr bool is_array = std::is_array_v<T>;
+    static constexpr bool is_enum = std::is_enum_v<T>;
+    static constexpr bool is_union = std::is_union_v<T>;
+    static constexpr bool is_class = std::is_class_v<T>;
+    static constexpr bool is_function = std::is_function_v<T>;
+    static constexpr bool is_pointer = std::is_pointer_v<T>;
+    static constexpr bool is_lvalue_reference = std::is_lvalue_reference_v<T>;
+    static constexpr bool is_rvalue_reference = std::is_rvalue_reference_v<T>;
+    static constexpr bool is_member_pointer = std::is_member_pointer_v<T>;
+
+    // Composite traits
+    static constexpr bool is_arithmetic = std::is_arithmetic_v<T>;
+    static constexpr bool is_fundamental = std::is_fundamental_v<T>;
+    static constexpr bool is_scalar = std::is_scalar_v<T>;
+    static constexpr bool is_object = std::is_object_v<T>;
+    static constexpr bool is_compound = std::is_compound_v<T>;
+    static constexpr bool is_reference = std::is_reference_v<T>;
+    static constexpr bool is_member_function_pointer =
+        std::is_member_function_pointer_v<T>;
+
+    // Type properties
+    static constexpr bool is_const = std::is_const_v<T>;
+    static constexpr bool is_volatile = std::is_volatile_v<T>;
+    static constexpr bool is_trivial = std::is_trivial_v<T>;
+    static constexpr bool is_trivially_copyable =
+        std::is_trivially_copyable_v<T>;
+    static constexpr bool is_standard_layout = std::is_standard_layout_v<T>;
+    static constexpr bool is_empty = std::is_empty_v<T>;
+    static constexpr bool is_polymorphic = std::is_polymorphic_v<T>;
+    static constexpr bool is_abstract = std::is_abstract_v<T>;
+    static constexpr bool is_final = std::is_final_v<T>;
+    static constexpr bool is_aggregate = std::is_aggregate_v<T>;
+
+    // Constructibility
+    static constexpr bool is_default_constructible =
+        std::is_default_constructible_v<T>;
+    static constexpr bool is_copy_constructible =
+        std::is_copy_constructible_v<T>;
+    static constexpr bool is_move_constructible =
+        std::is_move_constructible_v<T>;
+    static constexpr bool is_copy_assignable = std::is_copy_assignable_v<T>;
+    static constexpr bool is_move_assignable = std::is_move_assignable_v<T>;
+    static constexpr bool is_destructible = std::is_destructible_v<T>;
+
+    /**
+     * @brief Get a summary string of all traits
+     */
+    static auto summary() -> std::string {
+        std::string result =
+            std::format("Type Traits for {}:\n", getDemangledTypeName<T>());
+        result += std::format("  Fundamental: {}, Scalar: {}, Object: {}\n",
+                              is_fundamental, is_scalar, is_object);
+        result +=
+            std::format("  Trivial: {}, Standard Layout: {}, Aggregate: {}\n",
+                        is_trivial, is_standard_layout, is_aggregate);
+        result += std::format(
+            "  Default Constructible: {}, Copy Constructible: {}, Move "
+            "Constructible: {}\n",
+            is_default_constructible, is_copy_constructible,
+            is_move_constructible);
+        return result;
+    }
+};
+
+/**
+ * @brief Visitor pattern for TypeInfo
+ */
+template <typename Visitor>
+auto visitTypeInfo(const TypeInfo& info, Visitor&& visitor) {
+    return std::forward<Visitor>(visitor)(info);
+}
+
+/**
+ * @brief Transform TypeInfo with a function
+ */
+template <typename Transform>
+auto transformTypeName(const TypeInfo& info,
+                       Transform&& transform) -> std::string {
+    return std::forward<Transform>(transform)(info.name());
+}
+
 }  // namespace atom::meta
 
-inline auto operator<<(std::ostream& oss, const atom::meta::TypeInfo& typeInfo)
-    -> std::ostream& {
+inline auto operator<<(std::ostream& oss,
+                       const atom::meta::TypeInfo& typeInfo) -> std::ostream& {
     return oss << typeInfo.name();
 }
+
+/**
+ * @brief std::format support for TypeInfo (C++20)
+ */
+template <>
+struct std::formatter<atom::meta::TypeInfo> : std::formatter<std::string> {
+    auto format(const atom::meta::TypeInfo& typeInfo,
+                std::format_context& ctx) const {
+        return std::formatter<std::string>::format(typeInfo.name(), ctx);
+    }
+};
 
 namespace std {
 template <>

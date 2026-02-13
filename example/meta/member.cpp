@@ -3,11 +3,14 @@
 #include <string>
 #include <vector>
 
-// Sample structures for demonstration
-struct Point {
-    int x;
-    int y;
-};
+// Sample structures for demonstrationstruct Point {
+bool operator==(const Point& other) const {
+    return x == other.x && y == other.y;
+}
+int x;
+int y;
+}
+;
 
 struct Rectangle {
     Point topLeft;
@@ -27,26 +30,25 @@ struct ComplexObject {
     Point position;
 };
 
-// Base class for inheritance example
-struct Base {
-    int baseValue;
-    virtual ~Base() = default;
-};
+// Base class for inheritance examplestruct Base {
+int baseValue;
+virtual ~Base() = default;
+}
+;
 
 struct Derived : public Base {
     int derivedValue;
     Point position;
 };
 
-// Simple tuple-like structure for get_member_by_index example
-struct TupleLike {
-    int first;
-    double second;
-    std::string third;
-};
+// Simple tuple-like structure for get_member_by_index examplestruct TupleLike {
+int first;
+double second;
+std::string third;
+}
+;
 
-// 为TupleLike提供正确的tuple-like接口
-namespace std {
+// 为TupleLike提供正确的tuple-like接口namespace std {
 template <>
 struct tuple_size<TupleLike> : std::integral_constant<std::size_t, 3> {};
 
@@ -185,17 +187,18 @@ int main() {
                   << "\n";
     } else {
         // 修复：直接使用error()而不是调用what()
-        std::cout << "Safe container_of failed: " << result.error() << "\n";
+        std::cout << "Safe container_of failed: "
+                  << result.error().error().what() << "\n";
     }
 
     // Example with null pointer
     Point* nullPtr = nullptr;
-    auto nullResult =
-        atom::meta::safe_container_of<Rectangle, Point>(nullPtr, &Rectangle::topLeft);
+    auto nullResult = atom::meta::safe_container_of<Rectangle, Point>(
+        nullPtr, &Rectangle::topLeft);
     if (!nullResult) {
         // 修复：直接使用error()而不是调用what()
         std::cout << "Expected error with null pointer: "
-                  << nullResult.error() << "\n";
+                  << nullResult.error().error().what() << "\n";
     }
     std::cout << "\n";
 
@@ -243,7 +246,7 @@ int main() {
                   << recoveredDerived->derivedValue << "\n";
 
         Base* recoveredBase =
-            atom::meta::container_of<Base, Derived>(posPtr, &Derived::position);
+            atom::meta::container_of<Derived>(posPtr, &Derived::position);
         std::cout << "Recovered base value: " << recoveredBase->baseValue
                   << "\n";
 
@@ -252,8 +255,7 @@ int main() {
         const Point* constPosPtr = &constDerived.position;
 
         [[maybe_unused]] const Base* constRecoveredBase =
-            atom::meta::container_of<Base, Derived>(constPosPtr,
-                                                    &Derived::position);
+            atom::meta::container_of<Derived>(constPosPtr, &Derived::position);
         std::cout << "Const recovered base object accessed\n";
     } catch (const atom::meta::member_pointer_error& e) {
         std::cout << "Error: " << e.what() << "\n";
@@ -274,7 +276,8 @@ int main() {
                   << foundPoint->y << ")\n";
     } else {
         // 修复：直接使用error()而不是调用what()
-        std::cout << "Point not found: " << rangeResult.error() << "\n";
+        std::cout << "Point not found: " << rangeResult.error().error().what()
+                  << "\n";
     }
 
     // Point not in the container
@@ -284,7 +287,7 @@ int main() {
     if (!notFoundResult) {
         // 修复：直接使用error()而不是调用what()
         std::cout << "Expected error for point not in container: "
-                  << notFoundResult.error() << "\n";
+                  << notFoundResult.error().error().what() << "\n";
     }
     std::cout << "\n";
 
@@ -301,7 +304,7 @@ int main() {
     } else {
         // 修复：直接使用error()而不是调用what()
         std::cout << "No point matching predicate: "
-                  << predResult.error() << "\n";
+                  << predResult.error().error().what() << "\n";
     }
 
     // No match for predicate
@@ -310,7 +313,7 @@ int main() {
     if (!noMatchResult) {
         // 修复：直接使用error()而不是调用what()
         std::cout << "Expected error for no matching predicate: "
-                  << noMatchResult.error() << "\n";
+                  << noMatchResult.error().error().what() << "\n";
     }
     std::cout << "\n";
 

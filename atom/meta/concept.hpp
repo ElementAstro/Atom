@@ -9,19 +9,69 @@
 #ifndef ATOM_META_CONCEPT_HPP
 #define ATOM_META_CONCEPT_HPP
 
-#include <complex>
+#if __cplusplus < 202002L
+#error "C++20 or later is required for this header"
+#endif
+
+#include <atomic>
 #include <concepts>
+#include <coroutine>
 #include <deque>
+#include <format>
 #include <functional>
+#include <future>
+#include <iterator>
 #include <list>
 #include <memory>
+#include <mutex>
+#include <ranges>
+#include <shared_mutex>
+#include <span>
 #include <string>
+#include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
+#include <version>
+
+// C++23 feature detection
+#if __cpp_lib_expected >= 202202L
+#include <expected>
+#define ATOM_HAS_STD_EXPECTED 1
+#else
+#define ATOM_HAS_STD_EXPECTED 0
+#endif
+
+#if __cpp_lib_move_only_function >= 202110L
+#define ATOM_HAS_MOVE_ONLY_FUNCTION 1
+#else
+#define ATOM_HAS_MOVE_ONLY_FUNCTION 0
+#endif
+
+#if __cpp_lib_flat_map >= 202207L
+#include <flat_map>
+#define ATOM_HAS_FLAT_MAP 1
+#else
+#define ATOM_HAS_FLAT_MAP 0
+#endif
+
+#if __cpp_lib_flat_set >= 202207L
+#include <flat_set>
+#define ATOM_HAS_FLAT_SET 1
+#else
+#define ATOM_HAS_FLAT_SET 0
+#endif
+
 #include "atom/containers/high_performance.hpp"
 
+#if defined(_MSVC_LANG)
+#if _MSVC_LANG < 202002L
+#error "C++20 is required for this library"
+#endif
+#elif defined(__cplusplus)
 #if __cplusplus < 202002L
 #error "C++20 is required for this library"
+#endif
 #endif
 
 //==============================================================================
@@ -150,6 +200,13 @@ concept CopyConstructible = std::is_copy_constructible_v<T>;
  */
 template <typename T>
 concept CopyAssignable = std::is_copy_assignable_v<T>;
+
+/*!
+ * \brief Concept for move constructible types
+ * \tparam T Type to check
+ */
+template <typename T>
+concept MoveConstructible = std::is_move_constructible_v<T>;
 
 /*!
  * \brief Concept for move assignable types
@@ -303,11 +360,25 @@ concept AnyChar = Char<T> || WChar<T> || Char16<T> || Char32<T>;
  * \tparam T Type to check
  */
 template <typename T>
-concept StringType =
-    std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view> ||
-    std::is_same_v<T, std::wstring> || std::is_same_v<T, std::u8string> ||
-    std::is_same_v<T, std::u16string> || std::is_same_v<T, std::u32string> ||
-    std::is_same_v<T, atom::containers::String>;
+concept StringType = [] {
+    using Decayed = std::remove_cvref_t<T>;
+    using Elem = std::remove_all_extents_t<Decayed>;
+    if constexpr (std::is_same_v<Decayed, std::string> ||
+                  std::is_same_v<Decayed, std::string_view> ||
+                  std::is_same_v<Decayed, std::wstring> ||
+                  std::is_same_v<Decayed, std::u8string> ||
+                  std::is_same_v<Decayed, std::u16string> ||
+                  std::is_same_v<Decayed, std::u32string> ||
+                  std::is_same_v<Decayed, atom::containers::String>) {
+        return true;
+    } else if constexpr (std::is_array_v<Decayed>) {
+        return std::is_same_v<Elem, char> || std::is_same_v<Elem, const char> ||
+               std::is_same_v<Elem, wchar_t> ||
+               std::is_same_v<Elem, const wchar_t>;
+    } else {
+        return false;
+    }
+}();
 
 /*!
  * \brief Concept for built-in types
@@ -580,5 +651,477 @@ concept Promise = requires(T& obj) {
  */
 template <typename T>
 concept AsyncResult = Future<T> || Promise<T>;
+
+//==============================================================================
+// C++23 Enhanced Concepts
+//==============================================================================
+
+namespace detail {
+/**
+ * @brief Helper to check if a type has a specific member function
+ */
+template <typename T, typename = void>
+struct has_to_string_impl : std::false_type {};
+
+template <typename T>
+struct has_to_string_impl<
+    T, std::void_t<decltype(std::declval<const T&>().toString())>>
+    : std::true_type {};
+}  // namespace detail
+
+/**
+ * @brief Check if std::expected is available
+ */
+inline constexpr bool has_std_expected = ATOM_HAS_STD_EXPECTED;
+
+/**
+ * @brief Check if std::move_only_function is available
+ */
+inline constexpr bool has_move_only_function = ATOM_HAS_MOVE_ONLY_FUNCTION;
+
+/**
+ * @brief Check if std::flat_map is available
+ */
+inline constexpr bool has_flat_map = ATOM_HAS_FLAT_MAP;
+
+/**
+ * @brief Check if std::flat_set is available
+ */
+inline constexpr bool has_flat_set = ATOM_HAS_FLAT_SET;
+
+//==============================================================================
+// Formatting and Serialization Concepts
+//==============================================================================
+
+/**
+ * @brief Concept for types that can be formatted with std::format
+ */
+template <typename T>
+concept Formattable = requires(const T& t) {
+    { std::format("{}", t) } -> std::convertible_to<std::string>;
+};
+
+/**
+ * @brief Concept for types that have a toString method
+ */
+template <typename T>
+concept HasToString = detail::has_to_string_impl<T>::value;
+
+/**
+ * @brief Concept for types that can be converted to string_view
+ */
+template <typename T>
+concept StringViewConvertible = requires(const T& t) {
+    { std::string_view(t) } -> std::same_as<std::string_view>;
+} || std::is_convertible_v<T, std::string_view>;
+
+/**
+ * @brief Concept for types that have JSON serialization
+ */
+template <typename T>
+concept JsonSerializable = requires(const T& t) {
+    { t.toJson() };
+};
+
+//==============================================================================
+// Range and Container Concepts (Enhanced)
+//==============================================================================
+
+/**
+ * @brief Concept for types that work with std::span
+ */
+template <typename T>
+concept SpanCompatible = requires(T& t) {
+    { std::span(t) };
+};
+
+/**
+ * @brief Concept for contiguous ranges
+ */
+template <typename T>
+concept ContiguousRange = std::ranges::contiguous_range<T>;
+
+/**
+ * @brief Concept for sized ranges
+ */
+template <typename T>
+concept SizedRange = std::ranges::sized_range<T>;
+
+/**
+ * @brief Concept for borrowed ranges
+ */
+template <typename T>
+concept BorrowedRange = std::ranges::borrowed_range<T>;
+
+/**
+ * @brief Concept for viewable ranges
+ */
+template <typename T>
+concept ViewableRange = std::ranges::viewable_range<T>;
+
+//==============================================================================
+// Coroutine Concepts (Enhanced)
+//==============================================================================
+
+/**
+ * @brief Concept for coroutine promise types
+ */
+template <typename T>
+concept CoroutinePromise = requires { typename T::promise_type; };
+
+/**
+ * @brief Concept for awaitable types
+ */
+template <typename T>
+concept AwaitableType = requires(T t) {
+    { t.await_ready() } -> std::convertible_to<bool>;
+    { t.await_resume() };
+};
+
+//==============================================================================
+// Memory and Lifetime Concepts
+//==============================================================================
+
+/**
+ * @brief Concept for trivially relocatable types
+ */
+template <typename T>
+concept TriviallyRelocatable =
+    std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>;
+
+/**
+ * @brief Concept for aggregate types
+ */
+template <typename T>
+concept Aggregate = std::is_aggregate_v<T>;
+
+/**
+ * @brief Concept for standard layout types
+ */
+template <typename T>
+concept StandardLayout = std::is_standard_layout_v<T>;
+
+/**
+ * @brief Concept for POD types
+ */
+template <typename T>
+concept PodType = std::is_trivial_v<T> && StandardLayout<T>;
+
+//==============================================================================
+// Callable Concepts (Enhanced)
+//==============================================================================
+
+/**
+ * @brief Concept for move-only callable types
+ */
+template <typename F, typename... Args>
+concept MoveOnlyInvocable =
+    std::invocable<F, Args...> && std::move_constructible<F> &&
+    !std::copy_constructible<F>;
+
+/**
+ * @brief Concept for const-callable types
+ */
+template <typename F, typename... Args>
+concept ConstInvocable = requires(const F& f, Args&&... args) {
+    { f(std::forward<Args>(args)...) };
+};
+
+/**
+ * @brief Concept for noexcept callable types
+ */
+template <typename F, typename... Args>
+concept NoexceptInvocable = std::is_nothrow_invocable_v<F, Args...>;
+
+/**
+ * @brief Concept for predicate types
+ */
+template <typename F, typename... Args>
+concept PredicateType = std::predicate<F, Args...>;
+
+/**
+ * @brief Concept for comparison function objects
+ */
+template <typename F, typename T>
+concept Comparator = std::strict_weak_order<F, T, T>;
+
+//==============================================================================
+// Type Relationship Concepts
+//==============================================================================
+
+/**
+ * @brief Concept for types with virtual destructor
+ */
+template <typename T>
+concept HasVirtualDestructor = std::has_virtual_destructor_v<T>;
+
+/**
+ * @brief Concept for polymorphic types
+ */
+template <typename T>
+concept PolymorphicType = std::is_polymorphic_v<T>;
+
+/**
+ * @brief Concept for final classes
+ */
+template <typename T>
+concept FinalClass = std::is_final_v<T>;
+
+/**
+ * @brief Concept for abstract classes
+ */
+template <typename T>
+concept AbstractClass = std::is_abstract_v<T>;
+
+/**
+ * @brief Concept for enum types
+ */
+template <typename T>
+concept EnumType = std::is_enum_v<T>;
+
+/**
+ * @brief Concept for scoped enum types
+ */
+template <typename T>
+concept ScopedEnumType =
+    EnumType<T> && !std::is_convertible_v<T, std::underlying_type_t<T>>;
+
+/**
+ * @brief Concept for unscoped enum types
+ */
+template <typename T>
+concept UnscopedEnumType =
+    EnumType<T> && std::is_convertible_v<T, std::underlying_type_t<T>>;
+
+//==============================================================================
+// Numeric Concepts (Enhanced)
+//==============================================================================
+
+/**
+ * @brief Concept for signed integral types
+ */
+template <typename T>
+concept SignedIntegralType = std::signed_integral<T>;
+
+/**
+ * @brief Concept for unsigned integral types
+ */
+template <typename T>
+concept UnsignedIntegralType = std::unsigned_integral<T>;
+
+/**
+ * @brief Concept for floating-point types with specific precision
+ */
+template <typename T>
+concept FloatingPointPrecise =
+    std::floating_point<T> &&
+    (std::same_as<T, float> || std::same_as<T, double> ||
+     std::same_as<T, long double>);
+
+/**
+ * @brief Concept for numeric types that support basic arithmetic
+ */
+template <typename T>
+concept NumericArithmetic = requires(T a, T b) {
+    { a + b } -> std::convertible_to<T>;
+    { a - b } -> std::convertible_to<T>;
+    { a* b } -> std::convertible_to<T>;
+    { a / b } -> std::convertible_to<T>;
+};
+
+/**
+ * @brief Concept for types supporting bitwise operations
+ */
+template <typename T>
+concept BitwiseOperable = requires(T a, T b) {
+    { a& b } -> std::convertible_to<T>;
+    { a | b } -> std::convertible_to<T>;
+    { a ^ b } -> std::convertible_to<T>;
+    { ~a } -> std::convertible_to<T>;
+    { a << 1 } -> std::convertible_to<T>;
+    { a >> 1 } -> std::convertible_to<T>;
+};
+
+//==============================================================================
+// Expected/Optional Concepts
+//==============================================================================
+
+#if ATOM_HAS_STD_EXPECTED
+/**
+ * @brief Concept for expected types
+ */
+template <typename T>
+concept ExpectedType = requires(T t) {
+    typename T::value_type;
+    typename T::error_type;
+    { t.has_value() } -> std::same_as<bool>;
+    { t.value() } -> std::same_as<typename T::value_type&>;
+    { t.error() } -> std::same_as<typename T::error_type&>;
+};
+#endif
+
+/**
+ * @brief Concept for optional-like types
+ */
+template <typename T>
+concept OptionalLike = requires(T t) {
+    { t.has_value() } -> std::same_as<bool>;
+    { *t };
+    { static_cast<bool>(t) };
+};
+
+//==============================================================================
+// Tuple and Variant Concepts
+//==============================================================================
+
+/**
+ * @brief Concept for tuple-like types
+ */
+template <typename T>
+concept TupleLikeType = requires {
+    {
+        std::tuple_size<std::remove_cvref_t<T>>::value
+    } -> std::convertible_to<std::size_t>;
+};
+
+/**
+ * @brief Concept for variant-like types
+ */
+template <typename T>
+concept VariantLike = requires(T t) {
+    { t.index() } -> std::convertible_to<std::size_t>;
+    {
+        std::visit([](auto&&) {}, t)
+    };
+};
+
+//==============================================================================
+// Meta Module Interoperability Concepts
+//==============================================================================
+
+/**
+ * @brief Concept for types that support demangling via abi.hpp
+ */
+template <typename T>
+concept Demanglable = requires {
+    { typeid(T).name() } -> std::convertible_to<const char*>;
+};
+
+/**
+ * @brief Concept for types with TypeInfo support
+ */
+template <typename T>
+concept TypeInfoSupported =
+    Demanglable<T> && (std::is_class_v<T> || std::is_enum_v<T> ||
+                       std::is_fundamental_v<T> || std::is_pointer_v<T>);
+
+/**
+ * @brief Concept for boxable types (for any.hpp)
+ */
+template <typename T>
+concept BoxCompatible = (std::copy_constructible<std::decay_t<T>> ||
+                         std::move_constructible<std::decay_t<T>>) &&
+                        std::destructible<std::decay_t<T>>;
+
+/**
+ * @brief Concept for types that can be wrapped in a proxy
+ */
+template <typename F>
+concept ProxyCompatible =
+    std::is_invocable_v<F> || std::is_member_function_pointer_v<F> ||
+    std::is_function_v<std::remove_pointer_t<F>>;
+
+/**
+ * @brief Concept for decorator-compatible functions
+ */
+template <typename F>
+concept DecoratorCompatible =
+    std::is_invocable_v<F> && std::is_object_v<std::decay_t<F>>;
+
+/**
+ * @brief Concept for reflection-compatible types
+ */
+template <typename T>
+concept ReflectionCompatible = std::is_class_v<T> && std::is_aggregate_v<T>;
+
+/**
+ * @brief Concept for enum types with traits
+ */
+template <typename T>
+concept EnumWithTraits = std::is_enum_v<T>;
+
+/**
+ * @brief Concept for invokable with result capture
+ */
+template <typename F, typename... Args>
+concept InvokableWithResult =
+    std::invocable<F, Args...> &&
+    (!std::is_void_v<std::invoke_result_t<F, Args...>>);
+
+/**
+ * @brief Concept for void-returning invokables
+ */
+template <typename F, typename... Args>
+concept VoidInvokable = std::invocable<F, Args...> &&
+                        std::is_void_v<std::invoke_result_t<F, Args...>>;
+
+/**
+ * @brief Concept for nothrow invokables
+ */
+template <typename F, typename... Args>
+concept NothrowInvokable =
+    std::invocable<F, Args...> && std::is_nothrow_invocable_v<F, Args...>;
+
+/**
+ * @brief Concept for types that support serialization
+ */
+template <typename T>
+concept MetaSerializable = requires(const T& t) {
+    { t.toString() } -> std::convertible_to<std::string>;
+} || requires(const T& t, std::ostream& os) {
+    { os << t } -> std::same_as<std::ostream&>;
+};
+
+/**
+ * @brief Concept for comparable types
+ */
+template <typename T>
+concept MetaComparable =
+    std::equality_comparable<T> || requires(const T& a, const T& b) {
+        { a == b } -> std::convertible_to<bool>;
+    };
+
+/**
+ * @brief Concept for hashable types
+ */
+template <typename T>
+concept MetaHashable = requires(const T& t) {
+    { std::hash<T>{}(t) } -> std::convertible_to<std::size_t>;
+};
+
+/**
+ * @brief Combined concept for registry-compatible types
+ */
+template <typename T>
+concept RegistryCompatible =
+    TypeInfoSupported<T> && std::default_initializable<T>;
+
+/**
+ * @brief Concept for factory-creatable types
+ */
+template <typename T>
+concept FactoryCreatable =
+    std::default_initializable<T> || std::is_constructible_v<T>;
+
+/**
+ * @brief Concept for cloneable types
+ */
+template <typename T>
+concept Cloneable = requires(const T& t) {
+    { t.clone() } -> std::convertible_to<std::unique_ptr<T>>;
+} || std::copy_constructible<T>;
+
+// Note: Advanced Type Manipulation Concepts (Aggregate, StandardLayout, POD,
+// HasVirtualDestructor) are defined earlier in this file - removed duplicates
 
 #endif  // ATOM_META_CONCEPT_HPP

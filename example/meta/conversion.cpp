@@ -26,24 +26,23 @@
 
 using namespace atom::meta;
 
-// Helper function to print section headers
-void printHeader(const std::string& title) {
-    std::cout << "\n==========================================================="
-                 "======="
-              << std::endl;
-    std::cout << "  " << title << std::endl;
-    std::cout
-        << "=================================================================="
-        << std::endl;
+// Helper function to print section headersvoid printHeader(const std::string&
+// title) {
+std::cout << "\n==========================================================="
+             "======="
+          << std::endl;
+std::cout << "  " << title << std::endl;
+std::cout
+    << "=================================================================="
+    << std::endl;
 }
 
-// Helper function to print subsection headers
-void printSubHeader(const std::string& title) {
-    std::cout << "\n--- " << title << " ---" << std::endl;
+// Helper function to print subsection headersvoid printSubHeader(const
+// std::string& title) {
+std::cout << "\n--- " << title << " ---" << std::endl;
 }
 
-// Helper to log conversion results
-template <typename From, typename To>
+// Helper to log conversion resultstemplate <typename From, typename To>
 void logConversion(const std::string& name, bool success) {
     std::cout << std::setw(40) << std::left << name << ": "
               << (success ? "Success" : "Failed") << std::endl;
@@ -53,59 +52,58 @@ void logConversion(const std::string& name, bool success) {
 // 1. Basic class hierarchy for polymorphic conversions
 //=============================================================================
 
-// Base class
-class Shape {
+// Base classclass Shape {
 public:
-    virtual ~Shape() = default;
-    virtual std::string type() const { return "Shape"; }
-    virtual double area() const { return 0.0; }
-    virtual void describe() const {
-        std::cout << "Shape: type=" << type() << ", area=" << area()
-                  << std::endl;
-    }
-};
+virtual ~Shape() = default;
+virtual std::string type() const { return "Shape"; }
+virtual double area() const { return 0.0; }
+virtual void describe() const {
+    std::cout << "Shape: type=" << type() << ", area=" << area() << std::endl;
+}
+}
+;
 
-// Derived class: Circle
-class Circle : public Shape {
+// Derived class: Circleclass Circle : public Shape {
 private:
-    double radius_;
+double radius_;
 
 public:
-    explicit Circle(double radius) : radius_(radius) {}
+explicit Circle(double radius) : radius_(radius) {}
 
-    std::string type() const override { return "Circle"; }
+std::string type() const override { return "Circle"; }
 
-    double area() const override { return 3.14159 * radius_ * radius_; }
+double area() const override { return 3.14159 * radius_ * radius_; }
 
-    double getRadius() const { return radius_; }
+double getRadius() const { return radius_; }
 
-    void describe() const override {
-        std::cout << "Circle: radius=" << radius_ << ", area=" << area()
-                  << std::endl;
-    }
-};
+void describe() const override {
+    std::cout << "Circle: radius=" << radius_ << ", area=" << area()
+              << std::endl;
+}
+}
+;
 
-// Derived class: Rectangle
-class Rectangle : public Shape {
+// Derived class: Rectangleclass Rectangle : public Shape {
 private:
-    double width_;
-    double height_;
+double width_;
+double height_;
 
 public:
-    Rectangle(double width, double height) : width_(width), height_(height) {}
+Rectangle(double width, double height) : width_(width), height_(height) {}
 
-    std::string type() const override { return "Rectangle"; }
+std::string type() const override { return "Rectangle"; }
 
-    double area() const override { return width_ * height_; }
+double area() const override { return width_ * height_; }
 
-    double getWidth() const { return width_; }
-    double getHeight() const { return height_; }
+double getWidth() const { return width_; }
+double getHeight() const { return height_; }
 
-    void describe() const override {
-        std::cout << "Rectangle: width=" << width_ << ", height=" << height_
-                  << ", area=" << area() << std::endl;
-    }
-};
+void describe() const override {
+    std::cout << "Rectangle: width=" << width_ << ", height=" << height_
+              << ", area=" << area() << std::endl;
+}
+}
+;
 
 // Derived class: Square (inherits from Rectangle)
 class Square : public Rectangle {
@@ -126,22 +124,22 @@ public:
 // 2. Custom types for conversion demonstration
 //=============================================================================
 
-// Timestamp class
-class Timestamp {
+// Timestamp classclass Timestamp {
 private:
-    uint64_t milliseconds_;
+uint64_t milliseconds_;
 
 public:
-    explicit Timestamp(uint64_t ms) : milliseconds_(ms) {}
+explicit Timestamp(uint64_t ms) : milliseconds_(ms) {}
 
-    uint64_t getMilliseconds() const { return milliseconds_; }
+uint64_t getMilliseconds() const { return milliseconds_; }
 
-    std::string toString() const {
-        std::ostringstream oss;
-        oss << milliseconds_ << "ms";
-        return oss.str();
-    }
-};
+std::string toString() const {
+    std::ostringstream oss;
+    oss << milliseconds_ << "ms";
+    return oss.str();
+}
+}
+;
 
 // DateTime class (for conversion with Timestamp)
 class DateTime {
@@ -203,126 +201,125 @@ public:
     }
 };
 
-// Currency representation
-class Money {
+// Currency representationclass Money {
 private:
-    double amount_;
-    std::string currency_;
+double amount_;
+std::string currency_;
 
 public:
-    Money(double amount, const std::string& currency)
-        : amount_(amount), currency_(currency) {}
+Money(double amount, const std::string& currency)
+    : amount_(amount), currency_(currency) {}
 
-    double getAmount() const { return amount_; }
-    std::string getCurrency() const { return currency_; }
+double getAmount() const { return amount_; }
+std::string getCurrency() const { return currency_; }
 
-    std::string toString() const {
-        std::ostringstream oss;
-        oss << std::fixed << std::setprecision(2) << amount_ << " "
-            << currency_;
-        return oss.str();
-    }
-};
+std::string toString() const {
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2) << amount_ << " " << currency_;
+    return oss.str();
+}
+}
+;
 
-// Simple string representation
-class FormattedString {
+// Simple string representationclass FormattedString {
 private:
-    std::string value_;
+std::string value_;
 
 public:
-    explicit FormattedString(const std::string& value) : value_(value) {}
-    std::string getValue() const { return value_; }
+explicit FormattedString(const std::string& value) : value_(value) {}
+std::string getValue() const { return value_; }
 
-    std::string toString() const { return "\"" + value_ + "\""; }
-};
+std::string toString() const { return "\"" + value_ + "\""; }
+}
+;
 
 //=============================================================================
 // 3. Custom conversion classes
 //=============================================================================
 
-// Conversion between Timestamp and DateTime
-class TimestampToDateTimeConversion : public TypeConversionBase {
+// Conversion between Timestamp and DateTimeclass TimestampToDateTimeConversion
+// : public TypeConversionBase {
 public:
-    TimestampToDateTimeConversion()
-        : TypeConversionBase(userType<DateTime>(), userType<Timestamp>()) {}
+TimestampToDateTimeConversion()
+    : TypeConversionBase(userType<DateTime>(), userType<Timestamp>()) {}
 
-    std::any convert(const std::any& from) const override {
-        try {
-            const auto& timestamp = std::any_cast<const Timestamp&>(from);
-            uint64_t ms = timestamp.getMilliseconds();
+std::any convert(const std::any& from) const override {
+    try {
+        const auto& timestamp = std::any_cast<const Timestamp&>(from);
+        uint64_t ms = timestamp.getMilliseconds();
 
-            auto timeT = ms / 1000;
-            auto msRemaining = ms % 1000;
+        auto timeT = ms / 1000;
+        auto msRemaining = ms % 1000;
 
-            // 修复: 正确处理时间转换
-            std::time_t timeValue = static_cast<std::time_t>(timeT);
-            auto localTime = *std::localtime(&timeValue);
+        // 修复: 正确处理时间转换
+        std::time_t timeValue = static_cast<std::time_t>(timeT);
+        auto localTime = *std::localtime(&timeValue);
 
-            return std::any(
-                DateTime(localTime.tm_year + 1900, localTime.tm_mon + 1,
-                         localTime.tm_mday, localTime.tm_hour, localTime.tm_min,
-                         localTime.tm_sec, static_cast<int>(msRemaining)));
-        } catch (const std::bad_any_cast&) {
-            THROW_CONVERSION_ERROR("Failed to convert Timestamp to DateTime");
-        }
-        // 添加返回值以防止编译器警告
-        return std::any();
+        return std::any(DateTime(localTime.tm_year + 1900, localTime.tm_mon + 1,
+                                 localTime.tm_mday, localTime.tm_hour,
+                                 localTime.tm_min, localTime.tm_sec,
+                                 static_cast<int>(msRemaining)));
+    } catch (const std::bad_any_cast&) {
+        THROW_CONVERSION_ERROR("Failed to convert Timestamp to DateTime");
     }
+    // 添加返回值以防止编译器警告
+    return std::any();
+}
 
-    std::any convertDown(const std::any& to) const override {
-        try {
-            const auto& dateTime = std::any_cast<const DateTime&>(to);
-            uint64_t ms = dateTime.toMilliseconds();
-            return std::any(Timestamp(ms));
-        } catch (const std::bad_any_cast&) {
-            THROW_CONVERSION_ERROR("Failed to convert DateTime to Timestamp");
-        }
-        // 添加返回值以防止编译器警告
-        return std::any();
+std::any convertDown(const std::any& to) const override {
+    try {
+        const auto& dateTime = std::any_cast<const DateTime&>(to);
+        uint64_t ms = dateTime.toMilliseconds();
+        return std::any(Timestamp(ms));
+    } catch (const std::bad_any_cast&) {
+        THROW_CONVERSION_ERROR("Failed to convert DateTime to Timestamp");
     }
-};
+    // 添加返回值以防止编译器警告
+    return std::any();
+}
+}
+;
 
-// Conversion between Money and FormattedString
-class MoneyToFormattedStringConversion : public TypeConversionBase {
+// Conversion between Money and FormattedStringclass
+// MoneyToFormattedStringConversion : public TypeConversionBase {
 public:
-    MoneyToFormattedStringConversion()
-        : TypeConversionBase(userType<FormattedString>(), userType<Money>()) {}
+MoneyToFormattedStringConversion()
+    : TypeConversionBase(userType<FormattedString>(), userType<Money>()) {}
 
-    std::any convert(const std::any& from) const override {
-        try {
-            const auto& money = std::any_cast<const Money&>(from);
-            std::ostringstream oss;
-            oss << std::fixed << std::setprecision(2) << money.getAmount()
-                << " " << money.getCurrency();
-            return std::any(FormattedString(oss.str()));
-        } catch (const std::bad_any_cast&) {
-            THROW_CONVERSION_ERROR(
-                "Failed to convert Money to FormattedString");
-        }
-        return std::any();
+std::any convert(const std::any& from) const override {
+    try {
+        const auto& money = std::any_cast<const Money&>(from);
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(2) << money.getAmount() << " "
+            << money.getCurrency();
+        return std::any(FormattedString(oss.str()));
+    } catch (const std::bad_any_cast&) {
+        THROW_CONVERSION_ERROR("Failed to convert Money to FormattedString");
     }
+    return std::any();
+}
 
-    std::any convertDown(const std::any& to) const override {
-        try {
-            const auto& str = std::any_cast<const FormattedString&>(to);
-            std::string valueStr = str.getValue();
+std::any convertDown(const std::any& to) const override {
+    try {
+        const auto& str = std::any_cast<const FormattedString&>(to);
+        std::string valueStr = str.getValue();
 
-            size_t spacePos = valueStr.find_last_of(' ');
-            if (spacePos != std::string::npos) {
-                double amount = std::stod(valueStr.substr(0, spacePos));
-                std::string currency = valueStr.substr(spacePos + 1);
-                return std::any(Money(amount, currency));
-            }
-            THROW_CONVERSION_ERROR("Invalid money format");
-        } catch (const std::bad_any_cast& e) {
-            THROW_CONVERSION_ERROR(
-                "Failed to convert FormattedString to Money");
-        } catch (const std::exception& e) {
-            THROW_CONVERSION_ERROR(std::string("Invalid format: ") + e.what());
+        size_t spacePos = valueStr.find_last_of(' ');
+        if (spacePos != std::string::npos) {
+            double amount = std::stod(valueStr.substr(0, spacePos));
+            std::string currency = valueStr.substr(spacePos + 1);
+            return std::any(Money(amount, currency));
         }
-        return std::any();
+        THROW_CONVERSION_ERROR("Invalid money format");
+    } catch (const std::bad_any_cast& e) {
+        THROW_CONVERSION_ERROR("Failed to convert FormattedString to Money");
+    } catch (const std::exception& e) {
+        THROW_CONVERSION_ERROR(std::string("Invalid format: ") + e.what());
     }
-};
+    return std::any();
+}
+}
+;
 
 //=============================================================================
 // Main function with comprehensive examples

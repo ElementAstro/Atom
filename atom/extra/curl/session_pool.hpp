@@ -1,69 +1,110 @@
 #ifndef ATOM_EXTRA_CURL_SESSION_POOL_HPP
 #define ATOM_EXTRA_CURL_SESSION_POOL_HPP
 
-#include <cstddef>
+#include <atomic>
 #include <memory>
-#include <mutex>
+#include <chrono>
 #include <vector>
+#include <mutex>
+#include <spdlog/spdlog.h>
 
-/**
- * @brief Namespace for curl related utilities.
- */
 namespace atom::extra::curl {
 
 class Session;
+
 /**
- * @brief Manages a pool of Session objects for reuse.
+ * @brief Simplified session pool using atom::memory::ObjectPool
  *
- * This class provides a mechanism to efficiently manage and reuse Session
- * objects, reducing the overhead of creating new sessions for each request.
- * It uses a mutex to ensure thread safety.
+ * This provides a compatible interface to the existing curl code while using
+ * the atom library's high-performance object pool implementation.
  */
 class SessionPool {
 public:
     /**
-     * @brief Constructor for the SessionPool class.
-     *
-     * @param max_sessions The maximum number of sessions to keep in the pool.
-     * Defaults to 10.
+     * @brief Configuration for session pool behavior
      */
-    SessionPool(size_t max_sessions = 10);
+    struct Config {
+        size_t max_pool_size = 100;
+        std::chrono::seconds timeout = std::chrono::seconds(30);
+        bool enable_statistics = true;
+
+        static Config createDefault() {
+            return Config{};
+        }
+
+        static Config createHighThroughput() {
+            Config config;
+            config.max_pool_size = 500;
+            config.timeout = std::chrono::seconds(60);
+            return config;
+        }
+
+        static Config createLowMemory() {
+            Config config;
+            config.max_pool_size = 20;
+            config.timeout = std::chrono::seconds(10);
+            return config;
+        }
+    };
 
     /**
-     * @brief Destructor for the SessionPool class.
-     *
-     * Clears the session pool and releases all Session objects.
+     * @brief Performance statistics
+     */
+    struct Statistics {
+        std::atomic<uint64_t> acquire_count{0};
+        std::atomic<uint64_t> release_count{0};
+        std::atomic<uint64_t> create_count{0};
+        std::atomic<uint64_t> cache_hits{0};
+        std::atomic<uint64_t> cache_misses{0};
+        std::atomic<uint64_t> work_steals{0};
+        std::atomic<uint64_t> contention_count{0};
+    };
+
+public:
+
+    /**
+     * @brief Constructor with configuration
+     */
+    explicit SessionPool(const Config& config = Config::createDefault());
+
+    /**
+     * @brief Destructor
      */
     ~SessionPool();
 
     /**
-     * @brief Acquires a Session object from the pool.
-     *
-     * If there are available Session objects in the pool, this method returns
-     * one of them. Otherwise, it creates a new Session object.
-     *
-     * @return A shared pointer to a Session object.
+     * @brief Acquire a session (lock-free with thread-local caching)
      */
     std::shared_ptr<Session> acquire();
 
     /**
-     * @brief Releases a Session object back to the pool.
-     *
-     * This method returns a Session object to the pool for reuse. If the pool
-     * is full, the Session object is destroyed.
-     *
-     * @param session A shared pointer to the Session object to release.
+     * @brief Release a session back to the pool
      */
     void release(std::shared_ptr<Session> session);
 
+    /**
+     * @brief Get current pool statistics
+     */
+    const Statistics& getStatistics() const noexcept { return stats_; }
+
+    /**
+     * @brief Get approximate total session count
+     */
+    size_t size() const noexcept;
+
 private:
-    /** @brief The maximum number of sessions to keep in the pool. */
-    size_t max_sessions_;
-    /** @brief The vector of Session objects in the pool. */
-    std::vector<std::shared_ptr<Session>> pool_;
-    /** @brief Mutex to protect the session pool from concurrent access. */
-    std::mutex mutex_;
+    // Simplified implementation using standard containers
+    std::vector<std::shared_ptr<Session>> available_sessions_;
+    std::mutex pool_mutex_;
+    Config config_;
+    mutable Statistics stats_;
+
+    /**
+     * @brief Create a new session
+     */
+    std::shared_ptr<Session> createSession();
 };
+
 }  // namespace atom::extra::curl
 
 #endif  // ATOM_EXTRA_CURL_SESSION_POOL_HPP

@@ -11,30 +11,30 @@ PYBIND11_MODULE(async_executor, m) {
         Advanced Async Task Executor
         ---------------------------
 
-        This module provides a high-performance asynchronous task executor with 
+        This module provides a high-performance asynchronous task executor with
         thread pooling, priority-based scheduling, and multiple execution strategies.
-        
+
         The module includes:
           - Thread pool with dynamic resizing
           - Priority-based task scheduling (LOW, NORMAL, HIGH, CRITICAL)
           - Various execution strategies (IMMEDIATE, DEFERRED, SCHEDULED)
           - Task cancellation support
           - Wait for completion functionality
-          
+
         Example:
             >>> from atom.async.async_executor import AsyncExecutor, ExecutionStrategy, TaskPriority
-            >>> 
+            >>>
             >>> # Create an executor with 4 threads
             >>> executor = AsyncExecutor(4)
-            >>> 
+            >>>
             >>> # Schedule a task for immediate execution with normal priority
             >>> future = executor.schedule(
-            >>>     ExecutionStrategy.IMMEDIATE, 
+            >>>     ExecutionStrategy.IMMEDIATE,
             >>>     TaskPriority.NORMAL,
-            >>>     lambda x: x * 2, 
+            >>>     lambda x: x * 2,
             >>>     10
             >>> )
-            >>> 
+            >>>
             >>> # Get the result when ready
             >>> result = future.result()
             >>> print(result)  # Outputs: 20
@@ -87,8 +87,8 @@ PYBIND11_MODULE(async_executor, m) {
     // 假设AsyncExecutor有三种执行策略: IMMEDIATE(0), DEFERRED(1), SCHEDULED(2)
     // 这里我们创建一个临时枚举来绑定这些值
     enum class ExecutionStrategy { IMMEDIATE = 0, DEFERRED = 1, SCHEDULED = 2 };
-    py::enum_<ExecutionStrategy>(
-        m, "ExecutionStrategy", "Execution strategies for the async executor")
+    py::enum_<ExecutionStrategy>(m, "ExecutionStrategy",
+                                 "Execution strategies for the async executor")
         .value("IMMEDIATE", ExecutionStrategy::IMMEDIATE,
                "Execute immediately in the thread pool")
         .value("DEFERRED", ExecutionStrategy::DEFERRED,
@@ -110,12 +110,12 @@ Args:
 
 Examples:
     >>> executor = AsyncExecutor(4)  # Create an executor with 4 threads
-    >>> 
+    >>>
     >>> # Schedule an immediate task
     >>> future = executor.schedule(
-    >>>     ExecutionStrategy.IMMEDIATE, 
+    >>>     ExecutionStrategy.IMMEDIATE,
     >>>     TaskPriority.NORMAL,
-    >>>     lambda x: x * 2, 
+    >>>     lambda x: x * 2,
     >>>     10
     >>> )
     >>>
@@ -123,26 +123,29 @@ Examples:
     >>> result = future.result()
 )")
         .def(py::init([](py::object pool_size) {
-            atom::async::AsyncExecutor::Configuration config;
-            if (!pool_size.is_none()) {
-                config.minThreads = pool_size.cast<size_t>();
-                config.maxThreads = pool_size.cast<size_t>();
-            }
-            return std::make_unique<atom::async::AsyncExecutor>(config);
-        }), py::arg("pool_size") = py::none(),
-        "Constructs an AsyncExecutor with a specified thread pool size (default: hardware concurrency)")
+                 atom::async::AsyncExecutor::Configuration config;
+                 if (!pool_size.is_none()) {
+                     config.minThreads = pool_size.cast<size_t>();
+                     config.maxThreads = pool_size.cast<size_t>();
+                 }
+                 return std::make_unique<atom::async::AsyncExecutor>(config);
+             }),
+             py::arg("pool_size") = py::none(),
+             "Constructs an AsyncExecutor with a specified thread pool size "
+             "(default: hardware concurrency)")
         .def(
             "schedule",
-            [](atom::async::AsyncExecutor& self,
-               ExecutionStrategy strategy,
+            [](atom::async::AsyncExecutor& self, ExecutionStrategy strategy,
                atom::async::AsyncExecutor::Priority priority, py::function func,
                py::args args) {
                 // 将ExecutionStrategy转换为AsyncExecutor内部使用的类型或直接使用整数值
                 // 并将函数和参数包装为可调用对象
-                return self.execute([func, args]() {
-                    py::gil_scoped_acquire acquire;
-                    return func(*args).cast<py::object>();
-                }, priority);
+                return self.execute(
+                    [func, args]() {
+                        py::gil_scoped_acquire acquire;
+                        return func(*args).cast<py::object>();
+                    },
+                    priority);
             },
             py::arg("strategy"), py::arg("priority"), py::arg("func"),
             R"(Schedule a task for execution with the specified strategy and priority.
@@ -165,37 +168,41 @@ Examples:
     >>> )
     >>> result = future.result()  # This will be 30
 )")
-        .def("execute_deferred_tasks",
-             [](atom::async::AsyncExecutor& self) {
-                 // 这个方法可能需要自定义实现，因为我们无法确定是否有对应的方法
-                 // 假设AsyncExecutor没有这个方法
-                 throw std::runtime_error("Method not implemented");
-             },
-             "Execute all deferred tasks")
-        .def("wait_for_all",
-             [](atom::async::AsyncExecutor& self) {
-                 // 等待所有任务完成的逻辑
-                 // 假设没有直接对应的方法
-                 throw std::runtime_error("Method not implemented");
-             },
-             "Wait for all tasks to complete, including deferred tasks")
-        .def("queue_size",
-             [](const atom::async::AsyncExecutor& self) {
-                 return self.getPendingTaskCount();
-             },
-             "Get the number of tasks waiting in the queue")
-        .def("active_task_count",
-             [](const atom::async::AsyncExecutor& self) {
-                 return self.getActiveThreadCount();
-             },
-             "Get the number of active tasks currently being processed")
-        .def("resize",
-             [](atom::async::AsyncExecutor& self, size_t pool_size) {
-                 // 可能需要自定义实现，假设AsyncExecutor没有直接的resize方法
-                 throw std::runtime_error("Method not implemented");
-             },
-             py::arg("pool_size"),
-             "Resize the thread pool to a specified size");
+        .def(
+            "execute_deferred_tasks",
+            [](atom::async::AsyncExecutor& self) {
+                // 这个方法可能需要自定义实现，因为我们无法确定是否有对应的方法
+                // 假设AsyncExecutor没有这个方法
+                throw std::runtime_error("Method not implemented");
+            },
+            "Execute all deferred tasks")
+        .def(
+            "wait_for_all",
+            [](atom::async::AsyncExecutor& self) {
+                // 等待所有任务完成的逻辑
+                // 假设没有直接对应的方法
+                throw std::runtime_error("Method not implemented");
+            },
+            "Wait for all tasks to complete, including deferred tasks")
+        .def(
+            "queue_size",
+            [](const atom::async::AsyncExecutor& self) {
+                return self.getPendingTaskCount();
+            },
+            "Get the number of tasks waiting in the queue")
+        .def(
+            "active_task_count",
+            [](const atom::async::AsyncExecutor& self) {
+                return self.getActiveThreadCount();
+            },
+            "Get the number of active tasks currently being processed")
+        .def(
+            "resize",
+            [](atom::async::AsyncExecutor& self, size_t pool_size) {
+                // 可能需要自定义实现，假设AsyncExecutor没有直接的resize方法
+                throw std::runtime_error("Method not implemented");
+            },
+            py::arg("pool_size"), "Resize the thread pool to a specified size");
 
     // Define a convenience function for getting hardware concurrency
     m.def(

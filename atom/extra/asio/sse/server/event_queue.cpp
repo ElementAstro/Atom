@@ -2,7 +2,7 @@
 
 namespace atom::extra::asio::sse {
 
-EventQueue::EventQueue(EventStore& event_store, bool persist_events)
+EventQueue::EventQueue(ServerEventStore& event_store, bool persist_events)
     : event_store_(event_store), persist_events_(persist_events) {}
 
 void EventQueue::push_event(Event event) {

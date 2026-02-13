@@ -46,11 +46,11 @@ py::class_<atom::utils::unordered_flat_map<K, V>> declare_robin_hood_map(
         .def("load_factor", &MapType::load_factor,
              "Returns the average number of elements per bucket.")
         .def("max_load_factor",
-             (float (MapType::*)() const noexcept) & MapType::max_load_factor,
+             (float(MapType::*)() const noexcept) & MapType::max_load_factor,
              "Returns the current maximum load factor.")
         .def("max_load_factor",
-             (void (MapType::*)(float))&MapType::max_load_factor, py::arg("ml"),
-             "Sets the maximum load factor of the container.")
+             (void(MapType::*)(float)) & MapType::max_load_factor,
+             py::arg("ml"), "Sets the maximum load factor of the container.")
         // Python-specific methods
         .def("__len__", &MapType::size, "Support for len() function.")
         .def(

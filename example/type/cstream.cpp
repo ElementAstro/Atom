@@ -7,16 +7,14 @@
 
 #include "atom/type/cstream.hpp"
 
-// Helper function to print a section header
-void printHeader(const std::string& title) {
-    std::cout << "\n==============================================="
-              << std::endl;
-    std::cout << "  " << title << std::endl;
-    std::cout << "===============================================" << std::endl;
+// Helper function to print a section headervoid printHeader(const std::string&
+// title) {
+std::cout << "\n===============================================" << std::endl;
+std::cout << "  " << title << std::endl;
+std::cout << "===============================================" << std::endl;
 }
 
-// Helper function to print a vector
-template <typename T>
+// Helper function to print a vectortemplate <typename T>
 void printVector(const std::vector<T>& vec, const std::string& label) {
     std::cout << label << ": [";
     bool first = true;
@@ -29,8 +27,7 @@ void printVector(const std::vector<T>& vec, const std::string& label) {
     std::cout << "]" << std::endl;
 }
 
-// Helper function to print a list
-template <typename T>
+// Helper function to print a listtemplate <typename T>
 void printList(const std::list<T>& lst, const std::string& label) {
     std::cout << label << ": [";
     bool first = true;
@@ -43,45 +40,45 @@ void printList(const std::list<T>& lst, const std::string& label) {
     std::cout << "]" << std::endl;
 }
 
-// Person class for demonstrating complex object handling
-class Person {
+// Person class for demonstrating complex object handlingclass Person {
 private:
-    std::string name;
-    int age;
-    std::string department;
+std::string name;
+int age;
+std::string department;
 
 public:
-    Person() : name(""), age(0), department("") {}
+Person() : name(""), age(0), department("") {}
 
-    Person(std::string name, int age, std::string department)
-        : name(std::move(name)), age(age), department(std::move(department)) {}
+Person(std::string name, int age, std::string department)
+    : name(std::move(name)), age(age), department(std::move(department)) {}
 
-    // Getters
-    const std::string& getName() const { return name; }
-    int getAge() const { return age; }
-    const std::string& getDepartment() const { return department; }
+// Getters
+const std::string& getName() const { return name; }
+int getAge() const { return age; }
+const std::string& getDepartment() const { return department; }
 
-    // For sorting and comparisons
-    bool operator==(const Person& other) const {
-        return name == other.name && age == other.age &&
-               department == other.department;
-    }
+// For sorting and comparisons
+bool operator==(const Person& other) const {
+    return name == other.name && age == other.age &&
+           department == other.department;
+}
 
-    bool operator<(const Person& other) const {
-        if (name != other.name)
-            return name < other.name;
-        if (age != other.age)
-            return age < other.age;
-        return department < other.department;
-    }
+bool operator<(const Person& other) const {
+    if (name != other.name)
+        return name < other.name;
+    if (age != other.age)
+        return age < other.age;
+    return department < other.department;
+}
 
-    // For printing
-    friend std::ostream& operator<<(std::ostream& os, const Person& person) {
-        os << "Person{name='" << person.name << "', age=" << person.age
-           << ", department='" << person.department << "'}";
-        return os;
-    }
-};
+// For printing
+friend std::ostream& operator<<(std::ostream& os, const Person& person) {
+    os << "Person{name='" << person.name << "', age=" << person.age
+       << ", department='" << person.department << "'}";
+    return os;
+}
+}
+;
 
 int main() {
     std::cout << "======================================================="

@@ -8,7 +8,6 @@
 #include "../core/types.h"
 #include "manager.h"
 
-
 using namespace modern_log;
 using ::testing::_;
 using ::testing::Return;

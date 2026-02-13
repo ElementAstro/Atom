@@ -22,17 +22,16 @@
 
 using namespace atom::meta;
 
-// Helper function to print section headers
-void printHeader(const std::string& title) {
-    std::cout << "\n=========================================================="
-              << std::endl;
-    std::cout << "  " << title << std::endl;
-    std::cout << "=========================================================="
-              << std::endl;
+// Helper function to print section headersvoid printHeader(const std::string&
+// title) {
+std::cout << "\n=========================================================="
+          << std::endl;
+std::cout << "  " << title << std::endl;
+std::cout << "=========================================================="
+          << std::endl;
 }
 
-// Helper function to print field count information
-template <typename T>
+// Helper function to print field count informationtemplate <typename T>
 void printFieldCount(const std::string& typeName) {
     std::cout << std::left << std::setw(40) << typeName
               << " | Fields: " << fieldCountOf<T>() << std::endl;
@@ -42,72 +41,71 @@ void printFieldCount(const std::string& typeName) {
 // 1. Basic structs with different field counts
 //=========================================================================
 
-// Empty struct
-struct EmptyStruct {};
+// Empty structstruct EmptyStruct {};
 
-// Single field struct
-struct SingleField {
-    int x;
-};
+// Single field structstruct SingleField {
+int x;
+}
+;
 
-// Two fields struct
-struct TwoFields {
-    int x;
-    double y;
-};
+// Two fields structstruct TwoFields {
+int x;
+double y;
+}
+;
 
-// Three fields struct
-struct ThreeFields {
-    int x;
-    double y;
-    char z;
-};
+// Three fields structstruct ThreeFields {
+int x;
+double y;
+char z;
+}
+;
 
-// Many fields struct
-struct ManyFields {
-    int a;
-    float b;
-    double c;
-    char d;
-    unsigned e;
-    long f;
-    bool g;
-    short h;
-};
+// Many fields structstruct ManyFields {
+int a;
+float b;
+double c;
+char d;
+unsigned e;
+long f;
+bool g;
+short h;
+}
+;
 
 //=========================================================================
 // 2. Nested structs
 //=========================================================================
 
-// Struct with nested struct as member
-struct NestedStruct {
-    int x;
-    TwoFields nested;
-    double z;
-};
+// Struct with nested struct as memberstruct NestedStruct {
+int x;
+TwoFields nested;
+double z;
+}
+;
 
-// Deeply nested struct
-struct DeeplyNested {
-    int a;
-    NestedStruct b;
-    ThreeFields c;
-};
+// Deeply nested structstruct DeeplyNested {
+int a;
+NestedStruct b;
+ThreeFields c;
+}
+;
 
 //=========================================================================
 // 3. Structs with array members
 //=========================================================================
 
-// Struct with array
-struct WithArray {
-    int values[5];
-    double factor;
-};
+// Struct with arraystruct WithArray {
+int values[5];
+double factor;
+}
+;
 
-// Struct with 2D array
-struct With2DArray {
-    int matrix[3][3];
-    char label;
-};
+// Struct with 2D arraystruct With2DArray {
+int matrix[3][3];
+char label;
+}
+;
 
 //=========================================================================
 // 4. Custom type_info specializations
@@ -121,8 +119,7 @@ struct CustomType {
     // More complex members...
 };
 
-// Custom type_info specialization
-template <>
+// Custom type_info specializationtemplate <>
 struct atom::meta::type_info<CustomType> {
     static constexpr size_t count = 2;  // Manually specify the field count
 };
@@ -131,15 +128,13 @@ struct atom::meta::type_info<CustomType> {
 // 5. Template structs
 //=========================================================================
 
-// Template struct
-template <typename T>
+// Template structtemplate <typename T>
 struct Wrapper {
     T value;
     double weight;
 };
 
-// Template struct with variadic parameters
-template <typename... Args>
+// Template struct with variadic parameterstemplate <typename... Args>
 struct Pack {
     std::tuple<Args...> data;
 };
@@ -148,42 +143,42 @@ struct Pack {
 // 6. Inheritance scenarios
 //=========================================================================
 
-// Base struct
-struct Base {
-    int base_field;
-};
+// Base structstruct Base {
+int base_field;
+}
+;
 
-// Derived struct with inheritance
-struct Derived : Base {
-    double derived_field;
-};
+// Derived struct with inheritancestruct Derived : Base {
+double derived_field;
+}
+;
 
-// Multiple inheritance
-struct MultipleInheritance : Base, TwoFields {
-    char additional_field;
-};
+// Multiple inheritancestruct MultipleInheritance : Base, TwoFields {
+char additional_field;
+}
+;
 
 //=========================================================================
 // 7. Edge cases and special cases
 //=========================================================================
 
-// Struct with bitfields
-struct Bitfields {
-    unsigned int a : 1;
-    unsigned int b : 2;
-    unsigned int c : 3;
-};
+// Struct with bitfieldsstruct Bitfields {
+unsigned int a : 1;
+unsigned int b : 2;
+unsigned int c : 3;
+}
+;
 
-// Struct with private/protected fields
-class WithAccess {
+// Struct with private/protected fieldsclass WithAccess {
 public:
-    WithAccess() : public_field(0), private_field(0) {}
+WithAccess() : public_field(0), private_field(0) {}
 
-    int public_field;
+int public_field;
 
 private:
-    int private_field;
-};
+int private_field;
+}
+;
 
 //=========================================================================
 // 8. Non-aggregate types

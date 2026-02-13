@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 template <typename T>
@@ -15,11 +14,10 @@ void declare_math_classes(py::module& m, const std::string& type_suffix) {
         using SFClass = atom::extra::boost::SpecialFunctions<T>;
         std::string class_name = "SpecialFunctions" + type_suffix;
 
-        py::class_<SFClass>(
-            m, class_name.c_str(),
-            R"(Wrapper class for special mathematical functions.
+        py::class_<SFClass>(m, class_name.c_str(),
+                            R"(Wrapper class for special mathematical functions.
 
-This class provides various special mathematical functions like beta, gamma, 
+This class provides various special mathematical functions like beta, gamma,
 digamma, error function, Bessel functions, and Legendre polynomials.
 
 Examples:
@@ -347,9 +345,8 @@ Returns:
         using IntClass = atom::extra::boost::NumericalIntegration<T>;
         std::string class_name = "NumericalIntegration" + type_suffix;
 
-        py::class_<IntClass>(
-            m, class_name.c_str(),
-            R"(Wrapper class for numerical integration methods.
+        py::class_<IntClass>(m, class_name.c_str(),
+                             R"(Wrapper class for numerical integration methods.
 
 This class provides numerical integration functions like the trapezoidal rule.
 
@@ -496,7 +493,7 @@ Raises:
         py::class_<LAClass>(m, class_name.c_str(),
                             R"(Wrapper class for linear algebra operations.
 
-This class provides linear algebra operations such as solving linear systems, 
+This class provides linear algebra operations such as solving linear systems,
 computing determinants, matrix multiplication, and transpose.
 
 Examples:
@@ -574,11 +571,11 @@ Examples:
     >>> solution = math.ODESolver.runge_kutta4(harmonic_oscillator, init_state, 0.0, 10.0, 0.01)
     >>> # solution contains the state at each time step
 )")
-            .def_static(
-                "runge_kutta4", &ODEClass::rungeKutta4, py::arg("system"),
-                py::arg("initial_state"), py::arg("start_time"),
-                py::arg("end_time"), py::arg("step_size"),
-                R"(Solves an ODE using the 4th order Runge-Kutta method.
+            .def_static("runge_kutta4", &ODEClass::rungeKutta4,
+                        py::arg("system"), py::arg("initial_state"),
+                        py::arg("start_time"), py::arg("end_time"),
+                        py::arg("step_size"),
+                        R"(Solves an ODE using the 4th order Runge-Kutta method.
 
 Args:
     system: The system function defining the ODE.
@@ -601,7 +598,7 @@ Returns:
             m, class_name.c_str(),
             R"(Wrapper class for financial mathematics functions.
 
-This class provides financial math functions such as Black-Scholes option pricing, 
+This class provides financial math functions such as Black-Scholes option pricing,
 bond pricing, and implied volatility calculation.
 
 Examples:
@@ -691,6 +688,28 @@ Examples:
     >>> from atom.extra.boost import math
     >>> math.factorial(5)
     120
+)");
+
+    m.def(
+        "transform_range",
+        [](const std::vector<T>& data, const std::function<T(T)>& func) {
+            auto view = atom::extra::boost::transformRange(data, func);
+            std::vector<T> result;
+            result.reserve(data.size());
+            for (const auto& v : view) {
+                result.push_back(v);
+            }
+            return result;
+        },
+        py::arg("data"), py::arg("func"),
+        R"(Transforms a range of values using a unary function.
+
+Args:
+    data: Iterable of numeric values.
+    func: Callable that takes a value and returns a transformed value.
+
+Returns:
+    A list containing the transformed values.
 )");
 
     // Define aliases for easier access to common instantiations

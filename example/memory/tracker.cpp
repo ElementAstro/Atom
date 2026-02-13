@@ -18,121 +18,119 @@
 #define ATOM_MEMORY_TRACKING_ENABLED
 #endif
 
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
 }
 
-// Class for testing memory leaks
-class MemoryLeakTest {
+// Class for testing memory leaksclass MemoryLeakTest {
 public:
-    MemoryLeakTest(int id, int dataSize) : id_(id), data_(nullptr) {
-        std::cout << "Creating MemoryLeakTest object #" << id_ << std::endl;
-        data_ = new int[dataSize];
-        dataSize_ = dataSize;
-    }
+MemoryLeakTest(int id, int dataSize) : id_(id), data_(nullptr) {
+    std::cout << "Creating MemoryLeakTest object #" << id_ << std::endl;
+    data_ = new int[dataSize];
+    dataSize_ = dataSize;
+}
 
-    ~MemoryLeakTest() {
-        std::cout << "Destroying MemoryLeakTest object #" << id_ << std::endl;
-        // Intentionally commented out to simulate a memory leak
-        // delete[] data_;
-    }
+~MemoryLeakTest() {
+    std::cout << "Destroying MemoryLeakTest object #" << id_ << std::endl;
+    // Intentionally commented out to simulate a memory leak
+    // delete[] data_;
+}
 
-    void setValue(int index, int value) {
-        if (index >= 0 && index < dataSize_) {
-            data_[index] = value;
-        }
+void setValue(int index, int value) {
+    if (index >= 0 && index < dataSize_) {
+        data_[index] = value;
     }
+}
 
-    int getValue(int index) const {
-        if (index >= 0 && index < dataSize_) {
-            return data_[index];
-        }
-        return -1;
+int getValue(int index) const {
+    if (index >= 0 && index < dataSize_) {
+        return data_[index];
     }
+    return -1;
+}
 
 private:
-    int id_;
-    int* data_;
-    int dataSize_;
-};
+int id_;
+int* data_;
+int dataSize_;
+}
+;
 
-// Class that properly cleans up memory
-class ProperCleanupTest {
+// Class that properly cleans up memoryclass ProperCleanupTest {
 public:
-    ProperCleanupTest(int id, int dataSize)
-        : id_(id), data_(new int[dataSize]), dataSize_(dataSize) {
-        std::cout << "Creating ProperCleanupTest object #" << id_ << std::endl;
-    }
+ProperCleanupTest(int id, int dataSize)
+    : id_(id), data_(new int[dataSize]), dataSize_(dataSize) {
+    std::cout << "Creating ProperCleanupTest object #" << id_ << std::endl;
+}
 
-    ~ProperCleanupTest() {
-        std::cout << "Destroying ProperCleanupTest object #" << id_
-                  << std::endl;
-        delete[] data_;  // Properly delete the allocated memory
-    }
+~ProperCleanupTest() {
+    std::cout << "Destroying ProperCleanupTest object #" << id_ << std::endl;
+    delete[] data_;  // Properly delete the allocated memory
+}
 
-    void setValue(int index, int value) {
-        if (index >= 0 && index < dataSize_) {
-            data_[index] = value;
-        }
+void setValue(int index, int value) {
+    if (index >= 0 && index < dataSize_) {
+        data_[index] = value;
     }
+}
 
-    int getValue(int index) const {
-        if (index >= 0 && index < dataSize_) {
-            return data_[index];
-        }
-        return -1;
+int getValue(int index) const {
+    if (index >= 0 && index < dataSize_) {
+        return data_[index];
     }
+    return -1;
+}
 
 private:
-    int id_;
-    int* data_;
-    int dataSize_;
-};
+int id_;
+int* data_;
+int dataSize_;
+}
+;
 
-// Function to perform allocations in a separate thread
-void threadAllocationFunc(int id, int count) {
-    std::cout << "Thread " << id << " started" << std::endl;
+// Function to perform allocations in a separate threadvoid
+// threadAllocationFunc(int id, int count) {
+std::cout << "Thread " << id << " started" << std::endl;
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(10 * id));
+std::this_thread::sleep_for(std::chrono::milliseconds(10 * id));
 
-    // Allocate memory in this thread
-    std::vector<void*> allocations;
-    for (int i = 0; i < count; ++i) {
-        size_t size = 100 + (id * 10) + (i % 50);
-        void* ptr = malloc(size);
-        ATOM_TRACK_ALLOC(ptr, size);
-        allocations.push_back(ptr);
+// Allocate memory in this thread
+std::vector<void*> allocations;
+for (int i = 0; i < count; ++i) {
+    size_t size = 100 + (id * 10) + (i % 50);
+    void* ptr = malloc(size);
+    ATOM_TRACK_ALLOC(ptr, size);
+    allocations.push_back(ptr);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+}
 
-    // Free half of the allocations
-    for (size_t i = 0; i < allocations.size() / 2; ++i) {
+// Free half of the allocations
+for (size_t i = 0; i < allocations.size() / 2; ++i) {
+    ATOM_TRACK_FREE(allocations[i]);
+    free(allocations[i]);
+}
+
+std::cout << "Thread " << id << " completed" << std::endl;
+
+// Intentionally leak the rest of the allocations in odd-numbered threads
+if (id % 2 == 0) {
+    for (size_t i = allocations.size() / 2; i < allocations.size(); ++i) {
         ATOM_TRACK_FREE(allocations[i]);
         free(allocations[i]);
     }
-
-    std::cout << "Thread " << id << " completed" << std::endl;
-
-    // Intentionally leak the rest of the allocations in odd-numbered threads
-    if (id % 2 == 0) {
-        for (size_t i = allocations.size() / 2; i < allocations.size(); ++i) {
-            ATOM_TRACK_FREE(allocations[i]);
-            free(allocations[i]);
-        }
-    }
+}
 }
 
-// Custom error callback function
-void customErrorCallback(const std::string& errorMessage) {
-    std::cerr << "CUSTOM ERROR HANDLER: " << errorMessage << std::endl;
+// Custom error callback functionvoid customErrorCallback(const std::string&
+// errorMessage) {
+std::cerr << "CUSTOM ERROR HANDLER: " << errorMessage << std::endl;
 }
 
-// Define a custom allocator that uses the memory tracker
-template <typename T>
+// Define a custom allocator that uses the memory trackertemplate <typename T>
 class TrackedAllocator {
 public:
     using value_type = T;

@@ -16,11 +16,11 @@ LogManager& LogManager::instance() {
     return instance;
 }
 
-Result<std::shared_ptr<Logger>> LogManager::create_logger(
+Result<std::shared_ptr<Logger>, LogError> LogManager::create_logger(
     const LogConfig& config) {
     std::unique_lock lock(mutex_);
     if (loggers_.contains(config.name)) {
-        return std::unexpected(LogError::invalid_config);
+        return LogError::invalid_config;
     }
     try {
         std::vector<spdlog::sink_ptr> sinks;
@@ -48,19 +48,19 @@ Result<std::shared_ptr<Logger>> LogManager::create_logger(
         event_system_->emit(LogEvent::logger_created, config.name);
         return logger;
     } catch (const spdlog::spdlog_ex&) {
-        return std::unexpected(LogError::file_creation_failed);
+        return LogError::file_creation_failed;
     } catch (...) {
-        return std::unexpected(LogError::invalid_config);
+        return LogError::invalid_config;
     }
 }
 
-Result<std::shared_ptr<Logger>> LogManager::get_logger(
+Result<std::shared_ptr<Logger>, LogError> LogManager::get_logger(
     const std::string& name) {
     std::shared_lock lock(mutex_);
     if (auto it = loggers_.find(name); it != loggers_.end()) {
         return it->second;
     }
-    return std::unexpected(LogError::logger_not_found);
+    return LogError::logger_not_found;
 }
 
 bool LogManager::remove_logger(const std::string& name) {
@@ -112,6 +112,7 @@ Logger& LogManager::default_logger() {
     static std::shared_ptr<Logger> logger = []() {
         LogConfig config{.name = "default",
                          .level = Level::info,
+                         .file_config = {},
                          .console_output = true,
                          .colored_output = true};
         auto result = instance().create_logger(config);
@@ -119,18 +120,21 @@ Logger& LogManager::default_logger() {
             auto fallback = std::make_shared<spdlog::logger>("fallback");
             return std::make_shared<Logger>(fallback);
         }
-        return *result;
+        return result.value();
     }();
     return *logger;
 }
 
-Result<std::shared_ptr<Logger>> LogManager::create_simple_logger(
+Result<std::shared_ptr<Logger>, LogError> LogManager::create_simple_logger(
     const std::string& name, Level level, bool console) {
-    LogConfig config{.name = name, .level = level, .console_output = console};
+    LogConfig config{.name = name,
+                     .level = level,
+                     .file_config = {},
+                     .console_output = console};
     return instance().create_logger(config);
 }
 
-Result<std::shared_ptr<Logger>> LogManager::create_file_logger(
+Result<std::shared_ptr<Logger>, LogError> LogManager::create_file_logger(
     const std::string& name, const std::string& filename, Level level,
     bool rotating) {
     LogConfig config{.name = name,
@@ -141,7 +145,7 @@ Result<std::shared_ptr<Logger>> LogManager::create_file_logger(
     return instance().create_logger(config);
 }
 
-Result<std::shared_ptr<Logger>> LogManager::create_async_logger(
+Result<std::shared_ptr<Logger>, LogError> LogManager::create_async_logger(
     const std::string& name, const LogConfig& config) {
     LogConfig async_config = config;
     async_config.name = name;

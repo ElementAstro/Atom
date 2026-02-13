@@ -22,43 +22,25 @@
 
 using namespace atom::meta;
 
-// Define some example enums to work with
-enum class Color {
-    Red = 0,
-    Green = 1,
-    Blue = 2,
-    Yellow = 3,
-    Magenta = 4,
-    Cyan = 5,
-    Black = 6,
-    White = 7
-};
+// Define some example enums to work withenum class Color {
+Red = 0, Green = 1, Blue = 2, Yellow = 3, Magenta = 4, Cyan = 5, Black = 6,
+         White = 7
+}
+;
 
-// Define flags enum for bitwise operations
-enum class Permission : uint8_t {
-    None = 0x00,
-    Read = 0x01,
-    Write = 0x02,
-    Execute = 0x04,
-    Admin = 0x08,
-    All = Read | Write | Execute | Admin
-};
+// Define flags enum for bitwise operationsenum class Permission : uint8_t {
+None = 0x00, Read = 0x01, Write = 0x02, Execute = 0x04, Admin = 0x08,
+             All = Read | Write | Execute | Admin
+}
+;
 
-// Define an enum with descriptions
-enum class HttpStatus {
-    OK = 200,
-    Created = 201,
-    Accepted = 202,
-    NoContent = 204,
-    BadRequest = 400,
-    Unauthorized = 401,
-    Forbidden = 403,
-    NotFound = 404,
-    ServerError = 500
-};
+// Define an enum with descriptionsenum class HttpStatus {
+OK = 200, Created = 201, Accepted = 202, NoContent = 204, BadRequest = 400,
+          Unauthorized = 401, Forbidden = 403, NotFound = 404, ServerError = 500
+}
+;
 
-// Implement EnumTraits specialization for Color
-template <>
+// Implement EnumTraits specialization for Colortemplate <>
 struct atom::meta::EnumTraits<Color> {
     static constexpr std::array values = {
         Color::Red,     Color::Green, Color::Blue,  Color::Yellow,
@@ -69,10 +51,12 @@ struct atom::meta::EnumTraits<Color> {
         std::string_view{"Blue"},    std::string_view{"Yellow"},
         std::string_view{"Magenta"}, std::string_view{"Cyan"},
         std::string_view{"Black"},   std::string_view{"White"}};
+
+    static constexpr size_t size() noexcept { return values.size(); }
+    static constexpr bool empty() noexcept { return values.size() == 0; }
 };
 
-// Implement EnumTraits specialization for Permission
-template <>
+// Implement EnumTraits specialization for Permission with aliasestemplate <>
 struct atom::meta::EnumTraits<Permission> {
     static constexpr std::array values = {
         Permission::None,    Permission::Read,  Permission::Write,
@@ -82,18 +66,14 @@ struct atom::meta::EnumTraits<Permission> {
         std::string_view{"None"},  std::string_view{"Read"},
         std::string_view{"Write"}, std::string_view{"Execute"},
         std::string_view{"Admin"}, std::string_view{"All"}};
-};
 
-// EnumAliasTraits specialization for Permission
-template <>
-struct atom::meta::EnumAliasTraits<Permission> {
     static constexpr std::array aliases = {
         std::string_view{"0"}, std::string_view{"R"}, std::string_view{"W"},
         std::string_view{"X"}, std::string_view{"A"}, std::string_view{"RWX"}};
 };
 
-// Implement EnumTraits specialization for HttpStatus with descriptions
-template <>
+// Implement EnumTraits specialization for HttpStatus with descriptionstemplate
+// <>
 struct atom::meta::EnumTraits<HttpStatus> {
     static constexpr std::array values = {
         HttpStatus::OK,        HttpStatus::Created,    HttpStatus::Accepted,
@@ -119,19 +99,18 @@ struct atom::meta::EnumTraits<HttpStatus> {
         std::string_view{"Server encountered an error"}};
 };
 
-// Helper function to print section headers
-void printHeader(const std::string& title) {
-    std::cout << "\n==========================================================="
-              << std::endl;
-    std::cout << "  " << title << std::endl;
-    std::cout << "==========================================================="
-              << std::endl;
+// Helper function to print section headersvoid printHeader(const std::string&
+// title) {
+std::cout << "\n==========================================================="
+          << std::endl;
+std::cout << "  " << title << std::endl;
+std::cout << "==========================================================="
+          << std::endl;
 }
 
-// Helper function for formatting
-void printValue(const std::string& label, const std::string& value) {
-    std::cout << std::left << std::setw(30) << label << ": " << value
-              << std::endl;
+// Helper function for formattingvoid printValue(const std::string& label, const
+// std::string& value) {
+std::cout << std::left << std::setw(30) << label << ": " << value << std::endl;
 }
 
 void printValue(const std::string& label, int value) {
@@ -144,8 +123,8 @@ void printValue(const std::string& label, bool value) {
               << (value ? "true" : "false") << std::endl;
 }
 
-// 修复: 将默认参数改为适当的类型，并修复const引用无法接受nullptr的问题
-template <typename T>
+// 修复: 将默认参数改为适当的类型，并修复const引用无法接受nullptr的问题template
+// <typename T>
 void printOptional(
     const std::string& label, const std::optional<T>& value,
     std::function<std::string(const T&)> formatter = [](const T& v) {
@@ -328,11 +307,11 @@ int main() {
     printValue("With all permissions", std::string(enum_name(userPermission)));
 
     // Get the underlying bitmask
-    auto permBitmask = enum_bitmask(userPermission);
+    auto permBitmask = enum_to_integer(userPermission);
     printValue("Permission bitmask", static_cast<int>(permBitmask));
 
     // Convert bitmask back to enum
-    auto permFromBitmask = bitmask_to_enum<Permission>(0x03);  // Read + Write
+    auto permFromBitmask = integer_to_enum<Permission>(0x03);  // Read + Write
     printOptional<Permission>(
         "bitmask_to_enum<Permission>(0x03)", permFromBitmask,
         [](const Permission& p) { return std::string(enum_name(p)); });
@@ -343,12 +322,12 @@ int main() {
     printHeader("7. Enum Aliases");
 
     // Use alias to get enum value
-    auto readPerm1 = enum_cast_with_alias<Permission>("Read");
+    auto readPerm1 = enum_cast_icase<Permission>("Read");
     printOptional<Permission>(
         "enum_cast_with_alias<Permission>(\"Read\")", readPerm1,
         [](const Permission& p) { return std::string(enum_name(p)); });
 
-    auto readPerm2 = enum_cast_with_alias<Permission>("R");  // Using alias
+    auto readPerm2 = enum_cast_icase<Permission>("R");  // Using alias
     printOptional<Permission>(
         "enum_cast_with_alias<Permission>(\"R\")", readPerm2,
         [](const Permission& p) { return std::string(enum_name(p)); });

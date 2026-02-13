@@ -8,8 +8,7 @@
 
 #include "atom/type/concurrent_map.hpp"
 
-// Helper function to print results
-template <typename T>
+// Helper function to print resultstemplate <typename T>
 void print_results(const std::string& operation,
                    const std::vector<std::optional<T>>& results) {
     std::cout << operation << " results: " << std::endl;
@@ -25,30 +24,29 @@ void print_results(const std::string& operation,
     std::cout << std::endl;
 }
 
-// Helper for generating random strings
-std::string random_string(size_t length) {
-    static const char alphanum[] =
-        "0123456789"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "abcdefghijklmnopqrstuvwxyz";
+// Helper for generating random stringsstd::string random_string(size_t length)
+// {
+static const char alphanum[] =
+    "0123456789"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz";
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, sizeof(alphanum) - 2);
+std::random_device rd;
+std::mt19937 gen(rd());
+std::uniform_int_distribution<> dis(0, sizeof(alphanum) - 2);
 
-    std::string result;
-    result.reserve(length);
-    for (size_t i = 0; i < length; ++i) {
-        result += alphanum[dis(gen)];
-    }
-    return result;
+std::string result;
+result.reserve(length);
+for (size_t i = 0; i < length; ++i) {
+    result += alphanum[dis(gen)];
+}
+return result;
 }
 
-// A simple computation function to demonstrate thread pool usage
-double compute_expensive_operation(int input) {
-    // Simulate complex computation
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    return std::sqrt(input) * std::log(input + 1);
+// A simple computation function to demonstrate thread pool usagedouble
+// compute_expensive_operation(int input) { Simulate complex computation
+std::this_thread::sleep_for(std::chrono::milliseconds(50));
+return std::sqrt(input) * std::log(input + 1);
 }
 
 int main() {

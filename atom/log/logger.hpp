@@ -33,12 +33,12 @@ namespace lithium {
  */
 enum class LogLevel {
     TRACE = 0,
-    DEBUG = 1,
-    INFO = 2,
-    WARN = 3,
-    ERROR = 4,
-    CRITICAL = 5,
-    OFF = 6,
+    DEBUG_LEVEL = 1,
+    INFO_LEVEL = 2,
+    WARN_LEVEL = 3,
+    ERROR_LEVEL = 4,
+    CRITICAL_LEVEL = 5,
+    OFF_LEVEL = 6,
     UNKNOWN = 7
 };
 

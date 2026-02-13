@@ -1,14 +1,24 @@
 #include "session.hpp"
+#include <cstring>
 #include <filesystem>
+#include <thread>
 
 #include "connection_pool.hpp"
 #include "error.hpp"
 #include "request.hpp"
 
 namespace atom::extra::curl {
+void ensure_curl_global_init() {
+    static const auto initialized = [] {
+        curl_global_init(CURL_GLOBAL_DEFAULT);
+        return 0;
+    }();
+    (void)initialized;
+}
+
 Session::Session()
     : connection_pool_(nullptr), cache_(nullptr), rate_limiter_(nullptr) {
-    curl_global_init(CURL_GLOBAL_ALL);
+    ensure_curl_global_init();
     handle_ = curl_easy_init();
     if (!handle_) {
         throw Error(CURLE_FAILED_INIT, "Failed to initialize curl");
@@ -17,7 +27,7 @@ Session::Session()
 
 Session::Session(ConnectionPool* pool)
     : connection_pool_(pool), cache_(nullptr), rate_limiter_(nullptr) {
-    curl_global_init(CURL_GLOBAL_ALL);
+    ensure_curl_global_init();
     handle_ = pool ? pool->acquire() : curl_easy_init();
     if (!handle_) {
         throw Error(CURLE_FAILED_INIT, "Failed to initialize curl");
@@ -25,6 +35,11 @@ Session::Session(ConnectionPool* pool)
 }
 
 Session::~Session() {
+    if (request_headers_) {
+        curl_slist_free_all(request_headers_);
+        request_headers_ = nullptr;
+    }
+
     if (handle_) {
         if (connection_pool_) {
             connection_pool_->release(handle_);
@@ -32,7 +47,6 @@ Session::~Session() {
             curl_easy_cleanup(handle_);
         }
     }
-    curl_global_cleanup();
 }
 
 Session::Session(Session&& other) noexcept
@@ -40,15 +54,24 @@ Session::Session(Session&& other) noexcept
       connection_pool_(other.connection_pool_),
       cache_(other.cache_),
       rate_limiter_(other.rate_limiter_),
-      interceptors_(std::move(other.interceptors_)) {
+      interceptors_(std::move(other.interceptors_)),
+      response_body_(std::move(other.response_body_)),
+      response_headers_(std::move(other.response_headers_)),
+      request_headers_(other.request_headers_) {
     other.handle_ = nullptr;
     other.connection_pool_ = nullptr;
     other.cache_ = nullptr;
     other.rate_limiter_ = nullptr;
+    other.request_headers_ = nullptr;
 }
 
 Session& Session::operator=(Session&& other) noexcept {
     if (this != &other) {
+        if (request_headers_) {
+            curl_slist_free_all(request_headers_);
+            request_headers_ = nullptr;
+        }
+
         if (handle_) {
             if (connection_pool_) {
                 connection_pool_->release(handle_);
@@ -61,10 +84,14 @@ Session& Session::operator=(Session&& other) noexcept {
         cache_ = other.cache_;
         rate_limiter_ = other.rate_limiter_;
         interceptors_ = std::move(other.interceptors_);
+        response_body_ = std::move(other.response_body_);
+        response_headers_ = std::move(other.response_headers_);
+        request_headers_ = other.request_headers_;
         other.handle_ = nullptr;
         other.connection_pool_ = nullptr;
         other.cache_ = nullptr;
         other.rate_limiter_ = nullptr;
+        other.request_headers_ = nullptr;
     }
     return *this;
 }
@@ -110,8 +137,22 @@ Response Session::execute(const Request& request) {
 }
 
 std::future<Response> Session::execute_async(const Request& request) {
-    return std::async(std::launch::async,
-                      [this, request]() { return execute(request); });
+    Request request_copy = request;
+    ConnectionPool* pool = connection_pool_;
+    Cache* cache = cache_;
+    RateLimiter* limiter = rate_limiter_;
+    auto interceptors = interceptors_;
+
+    return std::async(std::launch::async, [request_copy, pool, cache, limiter,
+                                           interceptors]() mutable {
+        Session session(pool);
+        session.set_cache(cache);
+        session.set_rate_limiter(limiter);
+        for (const auto& interceptor : interceptors) {
+            session.add_interceptor(interceptor);
+        }
+        return session.execute(request_copy);
+    });
 }
 
 Response Session::get(std::string_view url) {
@@ -312,6 +353,10 @@ int Session::ProgressCallback::xferinfo(void* clientp, curl_off_t dltotal,
 };
 
 void Session::reset() {
+    if (request_headers_) {
+        curl_slist_free_all(request_headers_);
+        request_headers_ = nullptr;
+    }
     curl_easy_reset(handle_);
     response_body_.clear();
     response_headers_.clear();
@@ -378,14 +423,14 @@ void Session::setup_request(const Request& request) {
             break;
     }
 
-    struct curl_slist* headers = nullptr;
+    request_headers_ = nullptr;
     for (const auto& [name, value] : request.headers()) {
         std::string header = name + ": " + value;
-        headers = curl_slist_append(headers, header.c_str());
+        request_headers_ = curl_slist_append(request_headers_, header.c_str());
     }
 
-    if (headers) {
-        curl_easy_setopt(handle_, CURLOPT_HTTPHEADER, headers);
+    if (request_headers_) {
+        curl_easy_setopt(handle_, CURLOPT_HTTPHEADER, request_headers_);
     }
 
     if (request.timeout()) {
@@ -590,4 +635,4 @@ size_t Session::file_write_callback(char* ptr, size_t size, size_t nmemb,
     size_t written = fwrite(ptr, size, nmemb, static_cast<FILE*>(userdata));
     return written;
 }
-};  // namespace atom::extra::curl
+}  // namespace atom::extra::curl

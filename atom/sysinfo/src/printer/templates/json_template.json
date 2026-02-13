@@ -1,0 +1,197 @@
+{
+  "metadata": {
+    "title": "{{title}}",
+    "description": "{{description}}",
+    "generator": "Atom System Information Printer",
+    "version": "1.0.0",
+    "timestamp": "{{timestamp}}",
+    "author": "{{author}}",
+    "format": "json",
+    "schema_version": "1.0"
+  },
+  "system_information": {
+    "operating_system": {
+      "name": "{{os.name}}",
+      "version": "{{os.version}}",
+      "kernel": "{{os.kernel}}",
+      "architecture": "{{os.architecture}}",
+      "computer_name": "{{os.computer_name}}",
+      "boot_time": "{{os.boot_time}}",
+      "install_date": "{{os.install_date}}",
+      "last_update": "{{os.last_update}}",
+      "time_zone": "{{os.time_zone}}",
+      "is_server": "{{os.is_server}}"
+    },
+    "cpu": {
+      "model": "{{cpu.model}}",
+      "vendor": "{{cpu.vendor}}",
+      "architecture": "{{cpu.architecture}}",
+      "physical_cores": "{{cpu.physical_cores}}",
+      "logical_cores": "{{cpu.logical_cores}}",
+      "base_frequency": "{{cpu.base_frequency}}",
+      "max_frequency": "{{cpu.max_frequency}}",
+      "current_usage": "{{cpu.usage}}",
+      "temperature": "{{cpu.temperature}}",
+      "cache": {
+        "l1_data": "{{cpu.cache.l1_data}}",
+        "l1_instruction": "{{cpu.cache.l1_instruction}}",
+        "l2": "{{cpu.cache.l2}}",
+        "l3": "{{cpu.cache.l3}}"
+      }
+    },
+    "memory": {
+      "total_physical": "{{memory.total_physical}}",
+      "available_physical": "{{memory.available_physical}}",
+      "used_physical": "{{memory.used_physical}}",
+      "usage_percentage": "{{memory.usage_percentage}}",
+      "total_virtual": "{{memory.total_virtual}}",
+      "available_virtual": "{{memory.available_virtual}}",
+      "slots": [
+        {{#memory.slots}}
+        {
+          "capacity": "{{capacity}}",
+          "speed": "{{speed}}",
+          "type": "{{type}}",
+          "manufacturer": "{{manufacturer}}"
+        }{{#unless @last}},{{/unless}}
+        {{/memory.slots}}
+      ]
+    },
+    "storage": [
+      {{#disks}}
+      {
+        "model": "{{model}}",
+        "type": "{{type}}",
+        "filesystem": "{{filesystem}}",
+        "total_space": "{{total_space}}",
+        "free_space": "{{free_space}}",
+        "used_space": "{{used_space}}",
+        "usage_percentage": "{{usage_percentage}}",
+        "mount_point": "{{mount_point}}",
+        "health_status": "{{health_status}}"
+      }{{#unless @last}},{{/unless}}
+      {{/disks}}
+    ],
+    "battery": {
+      "present": "{{battery.present}}",
+      "charging": "{{battery.charging}}",
+      "level": "{{battery.level}}",
+      "health": "{{battery.health}}",
+      "temperature": "{{battery.temperature}}",
+      "time_remaining": "{{battery.time_remaining}}",
+      "cycle_count": "{{battery.cycle_count}}",
+      "manufacturer": "{{battery.manufacturer}}",
+      "model": "{{battery.model}}"
+    },
+    "bios": {
+      "vendor": "{{bios.vendor}}",
+      "version": "{{bios.version}}",
+      "release_date": "{{bios.release_date}}",
+      "serial_number": "{{bios.serial_number}}",
+      "characteristics": "{{bios.characteristics}}",
+      "upgradeable": "{{bios.upgradeable}}"
+    },
+    "network": {
+      "interfaces": [
+        {{#network.interfaces}}
+        {
+          "name": "{{name}}",
+          "type": "{{type}}",
+          "status": "{{status}}",
+          "ip_address": "{{ip_address}}",
+          "mac_address": "{{mac_address}}",
+          "speed": "{{speed}}",
+          "duplex": "{{duplex}}"
+        }{{#unless @last}},{{/unless}}
+        {{/network.interfaces}}
+      ],
+      "wifi": {
+        "connected": "{{network.wifi.connected}}",
+        "ssid": "{{network.wifi.ssid}}",
+        "signal_strength": "{{network.wifi.signal_strength}}",
+        "frequency": "{{network.wifi.frequency}}",
+        "security": "{{network.wifi.security}}"
+      }
+    },
+    "graphics": [
+      {{#graphics}}
+      {
+        "name": "{{name}}",
+        "vendor": "{{vendor}}",
+        "memory": "{{memory}}",
+        "driver_version": "{{driver_version}}",
+        "resolution": "{{resolution}}",
+        "refresh_rate": "{{refresh_rate}}"
+      }{{#unless @last}},{{/unless}}
+      {{/graphics}}
+    ],
+    "locale": {
+      "language": "{{locale.language}}",
+      "language_code": "{{locale.language_code}}",
+      "country": "{{locale.country}}",
+      "country_code": "{{locale.country_code}}",
+      "character_encoding": "{{locale.character_encoding}}",
+      "time_format": "{{locale.time_format}}",
+      "date_format": "{{locale.date_format}}",
+      "currency": "{{locale.currency}}"
+    },
+    "environment": {
+      "desktop_environment": "{{environment.desktop_environment}}",
+      "window_manager": "{{environment.window_manager}}",
+      "theme": "{{environment.theme}}",
+      "icons": "{{environment.icons}}",
+      "font": "{{environment.font}}",
+      "cursor": "{{environment.cursor}}"
+    }
+  },
+  "performance_metrics": {
+    "cpu_usage_history": [
+      {{#performance.cpu_history}}
+      {
+        "timestamp": "{{timestamp}}",
+        "usage": "{{usage}}"
+      }{{#unless @last}},{{/unless}}
+      {{/performance.cpu_history}}
+    ],
+    "memory_usage_history": [
+      {{#performance.memory_history}}
+      {
+        "timestamp": "{{timestamp}}",
+        "usage": "{{usage}}"
+      }{{#unless @last}},{{/unless}}
+      {{/performance.memory_history}}
+    ],
+    "disk_io": {
+      "read_speed": "{{performance.disk.read_speed}}",
+      "write_speed": "{{performance.disk.write_speed}}",
+      "iops": "{{performance.disk.iops}}"
+    },
+    "network_io": {
+      "download_speed": "{{performance.network.download_speed}}",
+      "upload_speed": "{{performance.network.upload_speed}}",
+      "latency": "{{performance.network.latency}}"
+    }
+  },
+  "security": {
+    "antivirus": {
+      "installed": "{{security.antivirus.installed}}",
+      "name": "{{security.antivirus.name}}",
+      "version": "{{security.antivirus.version}}",
+      "last_update": "{{security.antivirus.last_update}}"
+    },
+    "firewall": {
+      "enabled": "{{security.firewall.enabled}}",
+      "name": "{{security.firewall.name}}",
+      "profile": "{{security.firewall.profile}}"
+    },
+    "encryption": {
+      "disk_encryption": "{{security.encryption.disk_encryption}}",
+      "bitlocker_status": "{{security.encryption.bitlocker_status}}"
+    },
+    "updates": {
+      "automatic_updates": "{{security.updates.automatic_updates}}",
+      "pending_updates": "{{security.updates.pending_updates}}",
+      "last_check": "{{security.updates.last_check}}"
+    }
+  }
+}

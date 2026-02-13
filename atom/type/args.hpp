@@ -339,14 +339,19 @@ public:
      * @tparam T The type to retrieve
      * @param key The key to look up
      * @return Reference to stored value
+     * @throws std::out_of_range if key doesn't exist
      * @throws bad_any_cast if type doesn't match
      */
     template <typename T>
     auto operator[](string_view_type key) -> T& {
+        auto it = m_data_.find(key);
+        if (it == m_data_.end()) {
+            throw std::out_of_range("Key not found: " + std::string(key));
+        }
 #ifdef ATOM_USE_BOOST
-        return boost::any_cast<T&>(m_data_[key]);
+        return boost::any_cast<T&>(it->second);
 #else
-        return std::any_cast<T&>(m_data_[key]);
+        return std::any_cast<T&>(it->second);
 #endif
     }
 

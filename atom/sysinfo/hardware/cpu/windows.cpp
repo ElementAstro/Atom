@@ -1,0 +1,1046 @@
+/*
+ * windows.cpp
+ *
+ * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ */
+
+/*************************************************
+
+Date: 2024-3-4
+
+Description: System Information Module - CPU Windows Implementation
+
+**************************************************/
+
+#include <thread>
+#ifdef _WIN32
+
+#include <spdlog/spdlog.h>
+#include "common.hpp"
+
+#include <powersetting.h>
+#include <powrprof.h>  // Add this header for PowerGetActiveScheme
+
+#ifdef _MSC_VER
+#pragma comment(lib, "PowrProf.lib")  // Link against the PowerProf library
+#endif
+
+namespace atom::system {
+
+// 添加Windows特定函数前向声明
+auto getCurrentCpuUsage_Windows() -> float;
+auto getPerCoreCpuUsage_Windows() -> std::vector<float>;
+auto getCurrentCpuTemperature_Windows() -> float;
+auto getPerCoreCpuTemperature_Windows() -> std::vector<float>;
+auto getCPUModel_Windows() -> std::string;
+// 这里应该添加所有函数的前向声明
+
+auto getCurrentCpuUsage_Windows() -> float {
+    spdlog::info("Starting getCurrentCpuUsage function on Windows");
+
+    static PDH_HQUERY cpuQuery = nullptr;
+    static PDH_HCOUNTER cpuTotal = nullptr;
+    static bool initialized = false;
+
+    float cpuUsage = 0.0F;
+
+    if (!initialized) {
+        PdhOpenQuery(nullptr, 0, &cpuQuery);
+        PdhAddEnglishCounter(cpuQuery, "\\Processor(_Total)\\% Processor Time",
+                             0, &cpuTotal);
+        PdhCollectQueryData(cpuQuery);
+        initialized = true;
+
+        // First call will not return valid data, need to wait and call again
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        PdhCollectQueryData(cpuQuery);
+    }
+
+    // Get the CPU usage
+    PDH_FMT_COUNTERVALUE counterVal;
+    PdhCollectQueryData(cpuQuery);
+    PdhGetFormattedCounterValue(cpuTotal, PDH_FMT_DOUBLE, nullptr, &counterVal);
+    cpuUsage = static_cast<float>(counterVal.doubleValue);
+
+    // Clamp the value between 0 and 100
+    cpuUsage = std::max(0.0F, std::min(100.0F, cpuUsage));
+
+    spdlog::info("Windows CPU Usage: {}%", cpuUsage);
+    return cpuUsage;
+}
+
+auto getPerCoreCpuUsage() -> std::vector<float> {
+    spdlog::info("Starting getPerCoreCpuUsage function on Windows");
+
+    static PDH_HQUERY cpuQuery = nullptr;
+    static std::vector<PDH_HCOUNTER> cpuCounters;
+    static bool initialized = false;
+
+    int numCores = getNumberOfLogicalCores();
+    std::vector<float> coreUsages(numCores, 0.0F);
+
+    if (!initialized) {
+        PdhOpenQuery(nullptr, 0, &cpuQuery);
+        cpuCounters.resize(numCores);
+
+        for (int i = 0; i < numCores; i++) {
+            std::string counterPath =
+                "\\Processor(" + std::to_string(i) + ")\\% Processor Time";
+            PdhAddEnglishCounter(cpuQuery, counterPath.c_str(), 0,
+                                 &cpuCounters[i]);
+        }
+
+        PdhCollectQueryData(cpuQuery);
+        initialized = true;
+
+        // First call will not return valid data, need to wait and call again
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        PdhCollectQueryData(cpuQuery);
+    }
+
+    // Get the CPU usage for each core
+    PdhCollectQueryData(cpuQuery);
+
+    for (int i = 0; i < numCores; i++) {
+        PDH_FMT_COUNTERVALUE counterVal;
+        PdhGetFormattedCounterValue(cpuCounters[i], PDH_FMT_DOUBLE, nullptr,
+                                    &counterVal);
+        coreUsages[i] = static_cast<float>(counterVal.doubleValue);
+        coreUsages[i] = std::max(0.0F, std::min(100.0F, coreUsages[i]));
+    }
+
+    spdlog::info("Windows Per-Core CPU Usage collected for {} cores", numCores);
+    return coreUsages;
+}
+
+auto getCurrentCpuTemperature() -> float {
+    spdlog::info("Starting getCurrentCpuTemperature function on Windows");
+
+    float temperature = 0.0F;
+    HRESULT hres;
+
+    // Initialize COM
+    hres = CoInitializeEx(0, COINIT_MULTITHREADED);
+    if (FAILED(hres) && hres != RPC_E_CHANGED_MODE) {
+        spdlog::error("Failed to initialize COM library. Error code: {}", hres);
+        return temperature;
+    }
+
+    // Initialize COM security
+    hres = CoInitializeSecurity(
+        nullptr, -1, nullptr, nullptr, RPC_C_AUTHN_LEVEL_DEFAULT,
+        RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE, nullptr);
+
+    if (FAILED(hres) && hres != RPC_E_TOO_LATE) {
+        spdlog::debug("COM security already initialized or failed: {}", hres);
+    }
+
+    // Obtain the initial locator to WMI
+    IWbemLocator *pLoc = nullptr;
+    hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER,
+                            IID_IWbemLocator, (LPVOID *)&pLoc);
+
+    if (FAILED(hres)) {
+        spdlog::error("Failed to create IWbemLocator object. Error code: {}",
+                      hres);
+        CoUninitialize();
+        return temperature;
+    }
+
+    // Connect to WMI through the IWbemLocator::ConnectServer method
+    IWbemServices *pSvc = nullptr;
+    hres = pLoc->ConnectServer(_bstr_t(L"ROOT\\WMI"), nullptr, nullptr, 0, 0, 0,
+                               0, &pSvc);
+
+    if (FAILED(hres)) {
+        spdlog::warn(
+            "Could not connect to WMI namespace ROOT\\WMI. Error code: {}",
+            hres);
+        pLoc->Release();
+        CoUninitialize();
+        return temperature;
+    }
+
+    // Set security levels on the proxy
+    hres = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, nullptr,
+                             RPC_C_AUTHN_LEVEL_CALL,
+                             RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
+
+    if (FAILED(hres)) {
+        spdlog::error("Could not set proxy blanket. Error code: {}", hres);
+        pSvc->Release();
+        pLoc->Release();
+        CoUninitialize();
+        return temperature;
+    }
+
+    // Query for thermal zone temperature
+    IEnumWbemClassObject *pEnumerator = nullptr;
+    hres = pSvc->ExecQuery(
+        bstr_t("WQL"), bstr_t("SELECT * FROM MSAcpi_ThermalZoneTemperature"),
+        WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
+        &pEnumerator);
+
+    if (FAILED(hres)) {
+        spdlog::warn("WMI query for thermal zone failed. Error code: {}", hres);
+        pSvc->Release();
+        pLoc->Release();
+        CoUninitialize();
+        return temperature;
+    }
+
+    // Get the data from the query
+    IWbemClassObject *pclsObj = nullptr;
+    ULONG uReturn = 0;
+
+    if (pEnumerator) {
+        HRESULT hr = pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1,
+                                       &pclsObj, &uReturn);
+
+        if (uReturn != 0) {
+            VARIANT vtProp;
+            VariantInit(&vtProp);
+
+            // Get the value of the CurrentTemperature property
+            hr = pclsObj->Get(L"CurrentTemperature", 0, &vtProp, 0, 0);
+            if (SUCCEEDED(hr) && vtProp.vt == VT_I4) {
+                // Temperature is in tenths of Kelvin, convert to Celsius
+                temperature = (vtProp.lVal / 10.0f) - 273.15f;
+                spdlog::info(
+                    "Windows CPU Temperature: {}°C (from thermal zone)",
+                    temperature);
+            } else {
+                spdlog::warn("Failed to retrieve CurrentTemperature property");
+            }
+
+            VariantClear(&vtProp);
+            pclsObj->Release();
+        } else {
+            spdlog::warn("No thermal zone temperature data available");
+        }
+
+        pEnumerator->Release();
+    }
+
+    // Cleanup
+    pSvc->Release();
+    pLoc->Release();
+    CoUninitialize();
+
+    return temperature;
+}
+
+auto getPerCoreCpuTemperature() -> std::vector<float> {
+    spdlog::info("Starting getPerCoreCpuTemperature function on Windows");
+
+    int numCores = getNumberOfLogicalCores();
+    std::vector<float> temperatures(numCores, 0.0F);
+
+    // Windows WMI doesn't provide per-core temperature data directly
+    // MSAcpi_ThermalZoneTemperature provides overall thermal zone temperatures
+    // For per-core data, we would need hardware-specific drivers or libraries
+
+    // As a fallback, use the overall CPU temperature for all cores
+    float overallTemp = getCurrentCpuTemperature();
+    std::fill(temperatures.begin(), temperatures.end(), overallTemp);
+
+    spdlog::info(
+        "Windows Per-Core CPU Temperature: Using overall temperature ({} °C) "
+        "for {} cores",
+        overallTemp, numCores);
+    spdlog::debug(
+        "Note: Windows does not provide native per-core temperature APIs. "
+        "Consider using hardware monitoring libraries for detailed per-core "
+        "data.");
+
+    return temperatures;
+}
+
+auto getCPUModel() -> std::string {
+    spdlog::info("Starting getCPUModel function on Windows");
+
+    if (!needsCacheRefresh() && !g_cpuInfoCache.model.empty()) {
+        return g_cpuInfoCache.model;
+    }
+
+    std::string cpuModel = "Unknown";
+
+    int cpuInfo[4] = {-1};
+    char cpuBrandString[64] = {0};
+
+    __cpuid(cpuInfo, 0x80000000);
+    unsigned int nExIds = cpuInfo[0];
+
+    if (nExIds >= 0x80000004) {
+        // Get the brand string from EAX=8000000[2,3,4]
+        for (unsigned int i = 0x80000002; i <= 0x80000004; i++) {
+            __cpuid(cpuInfo, i);
+            memcpy(cpuBrandString + (i - 0x80000002) * 16, cpuInfo,
+                   sizeof(cpuInfo));
+        }
+        cpuModel = cpuBrandString;
+    }
+
+    // Trim whitespace
+    cpuModel.erase(0, cpuModel.find_first_not_of(" \t\n\r\f\v"));
+    cpuModel.erase(cpuModel.find_last_not_of(" \t\n\r\f\v") + 1);
+
+    spdlog::info("Windows CPU Model: {}", cpuModel);
+    return cpuModel;
+}
+
+auto getProcessorIdentifier() -> std::string {
+    spdlog::info("Starting getProcessorIdentifier function on Windows");
+
+    if (!needsCacheRefresh() && !g_cpuInfoCache.identifier.empty()) {
+        return g_cpuInfoCache.identifier;
+    }
+
+    std::string identifier = "Unknown";
+
+    int cpuInfo[4] = {0};
+    char vendorID[13] = {0};
+
+    // Get vendor ID
+    __cpuid(cpuInfo, 0);
+    memcpy(vendorID, &cpuInfo[1], sizeof(int));
+    memcpy(vendorID + 4, &cpuInfo[3], sizeof(int));
+    memcpy(vendorID + 8, &cpuInfo[2], sizeof(int));
+    vendorID[12] = '\0';
+
+    // Get family, model, stepping
+    __cpuid(cpuInfo, 1);
+    int family = (cpuInfo[0] >> 8) & 0xF;
+    int model = (cpuInfo[0] >> 4) & 0xF;
+    int extModel = (cpuInfo[0] >> 16) & 0xF;
+    int extFamily = (cpuInfo[0] >> 20) & 0xFF;
+    int stepping = cpuInfo[0] & 0xF;
+
+    if (family == 0xF) {
+        family += extFamily;
+    }
+
+    if (family == 0x6 || family == 0xF) {
+        model = (extModel << 4) | model;
+    }
+
+    identifier = std::string(vendorID) + " Family " + std::to_string(family) +
+                 " Model " + std::to_string(model) + " Stepping " +
+                 std::to_string(stepping);
+
+    spdlog::info("Windows CPU Identifier: {}", identifier);
+    return identifier;
+}
+
+auto getProcessorFrequency() -> double {
+    spdlog::info("Starting getProcessorFrequency function on Windows");
+
+    DWORD bufSize = sizeof(DWORD);
+    DWORD mhz = 0;
+
+    // Get current frequency (in MHz)
+    if (RegGetValue(HKEY_LOCAL_MACHINE,
+                    "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
+                    "~MHz", RRF_RT_REG_DWORD, nullptr, &mhz,
+                    &bufSize) == ERROR_SUCCESS) {
+        double frequency = static_cast<double>(mhz) / 1000.0;
+        spdlog::info("Windows CPU Frequency: {} GHz", frequency);
+        return frequency;
+    }
+
+    spdlog::info("Failed to get Windows CPU Frequency");
+    return 0.0;
+}
+
+auto getMinProcessorFrequency() -> double {
+    spdlog::info("Starting getMinProcessorFrequency function on Windows");
+
+    // Windows doesn't provide a direct API for minimum CPU frequency
+    // This would require reading from the registry or using WMI
+    // A placeholder implementation is provided
+
+    double minFreq = 0.0;
+
+    // As a fallback, we can try to get processor information from WMIC
+    // For simplicity, we'll return a default value or a fraction of the current
+    // frequency
+    double currentFreq = getProcessorFrequency();
+    if (currentFreq > 0) {
+        minFreq = currentFreq * 0.5;  // Estimate as half the current frequency
+    }
+
+    spdlog::info("Windows CPU Min Frequency: {} GHz (estimated)", minFreq);
+    return minFreq;
+}
+
+auto getMaxProcessorFrequency() -> double {
+    spdlog::info("Starting getMaxProcessorFrequency function on Windows");
+
+    DWORD bufSize = sizeof(DWORD);
+    DWORD mhz = 0;
+
+    // Try to get the max frequency from registry
+    if (RegGetValue(HKEY_LOCAL_MACHINE,
+                    "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
+                    "~MHz", RRF_RT_REG_DWORD, nullptr, &mhz,
+                    &bufSize) == ERROR_SUCCESS) {
+        double frequency = static_cast<double>(mhz) / 1000.0;
+        spdlog::info("Windows CPU Max Frequency: {} GHz", frequency);
+        return frequency;
+    }
+
+    spdlog::info("Failed to get Windows CPU Max Frequency");
+    return getProcessorFrequency();  // Fallback to current frequency
+}
+
+auto getPerCoreFrequencies() -> std::vector<double> {
+    spdlog::info("Starting getPerCoreFrequencies function on Windows");
+
+    int numCores = getNumberOfLogicalCores();
+    std::vector<double> frequencies(numCores, 0.0);
+
+    // Windows doesn't provide an easy way to get per-core frequencies
+    // This would require platform-specific hardware monitoring
+    // For simplicity, we'll use the same frequency for all cores
+    double frequency = getProcessorFrequency();
+
+    for (int i = 0; i < numCores; i++) {
+        frequencies[i] = frequency;
+    }
+
+    spdlog::info("Windows Per-Core CPU Frequencies: {} GHz (all cores)",
+                 frequency);
+    return frequencies;
+}
+
+auto getNumberOfPhysicalPackages() -> int {
+    spdlog::info("Starting getNumberOfPhysicalPackages function on Windows");
+
+    if (!needsCacheRefresh() && g_cpuInfoCache.numPhysicalPackages > 0) {
+        return g_cpuInfoCache.numPhysicalPackages;
+    }
+
+    int numberOfPackages = 0;
+
+    // Use WMI to get physical package information
+    // This is a simplified placeholder implementation
+
+    // Most desktop/laptop systems have 1 physical package
+    numberOfPackages = 1;
+
+    spdlog::info("Windows Physical CPU Packages: {}", numberOfPackages);
+    return numberOfPackages;
+}
+
+auto getNumberOfPhysicalCores() -> int {
+    spdlog::info("Starting getNumberOfPhysicalCores function on Windows");
+
+    if (!needsCacheRefresh() && g_cpuInfoCache.numPhysicalCores > 0) {
+        return g_cpuInfoCache.numPhysicalCores;
+    }
+
+    SYSTEM_INFO sysInfo;
+    GetSystemInfo(&sysInfo);
+
+    // GetSystemInfo returns logical cores, not physical cores
+    // For a more accurate count, we would need to use WMI or similar
+    // This is a simplified approximation
+    int numberOfCores = sysInfo.dwNumberOfProcessors;
+
+    // Try to account for hyperthreading by dividing by 2
+    // This is a very rough approximation
+    bool hasHyperthreading = false;
+
+    // Check for hyperthreading capability using CPUID
+    int cpuInfo[4] = {0};
+    __cpuid(cpuInfo, 1);
+    hasHyperthreading = (cpuInfo[3] & (1 << 28)) != 0;
+
+    if (hasHyperthreading && numberOfCores > 1) {
+        numberOfCores = numberOfCores / 2;
+    }
+
+    // Ensure we have at least 1 core
+    numberOfCores = std::max(1, numberOfCores);
+
+    spdlog::info("Windows Physical CPU Cores: {}", numberOfCores);
+    return numberOfCores;
+}
+
+auto getNumberOfLogicalCores() -> int {
+    spdlog::info("Starting getNumberOfLogicalCores function on Windows");
+
+    if (!needsCacheRefresh() && g_cpuInfoCache.numLogicalCores > 0) {
+        return g_cpuInfoCache.numLogicalCores;
+    }
+
+    SYSTEM_INFO sysInfo;
+    GetSystemInfo(&sysInfo);
+
+    int numberOfCores = sysInfo.dwNumberOfProcessors;
+
+    spdlog::info("Windows Logical CPU Cores: {}", numberOfCores);
+    return numberOfCores;
+}
+
+auto getCacheSizes() -> CacheSizes {
+    spdlog::info("Starting getCacheSizes function on Windows");
+
+    if (!needsCacheRefresh() &&
+        (g_cpuInfoCache.caches.l1d > 0 || g_cpuInfoCache.caches.l2 > 0 ||
+         g_cpuInfoCache.caches.l3 > 0)) {
+        return g_cpuInfoCache.caches;
+    }
+
+    CacheSizes cacheSizes{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+    // L1 cache size - use CPUID
+    int cpuInfo[4] = {0};
+
+    __cpuid(cpuInfo, 0);
+    int maxFunc = cpuInfo[0];
+
+    if (maxFunc >= 4) {
+        // Get cache info using CPUID function 4
+        for (int i = 0;; i++) {
+            __cpuidex(cpuInfo, 4, i);
+
+            // If no more caches
+            if ((cpuInfo[0] & 0x1F) == 0)
+                break;
+
+            int level = (cpuInfo[0] >> 5) & 0x7;
+            int type = cpuInfo[0] & 0x1F;
+            int lineSize = (cpuInfo[1] & 0xFFF) + 1;
+            int associativity = ((cpuInfo[1] >> 22) & 0x3FF) + 1;
+            int sets = cpuInfo[2] + 1;
+            int totalSize = (associativity * lineSize * sets);
+
+            // Type: 1=data, 2=instruction, 3=unified
+            switch (level) {
+                case 1:
+                    if (type == 1) {  // Data cache
+                        cacheSizes.l1d = totalSize;
+                        cacheSizes.l1d_line_size = lineSize;
+                        cacheSizes.l1d_associativity = associativity;
+                    } else if (type == 2) {  // Instruction cache
+                        cacheSizes.l1i = totalSize;
+                        cacheSizes.l1i_line_size = lineSize;
+                        cacheSizes.l1i_associativity = associativity;
+                    }
+                    break;
+                case 2:
+                    cacheSizes.l2 = totalSize;
+                    cacheSizes.l2_line_size = lineSize;
+                    cacheSizes.l2_associativity = associativity;
+                    break;
+                case 3:
+                    cacheSizes.l3 = totalSize;
+                    cacheSizes.l3_line_size = lineSize;
+                    cacheSizes.l3_associativity = associativity;
+                    break;
+            }
+        }
+    }
+
+    spdlog::info("Windows Cache Sizes: L1d={}KB, L1i={}KB, L2={}KB, L3={}KB",
+                 cacheSizes.l1d / 1024, cacheSizes.l1i / 1024,
+                 cacheSizes.l2 / 1024, cacheSizes.l3 / 1024);
+
+    return cacheSizes;
+}
+
+auto getCpuLoadAverage() -> LoadAverage {
+    spdlog::info("Starting getCpuLoadAverage function on Windows");
+
+    LoadAverage loadAvg{0.0, 0.0, 0.0};
+
+    // Windows doesn't have a direct equivalent to Unix load average
+    // Instead, we can use CPU usage as an approximation
+    float cpuUsage = getCurrentCpuUsage();
+
+    // Convert to a load-like value
+    int numCores = getNumberOfLogicalCores();
+    double load = (cpuUsage / 100.0) * numCores;
+
+    // For simplicity, use the same value for all time periods
+    loadAvg.oneMinute = load;
+    loadAvg.fiveMinutes = load;
+    loadAvg.fifteenMinutes = load;
+
+    spdlog::info(
+        "Windows Load Average (approximated from CPU usage): {}, {}, {}",
+        loadAvg.oneMinute, loadAvg.fiveMinutes, loadAvg.fifteenMinutes);
+
+    return loadAvg;
+}
+
+auto getCpuPowerInfo() -> CpuPowerInfo {
+    spdlog::info("Starting getCpuPowerInfo function on Windows");
+
+    CpuPowerInfo powerInfo{0.0, 0.0, 0.0};
+
+    // Windows doesn't provide direct CPU power consumption without hardware
+    // monitoring This would require platform-specific hardware monitoring
+    // libraries
+
+    // For TDP, we could try to read from WMI or simply set a typical value
+    // based on the processor model
+
+    spdlog::info(
+        "Windows CPU Power Info: currentWatts={}, maxTDP={}, energyImpact={} "
+        "(placeholder values)",
+        powerInfo.currentWatts, powerInfo.maxTDP, powerInfo.energyImpact);
+
+    return powerInfo;
+}
+
+auto getCpuFeatureFlags() -> std::vector<std::string> {
+    spdlog::info("Starting getCpuFeatureFlags function on Windows");
+
+    if (!needsCacheRefresh() && !g_cpuInfoCache.flags.empty()) {
+        return g_cpuInfoCache.flags;
+    }
+
+    std::vector<std::string> flags;
+
+    // CPU feature flags using CPUID
+    int cpuInfo[4] = {0};
+
+    // Get standard feature flags
+    __cpuid(cpuInfo, 1);
+
+    // EDX register flags
+    if (cpuInfo[3] & (1 << 0))
+        flags.push_back("fpu");
+    if (cpuInfo[3] & (1 << 1))
+        flags.push_back("vme");
+    if (cpuInfo[3] & (1 << 2))
+        flags.push_back("de");
+    if (cpuInfo[3] & (1 << 3))
+        flags.push_back("pse");
+    if (cpuInfo[3] & (1 << 4))
+        flags.push_back("tsc");
+    if (cpuInfo[3] & (1 << 5))
+        flags.push_back("msr");
+    if (cpuInfo[3] & (1 << 6))
+        flags.push_back("pae");
+    if (cpuInfo[3] & (1 << 7))
+        flags.push_back("mce");
+    if (cpuInfo[3] & (1 << 8))
+        flags.push_back("cx8");
+    if (cpuInfo[3] & (1 << 9))
+        flags.push_back("apic");
+    if (cpuInfo[3] & (1 << 11))
+        flags.push_back("sep");
+    if (cpuInfo[3] & (1 << 12))
+        flags.push_back("mtrr");
+    if (cpuInfo[3] & (1 << 13))
+        flags.push_back("pge");
+    if (cpuInfo[3] & (1 << 14))
+        flags.push_back("mca");
+    if (cpuInfo[3] & (1 << 15))
+        flags.push_back("cmov");
+    if (cpuInfo[3] & (1 << 16))
+        flags.push_back("pat");
+    if (cpuInfo[3] & (1 << 17))
+        flags.push_back("pse36");
+    if (cpuInfo[3] & (1 << 18))
+        flags.push_back("psn");
+    if (cpuInfo[3] & (1 << 19))
+        flags.push_back("clfsh");
+    if (cpuInfo[3] & (1 << 21))
+        flags.push_back("ds");
+    if (cpuInfo[3] & (1 << 22))
+        flags.push_back("acpi");
+    if (cpuInfo[3] & (1 << 23))
+        flags.push_back("mmx");
+    if (cpuInfo[3] & (1 << 24))
+        flags.push_back("fxsr");
+    if (cpuInfo[3] & (1 << 25))
+        flags.push_back("sse");
+    if (cpuInfo[3] & (1 << 26))
+        flags.push_back("sse2");
+    if (cpuInfo[3] & (1 << 27))
+        flags.push_back("ss");
+    if (cpuInfo[3] & (1 << 28))
+        flags.push_back("htt");
+    if (cpuInfo[3] & (1 << 29))
+        flags.push_back("tm");
+    if (cpuInfo[3] & (1 << 31))
+        flags.push_back("pbe");
+
+    // ECX register flags
+    if (cpuInfo[2] & (1 << 0))
+        flags.push_back("sse3");
+    if (cpuInfo[2] & (1 << 1))
+        flags.push_back("pclmulqdq");
+    if (cpuInfo[2] & (1 << 3))
+        flags.push_back("monitor");
+    if (cpuInfo[2] & (1 << 4))
+        flags.push_back("ds_cpl");
+    if (cpuInfo[2] & (1 << 5))
+        flags.push_back("vmx");
+    if (cpuInfo[2] & (1 << 6))
+        flags.push_back("smx");
+    if (cpuInfo[2] & (1 << 7))
+        flags.push_back("est");
+    if (cpuInfo[2] & (1 << 8))
+        flags.push_back("tm2");
+    if (cpuInfo[2] & (1 << 9))
+        flags.push_back("ssse3");
+    if (cpuInfo[2] & (1 << 13))
+        flags.push_back("cx16");
+    if (cpuInfo[2] & (1 << 19))
+        flags.push_back("sse4_1");
+    if (cpuInfo[2] & (1 << 20))
+        flags.push_back("sse4_2");
+    if (cpuInfo[2] & (1 << 21))
+        flags.push_back("x2apic");
+    if (cpuInfo[2] & (1 << 22))
+        flags.push_back("movbe");
+    if (cpuInfo[2] & (1 << 23))
+        flags.push_back("popcnt");
+    if (cpuInfo[2] & (1 << 25))
+        flags.push_back("aes");
+    if (cpuInfo[2] & (1 << 26))
+        flags.push_back("xsave");
+    if (cpuInfo[2] & (1 << 28))
+        flags.push_back("avx");
+    if (cpuInfo[2] & (1 << 29))
+        flags.push_back("f16c");
+    if (cpuInfo[2] & (1 << 30))
+        flags.push_back("rdrnd");
+
+    // Check for extended features
+    __cpuid(cpuInfo, 0x80000000);
+    unsigned int nExIds = cpuInfo[0];
+
+    if (nExIds >= 0x80000001) {
+        __cpuid(cpuInfo, 0x80000001);
+
+        // EDX
+        if (cpuInfo[3] & (1 << 11))
+            flags.push_back("syscall");
+        if (cpuInfo[3] & (1 << 20))
+            flags.push_back("nx");
+        if (cpuInfo[3] & (1 << 29))
+            flags.push_back("lm");  // Long Mode (64-bit)
+
+        // ECX
+        if (cpuInfo[2] & (1 << 0))
+            flags.push_back("lahf_lm");
+        if (cpuInfo[2] & (1 << 5))
+            flags.push_back("abm");
+        if (cpuInfo[2] & (1 << 6))
+            flags.push_back("sse4a");
+        if (cpuInfo[2] & (1 << 8))
+            flags.push_back("3dnowprefetch");
+        if (cpuInfo[2] & (1 << 11))
+            flags.push_back("xop");
+        if (cpuInfo[2] & (1 << 12))
+            flags.push_back("fma4");
+    }
+
+    // Check for AVX2 and other newer features (CPUID 7)
+    __cpuidex(cpuInfo, 7, 0);
+
+    // EBX
+    if (cpuInfo[1] & (1 << 5))
+        flags.push_back("avx2");
+    if (cpuInfo[1] & (1 << 3))
+        flags.push_back("bmi1");
+    if (cpuInfo[1] & (1 << 8))
+        flags.push_back("bmi2");
+
+    // Check for AVX-512 features
+    if (cpuInfo[1] & (1 << 16))
+        flags.push_back("avx512f");
+    if (cpuInfo[1] & (1 << 17))
+        flags.push_back("avx512dq");
+    if (cpuInfo[1] & (1 << 21))
+        flags.push_back("avx512ifma");
+    if (cpuInfo[1] & (1 << 26))
+        flags.push_back("avx512pf");
+    if (cpuInfo[1] & (1 << 27))
+        flags.push_back("avx512er");
+    if (cpuInfo[1] & (1 << 28))
+        flags.push_back("avx512cd");
+    if (cpuInfo[1] & (1 << 30))
+        flags.push_back("avx512bw");
+    if (cpuInfo[1] & (1 << 31))
+        flags.push_back("avx512vl");
+
+    // ECX
+    if (cpuInfo[2] & (1 << 1))
+        flags.push_back("avx512vbmi");
+    if (cpuInfo[2] & (1 << 6))
+        flags.push_back("avx512vbmi2");
+
+    spdlog::info("Windows CPU Flags: {} features collected", flags.size());
+
+    return flags;
+}
+
+auto getCpuArchitecture() -> CpuArchitecture {
+    spdlog::info("Starting getCpuArchitecture function on Windows");
+
+    if (!needsCacheRefresh()) {
+        std::lock_guard<std::mutex> lock(g_cacheMutex);
+        if (g_cacheInitialized &&
+            g_cpuInfoCache.architecture != CpuArchitecture::UNKNOWN) {
+            return g_cpuInfoCache.architecture;
+        }
+    }
+
+    CpuArchitecture arch = CpuArchitecture::UNKNOWN;
+
+    SYSTEM_INFO sysInfo;
+    GetSystemInfo(&sysInfo);
+
+    switch (sysInfo.wProcessorArchitecture) {
+        case PROCESSOR_ARCHITECTURE_AMD64:
+            arch = CpuArchitecture::X86_64;
+            break;
+        case PROCESSOR_ARCHITECTURE_INTEL:
+            arch = CpuArchitecture::X86;
+            break;
+        case PROCESSOR_ARCHITECTURE_ARM:
+            arch = CpuArchitecture::ARM;
+            break;
+        case PROCESSOR_ARCHITECTURE_ARM64:
+            arch = CpuArchitecture::ARM64;
+            break;
+        default:
+            arch = CpuArchitecture::UNKNOWN;
+            break;
+    }
+
+    spdlog::info("Windows CPU Architecture: {}", cpuArchitectureToString(arch));
+    return arch;
+}
+
+auto getCpuVendor() -> CpuVendor {
+    spdlog::info("Starting getCpuVendor function on Windows");
+
+    if (!needsCacheRefresh()) {
+        std::lock_guard<std::mutex> lock(g_cacheMutex);
+        if (g_cacheInitialized && g_cpuInfoCache.vendor != CpuVendor::UNKNOWN) {
+            return g_cpuInfoCache.vendor;
+        }
+    }
+
+    CpuVendor vendor = CpuVendor::UNKNOWN;
+    std::string vendorString;
+
+    int cpuInfo[4] = {0};
+    char vendorID[13] = {0};
+
+    __cpuid(cpuInfo, 0);
+    memcpy(vendorID, &cpuInfo[1], sizeof(int));
+    memcpy(vendorID + 4, &cpuInfo[3], sizeof(int));
+    memcpy(vendorID + 8, &cpuInfo[2], sizeof(int));
+    vendorID[12] = '\0';
+
+    vendorString = vendorID;
+    vendor = getVendorFromString(vendorString);
+
+    spdlog::info("Windows CPU Vendor: {} ({})", vendorString,
+                 cpuVendorToString(vendor));
+    return vendor;
+}
+
+auto getCpuSocketType() -> std::string {
+    spdlog::info("Starting getCpuSocketType function on Windows");
+
+    if (!needsCacheRefresh() && !g_cpuInfoCache.socketType.empty()) {
+        return g_cpuInfoCache.socketType;
+    }
+
+    std::string socketType = "Unknown";
+
+    // Try to get socket designation from WMI Win32_Processor
+    HRESULT hres;
+    hres = CoInitializeEx(0, COINIT_MULTITHREADED);
+    if (FAILED(hres) && hres != RPC_E_CHANGED_MODE) {
+        spdlog::debug("COM already initialized or failed: {}", hres);
+    }
+
+    IWbemLocator *pLoc = nullptr;
+    hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER,
+                            IID_IWbemLocator, (LPVOID *)&pLoc);
+
+    if (SUCCEEDED(hres)) {
+        IWbemServices *pSvc = nullptr;
+        hres = pLoc->ConnectServer(_bstr_t(L"ROOT\\CIMV2"), nullptr, nullptr, 0,
+                                   0, 0, 0, &pSvc);
+
+        if (SUCCEEDED(hres)) {
+            CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE,
+                              nullptr, RPC_C_AUTHN_LEVEL_CALL,
+                              RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
+
+            IEnumWbemClassObject *pEnumerator = nullptr;
+            hres = pSvc->ExecQuery(
+                bstr_t("WQL"),
+                bstr_t("SELECT SocketDesignation FROM Win32_Processor"),
+                WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
+                &pEnumerator);
+
+            if (SUCCEEDED(hres)) {
+                IWbemClassObject *pclsObj = nullptr;
+                ULONG uReturn = 0;
+
+                if (pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1,
+                                      &pclsObj, &uReturn) == S_OK &&
+                    uReturn != 0) {
+                    VARIANT vtProp;
+                    VariantInit(&vtProp);
+
+                    if (pclsObj->Get(L"SocketDesignation", 0, &vtProp, 0, 0) ==
+                        S_OK) {
+                        if (vtProp.vt == VT_BSTR && vtProp.bstrVal != nullptr) {
+                            int size = WideCharToMultiByte(
+                                CP_UTF8, 0, vtProp.bstrVal, -1, nullptr, 0,
+                                nullptr, nullptr);
+                            if (size > 0) {
+                                std::vector<char> buffer(size);
+                                WideCharToMultiByte(CP_UTF8, 0, vtProp.bstrVal,
+                                                    -1, buffer.data(), size,
+                                                    nullptr, nullptr);
+                                socketType = buffer.data();
+                            }
+                        }
+                    }
+
+                    VariantClear(&vtProp);
+                    pclsObj->Release();
+                }
+
+                pEnumerator->Release();
+            }
+
+            pSvc->Release();
+        }
+
+        pLoc->Release();
+    }
+
+    CoUninitialize();
+
+    // If WMI didn't provide useful info, try to infer from CPU model
+    if (socketType == "Unknown" || socketType.empty()) {
+        std::string model = getCPUModel();
+
+        if (model.find("Intel") != std::string::npos) {
+            if (model.find("Core i9") != std::string::npos ||
+                model.find("Core i7") != std::string::npos ||
+                model.find("Core i5") != std::string::npos ||
+                model.find("Core i3") != std::string::npos) {
+                if (model.find("12th Gen") != std::string::npos ||
+                    model.find("13th Gen") != std::string::npos ||
+                    model.find("14th Gen") != std::string::npos) {
+                    socketType = "LGA1700";
+                } else if (model.find("10th Gen") != std::string::npos ||
+                           model.find("11th Gen") != std::string::npos) {
+                    socketType = "LGA1200";
+                } else if (model.find("8th Gen") != std::string::npos ||
+                           model.find("9th Gen") != std::string::npos) {
+                    socketType = "LGA1151";
+                }
+            } else if (model.find("Xeon") != std::string::npos) {
+                socketType = "Intel Xeon Socket";
+            }
+        } else if (model.find("AMD") != std::string::npos) {
+            if (model.find("Ryzen") != std::string::npos) {
+                if (model.find("7000") != std::string::npos) {
+                    socketType = "AM5";
+                } else if (model.find("5000") != std::string::npos ||
+                           model.find("3000") != std::string::npos) {
+                    socketType = "AM4";
+                }
+            } else if (model.find("EPYC") != std::string::npos) {
+                socketType = "AMD EPYC Socket";
+            } else if (model.find("Threadripper") != std::string::npos) {
+                socketType = "sTRX4/TRX40";
+            }
+        }
+    }
+
+    spdlog::info("Windows CPU Socket Type: {}", socketType);
+
+    std::lock_guard<std::mutex> lock(g_cacheMutex);
+    g_cpuInfoCache.socketType = socketType;
+
+    return socketType;
+}
+
+auto getCpuScalingGovernor() -> std::string {
+    spdlog::info("Starting getCpuScalingGovernor function on Windows");
+
+    std::string governor = "Unknown";
+
+    GUID *activePlanGuid = NULL;
+    if (PowerGetActiveScheme(NULL, &activePlanGuid) == ERROR_SUCCESS) {
+        // First, get the required buffer size
+        DWORD bufferSize = 0;
+        PowerReadFriendlyName(NULL, activePlanGuid, NULL, NULL, NULL,
+                              &bufferSize);
+
+        if (bufferSize > 0) {
+            // Allocate buffer of the correct type
+            std::vector<BYTE> buffer(bufferSize);
+
+            // Get the friendly name
+            if (PowerReadFriendlyName(NULL, activePlanGuid, NULL, NULL,
+                                      buffer.data(),
+                                      &bufferSize) == ERROR_SUCCESS) {
+                // The result is a wide string (UTF-16)
+                LPWSTR friendlyName = reinterpret_cast<LPWSTR>(buffer.data());
+
+                // Convert wide string to UTF-8
+                int narrowBufferSize = WideCharToMultiByte(
+                    CP_UTF8, 0, friendlyName, -1, NULL, 0, NULL, NULL);
+                if (narrowBufferSize > 0) {
+                    std::vector<char> narrowBuffer(narrowBufferSize);
+                    if (WideCharToMultiByte(CP_UTF8, 0, friendlyName, -1,
+                                            narrowBuffer.data(),
+                                            narrowBufferSize, NULL, NULL) > 0) {
+                        governor = narrowBuffer.data();
+                    }
+                }
+            }
+        }
+
+        LocalFree(activePlanGuid);
+    }
+
+    spdlog::info("Windows Power Plan: {}", governor);
+    return governor;
+}
+
+auto getPerCoreScalingGovernors() -> std::vector<std::string> {
+    spdlog::info("Starting getPerCoreScalingGovernors function on Windows");
+
+    int numCores = getNumberOfLogicalCores();
+    std::vector<std::string> governors(numCores);
+
+    // Windows doesn't have per-core power modes, use system-wide setting for
+    // all
+    std::string governor = getCpuScalingGovernor();
+
+    for (int i = 0; i < numCores; ++i) {
+        governors[i] = governor;
+    }
+
+    spdlog::info("Windows Per-Core Power Plans: {} (same for all cores)",
+                 governor);
+    return governors;
+}
+
+// Wrapper function for getCurrentCpuUsage (the only one missing)
+auto getCurrentCpuUsage() -> float { return getCurrentCpuUsage_Windows(); }
+
+}  // namespace atom::system
+
+#endif /* _WIN32 */

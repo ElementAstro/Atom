@@ -1,18 +1,71 @@
-#ifndef ATOM_MEMORY_MEMORY_POOL_HPP
-#define ATOM_MEMORY_MEMORY_POOL_HPP
+/**
+ * @file memory.hpp
+ * @brief Variable-size memory pool implementation with PMR support
+ *
+ * This file provides the MemoryPool class, which is a VARIABLE-SIZE memory pool
+ * that implements std::pmr::memory_resource. It can allocate different sizes of
+ * memory blocks efficiently.
+ *
+ * MEMORY POOL TYPES IN ATOM::MEMORY:
+ *
+ * 1. MemoryPool (this file - memory.hpp):
+ *    - Variable-size allocations
+ *    - Implements std::pmr::memory_resource
+ *    - Supports different allocation strategies (FirstFit, BestFit, WorstFit)
+ *    - Tagged allocations for debugging
+ *    - Detailed statistics and fragmentation management
+ *    - Use when: You need different-sized allocations with PMR compatibility
+ *
+ * 2. FixedBlockPool (memory_pool.hpp):
+ *    - Fixed-size block allocations only
+ *    - Simpler and faster than MemoryPool for uniform sizes
+ *    - Thread-safe with mutex
+ *    - Use when: All allocations are the same size
+ *
+ * 3. SimpleObjectPool (memory_pool.hpp):
+ *    - Wrapper around FixedBlockPool for object-oriented usage
+ *    - Provides PoolPtr smart pointer for automatic cleanup
+ *    - Use when: You want simple object pooling with RAII
+ *
+ * 4. ObjectPool (object.hpp):
+ *    - Advanced object pool with extensive features
+ *    - Priority-based allocation, batch operations, validation
+ *    - Statistics, timeouts, auto-cleanup
+ *    - Optional Boost integration
+ *    - Use when: You need advanced object pooling features
+ *
+ * 5. Arena (short_alloc.hpp):
+ *    - Stack-based arena allocator
+ *    - Multiple allocation strategies
+ *    - Very fast for temporary allocations
+ *    - Use when: You need stack-based temporary allocations
+ *
+ * @author Max Qian
+ * @copyright Copyright (C) 2023-2024 Max Qian
+ */
+
+#ifndef ATOM_MEMORY_MEMORY_HPP
+#define ATOM_MEMORY_MEMORY_HPP
 
 #include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <memory_resource>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <vector>
+
+#ifdef _WIN32
+#include <malloc.h>
+#endif
 
 #ifdef ATOM_USE_BOOST
 #include <boost/pool/pool.hpp>
@@ -67,6 +120,49 @@ struct MemoryPoolStats {
         0};                              ///< Deallocation operation count
     std::atomic<size_t> chunk_count{0};  ///< Number of memory chunks
 
+    // Default constructor
+    MemoryPoolStats() = default;
+
+    // Copy constructor
+    MemoryPoolStats(const MemoryPoolStats& other) noexcept
+        : total_allocated(other.total_allocated.load()),
+          total_available(other.total_available.load()),
+          allocation_count(other.allocation_count.load()),
+          deallocation_count(other.deallocation_count.load()),
+          chunk_count(other.chunk_count.load()) {}
+
+    // Move constructor
+    MemoryPoolStats(MemoryPoolStats&& other) noexcept
+        : total_allocated(other.total_allocated.load()),
+          total_available(other.total_available.load()),
+          allocation_count(other.allocation_count.load()),
+          deallocation_count(other.deallocation_count.load()),
+          chunk_count(other.chunk_count.load()) {}
+
+    // Copy assignment operator
+    MemoryPoolStats& operator=(const MemoryPoolStats& other) noexcept {
+        if (this != &other) {
+            total_allocated = other.total_allocated.load();
+            total_available = other.total_available.load();
+            allocation_count = other.allocation_count.load();
+            deallocation_count = other.deallocation_count.load();
+            chunk_count = other.chunk_count.load();
+        }
+        return *this;
+    }
+
+    // Move assignment operator
+    MemoryPoolStats& operator=(MemoryPoolStats&& other) noexcept {
+        if (this != &other) {
+            total_allocated = other.total_allocated.load();
+            total_available = other.total_available.load();
+            allocation_count = other.allocation_count.load();
+            deallocation_count = other.deallocation_count.load();
+            chunk_count = other.chunk_count.load();
+        }
+        return *this;
+    }
+
     void reset() noexcept {
         total_allocated = 0;
         total_available = 0;
@@ -84,13 +180,14 @@ struct MemoryTag {
     std::string file;
     int line;
 
+    // Default constructor
+    MemoryTag() : name(""), file(""), line(0) {}
+
     MemoryTag(std::string tag_name, std::string file_name, int line_num)
         : name(std::move(tag_name)),
           file(std::move(file_name)),
           line(line_num) {}
 };
-
-}  // namespace atom::memory
 
 /**
  * @brief High-performance memory pool for efficient memory allocation and
@@ -100,6 +197,10 @@ struct MemoryTag {
  * the overhead of frequent allocations and deallocations. It includes various
  * optimization strategies, supports thread-safe operations, and provides
  * detailed memory usage statistics.
+ *
+ * This is a VARIABLE-SIZE memory pool that can allocate different sizes of
+ * memory blocks and implements std::pmr::memory_resource. For fixed-size
+ * block allocations, see FixedBlockPool in memory_pool.hpp.
  *
  * @tparam T The type of objects to allocate
  * @tparam BlockSize The size of each memory block in bytes
@@ -114,9 +215,8 @@ public:
      *
      * @param block_size_strategy Memory block growth strategy
      */
-    explicit MemoryPool(
-        std::unique_ptr<atom::memory::BlockSizeStrategy> block_size_strategy =
-            std::make_unique<atom::memory::ExponentialBlockSizeStrategy>())
+    explicit MemoryPool(std::unique_ptr<BlockSizeStrategy> block_size_strategy =
+                            std::make_unique<ExponentialBlockSizeStrategy>())
         : block_size_strategy_(std::move(block_size_strategy)) {
         static_assert(BlockSize >= sizeof(T),
                       "BlockSize must be at least as large as sizeof(T)");
@@ -171,12 +271,12 @@ public:
      *
      * @param n The number of objects to allocate
      * @return T* A pointer to the allocated memory
-     * @throws atom::memory::MemoryPoolException if allocation fails
+     * @throws MemoryPoolException if allocation fails
      */
     [[nodiscard]] T* allocate(size_t n) {
         const size_t numBytes = n * sizeof(T);
         if (numBytes > maxSize()) {
-            throw atom::memory::MemoryPoolException(
+            throw MemoryPoolException(
                 "Requested size exceeds maximum block size");
         }
 
@@ -236,7 +336,7 @@ public:
                                     int line = 0) {
         T* ptr = allocate(n);
         std::unique_lock lock(mutex_);
-        tagged_allocations_[ptr] = atom::memory::MemoryTag(tag, file, line);
+        tagged_allocations_[ptr] = MemoryTag(tag, file, line);
         return ptr;
     }
 
@@ -375,8 +475,7 @@ public:
      * @param ptr Pointer to look up
      * @return The tag associated with the pointer, if any
      */
-    [[nodiscard]] std::optional<atom::memory::MemoryTag> findTag(
-        void* ptr) const {
+    [[nodiscard]] std::optional<MemoryTag> findTag(void* ptr) const {
         std::shared_lock lock(mutex_);
         auto it = tagged_allocations_.find(ptr);
         if (it != tagged_allocations_.end()) {
@@ -390,8 +489,8 @@ public:
      *
      * @return A copy of the pointer-to-tag mapping
      */
-    [[nodiscard]] std::unordered_map<void*, atom::memory::MemoryTag>
-    getTaggedAllocations() const {
+    [[nodiscard]] std::unordered_map<void*, MemoryTag> getTaggedAllocations()
+        const {
         std::shared_lock lock(mutex_);
         return tagged_allocations_;
     }
@@ -419,7 +518,7 @@ protected:
      * @param bytes Number of bytes to allocate
      * @param alignment Memory alignment
      * @return Pointer to allocated memory
-     * @throws atom::memory::MemoryPoolException if allocation fails
+     * @throws MemoryPoolException if allocation fails
      */
     void* do_allocate(size_t bytes, size_t alignment) override {
         if (alignment <= Alignment && bytes <= maxSize()) {
@@ -427,10 +526,13 @@ protected:
         }
 
         // Fall back to aligned allocation
+#ifdef _WIN32
+        void* ptr = _aligned_malloc(bytes, alignment);
+#else
         void* ptr = aligned_alloc(alignment, bytes);
+#endif
         if (!ptr) {
-            throw atom::memory::MemoryPoolException(
-                "Aligned allocation failed");
+            throw MemoryPoolException("Aligned allocation failed");
         }
 
         std::unique_lock lock(mutex_);
@@ -452,7 +554,11 @@ protected:
         } else {
             std::unique_lock lock(mutex_);
             updateStats(bytes, false);
-            free(p);  // Use free for aligned-allocated memory
+#ifdef _WIN32
+            _aligned_free(p);  // Use _aligned_free for _aligned_malloc memory
+#else
+            free(p);  // Use free for aligned_alloc memory
+#endif
         }
     }
 
@@ -630,14 +736,16 @@ private:
     }
 
 private:
-    std::unique_ptr<atom::memory::BlockSizeStrategy>
+    std::unique_ptr<BlockSizeStrategy>
         block_size_strategy_;           ///< Block size strategy
     std::vector<Chunk> pool_;           ///< Pool of memory chunks
     std::vector<FreeBlock> free_list_;  ///< List of free blocks
     mutable std::shared_mutex mutex_;   ///< Mutex to protect shared resources
-    atom::memory::MemoryPoolStats stats_;  ///< Memory pool statistics
-    std::unordered_map<void*, atom::memory::MemoryTag>
+    MemoryPoolStats stats_;             ///< Memory pool statistics
+    std::unordered_map<void*, MemoryTag>
         tagged_allocations_;  ///< Tagged allocations
 };
 
-#endif  // ATOM_MEMORY_MEMORY_POOL_HPP
+}  // namespace atom::memory
+
+#endif  // ATOM_MEMORY_MEMORY_HPP

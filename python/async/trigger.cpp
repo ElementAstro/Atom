@@ -7,7 +7,6 @@
 #include <future>
 #include <string>
 
-
 namespace py = pybind11;
 
 // Helper function to convert std::future<std::size_t> to Python
@@ -97,7 +96,7 @@ Raises:
     TriggerException: If the event name is empty or the callback is invalid.
 
 Examples:
-    >>> callback_id = trigger.register_callback("data_received", 
+    >>> callback_id = trigger.register_callback("data_received",
     ...                                         lambda data: print(f"Got: {data}"),
     ...                                         CallbackPriority.HIGH)
 )")
@@ -221,10 +220,9 @@ Examples:
     >>> count = trigger.cancel_all_triggers()
     >>> print(f"Canceled {count} total pending triggers")
 )")
-        .def(
-            "has_callbacks", &atom::async::Trigger<py::object>::hasCallbacks,
-            py::arg("event"),
-            R"(Checks if the trigger has any registered callbacks for an event.
+        .def("has_callbacks", &atom::async::Trigger<py::object>::hasCallbacks,
+             py::arg("event"),
+             R"(Checks if the trigger has any registered callbacks for an event.
 
 Args:
     event: The name of the event to check.

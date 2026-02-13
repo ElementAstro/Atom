@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="20" failures="0" disabled="0" errors="0" time="0.398" timestamp="2025-09-08T21:37:47.984" name="AllTests">
+  <testsuite name="SimpleTest" tests="4" failures="0" disabled="0" skipped="0" errors="0" time="0.064" timestamp="2025-09-08T21:37:48.020">
+    <testcase name="BasicAssertion" file="D:/Project/Atom/tests/components/simple_test.cpp" line="7" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.029" classname="SimpleTest" />
+    <testcase name="StringOperations" file="D:/Project/Atom/tests/components/simple_test.cpp" line="13" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.047" classname="SimpleTest" />
+    <testcase name="VectorOperations" file="D:/Project/Atom/tests/components/simple_test.cpp" line="22" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.062" classname="SimpleTest" />
+    <testcase name="SmartPointers" file="D:/Project/Atom/tests/components/simple_test.cpp" line="34" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.077" classname="SimpleTest" />
+  </testsuite>
+  <testsuite name="TestClassTest" tests="2" failures="0" disabled="0" skipped="0" errors="0" time="0.031" timestamp="2025-09-08T21:37:48.095">
+    <testcase name="BasicFunctionality" file="D:/Project/Atom/tests/components/simple_test.cpp" line="59" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.106" classname="TestClassTest" />
+    <testcase name="ZeroValue" file="D:/Project/Atom/tests/components/simple_test.cpp" line="70" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.121" classname="TestClassTest" />
+  </testsuite>
+  <testsuite name="CalculatorTest" tests="3" failures="0" disabled="0" skipped="0" errors="0" time="0.048" timestamp="2025-09-08T21:37:48.145">
+    <testcase name="Addition" file="D:/Project/Atom/tests/components/simple_test.cpp" line="100" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.152" classname="CalculatorTest" />
+    <testcase name="Multiplication" file="D:/Project/Atom/tests/components/simple_test.cpp" line="108" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.170" classname="CalculatorTest" />
+    <testcase name="EdgeCases" file="D:/Project/Atom/tests/components/simple_test.cpp" line="116" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.184" classname="CalculatorTest" />
+  </testsuite>
+  <testsuite name="ExceptionTest" tests="2" failures="0" disabled="0" skipped="0" errors="0" time="0.023" timestamp="2025-09-08T21:37:48.208">
+    <testcase name="ThrowsException" file="D:/Project/Atom/tests/components/simple_test.cpp" line="157" status="run" result="completed" time="0.002" timestamp="2025-09-08T21:37:48.217" classname="ExceptionTest" />
+    <testcase name="NoException" file="D:/Project/Atom/tests/components/simple_test.cpp" line="165" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.228" classname="ExceptionTest" />
+  </testsuite>
+  <testsuite name="PerformanceTest" tests="1" failures="0" disabled="0" skipped="0" errors="0" time="0.009" timestamp="2025-09-08T21:37:48.238">
+    <testcase name="VectorResize" file="D:/Project/Atom/tests/components/simple_test.cpp" line="184" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.242" classname="PerformanceTest" />
+  </testsuite>
+  <testsuite name="MockComponentTest" tests="2" failures="0" disabled="0" skipped="0" errors="0" time="0.018" timestamp="2025-09-08T21:37:48.257">
+    <testcase name="BasicOperations" file="D:/Project/Atom/tests/components/simple_test.cpp" line="216" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.261" classname="MockComponentTest" />
+    <testcase name="MultipleComponents" file="D:/Project/Atom/tests/components/simple_test.cpp" line="226" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.271" classname="MockComponentTest" />
+  </testsuite>
+  <testsuite name="SquareValues/ParameterizedTest" tests="6" failures="0" disabled="0" skipped="0" errors="0" time="0.078" timestamp="2025-09-08T21:37:48.288">
+    <testcase name="SquareTest/0" value_param="(0, 0)" file="D:/Project/Atom/tests/components/simple_test.cpp" line="135" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.295" classname="SquareValues/ParameterizedTest" />
+    <testcase name="SquareTest/1" value_param="(1, 1)" file="D:/Project/Atom/tests/components/simple_test.cpp" line="135" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.306" classname="SquareValues/ParameterizedTest" />
+    <testcase name="SquareTest/2" value_param="(2, 4)" file="D:/Project/Atom/tests/components/simple_test.cpp" line="135" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.320" classname="SquareValues/ParameterizedTest" />
+    <testcase name="SquareTest/3" value_param="(3, 9)" file="D:/Project/Atom/tests/components/simple_test.cpp" line="135" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.331" classname="SquareValues/ParameterizedTest" />
+    <testcase name="SquareTest/4" value_param="(-2, 4)" file="D:/Project/Atom/tests/components/simple_test.cpp" line="135" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.344" classname="SquareValues/ParameterizedTest" />
+    <testcase name="SquareTest/5" value_param="(5, 25)" file="D:/Project/Atom/tests/components/simple_test.cpp" line="135" status="run" result="completed" time="0." timestamp="2025-09-08T21:37:48.360" classname="SquareValues/ParameterizedTest" />
+  </testsuite>
+</testsuites>
