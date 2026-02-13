@@ -6,7 +6,7 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include "atom/algorithm/matrix_compress.hpp"
+#include "atom/algorithm/compression/matrix_compress.hpp"
 #include "atom/error/exception.hpp"
 
 using namespace atom::algorithm;

@@ -14,7 +14,7 @@
  * @date 2024-12-19
  */
 
-#include "atom/algorithm/convolve.hpp"
+#include "atom/algorithm/signal/convolve.hpp"
 
 #include <chrono>
 #include <complex>

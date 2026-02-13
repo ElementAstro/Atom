@@ -7,53 +7,14 @@
 #ifndef ATOM_SYSTEM_COMMAND_EXECUTOR_HPP
 #define ATOM_SYSTEM_COMMAND_EXECUTOR_HPP
 
-#include <chrono>
 #include <functional>
-#include <future>
 #include <string>
 #include <vector>
 
 #include "atom/macro.hpp"
+#include "types.hpp"
 
 namespace atom::system {
-
-// Forward declarations
-enum class TaskPriority;
-struct CommandSystemMetrics;
-
-/**
- * @brief Configuration for command execution
- */
-struct ExecutionConfig {
-    bool openTerminal = false;
-    bool validateCommand = true;
-    bool enableLogging = true;
-    size_t bufferSize = 8192;  // Increased default buffer size
-    std::chrono::milliseconds timeout = std::chrono::milliseconds::zero();
-    size_t maxOutputSize = 1024 * 1024;  // 1MB default limit
-    bool streamOutput = false;
-    bool captureStderr = true;
-};
-
-/**
- * @brief Result of command execution
- */
-struct ExecutionResult {
-    std::string output;
-    std::string error;
-    int exitCode = 0;
-    std::chrono::milliseconds executionTime{0};
-    bool timedOut = false;
-    bool wasKilled = false;
-};
-
-/**
- * @brief Validate a command for security and safety
- *
- * @param command The command to validate
- * @return true if command is safe to execute
- */
-ATOM_NODISCARD auto validateCommand(const std::string &command) -> bool;
 
 /**
  * @brief Execute a command with enhanced configuration and return detailed result
@@ -173,18 +134,6 @@ ATOM_NODISCARD auto executeCommandWithStatus(const std::string &command)
  */
 ATOM_NODISCARD auto executeCommandSimple(const std::string &command) -> bool;
 
-/**
- * @brief Get execution statistics and performance metrics
- *
- * @return String containing formatted statistics
- */
-ATOM_NODISCARD auto getExecutionStatistics() -> std::string;
-
-/**
- * @brief Clear execution statistics
- */
-void clearExecutionStatistics();
-
 // Internal implementation function (used by other modules)
 auto executeCommandInternal(
     const std::string &command, bool openTerminal,
@@ -204,67 +153,6 @@ auto executeCommandInternalEnhanced(
     const std::string &password = "")
     -> ExecutionResult;
 
-// ============================================================================
-// Optimized Execution Functions
-// ============================================================================
-
-/**
- * @brief Execute command asynchronously with optimizations
- * @param command The command to execute
- * @param config Execution configuration
- * @param priority Task priority (0=low, 1=normal, 2=high, 3=critical)
- * @return Future containing the execution result
- */
-ATOM_NODISCARD auto executeCommandAsync(
-    const std::string& command,
-    const ExecutionConfig& config = {},
-    int priority = 1) -> std::future<ExecutionResult>;
-
-/**
- * @brief Execute command with intelligent caching
- * @param command The command to execute
- * @param config Execution configuration
- * @return Execution result (may be cached)
- */
-ATOM_NODISCARD auto executeCommandCached(
-    const std::string& command,
-    const ExecutionConfig& config = {}) -> ExecutionResult;
-
-/**
- * @brief Execute multiple commands with optimized thread pool
- * @param commands Vector of commands to execute
- * @param config Execution configuration
- * @param maxConcurrency Maximum concurrent executions
- * @return Vector of execution results
- */
-ATOM_NODISCARD auto executeCommandsBatch(
-    const std::vector<std::string>& commands,
-    const ExecutionConfig& config = {},
-    size_t maxConcurrency = 0) -> std::vector<ExecutionResult>;
-
-/**
- * @brief Execute command with rate limiting
- * @param command The command to execute
- * @param config Execution configuration
- * @param identifier Rate limit identifier
- * @return Execution result or error if rate limited
- */
-ATOM_NODISCARD auto executeCommandRateLimited(
-    const std::string& command,
-    const ExecutionConfig& config = {},
-    const std::string& identifier = "") -> ExecutionResult;
-
-/**
- * @brief Get execution metrics
- * @return Current execution metrics
- */
-ATOM_NODISCARD auto getExecutionMetrics() -> const CommandSystemMetrics&;
-
-/**
- * @brief Reset execution statistics
- */
-void resetExecutionStatistics();
-
 }  // namespace atom::system
 
-#endif
+#endif  // ATOM_SYSTEM_COMMAND_EXECUTOR_HPP

@@ -8,7 +8,7 @@
 #include <optional>
 #include <vector>
 
-#include "../rust_numeric.hpp"
+#include "../core/rust_numeric.hpp"
 
 namespace atom::algorithm {
 

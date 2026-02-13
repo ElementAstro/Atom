@@ -12,7 +12,7 @@
  * @date 2024-12-19
  */
 
-#include "atom/algorithm/md5.hpp"
+#include "atom/algorithm/crypto/md5.hpp"
 
 #include <chrono>
 #include <fstream>

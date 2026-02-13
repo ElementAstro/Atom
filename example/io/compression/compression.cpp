@@ -91,18 +91,21 @@ void demonstrateFileCompression() {
 void demonstrateZipOperations() {
     std::cout << "\n=== ZIP Archive Operations Demo ===" << std::endl;
 
+    const std::string zipDir = "zip_test_dir";
     const std::string zipFile = "test_archive.zip";
     const std::string testFile1 = "test1.txt";
     const std::string testFile2 = "test2.txt";
 
-    // Create test files
-    createSampleFile(testFile1, "Content of test file 1\nMultiple lines here.");
-    createSampleFile(testFile2,
+    // Create a dedicated directory with test files
+    fs::create_directories(zipDir);
+    createSampleFile(zipDir + "/" + testFile1,
+                     "Content of test file 1\nMultiple lines here.");
+    createSampleFile(zipDir + "/" + testFile2,
                      "Content of test file 2\nDifferent content here.");
 
-    // Create ZIP archive
+    // Create ZIP archive from the dedicated directory (not ".")
     std::cout << "Creating ZIP archive..." << std::endl;
-    auto zipResult = atom::io::createZip(".", zipFile);
+    auto zipResult = atom::io::createZip(zipDir, zipFile);
     if (zipResult.success) {
         std::cout << "✅ Successfully created ZIP file: " << zipFile
                   << std::endl;
@@ -157,9 +160,72 @@ void demonstrateZipOperations() {
     }
 
     // Clean up
-    fs::remove(testFile1);
-    fs::remove(testFile2);
+    fs::remove_all(zipDir);
     fs::remove(zipFile);
+}
+
+/**
+ * @brief Demonstrates GZ file decompression
+ */
+void demonstrateGzDecompression() {
+    std::cout << "\n=== GZ File Decompression ===" << std::endl;
+
+    const std::string sourceFile = "decompress_test.txt";
+    const std::string compressedFile = "decompress_test.txt.gz";
+    const std::string outputDir = "decompressed_output";
+
+    // Create and compress a test file
+    std::cout << "1. Creating and compressing test file..." << std::endl;
+    {
+        std::ofstream file(sourceFile);
+        for (int i = 0; i < 500; ++i) {
+            file << "Decompression test line " << i
+                 << " with repeating pattern data.\n";
+        }
+        file.close();
+    }
+
+    auto originalSize = fs::file_size(sourceFile);
+    std::cout << "  Original file: " << originalSize << " bytes" << std::endl;
+
+    auto compResult = atom::io::compressFile(sourceFile, ".");
+    if (!compResult.success) {
+        std::cerr << "  Compression failed: " << compResult.error_message
+                  << std::endl;
+        return;
+    }
+    std::cout << "  Compressed to: " << compressedFile << std::endl;
+
+    // Decompress
+    std::cout << "\n2. Decompressing file..." << std::endl;
+    fs::create_directories(outputDir);
+
+    atom::io::DecompressionOptions decompOptions;
+    auto decompResult =
+        atom::io::decompressFile(compressedFile, outputDir, decompOptions);
+
+    if (decompResult.success) {
+        std::cout << "  Decompression successful" << std::endl;
+
+        // Check the decompressed file
+        std::string decompressedPath = outputDir + "/decompress_test.txt";
+        if (fs::exists(decompressedPath)) {
+            auto decompSize = fs::file_size(decompressedPath);
+            std::cout << "  Decompressed size: " << decompSize << " bytes"
+                      << std::endl;
+            std::cout << "  Matches original: "
+                      << (decompSize == originalSize ? "YES" : "NO")
+                      << std::endl;
+        }
+    } else {
+        std::cerr << "  Decompression failed: " << decompResult.error_message
+                  << std::endl;
+    }
+
+    // Cleanup
+    fs::remove(sourceFile);
+    fs::remove(compressedFile);
+    fs::remove_all(outputDir);
 }
 
 int main() {
@@ -169,6 +235,7 @@ int main() {
 
         demonstrateFileCompression();
         demonstrateZipOperations();
+        demonstrateGzDecompression();
 
         std::cout << "\n🎉 All compression operations completed successfully!"
                   << std::endl;

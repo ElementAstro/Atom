@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 #include "atom/algorithm/crypto/tea.hpp"
+#include "atom/algorithm/crypto/xtea.hpp"
+#include "atom/algorithm/crypto/xxtea.hpp"
 
 using namespace atom::algorithm;
 using namespace std::chrono_literals;

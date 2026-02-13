@@ -90,6 +90,18 @@ concept Hashable = requires(T t) {
     { std::hash<T>{}(t) } -> std::convertible_to<usize>;
 };
 
+/**
+ * @brief Concept for unsigned integral types.
+ */
+template <typename T>
+concept UnsignedIntegral = std::unsigned_integral<T>;
+
+/**
+ * @brief Concept for arithmetic types (integral or floating-point).
+ */
+template <typename T>
+concept Arithmetic = std::integral<T> || std::floating_point<T>;
+
 }  // namespace atom::algorithm
 
 #endif  // ATOM_ALGORITHM_COMMON_CONCEPTS_HPP

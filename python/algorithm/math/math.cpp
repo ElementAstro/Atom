@@ -1,4 +1,4 @@
-#include "atom/algorithm/math.hpp"
+#include "atom/algorithm/math/math.hpp"
 #include "atom/algorithm/math/gpu_math.hpp"
 #include "atom/algorithm/math/numerical.hpp"
 #include "atom/algorithm/math/statistics.hpp"

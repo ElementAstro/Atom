@@ -3,125 +3,18 @@
 
 #include <atomic>
 #include <chrono>
-#include <mutex>
 #include <random>
-#include <stdexcept>
 #include <string>
 #include <type_traits>
 
-#include "atom/algorithm/rust_numeric.hpp"
+#include "atom/algorithm/core/rust_numeric.hpp"
+#include "snowflake_exception.hpp"
 
 #ifdef ATOM_USE_BOOST
 #include <boost/random.hpp>
-#include <boost/thread/lock_guard.hpp>
-#include <boost/thread/mutex.hpp>
 #endif
 
 namespace atom::algorithm {
-
-/**
- * @brief Custom exception class for Snowflake-related errors.
- *
- * This class inherits from std::runtime_error and provides a base for more
- * specific Snowflake exceptions.
- */
-class SnowflakeException : public std::runtime_error {
-public:
-    /**
-     * @brief Constructs a SnowflakeException with a specified error message.
-     *
-     * @param message The error message associated with the exception.
-     */
-    explicit SnowflakeException(const std::string &message)
-        : std::runtime_error(message) {}
-};
-
-/**
- * @brief Exception class for invalid worker ID errors.
- *
- * This exception is thrown when the configured worker ID exceeds the maximum
- * allowed value.
- */
-class InvalidWorkerIdException : public SnowflakeException {
-public:
-    /**
-     * @brief Constructs an InvalidWorkerIdException with details about the
-     * invalid worker ID.
-     *
-     * @param worker_id The invalid worker ID.
-     * @param max The maximum allowed worker ID.
-     */
-    InvalidWorkerIdException(u64 worker_id, u64 max)
-        : SnowflakeException("Worker ID " + std::to_string(worker_id) +
-                             " exceeds maximum of " + std::to_string(max)) {}
-};
-
-/**
- * @brief Exception class for invalid datacenter ID errors.
- *
- * This exception is thrown when the configured datacenter ID exceeds the
- * maximum allowed value.
- */
-class InvalidDatacenterIdException : public SnowflakeException {
-public:
-    /**
-     * @brief Constructs an InvalidDatacenterIdException with details about the
-     * invalid datacenter ID.
-     *
-     * @param datacenter_id The invalid datacenter ID.
-     * @param max The maximum allowed datacenter ID.
-     */
-    InvalidDatacenterIdException(u64 datacenter_id, u64 max)
-        : SnowflakeException("Datacenter ID " + std::to_string(datacenter_id) +
-                             " exceeds maximum of " + std::to_string(max)) {}
-};
-
-/**
- * @brief Exception class for invalid timestamp errors.
- *
- * This exception is thrown when a generated timestamp is invalid or out of
- * range, typically indicating clock synchronization issues.
- */
-class InvalidTimestampException : public SnowflakeException {
-public:
-    /**
-     * @brief Constructs an InvalidTimestampException with details about the
-     * invalid timestamp.
-     *
-     * @param timestamp The invalid timestamp.
-     */
-    InvalidTimestampException(u64 timestamp)
-        : SnowflakeException("Timestamp " + std::to_string(timestamp) +
-                             " is invalid or out of range.") {}
-};
-
-/**
- * @brief A no-op lock class for scenarios where locking is not required.
- *
- * This class provides empty lock and unlock methods, effectively disabling
- * locking. It is used as a template parameter to allow the Snowflake class to
- * operate without synchronization overhead.
- */
-class SnowflakeNonLock {
-public:
-    /**
-     * @brief Empty lock method.
-     */
-    void lock() {}
-
-    /**
-     * @brief Empty unlock method.
-     */
-    void unlock() {}
-};
-
-#ifdef ATOM_USE_BOOST
-using boost_lock_guard = boost::lock_guard<boost::mutex>;
-using mutex_type = boost::mutex;
-#else
-using std_lock_guard = std::lock_guard<std::mutex>;
-using mutex_type = std::mutex;
-#endif
 
 /**
  * @brief A class for generating unique IDs using the Snowflake algorithm.

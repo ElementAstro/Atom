@@ -9,7 +9,7 @@
 #include <random>
 #include <string>
 #include <vector>
-#include "atom/algorithm/tea.hpp"
+#include "atom/algorithm/crypto/tea.hpp"
 
 using namespace atom::algorithm;
 using namespace std::chrono_literals;

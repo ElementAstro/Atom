@@ -1,4 +1,4 @@
-#include "atom/algorithm/tea.hpp"
+#include "atom/algorithm/crypto/tea.hpp"
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>

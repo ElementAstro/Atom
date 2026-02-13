@@ -1,4 +1,4 @@
-#include "atom/algorithm/md5.hpp"
+#include "atom/algorithm/crypto/md5.hpp"
 
 #include <pybind11/buffer_info.h>
 #include <pybind11/functional.h>

@@ -1,4 +1,4 @@
-#include "atom/algorithm/fraction.hpp"
+#include "atom/algorithm/math/fraction.hpp"
 
 #include <pybind11/operators.h>
 #include <pybind11/pybind11.h>

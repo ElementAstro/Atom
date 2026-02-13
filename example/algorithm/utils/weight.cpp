@@ -1,4 +1,4 @@
-#include "atom/algorithm/weight.hpp"
+#include "atom/algorithm/utils/weight.hpp"
 
 #include <iostream>
 #include <memory>

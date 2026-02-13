@@ -4,10 +4,14 @@ This directory contains cryptographic hash functions and encryption algorithms.
 
 ## Contents
 
+- **`crypto_utils.hpp`** - Shared cryptographic utilities (ByteType concept, PKCS7 padding)
 - **`md5.hpp/cpp`** - MD5 hash algorithm implementation with modern C++ features
 - **`sha1.hpp/cpp`** - SHA-1 hash algorithm with SIMD optimizations
 - **`blowfish.hpp/cpp`** - Blowfish symmetric encryption algorithm
-- **`tea.hpp/cpp`** - TEA (Tiny Encryption Algorithm) and XTEA implementations
+- **`tea_common.hpp/cpp`** - Shared types and utilities for the TEA family (exception, concepts, key validation, byte conversion)
+- **`tea.hpp/cpp`** - TEA (Tiny Encryption Algorithm)
+- **`xtea.hpp/cpp`** - XTEA (Extended TEA) algorithm
+- **`xxtea.hpp/cpp`** - XXTEA (Corrected Block TEA) algorithm with parallel variants
 
 ## Features
 

@@ -4,7 +4,13 @@ This directory contains algorithms for encoding and decoding data in various for
 
 ## Contents
 
-- **`base.hpp/cpp`** - Base32 and Base64 encoding/decoding with SIMD optimizations
+- **`base.hpp`** - Aggregator header (includes all sub-components for backwards compatibility)
+- **`detail.hpp`** - Shared detail utilities (ByteContainer concept)
+- **`base64.hpp/cpp`** - Base64 encoding/decoding with SIMD optimizations and compile-time support
+- **`base32.hpp/cpp`** - Base32 encoding/decoding (RFC 4648)
+- **`hex.hpp/cpp`** - Hexadecimal (Base16) encoding/decoding
+- **`url.hpp/cpp`** - URL encoding/decoding (RFC 3986)
+- **`xor_cipher.hpp/cpp`** - XOR encryption/decryption
 
 ## Features
 

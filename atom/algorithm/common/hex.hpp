@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-#include "atom/algorithm/core/rust_numeric.hpp"
+#include "atom/algorithm/core/hex_utils.hpp"  // hexToNibble, nibbleToHex, isHexDigit
 
 namespace atom::algorithm {
 
@@ -113,25 +113,10 @@ template <usize N>
 }
 
 /**
- * @brief Convert a hex character to its numeric value.
- * @param c The hex character ('0'-'9', 'a'-'f', 'A'-'F').
- * @return The numeric value (0-15), or -1 if invalid.
- */
-[[nodiscard]] constexpr auto hexCharToValue(char c) noexcept -> i32 {
-    if (c >= '0' && c <= '9') {
-        return c - '0';
-    }
-    if (c >= 'a' && c <= 'f') {
-        return c - 'a' + 10;
-    }
-    if (c >= 'A' && c <= 'F') {
-        return c - 'A' + 10;
-    }
-    return -1;
-}
-
-/**
  * @brief Convert a hexadecimal string to a byte vector.
+ *
+ * Uses hexToNibble() from core/hex_utils.hpp for character conversion.
+ *
  * @param hex The hexadecimal string (must have even length).
  * @return The byte vector, or empty if invalid input.
  */
@@ -145,14 +130,14 @@ template <usize N>
     result.reserve(hex.size() / 2);
 
     for (usize i = 0; i < hex.size(); i += 2) {
-        i32 high = hexCharToValue(hex[i]);
-        i32 low = hexCharToValue(hex[i + 1]);
+        auto high = hexToNibble(hex[i]);
+        auto low = hexToNibble(hex[i + 1]);
 
-        if (high < 0 || low < 0) {
+        if (!high || !low) {
             return {};
         }
 
-        result.push_back(static_cast<u8>((high << 4) | low));
+        result.push_back(static_cast<u8>((high.value() << 4) | low.value()));
     }
 
     return result;

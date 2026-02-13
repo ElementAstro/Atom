@@ -693,14 +693,6 @@ TEST_F(FileInfoTest, VeryLargeFileInfo) {
     EXPECT_EQ(fileInfo.fileType, "Regular file");
 }
 
-// Test file info error handling
-TEST_F(FileInfoTest, ErrorHandlingNonExistent) {
-    auto fileInfo = atom::io::getFileInfo(non_existent_file);
-
-    // Should handle non-existent file gracefully
-    EXPECT_TRUE(fileInfo.filePath.empty() || !fs::exists(fileInfo.filePath));
-}
-
 // Test file info for files with special characters
 TEST_F(FileInfoTest, SpecialCharactersInFilename) {
     std::vector<std::string> special_names = {

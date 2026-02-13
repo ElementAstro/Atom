@@ -1,4 +1,4 @@
-#include "atom/algorithm/flood.hpp"
+#include "atom/algorithm/graphics/flood.hpp"
 
 #include <chrono>
 #include <iostream>

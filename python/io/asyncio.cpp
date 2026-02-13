@@ -1,4 +1,4 @@
-#include "atom/io/async_io.hpp"
+#include "atom/io/async/async_io.hpp"
 
 #include <pybind11/chrono.h>
 #include <pybind11/complex.h>
@@ -33,24 +33,24 @@ PYBIND11_MODULE(asyncio, m) {
     });
 
     // Define AsyncResult template specializations
-    py::class_<atom::async::io::AsyncResult<std::string>>(m,
+    py::class_<atom::io::async::AsyncResult<std::string>>(m,
                                                           "AsyncResultString")
         .def(py::init<>())
         .def_readwrite("success",
-                       &atom::async::io::AsyncResult<std::string>::success)
+                       &atom::io::async::AsyncResult<std::string>::success)
         .def_readwrite(
             "error_message",
-            &atom::async::io::AsyncResult<std::string>::error_message)
+            &atom::io::async::AsyncResult<std::string>::error_message)
         .def_readwrite("value",
-                       &atom::async::io::AsyncResult<std::string>::value)
+                       &atom::io::async::AsyncResult<std::string>::value)
         .def(
             "__bool__",
-            [](const atom::async::io::AsyncResult<std::string>& result) {
+            [](const atom::io::async::AsyncResult<std::string>& result) {
                 return result.success;
             },
             "Check if the operation was successful")
         .def("__str__",
-             [](const atom::async::io::AsyncResult<std::string>& result) {
+             [](const atom::io::async::AsyncResult<std::string>& result) {
                  if (result.success) {
                      return "AsyncResult(success=True, value='" +
                             result.value.substr(0, 30) +
@@ -61,19 +61,19 @@ PYBIND11_MODULE(asyncio, m) {
                  }
              });
 
-    py::class_<atom::async::io::AsyncResult<void>>(m, "AsyncResultVoid")
+    py::class_<atom::io::async::AsyncResult<void>>(m, "AsyncResultVoid")
         .def(py::init<>())
-        .def_readwrite("success", &atom::async::io::AsyncResult<void>::success)
+        .def_readwrite("success", &atom::io::async::AsyncResult<void>::success)
         .def_readwrite("error_message",
-                       &atom::async::io::AsyncResult<void>::error_message)
+                       &atom::io::async::AsyncResult<void>::error_message)
         .def(
             "__bool__",
-            [](const atom::async::io::AsyncResult<void>& result) {
+            [](const atom::io::async::AsyncResult<void>& result) {
                 return result.success;
             },
             "Check if the operation was successful")
         .def("__str__",
-             [](const atom::async::io::AsyncResult<void>& result)
+             [](const atom::io::async::AsyncResult<void>& result)
                  -> std::string {
                  if (result.success) {
                      return "AsyncResult(success=True)";
@@ -83,19 +83,19 @@ PYBIND11_MODULE(asyncio, m) {
                  }
              });
 
-    py::class_<atom::async::io::AsyncResult<bool>>(m, "AsyncResultBool")
+    py::class_<atom::io::async::AsyncResult<bool>>(m, "AsyncResultBool")
         .def(py::init<>())
-        .def_readwrite("success", &atom::async::io::AsyncResult<bool>::success)
+        .def_readwrite("success", &atom::io::async::AsyncResult<bool>::success)
         .def_readwrite("error_message",
-                       &atom::async::io::AsyncResult<bool>::error_message)
-        .def_readwrite("value", &atom::async::io::AsyncResult<bool>::value)
+                       &atom::io::async::AsyncResult<bool>::error_message)
+        .def_readwrite("value", &atom::io::async::AsyncResult<bool>::value)
         .def(
             "__bool__",
-            [](const atom::async::io::AsyncResult<bool>& result) {
+            [](const atom::io::async::AsyncResult<bool>& result) {
                 return result.success;
             },
             "Check if the operation was successful")
-        .def("__str__", [](const atom::async::io::AsyncResult<bool>& result) {
+        .def("__str__", [](const atom::io::async::AsyncResult<bool>& result) {
             if (result.success) {
                 return "AsyncResult(success=True, value=" +
                        std::string(result.value ? "True" : "False") + ")";
@@ -105,30 +105,30 @@ PYBIND11_MODULE(asyncio, m) {
             }
         });
 
-    py::class_<atom::async::io::AsyncResult<std::vector<std::string>>>(
+    py::class_<atom::io::async::AsyncResult<std::vector<std::string>>>(
         m, "AsyncResultStringList")
         .def(py::init<>())
         .def_readwrite(
             "success",
-            &atom::async::io::AsyncResult<std::vector<std::string>>::success)
+            &atom::io::async::AsyncResult<std::vector<std::string>>::success)
         .def_readwrite("error_message",
-                       &atom::async::io::AsyncResult<
+                       &atom::io::async::AsyncResult<
                            std::vector<std::string>>::error_message)
         .def_readwrite(
             "value",
-            &atom::async::io::AsyncResult<std::vector<std::string>>::value)
+            &atom::io::async::AsyncResult<std::vector<std::string>>::value)
         .def(
             "__bool__",
-            [](const atom::async::io::AsyncResult<std::vector<std::string>>&
+            [](const atom::io::async::AsyncResult<std::vector<std::string>>&
                    result) { return result.success; },
             "Check if the operation was successful")
         .def(
             "__len__",
-            [](const atom::async::io::AsyncResult<std::vector<std::string>>&
+            [](const atom::io::async::AsyncResult<std::vector<std::string>>&
                    result) { return result.success ? result.value.size() : 0; },
             "Get the number of items if successful")
         .def("__str__",
-             [](const atom::async::io::AsyncResult<std::vector<std::string>>&
+             [](const atom::io::async::AsyncResult<std::vector<std::string>>&
                     result) {
                  if (result.success) {
                      return "AsyncResult(success=True, items=" +
@@ -139,30 +139,30 @@ PYBIND11_MODULE(asyncio, m) {
                  }
              });
 
-    py::class_<atom::async::io::AsyncResult<std::vector<fs::path>>>(
+    py::class_<atom::io::async::AsyncResult<std::vector<fs::path>>>(
         m, "AsyncResultPathList")
         .def(py::init<>())
         .def_readwrite(
             "success",
-            &atom::async::io::AsyncResult<std::vector<fs::path>>::success)
+            &atom::io::async::AsyncResult<std::vector<fs::path>>::success)
         .def_readwrite(
             "error_message",
-            &atom::async::io::AsyncResult<std::vector<fs::path>>::error_message)
+            &atom::io::async::AsyncResult<std::vector<fs::path>>::error_message)
         .def_readwrite(
             "value",
-            &atom::async::io::AsyncResult<std::vector<fs::path>>::value)
+            &atom::io::async::AsyncResult<std::vector<fs::path>>::value)
         .def(
             "__bool__",
-            [](const atom::async::io::AsyncResult<std::vector<fs::path>>&
+            [](const atom::io::async::AsyncResult<std::vector<fs::path>>&
                    result) { return result.success; },
             "Check if the operation was successful")
         .def(
             "__len__",
-            [](const atom::async::io::AsyncResult<std::vector<fs::path>>&
+            [](const atom::io::async::AsyncResult<std::vector<fs::path>>&
                    result) { return result.success ? result.value.size() : 0; },
             "Get the number of items if successful")
         .def("__str__",
-             [](const atom::async::io::AsyncResult<std::vector<fs::path>>&
+             [](const atom::io::async::AsyncResult<std::vector<fs::path>>&
                     result) {
                  if (result.success) {
                      return "AsyncResult(success=True, items=" +
@@ -173,47 +173,47 @@ PYBIND11_MODULE(asyncio, m) {
                  }
              });
 
-    py::class_<atom::async::io::AsyncResult<fs::file_status>>(
+    py::class_<atom::io::async::AsyncResult<fs::file_status>>(
         m, "AsyncResultFileStatus")
         .def(py::init<>())
         .def_readwrite("success",
-                       &atom::async::io::AsyncResult<fs::file_status>::success)
+                       &atom::io::async::AsyncResult<fs::file_status>::success)
         .def_readwrite(
             "error_message",
-            &atom::async::io::AsyncResult<fs::file_status>::error_message)
+            &atom::io::async::AsyncResult<fs::file_status>::error_message)
         .def_property(
             "value",
-            [](const atom::async::io::AsyncResult<fs::file_status>& result) {
+            [](const atom::io::async::AsyncResult<fs::file_status>& result) {
                 return result.value;
             },
-            [](atom::async::io::AsyncResult<fs::file_status>& result,
+            [](atom::io::async::AsyncResult<fs::file_status>& result,
                const fs::file_status& status) { result.value = status; })
         .def(
             "__bool__",
-            [](const atom::async::io::AsyncResult<fs::file_status>& result) {
+            [](const atom::io::async::AsyncResult<fs::file_status>& result) {
                 return result.success;
             },
             "Check if the operation was successful")
         .def(
             "is_directory",
-            [](const atom::async::io::AsyncResult<fs::file_status>& result) {
+            [](const atom::io::async::AsyncResult<fs::file_status>& result) {
                 return result.success && fs::is_directory(result.value);
             },
             "Check if the file is a directory")
         .def(
             "is_regular_file",
-            [](const atom::async::io::AsyncResult<fs::file_status>& result) {
+            [](const atom::io::async::AsyncResult<fs::file_status>& result) {
                 return result.success && fs::is_regular_file(result.value);
             },
             "Check if the file is a regular file")
         .def(
             "is_symlink",
-            [](const atom::async::io::AsyncResult<fs::file_status>& result) {
+            [](const atom::io::async::AsyncResult<fs::file_status>& result) {
                 return result.success && fs::is_symlink(result.value);
             },
             "Check if the file is a symbolic link")
         .def("__str__",
-             [](const atom::async::io::AsyncResult<fs::file_status>& result) {
+             [](const atom::io::async::AsyncResult<fs::file_status>& result) {
                  if (result.success) {
                      std::string type;
                      if (fs::is_directory(result.value))
@@ -234,7 +234,7 @@ PYBIND11_MODULE(asyncio, m) {
              });
 
     // Define AsyncFile class
-    py::class_<atom::async::io::AsyncFile>(
+    py::class_<atom::io::async::AsyncFile>(
         m, "AsyncFile",
         R"(Class for performing asynchronous file operations.
 
@@ -263,12 +263,12 @@ Examples:
              "Constructs an AsyncFile object with the given ASIO I/O context.")
         .def(
             "async_read",
-            [](atom::async::io::AsyncFile& self, const std::string& filename,
+            [](atom::io::async::AsyncFile& self, const std::string& filename,
                py::function callback) {
                 self.asyncRead(
                     filename,
                     [callback](
-                        atom::async::io::AsyncResult<std::string> result) {
+                        atom::io::async::AsyncResult<std::string> result) {
                         py::gil_scoped_acquire acquire;
                         callback(result);
                     });
@@ -291,13 +291,13 @@ Examples:
 )")
         .def(
             "async_write",
-            [](atom::async::io::AsyncFile& self, const std::string& filename,
+            [](atom::io::async::AsyncFile& self, const std::string& filename,
                const std::string& content, py::function callback) {
                 std::span<const char> content_span(content.data(),
                                                    content.size());
                 self.asyncWrite(
                     filename, content_span,
-                    [callback](atom::async::io::AsyncResult<void> result) {
+                    [callback](atom::io::async::AsyncResult<void> result) {
                         py::gil_scoped_acquire acquire;
                         callback(result);
                     });
@@ -321,11 +321,11 @@ Examples:
 )")
         .def(
             "async_delete",
-            [](atom::async::io::AsyncFile& self, const std::string& filename,
+            [](atom::io::async::AsyncFile& self, const std::string& filename,
                py::function callback) {
                 self.asyncDelete(
                     filename,
-                    [callback](atom::async::io::AsyncResult<void> result) {
+                    [callback](atom::io::async::AsyncResult<void> result) {
                         py::gil_scoped_acquire acquire;
                         callback(result);
                     });
@@ -348,11 +348,11 @@ Examples:
 )")
         .def(
             "async_copy",
-            [](atom::async::io::AsyncFile& self, const std::string& src,
+            [](atom::io::async::AsyncFile& self, const std::string& src,
                const std::string& dest, py::function callback) {
                 self.asyncCopy(
                     src, dest,
-                    [callback](atom::async::io::AsyncResult<void> result) {
+                    [callback](atom::io::async::AsyncResult<void> result) {
                         py::gil_scoped_acquire acquire;
                         callback(result);
                     });
@@ -376,12 +376,12 @@ Examples:
 )")
         .def(
             "async_read_with_timeout",
-            [](atom::async::io::AsyncFile& self, const std::string& filename,
+            [](atom::io::async::AsyncFile& self, const std::string& filename,
                int timeout_ms, py::function callback) {
                 self.asyncReadWithTimeout(
                     filename, std::chrono::milliseconds(timeout_ms),
                     [callback](
-                        atom::async::io::AsyncResult<std::string> result) {
+                        atom::io::async::AsyncResult<std::string> result) {
                         py::gil_scoped_acquire acquire;
                         callback(result);
                     });
@@ -405,12 +405,12 @@ Examples:
 )")
         .def(
             "async_batch_read",
-            [](atom::async::io::AsyncFile& self,
+            [](atom::io::async::AsyncFile& self,
                const std::vector<std::string>& files, py::function callback) {
                 self.asyncBatchRead(
                     files,
                     [callback](
-                        atom::async::io::AsyncResult<std::vector<std::string>>
+                        atom::io::async::AsyncResult<std::vector<std::string>>
                             result) {
                         py::gil_scoped_acquire acquire;
                         callback(result);
@@ -436,10 +436,10 @@ Examples:
 )")
         .def(
             "async_stat",
-            [](atom::async::io::AsyncFile& self, const std::string& filename,
+            [](atom::io::async::AsyncFile& self, const std::string& filename,
                py::function callback) {
                 self.asyncStat(filename,
-                               [callback](atom::async::io::AsyncResult<
+                               [callback](atom::io::async::AsyncResult<
                                           std::filesystem::file_status>
                                               result) {
                                    py::gil_scoped_acquire acquire;
@@ -467,11 +467,11 @@ Examples:
 )")
         .def(
             "async_move",
-            [](atom::async::io::AsyncFile& self, const std::string& src,
+            [](atom::io::async::AsyncFile& self, const std::string& src,
                const std::string& dest, py::function callback) {
                 self.asyncMove(
                     src, dest,
-                    [callback](atom::async::io::AsyncResult<void> result) {
+                    [callback](atom::io::async::AsyncResult<void> result) {
                         py::gil_scoped_acquire acquire;
                         callback(result);
                     });
@@ -495,11 +495,11 @@ Examples:
 )")
         .def(
             "async_change_permissions",
-            [](atom::async::io::AsyncFile& self, const std::string& filename,
+            [](atom::io::async::AsyncFile& self, const std::string& filename,
                fs::perms perms, py::function callback) {
                 self.asyncChangePermissions(
                     filename, perms,
-                    [callback](atom::async::io::AsyncResult<void> result) {
+                    [callback](atom::io::async::AsyncResult<void> result) {
                         py::gil_scoped_acquire acquire;
                         callback(result);
                     });
@@ -527,11 +527,11 @@ Examples:
 )")
         .def(
             "async_create_directory",
-            [](atom::async::io::AsyncFile& self, const std::string& path,
+            [](atom::io::async::AsyncFile& self, const std::string& path,
                py::function callback) {
                 self.asyncCreateDirectory(
                     path,
-                    [callback](atom::async::io::AsyncResult<void> result) {
+                    [callback](atom::io::async::AsyncResult<void> result) {
                         py::gil_scoped_acquire acquire;
                         callback(result);
                     });
@@ -554,11 +554,11 @@ Examples:
 )")
         .def(
             "async_exists",
-            [](atom::async::io::AsyncFile& self, const std::string& filename,
+            [](atom::io::async::AsyncFile& self, const std::string& filename,
                py::function callback) {
                 self.asyncExists(
                     filename,
-                    [callback](atom::async::io::AsyncResult<bool> result) {
+                    [callback](atom::io::async::AsyncResult<bool> result) {
                         py::gil_scoped_acquire acquire;
                         callback(result);
                     });
@@ -584,7 +584,7 @@ Examples:
 )")
         .def(
             "read_file",
-            [](atom::async::io::AsyncFile& self, const std::string& filename) {
+            [](atom::io::async::AsyncFile& self, const std::string& filename) {
                 return self.readFile(filename);
             },
             py::arg("filename"),
@@ -605,7 +605,7 @@ Examples:
 )")
         .def(
             "write_file",
-            [](atom::async::io::AsyncFile& self, const std::string& filename,
+            [](atom::io::async::AsyncFile& self, const std::string& filename,
                const std::string& content) {
                 std::span<const char> content_span(content.data(),
                                                    content.size());
@@ -631,43 +631,43 @@ Examples:
 
     // Define Task<AsyncResult<std::string>>
     py::class_<
-        atom::async::io::Task<atom::async::io::AsyncResult<std::string>>>(
+        atom::io::async::Task<atom::io::async::AsyncResult<std::string>>>(
         m, "TaskString")
         .def("get",
-             &atom::async::io::Task<
-                 atom::async::io::AsyncResult<std::string>>::get,
+             &atom::io::async::Task<
+                 atom::io::async::AsyncResult<std::string>>::get,
              "Wait for the task to complete and return the result")
         .def("is_ready",
-             &atom::async::io::Task<
-                 atom::async::io::AsyncResult<std::string>>::is_ready,
+             &atom::io::async::Task<
+                 atom::io::async::AsyncResult<std::string>>::is_ready,
              "Check if the task is ready");
 
     // Define Task<AsyncResult<void>>
-    py::class_<atom::async::io::Task<atom::async::io::AsyncResult<void>>>(
+    py::class_<atom::io::async::Task<atom::io::async::AsyncResult<void>>>(
         m, "TaskVoid")
         .def("get",
-             &atom::async::io::Task<atom::async::io::AsyncResult<void>>::get,
+             &atom::io::async::Task<atom::io::async::AsyncResult<void>>::get,
              "Wait for the task to complete and return the result")
         .def("is_ready",
-             &atom::async::io::Task<
-                 atom::async::io::AsyncResult<void>>::is_ready,
+             &atom::io::async::Task<
+                 atom::io::async::AsyncResult<void>>::is_ready,
              "Check if the task is ready");
 
     // Define Task<AsyncResult<std::vector<std::filesystem::path>>>
-    py::class_<atom::async::io::Task<
-        atom::async::io::AsyncResult<std::vector<std::filesystem::path>>>>(
+    py::class_<atom::io::async::Task<
+        atom::io::async::AsyncResult<std::vector<std::filesystem::path>>>>(
         m, "TaskPathList")
         .def("get",
-             &atom::async::io::Task<atom::async::io::AsyncResult<
+             &atom::io::async::Task<atom::io::async::AsyncResult<
                  std::vector<std::filesystem::path>>>::get,
              "Wait for the task to complete and return the result")
         .def("is_ready",
-             &atom::async::io::Task<atom::async::io::AsyncResult<
+             &atom::io::async::Task<atom::io::async::AsyncResult<
                  std::vector<std::filesystem::path>>>::is_ready,
              "Check if the task is ready");
 
     // Define AsyncDirectory class
-    py::class_<atom::async::io::AsyncDirectory>(
+    py::class_<atom::io::async::AsyncDirectory>(
         m, "AsyncDirectory",
         R"(Class for performing asynchronous directory operations.
 
@@ -699,11 +699,11 @@ Examples:
              "context.")
         .def(
             "async_create",
-            [](atom::async::io::AsyncDirectory& self, const std::string& path,
+            [](atom::io::async::AsyncDirectory& self, const std::string& path,
                py::function callback) {
                 self.asyncCreate(
                     path,
-                    [callback](atom::async::io::AsyncResult<void> result) {
+                    [callback](atom::io::async::AsyncResult<void> result) {
                         py::gil_scoped_acquire acquire;
                         callback(result);
                     });
@@ -726,11 +726,11 @@ Examples:
 )")
         .def(
             "async_remove",
-            [](atom::async::io::AsyncDirectory& self, const std::string& path,
+            [](atom::io::async::AsyncDirectory& self, const std::string& path,
                py::function callback) {
                 self.asyncRemove(
                     path,
-                    [callback](atom::async::io::AsyncResult<void> result) {
+                    [callback](atom::io::async::AsyncResult<void> result) {
                         py::gil_scoped_acquire acquire;
                         callback(result);
                     });
@@ -753,10 +753,10 @@ Examples:
 )")
         .def(
             "async_list_contents",
-            [](atom::async::io::AsyncDirectory& self, const std::string& path,
+            [](atom::io::async::AsyncDirectory& self, const std::string& path,
                py::function callback) {
                 self.asyncListContents(
-                    path, [callback](atom::async::io::AsyncResult<
+                    path, [callback](atom::io::async::AsyncResult<
                                      std::vector<std::filesystem::path>>
                                          result) {
                         py::gil_scoped_acquire acquire;
@@ -783,11 +783,11 @@ Examples:
 )")
         .def(
             "async_exists",
-            [](atom::async::io::AsyncDirectory& self, const std::string& path,
+            [](atom::io::async::AsyncDirectory& self, const std::string& path,
                py::function callback) {
                 self.asyncExists(
                     path,
-                    [callback](atom::async::io::AsyncResult<bool> result) {
+                    [callback](atom::io::async::AsyncResult<bool> result) {
                         py::gil_scoped_acquire acquire;
                         callback(result);
                     });
@@ -813,7 +813,7 @@ Examples:
 )")
         .def(
             "list_contents",
-            [](atom::async::io::AsyncDirectory& self, const std::string& path) {
+            [](atom::io::async::AsyncDirectory& self, const std::string& path) {
                 return self.listContents(path);
             },
             py::arg("path"),
@@ -831,6 +831,326 @@ Examples:
     >>> result = task.get()  # Wait for completion
     >>> if result.success:
     ...     print(f"Found {len(result.value)} entries")
+)");
+
+    // =========================================================================
+    // AsyncDirectoryOps class (newer API)
+    // =========================================================================
+
+    py::class_<atom::io::async::AsyncDirectoryOps>(
+        m, "AsyncDirectoryOps",
+        R"(Modern class for asynchronous directory operations.
+
+Provides async directory create, remove, and list operations via
+callback-based and coroutine-based APIs.
+
+Args:
+    io_context: The ASIO I/O context for asynchronous operations.
+
+Examples:
+    >>> import asio
+    >>> from atom.io.asyncio import AsyncDirectoryOps
+    >>>
+    >>> io_context = asio.io_context()
+    >>> dir_ops = AsyncDirectoryOps(io_context)
+    >>>
+    >>> def on_list(result):
+    ...     if result.success:
+    ...         for entry in result.value:
+    ...             print(entry)
+    >>>
+    >>> dir_ops.async_list_directory(".", on_list)
+    >>> io_context.run()
+)")
+        .def(py::init<asio::io_context&>(), py::arg("io_context"),
+             "Constructs an AsyncDirectoryOps with the given I/O context.")
+        .def(
+            "async_create_directory",
+            [](atom::io::async::AsyncDirectoryOps& self,
+               const std::string& path, py::function callback) {
+                self.asyncCreateDirectory(
+                    path,
+                    [callback](atom::io::async::AsyncResult<void> result) {
+                        py::gil_scoped_acquire acquire;
+                        callback(result);
+                    });
+            },
+            py::arg("path"), py::arg("callback"),
+            R"(Asynchronously creates a directory (including parents).
+
+Args:
+    path: The directory path to create.
+    callback: Function called with AsyncResultVoid on completion.
+
+Examples:
+    >>> def on_create(result):
+    ...     if result:
+    ...         print("Directory created")
+    ...     else:
+    ...         print(f"Error: {result.error_message}")
+    >>>
+    >>> dir_ops.async_create_directory("/tmp/new_dir", on_create)
+)")
+        .def(
+            "async_remove_directory",
+            [](atom::io::async::AsyncDirectoryOps& self,
+               const std::string& path, py::function callback) {
+                self.asyncRemoveDirectory(
+                    path,
+                    [callback](atom::io::async::AsyncResult<void> result) {
+                        py::gil_scoped_acquire acquire;
+                        callback(result);
+                    });
+            },
+            py::arg("path"), py::arg("callback"),
+            R"(Asynchronously removes a directory and all its contents.
+
+Args:
+    path: The directory path to remove.
+    callback: Function called with AsyncResultVoid on completion.
+
+Examples:
+    >>> def on_remove(result):
+    ...     if result:
+    ...         print("Directory removed")
+    >>>
+    >>> dir_ops.async_remove_directory("/tmp/old_dir", on_remove)
+)")
+        .def(
+            "async_list_directory",
+            [](atom::io::async::AsyncDirectoryOps& self,
+               const std::string& path, py::function callback) {
+                self.asyncListDirectory(
+                    path,
+                    [callback](atom::io::async::AsyncResult<
+                               std::vector<std::filesystem::path>>
+                                   result) {
+                        py::gil_scoped_acquire acquire;
+                        callback(result);
+                    });
+            },
+            py::arg("path"), py::arg("callback"),
+            R"(Asynchronously lists directory contents.
+
+Args:
+    path: The directory path to list.
+    callback: Function called with AsyncResultPathList on completion.
+
+Examples:
+    >>> def on_list(result):
+    ...     if result:
+    ...         for entry in result.value:
+    ...             print(entry)
+    >>>
+    >>> dir_ops.async_list_directory(".", on_list)
+)");
+
+    // =========================================================================
+    // AsyncBatchOps class
+    // =========================================================================
+
+    py::class_<atom::io::async::AsyncBatchOps>(
+        m, "AsyncBatchOps",
+        R"(Class for asynchronous batch file operations.
+
+Provides efficient parallel batch read, write, and delete operations
+for multiple files simultaneously.
+
+Args:
+    io_context: The ASIO I/O context for asynchronous operations.
+
+Examples:
+    >>> import asio
+    >>> from atom.io.asyncio import AsyncBatchOps
+    >>>
+    >>> io_context = asio.io_context()
+    >>> batch = AsyncBatchOps(io_context)
+    >>>
+    >>> def on_batch_read(result):
+    ...     if result.success:
+    ...         for content in result.value:
+    ...             print(f"Read {len(content)} bytes")
+    >>>
+    >>> batch.async_batch_read(["file1.txt", "file2.txt"], on_batch_read)
+    >>> io_context.run()
+)")
+        .def(py::init<asio::io_context&>(), py::arg("io_context"),
+             "Constructs an AsyncBatchOps with the given I/O context.")
+        .def(
+            "async_batch_read",
+            [](atom::io::async::AsyncBatchOps& self,
+               const std::vector<std::string>& files, py::function callback) {
+                self.asyncBatchRead(
+                    files,
+                    [callback](atom::io::async::AsyncResult<
+                               std::vector<std::string>>
+                                   result) {
+                        py::gil_scoped_acquire acquire;
+                        callback(result);
+                    });
+            },
+            py::arg("files"), py::arg("callback"),
+            R"(Asynchronously reads multiple files in parallel.
+
+Args:
+    files: List of file paths to read.
+    callback: Function called with AsyncResultStringList on completion.
+              The result value is a list of file contents as strings.
+
+Examples:
+    >>> def on_read(result):
+    ...     if result.success:
+    ...         for i, content in enumerate(result.value):
+    ...             print(f"File {i}: {len(content)} bytes")
+    >>>
+    >>> batch.async_batch_read(["a.txt", "b.txt"], on_read)
+)")
+        .def(
+            "async_batch_write",
+            [](atom::io::async::AsyncBatchOps& self,
+               const std::vector<std::pair<std::string, std::string>>&
+                   file_data_pairs,
+               py::function callback) {
+                self.asyncBatchWrite(
+                    file_data_pairs,
+                    [callback](atom::io::async::AsyncResult<void> result) {
+                        py::gil_scoped_acquire acquire;
+                        callback(result);
+                    });
+            },
+            py::arg("file_data_pairs"), py::arg("callback"),
+            R"(Asynchronously writes content to multiple files in parallel.
+
+Args:
+    file_data_pairs: List of (filename, data) tuples to write.
+    callback: Function called with AsyncResultVoid on completion.
+
+Examples:
+    >>> batch.async_batch_write(
+    ...     [("a.txt", "content A"), ("b.txt", "content B")],
+    ...     on_write
+    ... )
+)")
+        .def(
+            "async_batch_delete",
+            [](atom::io::async::AsyncBatchOps& self,
+               const std::vector<std::string>& files, py::function callback) {
+                self.asyncBatchDelete(
+                    files,
+                    [callback](atom::io::async::AsyncResult<void> result) {
+                        py::gil_scoped_acquire acquire;
+                        callback(result);
+                    });
+            },
+            py::arg("files"), py::arg("callback"),
+            R"(Asynchronously deletes multiple files in parallel.
+
+Args:
+    files: List of file paths to delete.
+    callback: Function called with AsyncResultVoid on completion.
+
+Examples:
+    >>> batch.async_batch_delete(["tmp1.txt", "tmp2.txt"], on_delete)
+)");
+
+    // =========================================================================
+    // AsyncStreamOps class
+    // =========================================================================
+
+    py::class_<atom::io::async::AsyncStreamOps>(
+        m, "AsyncStreamOps",
+        R"(Class for asynchronous streaming file operations.
+
+Provides memory-efficient chunked read and write operations for
+handling large files without loading entire contents into memory.
+
+Args:
+    io_context: The ASIO I/O context for asynchronous operations.
+
+Examples:
+    >>> import asio
+    >>> from atom.io.asyncio import AsyncStreamOps
+    >>>
+    >>> io_context = asio.io_context()
+    >>> stream = AsyncStreamOps(io_context)
+    >>>
+    >>> def on_chunk(result):
+    ...     if result:
+    ...         print(f"Read chunk of {len(result.value)} bytes")
+    >>>
+    >>> def on_done(result):
+    ...     print("Stream read complete" if result else result.error_message)
+    >>>
+    >>> stream.async_stream_read("large.bin", 4096, on_chunk, on_done)
+    >>> io_context.run()
+)")
+        .def(py::init<asio::io_context&>(), py::arg("io_context"),
+             "Constructs an AsyncStreamOps with the given I/O context.")
+        .def(
+            "async_stream_read",
+            [](atom::io::async::AsyncStreamOps& self,
+               const std::string& filename, size_t chunk_size,
+               py::function chunk_callback,
+               py::function completion_callback) {
+                self.asyncStreamRead(
+                    filename, chunk_size,
+                    [chunk_callback](
+                        atom::io::async::AsyncResult<std::string> result) {
+                        py::gil_scoped_acquire acquire;
+                        chunk_callback(result);
+                    },
+                    [completion_callback](
+                        atom::io::async::AsyncResult<void> result) {
+                        py::gil_scoped_acquire acquire;
+                        completion_callback(result);
+                    });
+            },
+            py::arg("filename"), py::arg("chunk_size"),
+            py::arg("chunk_callback"), py::arg("completion_callback"),
+            R"(Asynchronously reads a file in chunks for memory efficiency.
+
+Args:
+    filename: Path to the file to read.
+    chunk_size: Size of each chunk in bytes.
+    chunk_callback: Function called for each chunk with AsyncResultString.
+    completion_callback: Function called when reading finishes with AsyncResultVoid.
+
+Examples:
+    >>> def on_chunk(result):
+    ...     if result:
+    ...         print(f"Chunk: {len(result.value)} bytes")
+    >>>
+    >>> def on_done(result):
+    ...     print("Done!" if result else f"Error: {result.error_message}")
+    >>>
+    >>> stream.async_stream_read("large.bin", 8192, on_chunk, on_done)
+)")
+        .def(
+            "async_stream_write",
+            [](atom::io::async::AsyncStreamOps& self,
+               const std::string& filename, const std::string& data,
+               size_t chunk_size, py::function callback) {
+                std::span<const char> data_span(data.data(), data.size());
+                self.asyncStreamWrite(
+                    filename, data_span, chunk_size,
+                    [callback](atom::io::async::AsyncResult<void> result) {
+                        py::gil_scoped_acquire acquire;
+                        callback(result);
+                    });
+            },
+            py::arg("filename"), py::arg("data"), py::arg("chunk_size"),
+            py::arg("callback"),
+            R"(Asynchronously writes data to a file in chunks.
+
+Args:
+    filename: Path to the file to write.
+    data: The data string to write.
+    chunk_size: Size of each chunk to write at a time.
+    callback: Function called with AsyncResultVoid on completion.
+
+Examples:
+    >>> data = "x" * 1000000  # 1MB of data
+    >>> stream.async_stream_write("output.bin", data, 65536, on_done)
 )");
 
     // Utility functions
@@ -852,12 +1172,12 @@ Examples:
                     throw std::runtime_error("Error reading file: " + filename);
                 }
 
-                atom::async::io::AsyncResult<std::string> result;
+                atom::io::async::AsyncResult<std::string> result;
                 result.success = true;
                 result.value = std::move(buffer);
                 return result;
             } catch (const std::exception& e) {
-                atom::async::io::AsyncResult<std::string> result;
+                atom::io::async::AsyncResult<std::string> result;
                 result.success = false;
                 result.error_message = e.what();
                 return result;
@@ -896,11 +1216,11 @@ Examples:
                                              filename);
                 }
 
-                atom::async::io::AsyncResult<void> result;
+                atom::io::async::AsyncResult<void> result;
                 result.success = true;
                 return result;
             } catch (const std::exception& e) {
-                atom::async::io::AsyncResult<void> result;
+                atom::io::async::AsyncResult<void> result;
                 result.success = false;
                 result.error_message = e.what();
                 return result;
@@ -929,12 +1249,12 @@ Examples:
         "file_exists_sync",
         [](const std::string& filename) {
             try {
-                atom::async::io::AsyncResult<bool> result;
+                atom::io::async::AsyncResult<bool> result;
                 result.success = true;
                 result.value = fs::exists(filename);
                 return result;
             } catch (const std::exception& e) {
-                atom::async::io::AsyncResult<bool> result;
+                atom::io::async::AsyncResult<bool> result;
                 result.success = false;
                 result.error_message = e.what();
                 return result;

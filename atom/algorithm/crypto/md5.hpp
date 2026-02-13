@@ -24,7 +24,7 @@ Description: Self implemented MD5 algorithm.
 #include <vector>
 
 #include <spdlog/spdlog.h>
-#include "atom/algorithm/rust_numeric.hpp"
+#include "atom/algorithm/core/rust_numeric.hpp"
 
 namespace atom::algorithm {
 

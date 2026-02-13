@@ -3,7 +3,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include "atom/algorithm/annealing.hpp"
+#include "atom/algorithm/optimization/annealing.hpp"
 
 namespace py = pybind11;
 

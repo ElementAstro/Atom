@@ -742,4 +742,147 @@ Args:
 Examples:
     >>> quick_merge("merged_file.txt", "file.txt", 4)
 )");
+
+    // =========================================================================
+    // Additional Functions
+    // =========================================================================
+
+    m.def(
+        "classify_files",
+        [](const std::string& directory) {
+            return atom::io::classifyFiles(directory);
+        },
+        py::arg("directory"),
+        R"(Classifies files in a directory by their extension.
+
+Groups all files in the given directory by their file extension,
+returning a dictionary mapping extensions to lists of file paths.
+
+Args:
+    directory: Path to the directory to classify
+
+Returns:
+    dict: Mapping of file extensions to lists of file paths.
+          Files without extensions are grouped under "<no extension>".
+
+Examples:
+    >>> result = classify_files("/path/to/project")
+    >>> for ext, files in result.items():
+    ...     print(f"{ext}: {len(files)} files")
+    .py: 15 files
+    .cpp: 8 files
+    .hpp: 12 files
+)");
+
+    m.def(
+        "create_directories_recursive",
+        [](const std::string& base_path,
+           const std::vector<std::string>& subdirs, bool verbose,
+           bool dry_run, int delay) {
+            atom::io::CreateDirectoriesOptions opts;
+            opts.verbose = verbose;
+            opts.dryRun = dry_run;
+            opts.delay = delay;
+            return atom::io::createDirectoriesRecursive(base_path, subdirs,
+                                                        opts);
+        },
+        py::arg("base_path"), py::arg("subdirs"),
+        py::arg("verbose") = false, py::arg("dry_run") = false,
+        py::arg("delay") = 0,
+        R"(Creates directories recursively under a base path.
+
+Args:
+    base_path: The base directory path
+    subdirs: List of subdirectory names to create under base_path
+    verbose: If True, log each directory creation (default: False)
+    dry_run: If True, don't actually create directories (default: False)
+    delay: Delay in milliseconds between directory creations (default: 0)
+
+Returns:
+    True if all directories were created successfully
+
+Examples:
+    >>> create_directories_recursive(
+    ...     "/project",
+    ...     ["src", "tests", "docs", "build"],
+    ...     verbose=True
+    ... )
+    True
+)");
+
+    m.def(
+        "remove_directories_recursive",
+        [](const std::string& base_path,
+           const std::vector<std::string>& subdirs, bool verbose,
+           bool dry_run, int delay) {
+            atom::io::CreateDirectoriesOptions opts;
+            opts.verbose = verbose;
+            opts.dryRun = dry_run;
+            opts.delay = delay;
+            return atom::io::removeDirectoriesRecursive(base_path, subdirs,
+                                                        opts);
+        },
+        py::arg("base_path"), py::arg("subdirs"),
+        py::arg("verbose") = false, py::arg("dry_run") = false,
+        py::arg("delay") = 0,
+        R"(Removes directories recursively under a base path.
+
+Args:
+    base_path: The base directory path
+    subdirs: List of subdirectory names to remove under base_path
+    verbose: If True, log each directory removal (default: False)
+    dry_run: If True, don't actually remove directories (default: False)
+    delay: Delay in milliseconds between directory removals (default: 0)
+
+Returns:
+    True if all directories were removed successfully
+
+Examples:
+    >>> remove_directories_recursive(
+    ...     "/project",
+    ...     ["build", "dist", "__pycache__"],
+    ...     verbose=True
+    ... )
+    True
+)");
+
+    m.def(
+        "create_date_directory",
+        [](const std::string& date, const std::string& root_dir) {
+            atom::io::createDateDirectory(date, root_dir);
+        },
+        py::arg("date"), py::arg("root_dir"),
+        R"(Creates a directory with a date-based name under the root directory.
+
+Args:
+    date: The date string to use as the directory name
+    root_dir: The root directory under which to create the date directory
+
+Examples:
+    >>> create_date_directory("2024-01-15", "/var/log/myapp")
+)");
+
+    m.def(
+        "get_executable_name_from_path",
+        [](const std::string& path) {
+            return atom::io::getExecutableNameFromPath(path);
+        },
+        py::arg("path"),
+        R"(Extracts the executable name from a full path.
+
+Args:
+    path: Full path to an executable file
+
+Returns:
+    The executable name (filename without directory path)
+
+Examples:
+    >>> get_executable_name_from_path("/usr/bin/python3")
+    'python3'
+    >>> get_executable_name_from_path("C:\\Windows\\notepad.exe")
+    'notepad.exe'
+)");
+
+    // Module metadata
+    m.attr("__version__") = "2.0.0";
 }

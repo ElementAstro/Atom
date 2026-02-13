@@ -59,6 +59,22 @@ public:
     using AlgorithmException::AlgorithmException;
 };
 
+/**
+ * @brief Exception class for cryptography-related errors
+ */
+class CryptoException : public AlgorithmException {
+public:
+    using AlgorithmException::AlgorithmException;
+};
+
+/**
+ * @brief Exception class for compression-related errors
+ */
+class CompressionException : public AlgorithmException {
+public:
+    using AlgorithmException::AlgorithmException;
+};
+
 // Convenience macros for throwing algorithm exceptions
 #define THROW_ALGORITHM_ERROR(...)                                            \
     throw atom::algorithm::AlgorithmException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
@@ -79,6 +95,14 @@ public:
 #define THROW_UTILS_ERROR(...)                                            \
     throw atom::algorithm::UtilsException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
                                           ATOM_FUNC_NAME, __VA_ARGS__)
+
+#define THROW_CRYPTO_ERROR(...)                                            \
+    throw atom::algorithm::CryptoException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
+                                           ATOM_FUNC_NAME, __VA_ARGS__)
+
+#define THROW_COMPRESSION_ERROR(...)                  \
+    throw atom::algorithm::CompressionException(      \
+        ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, __VA_ARGS__)
 
 }  // namespace atom::algorithm
 

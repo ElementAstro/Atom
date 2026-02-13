@@ -1,15 +1,12 @@
 #include "matrix_compress.hpp"
 
 #include <algorithm>
-#include <fstream>
-#include <future>
-#include <random>
-#include <thread>
 #include <vector>
 
-#include <spdlog/spdlog.h>
-#include "atom/algorithm/rust_numeric.hpp"
+#include "atom/algorithm/core/rust_numeric.hpp"
 #include "atom/error/exception.hpp"
+#include "matrix_compress_parallel.hpp"
+#include "matrix_compress_utils.hpp"
 
 #ifdef __AVX2__
 #define USE_SIMD 2  // AVX2
@@ -21,45 +18,9 @@
 #define USE_SIMD 0
 #endif
 
-#ifdef ATOM_USE_BOOST
-#include <boost/exception/all.hpp>
-#include <boost/filesystem.hpp>
-#endif
-
 namespace atom::algorithm {
 
-// Define default number of threads for compression/decompression
-static usize getDefaultThreadCount() noexcept {
-    return std::max(1u, std::thread::hardware_concurrency());
-}
-
-// Helper function to merge two CompressedData vectors
-auto mergeCompressedData(const MatrixCompressor::CompressedData& data1,
-                         const MatrixCompressor::CompressedData& data2)
-    -> MatrixCompressor::CompressedData {
-    MatrixCompressor::CompressedData merged_data;
-    merged_data.reserve(data1.size() + data2.size());
-
-    if (data1.empty()) {
-        return data2;
-    } else if (data2.empty()) {
-        return data1;
-    }
-
-    merged_data.insert(merged_data.end(), data1.begin(), data1.end());
-
-    // Merge the last element of data1 with the first element of data2 if they
-    // are the same character
-    if (merged_data.back().first == data2.front().first) {
-        merged_data.back().second += data2.front().second;
-        merged_data.insert(merged_data.end(), std::next(data2.begin()),
-                           data2.end());
-    } else {
-        merged_data.insert(merged_data.end(), data2.begin(), data2.end());
-    }
-
-    return merged_data;
-}
+/* -------------------- Core Compress -------------------- */
 
 auto MatrixCompressor::compress(const Matrix& matrix) -> CompressedData {
     // Input validation
@@ -104,92 +65,7 @@ auto MatrixCompressor::compress(const Matrix& matrix) -> CompressedData {
     }
 }
 
-auto MatrixCompressor::compressParallel(const Matrix& matrix, i32 thread_count)
-    -> CompressedData {
-    if (matrix.empty() || matrix[0].empty()) {
-        return {};
-    }
-
-    usize num_threads = thread_count > 0 ? static_cast<usize>(thread_count)
-                                         : getDefaultThreadCount();
-
-    if (matrix.size() < num_threads ||
-        matrix.size() * matrix[0].size() < 10000) {
-        return compress(matrix);
-    }
-
-    try {
-        usize rows_per_thread = matrix.size() / num_threads;
-        std::vector<std::future<CompressedData>> futures;
-        futures.reserve(num_threads);
-
-        // Launch initial compression tasks
-        for (usize t = 0; t < num_threads; ++t) {
-            usize start_row = t * rows_per_thread;
-            usize end_row = (t == num_threads - 1) ? matrix.size()
-                                                   : (t + 1) * rows_per_thread;
-
-            futures.push_back(
-                std::async(std::launch::async, [&matrix, start_row, end_row]() {
-                    CompressedData result;
-                    if (start_row >= end_row)
-                        return result;
-
-                    char currentChar = matrix[start_row][0];
-                    i32 count = 0;
-
-                    for (usize i = start_row; i < end_row; ++i) {
-                        for (char ch : matrix[i]) {
-                            if (ch == currentChar) {
-                                count++;
-                            } else {
-                                result.emplace_back(currentChar, count);
-                                currentChar = ch;
-                                count = 1;
-                            }
-                        }
-                    }
-
-                    if (count > 0) {
-                        result.emplace_back(currentChar, count);
-                    }
-
-                    return result;
-                }));
-        }
-
-        // Sequential merging of results to avoid deadlock
-        // First, collect all results
-        std::vector<CompressedData> results;
-        results.reserve(futures.size());
-        for (auto& future : futures) {
-            results.push_back(future.get());
-        }
-
-        // Merge results sequentially
-        while (results.size() > 1) {
-            std::vector<CompressedData> merged_results;
-            merged_results.reserve((results.size() + 1) / 2);
-            for (size_t i = 0; i < results.size(); i += 2) {
-                if (i + 1 < results.size()) {
-                    merged_results.push_back(
-                        mergeCompressedData(results[i], results[i + 1]));
-                } else {
-                    merged_results.push_back(std::move(results[i]));
-                }
-            }
-            results = std::move(merged_results);
-        }
-
-        // Return the final result
-        return results.empty() ? CompressedData{} : std::move(results[0]);
-
-    } catch (const std::exception& e) {
-        THROW_MATRIX_COMPRESS_EXCEPTION(
-            "Error during parallel matrix compression: " +
-            std::string(e.what()));
-    }
-}
+/* -------------------- Core Decompress -------------------- */
 
 auto MatrixCompressor::decompress(const CompressedData& compressed, i32 rows,
                                   i32 cols) -> Matrix {
@@ -252,99 +128,38 @@ auto MatrixCompressor::decompress(const CompressedData& compressed, i32 rows,
     }
 }
 
+/* -------------------- Parallel Delegates -------------------- */
+
+auto MatrixCompressor::compressParallel(const Matrix& matrix, i32 thread_count)
+    -> CompressedData {
+    return compressMatrixParallel(matrix, thread_count);
+}
+
 auto MatrixCompressor::decompressParallel(const CompressedData& compressed,
                                           i32 rows, i32 cols, i32 thread_count)
     -> Matrix {
-    if (rows <= 0 || cols <= 0) {
-        THROW_MATRIX_DECOMPRESS_EXCEPTION(
-            "Invalid dimensions: rows and cols must be positive");
-    }
-
-    if (compressed.empty()) {
-        return Matrix(rows, std::vector<char>(cols, 0));
-    }
-
-    if (rows * cols < 10000) {
-        return decompress(compressed, rows, cols);
-    }
-
-    try {
-        usize num_threads = thread_count > 0 ? static_cast<usize>(thread_count)
-                                             : getDefaultThreadCount();
-        num_threads = std::min(num_threads, static_cast<usize>(rows));
-
-        Matrix result(rows, std::vector<char>(cols));
-
-        std::vector<std::pair<usize, usize>> row_ranges;
-        std::vector<std::pair<usize, usize>> element_ranges;
-
-        usize rows_per_thread = rows / num_threads;
-        usize elements_per_row = cols;
-
-        for (usize t = 0; t < num_threads; ++t) {
-            usize start_row = t * rows_per_thread;
-            usize end_row =
-                (t == num_threads - 1) ? rows : (t + 1) * rows_per_thread;
-            row_ranges.emplace_back(start_row, end_row);
-
-            usize start_element = start_row * elements_per_row;
-            usize end_element = end_row * elements_per_row;
-            element_ranges.emplace_back(start_element, end_element);
-        }
-
-        std::vector<usize> element_offsets = {0};
-        for (const auto& [ch, count] : compressed) {
-            element_offsets.push_back(element_offsets.back() + count);
-        }
-
-        std::vector<std::future<void>> futures;
-        for (usize t = 0; t < num_threads; ++t) {
-            futures.push_back(std::async(std::launch::async, [&, t]() {
-                usize start_element = element_ranges[t].first;
-                usize end_element = element_ranges[t].second;
-
-                usize block_index = 0;
-                while (block_index < element_offsets.size() - 1 &&
-                       element_offsets[block_index + 1] <= start_element) {
-                    block_index++;
-                }
-
-                usize current_element = start_element;
-                while (current_element < end_element &&
-                       block_index < compressed.size()) {
-                    char ch = compressed[block_index].first;
-                    usize block_start = element_offsets[block_index];
-                    usize block_end = element_offsets[block_index + 1];
-
-                    usize process_start =
-                        std::max(current_element, block_start);
-                    usize process_end = std::min(end_element, block_end);
-
-                    for (usize i = process_start; i < process_end; ++i) {
-                        i32 row = static_cast<i32>(i / cols);
-                        i32 col = static_cast<i32>(i % cols);
-                        result[row][col] = ch;
-                    }
-
-                    current_element = process_end;
-                    if (current_element >= block_end) {
-                        block_index++;
-                    }
-                }
-            }));
-        }
-
-        for (auto& future : futures) {
-            future.get();
-        }
-
-        return result;
-    } catch (const std::exception& e) {
-        THROW_MATRIX_DECOMPRESS_EXCEPTION(
-            "Error during parallel matrix decompression: " +
-            std::string(e.what()));
-    }
+    return decompressMatrixParallel(compressed, rows, cols, thread_count);
 }
+
+/* -------------------- Utility Delegates -------------------- */
+
+auto MatrixCompressor::generateRandomMatrix(i32 rows, i32 cols,
+                                            std::string_view charset)
+    -> Matrix {
+    return atom::algorithm::generateRandomMatrix(rows, cols, charset);
+}
+
+void MatrixCompressor::saveCompressedToFile(const CompressedData& compressed,
+                                            std::string_view filename) {
+    atom::algorithm::saveCompressedToFile(compressed, filename);
+}
+
+auto MatrixCompressor::loadCompressedFromFile(std::string_view filename)
+    -> CompressedData {
+    return atom::algorithm::loadCompressedFromFile(filename);
+}
+
+/* -------------------- SIMD Compress -------------------- */
 
 auto MatrixCompressor::compressWithSIMD(const Matrix& matrix)
     -> CompressedData {
@@ -449,6 +264,8 @@ auto MatrixCompressor::compressWithSIMD(const Matrix& matrix)
     return compressed;
 }
 
+/* -------------------- SIMD Decompress -------------------- */
+
 auto MatrixCompressor::decompressWithSIMD(const CompressedData& compressed,
                                           i32 rows, i32 cols) -> Matrix {
     Matrix matrix(rows, std::vector<char>(cols));
@@ -524,127 +341,5 @@ auto MatrixCompressor::decompressWithSIMD(const CompressedData& compressed,
 
     return matrix;
 }
-
-auto MatrixCompressor::generateRandomMatrix(i32 rows, i32 cols,
-                                            std::string_view charset)
-    -> Matrix {
-    std::random_device randomDevice;
-    std::mt19937 generator(randomDevice());
-    std::uniform_int_distribution<i32> distribution(
-        0, static_cast<i32>(charset.length()) - 1);
-
-    Matrix matrix(rows, std::vector<char>(cols));
-    for (auto& row : matrix) {
-        std::ranges::generate(row.begin(), row.end(), [&]() {
-            return charset[distribution(generator)];
-        });
-    }
-    return matrix;
-}
-
-void MatrixCompressor::saveCompressedToFile(const CompressedData& compressed,
-                                            std::string_view filename) {
-#ifdef ATOM_USE_BOOST
-    boost::filesystem::path filepath(filename);
-    std::ofstream file(filepath.string(), std::ios::binary);
-#else
-    std::ofstream file(std::string(filename), std::ios::binary);
-#endif
-    if (!file) {
-#ifdef ATOM_USE_BOOST
-        throw boost::enable_error_info(FileOpenException())
-            << boost::errinfo_api_function("Unable to open file for writing: " +
-                                           std::string(filename));
-#else
-        THROW_FAIL_TO_OPEN_FILE("Unable to open file for writing: " +
-                                std::string(filename));
-#endif
-    }
-
-    for (const auto& [ch, count] : compressed) {
-        file.write(reinterpret_cast<const char*>(&ch), sizeof(ch));
-        file.write(reinterpret_cast<const char*>(&count), sizeof(count));
-    }
-}
-
-auto MatrixCompressor::loadCompressedFromFile(std::string_view filename)
-    -> CompressedData {
-#ifdef ATOM_USE_BOOST
-    boost::filesystem::path filepath(filename);
-    std::ifstream file(filepath.string(), std::ios::binary);
-#else
-    std::ifstream file(std::string(filename), std::ios::binary);
-#endif
-    if (!file) {
-#ifdef ATOM_USE_BOOST
-        throw boost::enable_error_info(FileOpenException())
-            << boost::errinfo_api_function("Unable to open file for reading: " +
-                                           std::string(filename));
-#else
-        THROW_FAIL_TO_OPEN_FILE("Unable to open file for reading: " +
-                                std::string(filename));
-#endif
-    }
-
-    CompressedData compressed;
-    char ch;
-    i32 count;
-    while (file.read(reinterpret_cast<char*>(&ch), sizeof(ch)) &&
-           file.read(reinterpret_cast<char*>(&count), sizeof(count))) {
-        compressed.emplace_back(ch, count);
-    }
-
-    return compressed;
-}
-
-#if ATOM_ENABLE_DEBUG
-void performanceTest(i32 rows, i32 cols, bool runParallel) {
-    auto matrix = MatrixCompressor::generateRandomMatrix(rows, cols);
-
-    auto start = std::chrono::high_resolution_clock::now();
-    auto compressed = MatrixCompressor::compress(matrix);
-    auto end = std::chrono::high_resolution_clock::now();
-
-    std::chrono::duration<f64, std::milli> compression_time = end - start;
-
-    start = std::chrono::high_resolution_clock::now();
-    auto decompressed = MatrixCompressor::decompress(compressed, rows, cols);
-    end = std::chrono::high_resolution_clock::now();
-
-    std::chrono::duration<f64, std::milli> decompression_time = end - start;
-
-    f64 compression_ratio =
-        MatrixCompressor::calculateCompressionRatio(matrix, compressed);
-
-    spdlog::info("Matrix size: {}x{}", rows, cols);
-    spdlog::info("Compression time: {} ms", compression_time.count());
-    spdlog::info("Decompression time: {} ms", decompression_time.count());
-    spdlog::info("Compression ratio: {}", compression_ratio);
-    spdlog::info("Compressed size: {} elements", compressed.size());
-
-    if (runParallel) {
-        start = std::chrono::high_resolution_clock::now();
-        compressed = MatrixCompressor::compressParallel(matrix);
-        end = std::chrono::high_resolution_clock::now();
-
-        std::chrono::duration<f64, std::milli> parallel_compression_time =
-            end - start;
-
-        start = std::chrono::high_resolution_clock::now();
-        decompressed =
-            MatrixCompressor::decompressParallel(compressed, rows, cols);
-        end = std::chrono::high_resolution_clock::now();
-
-        std::chrono::duration<f64, std::milli> parallel_decompression_time =
-            end - start;
-
-        spdlog::info("\nParallel processing:");
-        spdlog::info("Compression time: {} ms",
-                     parallel_compression_time.count());
-        spdlog::info("Decompression time: {} ms",
-                     parallel_decompression_time.count());
-    }
-}
-#endif
 
 }  // namespace atom::algorithm

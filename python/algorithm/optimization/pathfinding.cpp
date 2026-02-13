@@ -1,4 +1,4 @@
-#include "atom/algorithm/pathfinding.hpp"
+#include "atom/algorithm/optimization/pathfinding.hpp"
 
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>

@@ -4,10 +4,34 @@ This directory contains miscellaneous utility algorithms and helper functions th
 
 ## Contents
 
+### Filename Matching
+
 - **`fnmatch.hpp/cpp`** - Filename pattern matching with glob-style wildcards
-- **`snowflake.hpp`** - Distributed unique ID generation using the Snowflake algorithm
-- **`weight.hpp`** - Weighted random selection and sampling algorithms
-- **`error_calibration.hpp`** - Error analysis and calibration utilities for numerical algorithms
+
+### Snowflake ID Generation
+
+- **`snowflake.hpp`** - Distributed unique ID generation using the Snowflake algorithm (aggregate)
+- **`snowflake_exception.hpp`** - Exception classes and lock types for Snowflake
+
+### UUID Generation
+
+- **`uuid.hpp`** - UUID generation and manipulation (v1, v4, v5)
+
+### Weighted Selection & Sampling
+
+- **`weight.hpp`** - Aggregate header for all weight-related components
+- **`weight_common.hpp`** - `WeightType` concept and `WeightError` exception
+- **`weight_collection.hpp`** - Thread-safe key-value weight collection (`WeightCollection<T>`)
+- **`weight_strategy.hpp`** - Selection strategy classes (`DefaultSelectionStrategy`, `BottomHeavySelectionStrategy`, `RandomSelectionStrategy`, `TopHeavySelectionStrategy`, `PowerLawSelectionStrategy`)
+- **`weight_sampler.hpp`** - Batch weighted random sampling (`WeightedRandomSampler<T>`)
+- **`weight_selector.hpp`** - Core weight selector with strategy pattern (`WeightSelector<T>`)
+
+### Error Calibration
+
+- **`error_calibration.hpp`** - Error analysis and calibration utilities (aggregate)
+- **`linear_solver.hpp`** - Gaussian elimination linear system solver
+- **`levenberg_marquardt.hpp`** - Levenberg-Marquardt nonlinear least-squares optimizer
+- **`async_calibration.hpp`** - Coroutine-based asynchronous calibration support
 
 ## Features
 

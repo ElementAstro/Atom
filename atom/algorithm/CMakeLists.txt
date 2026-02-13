@@ -26,63 +26,76 @@ find_package(TBB QUIET)
 # Sources and Headers
 set(SOURCES
     # Core files
-    core/algorithm.cpp
+    core/kmp.cpp
+    core/boyer_moore.cpp
     core/opencl_utils.cpp
     # Crypto files
     crypto/md5.cpp
     crypto/sha1.cpp
     crypto/blowfish.cpp
     crypto/tea.cpp
+    crypto/tea_common.cpp
+    crypto/xtea.cpp
+    crypto/xxtea.cpp
+    crypto/xor_cipher.cpp
     # Hash files
-    hash/mhash.cpp
+    hash/hex_utils.cpp
+    hash/keccak.cpp
+    hash/hash_context.cpp
+    hash/minhash.cpp
     # Math files
-    math/math.cpp
+    math/safe_math.cpp
+    math/bit_ops.cpp
+    math/number_theory.cpp
+    math/random.cpp
+    math/math_memory.cpp
+    math/parallel_math.cpp
     math/fraction.cpp
     math/bignumber.cpp
     math/gpu_math.cpp
     # Compression files
     compression/huffman.cpp
+    compression/huffman_optimized.cpp
     compression/matrix_compress.cpp
+    compression/matrix_compress_parallel.cpp
+    compression/matrix_compress_utils.cpp
     # Signal processing files
-    signal/convolve.cpp
+    signal/convolution_2d.cpp
+    signal/dft.cpp
+    signal/gaussian_filter.cpp
     # Optimization files
-    optimization/pathfinding.cpp
+    optimization/pathfinding/heuristics.cpp
+    optimization/pathfinding/grid_map.cpp
+    optimization/pathfinding/pathfinder.cpp
     # Encoding files
-    encoding/base.cpp
+    encoding/base64.cpp
+    encoding/base32.cpp
+    encoding/hex.cpp
+    encoding/url.cpp
     # Graphics files
     graphics/flood.cpp
     # Utils files
     utils/fnmatch.cpp)
 
 set(HEADERS
-    # Backwards compatibility headers (in root)
-    algorithm.hpp
-    annealing.hpp
-    base.hpp
-    bignumber.hpp
-    blowfish.hpp
-    convolve.hpp
-    error_calibration.hpp
-    flood.hpp
-    fnmatch.hpp
-    fraction.hpp
-    hash.hpp
-    huffman.hpp
-    math.hpp
-    matrix.hpp
-    matrix_compress.hpp
-    md5.hpp
-    mhash.hpp
-    pathfinding.hpp
-    perlin.hpp
-    rust_numeric.hpp
-    sha1.hpp
-    snowflake.hpp
-    tea.hpp
-    weight.hpp
-    # Actual implementation headers (in subdirectories)
+    # Barrel export header
+    index.hpp
+    # Algorithm exception hierarchy
+    algorithm_exception.hpp
+    # Implementation headers (in subdirectories)
     core/algorithm.hpp
+    core/kmp.hpp
+    core/bloom_filter.hpp
+    core/boyer_moore.hpp
     core/rust_numeric.hpp
+    core/rust_types.hpp
+    core/rust_error.hpp
+    core/rust_result.hpp
+    core/rust_option.hpp
+    core/rust_range.hpp
+    core/rust_int_methods.hpp
+    core/rust_float_methods.hpp
+    core/rust_iter.hpp
     core/simd_utils.hpp
     core/opencl_utils.hpp
     core/hex_utils.hpp
@@ -90,31 +103,85 @@ set(HEADERS
     crypto/sha1.hpp
     crypto/blowfish.hpp
     crypto/tea.hpp
+    crypto/tea_common.hpp
+    crypto/xtea.hpp
+    crypto/xxtea.hpp
+    crypto/crypto_utils.hpp
+    crypto/xor_cipher.hpp
     hash/hash.hpp
+    hash/hash_base.hpp
+    hash/hash_compute.hpp
+    hash/hex_utils.hpp
+    hash/keccak.hpp
+    hash/hash_context.hpp
+    hash/minhash.hpp
     hash/mhash.hpp
     math/math.hpp
+    math/math_concepts.hpp
+    math/safe_math.hpp
+    math/bit_ops.hpp
+    math/number_theory.hpp
+    math/random.hpp
+    math/math_memory.hpp
+    math/parallel_math.hpp
     math/matrix.hpp
     math/fraction.hpp
     math/bignumber.hpp
     math/statistics.hpp
     math/numerical.hpp
     math/gpu_math.hpp
+    math/linear_solver.hpp
+    math/levenberg_marquardt.hpp
     compression/huffman.hpp
+    compression/huffman_optimized.hpp
     compression/matrix_compress.hpp
+    compression/matrix_compress_parallel.hpp
+    compression/matrix_compress_utils.hpp
     signal/convolve.hpp
+    signal/convolve_common.hpp
+    signal/convolution_1d.hpp
+    signal/convolution_2d.hpp
+    signal/convolution_filters.hpp
+    signal/dft.hpp
+    signal/frequency_domain.hpp
+    signal/gaussian_filter.hpp
     optimization/annealing.hpp
+    optimization/annealing/annealing_concept.hpp
+    optimization/annealing/cooling_schedule.hpp
+    optimization/annealing/simulated_annealing.hpp
+    optimization/annealing/tsp.hpp
     optimization/pathfinding.hpp
+    optimization/pathfinding/point.hpp
+    optimization/pathfinding/graph.hpp
+    optimization/pathfinding/heuristics.hpp
+    optimization/pathfinding/grid_map.hpp
+    optimization/pathfinding/pathfinder.hpp
     encoding/base.hpp
+    encoding/detail.hpp
+    encoding/base64.hpp
+    encoding/base32.hpp
+    encoding/hex.hpp
+    encoding/url.hpp
+    encoding/xor_cipher.hpp
     graphics/flood.hpp
     graphics/noise_base.hpp
     graphics/perlin.hpp
     graphics/simplex.hpp
     graphics/image_ops.hpp
+    utils/async_calibration.hpp
     utils/error_calibration.hpp
     utils/fnmatch.hpp
+    utils/levenberg_marquardt.hpp
+    utils/linear_solver.hpp
     utils/snowflake.hpp
-    utils/weight.hpp
+    utils/snowflake_exception.hpp
     utils/uuid.hpp
+    utils/weight.hpp
+    utils/weight_collection.hpp
+    utils/weight_common.hpp
+    utils/weight_sampler.hpp
+    utils/weight_selector.hpp
+    utils/weight_strategy.hpp
     # Common utilities
     common/concepts.hpp
     common/endian.hpp
@@ -172,5 +239,9 @@ install(
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/atom
   COMPONENT development)
 
-# Install headers
-install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/algorithm)
+# Install headers preserving subdirectory structure
+foreach(_header ${HEADERS})
+  get_filename_component(_dir ${_header} DIRECTORY)
+  install(FILES ${_header}
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/algorithm/${_dir})
+endforeach()

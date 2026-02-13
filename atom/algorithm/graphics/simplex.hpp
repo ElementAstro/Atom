@@ -8,7 +8,7 @@
 #include <random>
 #include <vector>
 
-#include "../rust_numeric.hpp"
+#include "../core/rust_numeric.hpp"
 #include "noise_base.hpp"
 
 namespace atom::algorithm {

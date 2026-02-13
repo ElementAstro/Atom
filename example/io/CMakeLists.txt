@@ -39,7 +39,7 @@ function(create_subdir_examples SUBDIR_PATH CATEGORY_NAME BUILD_OPTION)
 
       if(ATOM_EXAMPLE_IO_${EXAMPLE_NAME_UPPER})
         add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
-        target_link_libraries(${EXECUTABLE_NAME} atom)
+        target_link_libraries(${EXECUTABLE_NAME} atom-io)
 
         # Set output directory
         set_target_properties(
@@ -61,6 +61,14 @@ function(create_subdir_examples SUBDIR_PATH CATEGORY_NAME BUILD_OPTION)
   endif()
 endfunction()
 
+# Build subdirectory examples
+create_subdir_examples("core" "core" ATOM_EXAMPLE_IO_BUILD_CORE)
+create_subdir_examples("async" "async" ATOM_EXAMPLE_IO_BUILD_ASYNC)
+create_subdir_examples("compression" "compression"
+                       ATOM_EXAMPLE_IO_BUILD_COMPRESSION)
+create_subdir_examples("filesystem" "filesystem"
+                       ATOM_EXAMPLE_IO_BUILD_FILESYSTEM)
+
 # Handle root-level integration examples
 if(ATOM_EXAMPLE_IO_BUILD_INTEGRATION)
   file(GLOB INTEGRATION_CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*_examples.cpp)
@@ -76,7 +84,7 @@ if(ATOM_EXAMPLE_IO_BUILD_INTEGRATION)
 
     if(ATOM_EXAMPLE_IO_${EXAMPLE_NAME_UPPER})
       add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
-      target_link_libraries(${EXECUTABLE_NAME} atom)
+      target_link_libraries(${EXECUTABLE_NAME} atom-io)
 
       set_target_properties(
         ${EXECUTABLE_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY

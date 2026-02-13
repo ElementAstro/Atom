@@ -73,13 +73,13 @@ void demonstrateBasicSplitting() {
     std::cout << "\nSplitting file into " << chunkSize << " byte chunks..."
               << std::endl;
     try {
-        atom::io::splitFile(testFile, chunkSize, "split_part_");
+        atom::io::splitFile(testFile, chunkSize, "split_output");
         std::cout << "✅ File split successfully" << std::endl;
 
         // List the created parts
         std::cout << "\nCreated parts:" << std::endl;
         for (int i = 0;; ++i) {
-            std::string partName = "split_part_" + std::to_string(i);
+            std::string partName = "split_output.part" + std::to_string(i);
             if (atom::io::isFileExists(partName)) {
                 auto partSize = atom::io::getFileSize(partName);
                 std::cout << "  📄 " << partName << " (" << partSize
@@ -105,7 +105,7 @@ void demonstrateFileMerging() {
     // Collect part files
     std::vector<std::string> partFiles;
     for (int i = 0;; ++i) {
-        std::string partName = "split_part_" + std::to_string(i);
+        std::string partName = "split_output.part" + std::to_string(i);
         if (atom::io::isFileExists(partName)) {
             partFiles.push_back(partName);
         } else {
@@ -159,13 +159,13 @@ void demonstrateQuickOperations() {
     std::cout << "\nPerforming quick split into " << numChunks << " chunks..."
               << std::endl;
     try {
-        atom::io::quickSplit(testFile, numChunks, "quick_part_");
+        atom::io::quickSplit(testFile, numChunks, "quick_output");
         std::cout << "✅ Quick split completed" << std::endl;
 
         // List created parts
         std::cout << "\nCreated parts:" << std::endl;
         for (int i = 0; i < numChunks; ++i) {
-            std::string partName = "quick_part_" + std::to_string(i);
+            std::string partName = "quick_output.part" + std::to_string(i);
             if (atom::io::isFileExists(partName)) {
                 auto partSize = atom::io::getFileSize(partName);
                 std::cout << "  📄 " << partName << " (" << partSize
@@ -183,7 +183,7 @@ void demonstrateQuickOperations() {
     const std::string quickMergedFile = "quick_merged_file.txt";
 
     try {
-        atom::io::quickMerge(quickMergedFile, "quick_part_", numChunks);
+        atom::io::quickMerge(quickMergedFile, "quick_output", numChunks);
         std::cout << "✅ Quick merge completed" << std::endl;
 
         auto quickMergedSize = atom::io::getFileSize(quickMergedFile);
@@ -246,8 +246,8 @@ void cleanup() {
 
     // Remove split parts
     for (int i = 0; i < 20; ++i) {  // Check up to 20 parts
-        std::string splitPart = "split_part_" + std::to_string(i);
-        std::string quickPart = "quick_part_" + std::to_string(i);
+        std::string splitPart = "split_output.part" + std::to_string(i);
+        std::string quickPart = "quick_output.part" + std::to_string(i);
 
         if (atom::io::isFileExists(splitPart)) {
             atom::io::removeFile(splitPart);

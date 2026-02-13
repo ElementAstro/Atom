@@ -7,6 +7,8 @@
 #include <chrono>
 #include <optional>
 
+#include "cron_types.hpp"
+
 /**
  * @brief Detailed result of cron validation with enhanced information
  */
@@ -29,18 +31,6 @@ enum class CronField {
     DAY_OF_MONTH = 2,
     MONTH = 3,
     DAY_OF_WEEK = 4
-};
-
-/**
- * @brief Timezone information for cron expressions
- */
-struct TimezoneInfo {
-    std::string timezone_id;
-    int utc_offset_minutes;
-    bool is_dst_aware;
-
-    TimezoneInfo(std::string tz = "UTC", int offset = 0, bool dst = false)
-        : timezone_id(std::move(tz)), utc_offset_minutes(offset), is_dst_aware(dst) {}
 };
 
 /**

@@ -8,7 +8,7 @@
 #include <thread>
 #include <vector>
 
-#include "atom/io/compress.hpp"
+#include "atom/io/compression/compress.hpp"
 
 namespace fs = std::filesystem;
 
@@ -1090,7 +1090,7 @@ TEST_F(CompressSlicesTest, ConcurrentCompression) {
     std::atomic<int> success_count{0};
 
     for (int i = 0; i < num_threads; ++i) {
-        threads.emplace_back([this, i, &success_count]() {
+        threads.emplace_back([i, &success_count]() {
             std::vector<unsigned char> data(1000,
                                             static_cast<unsigned char>(i));
             auto [result, compressed] = atom::io::compressData(data);
@@ -1110,6 +1110,65 @@ TEST_F(CompressSlicesTest, ConcurrentCompression) {
     }
 
     EXPECT_EQ(success_count, num_threads);
+}
+
+// Test createZip function
+TEST_F(FolderCompressionTest, CreateZipFromFolder) {
+    fs::path created_zip = test_dir / "created.zip";
+
+    atom::io::CompressionOptions options;
+    auto result = atom::io::createZip(source_dir.string(),
+                                      created_zip.string(), options);
+
+    EXPECT_TRUE(result.success);
+    EXPECT_TRUE(fs::exists(created_zip));
+    EXPECT_GT(fs::file_size(created_zip), 0u);
+
+    // Verify ZIP contents
+    auto contents = atom::io::listZipContents(created_zip.string());
+    EXPECT_FALSE(contents.empty());
+
+    // Extract and verify
+    fs::path extract_dir = test_dir / "create_zip_extract";
+    fs::create_directories(extract_dir);
+
+    atom::io::DecompressionOptions decomp_options;
+    auto extract_result = atom::io::extractZip(
+        created_zip.string(), extract_dir.string(), decomp_options);
+    EXPECT_TRUE(extract_result.success);
+}
+
+// Test createZip error handling
+TEST_F(FolderCompressionTest, CreateZipErrors) {
+    // Non-existent source
+    auto result1 = atom::io::createZip("/non/existent/path",
+                                       (test_dir / "err.zip").string(), {});
+    EXPECT_FALSE(result1.success);
+
+    // Empty source path
+    auto result2 = atom::io::createZip("",
+                                       (test_dir / "err2.zip").string(), {});
+    EXPECT_FALSE(result2.success);
+
+    // Empty zip path
+    auto result3 = atom::io::createZip(source_dir.string(), "", {});
+    EXPECT_FALSE(result3.success);
+}
+
+// Test ZIP operations on non-existent archive
+TEST_F(FolderCompressionTest, ZipOperationsOnNonExistentArchive) {
+    std::string fake_zip = (test_dir / "nonexistent.zip").string();
+
+    auto contents = atom::io::listZipContents(fake_zip);
+    EXPECT_TRUE(contents.empty());
+
+    EXPECT_FALSE(atom::io::fileExistsInZip(fake_zip, "file.txt"));
+
+    auto remove_result = atom::io::removeFromZip(fake_zip, "file.txt");
+    EXPECT_FALSE(remove_result.success);
+
+    auto size = atom::io::getZipSize(fake_zip);
+    EXPECT_FALSE(size.has_value());
 }
 
 // Test compression with encryption option

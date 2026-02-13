@@ -5,7 +5,7 @@
 #include <chrono>
 #include <random>
 #include <vector>
-#include "atom/algorithm/pathfinding.hpp"
+#include "atom/algorithm/optimization/pathfinding.hpp"
 
 using namespace atom::algorithm;
 

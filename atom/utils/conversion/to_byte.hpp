@@ -17,7 +17,7 @@
 #include <variant>
 #include <vector>
 
-#include "atom/algorithm/rust_numeric.hpp"
+#include "atom/algorithm/core/rust_numeric.hpp"
 
 #ifdef ATOM_USE_BOOST
 #include <boost/endian/conversion.hpp>

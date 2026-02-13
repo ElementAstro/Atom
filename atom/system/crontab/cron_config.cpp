@@ -5,9 +5,21 @@
  */
 
 #include "cron_config.hpp"
+#include "cron_event_types.hpp"
 
 #include <fstream>
 #include <spdlog/spdlog.h>
+
+// ============================================================================
+// CronExecutionTimer Implementation
+// ============================================================================
+
+CronExecutionTimer::~CronExecutionTimer() {
+    auto endTime = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+        endTime - startTime_);
+    CronConfigManager::getInstance().updateMetrics(type_, jobId_, duration);
+}
 
 // ============================================================================
 // CronConfigManager Implementation

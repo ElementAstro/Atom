@@ -14,7 +14,7 @@
  * @date 2024-12-19
  */
 
-#include "atom/algorithm/snowflake.hpp"
+#include "atom/algorithm/utils/snowflake.hpp"
 
 #include <chrono>
 #include <iomanip>

@@ -14,9 +14,27 @@ project(
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Core clipboard headers
+set(CLIPBOARD_HEADERS
+    clipboard.hpp
+    clipboard_types.hpp
+    clipboard_result.hpp
+    clipboard_error.hpp
+    clipboard_utils.hpp
+    clipboard_config.hpp
+    clipboard_impl.hpp)
+
 # Core clipboard sources
-set(CLIPBOARD_CORE_SOURCES clipboard.cpp clipboard.hpp clipboard.ipp
-                           clipboard_error.hpp)
+set(CLIPBOARD_CORE_SOURCES
+    clipboard.cpp
+    clipboard_text.cpp
+    clipboard_data.cpp
+    clipboard_image.cpp
+    clipboard_query.cpp
+    clipboard_monitor.cpp
+    clipboard_cache.cpp
+    clipboard_async.cpp
+    ${CLIPBOARD_HEADERS})
 
 # Platform-specific sources
 set(CLIPBOARD_PLATFORM_SOURCES)
@@ -128,8 +146,7 @@ install(
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Install headers
-install(FILES clipboard.hpp clipboard_error.hpp
-        DESTINATION include/atom/system/clipboard)
+install(FILES ${CLIPBOARD_HEADERS} DESTINATION include/atom/system/clipboard)
 
 # Install export targets
 install(

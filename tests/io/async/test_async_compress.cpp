@@ -15,7 +15,7 @@
 
 #include "atom/system/info/software.hpp"
 
-using namespace atom::async::io;
+using namespace atom::io::async;
 using namespace atom::system;
 using namespace testing;
 

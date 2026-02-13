@@ -31,7 +31,7 @@ Description: Validate aligned storage with optional Boost support
 #define ATOM_SIMD_SUPPORT
 #endif
 
-#include "atom/algorithm/rust_numeric.hpp"
+#include "atom/algorithm/core/rust_numeric.hpp"
 #include "atom/macro.hpp"
 
 #ifdef ATOM_USE_BOOST

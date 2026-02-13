@@ -1,38 +1,41 @@
 /**
  * @file coroutine_operations.cpp
- * @brief Demonstration of C++20 coroutine-based async I/O operations
+ * @brief Demonstration of callback-based async I/O operations with chaining
  *
  * This example demonstrates:
- * - Coroutine-based file reading and writing
- * - Sequential async operations with co_await
- * - Error handling in coroutines
- * - Directory listing with coroutines
+ * - Async file reading and writing with callbacks
+ * - Sequential async operations via chained callbacks
+ * - Error handling in async operations
+ * - File existence and status checks
  * - Combining multiple async operations
- * - Performance comparison with callback-based approach
  */
 
+#include <algorithm>
 #include <chrono>
-#include <coroutine>
 #include <filesystem>
+#include <fstream>
+#include <future>
 #include <iostream>
+#include <sstream>
+#include <span>
+#include <string>
 #include <vector>
 #include "atom/io/async/async_io.hpp"
 
-using namespace atom::async::io;
+using namespace atom::io::async;
 namespace fs = std::filesystem;
 
 /**
- * @brief Creates test files for coroutine demonstrations
+ * @brief Creates test files for demonstrations
  */
 void createTestFiles() {
-    std::cout << "Creating test files for coroutine operations..." << std::endl;
+    std::cout << "Creating test files..." << std::endl;
 
     std::vector<std::pair<std::string, std::string>> testFiles = {
         {"coro_test1.txt",
-         "First coroutine test file\nWith some content\nFor async operations"},
+         "First test file\nWith some content\nFor async operations"},
         {"coro_test2.txt",
-         "Second coroutine test file\nDifferent content here\nFor testing "
-         "purposes"},
+         "Second test file\nDifferent content here\nFor testing purposes"},
         {"coro_input.txt",
          "Input file for processing\nLine 2\nLine 3\nLine 4\nFinal line"}};
 
@@ -42,247 +45,290 @@ void createTestFiles() {
         file.close();
     }
 
-    std::cout << "✅ Created " << testFiles.size() << " test files"
-              << std::endl;
+    std::cout << "  Created " << testFiles.size() << " test files" << std::endl;
 }
 
 /**
- * @brief Simple coroutine for reading a file
+ * @brief Demonstrates simple async read and write
  */
-Task<void> simpleFileRead(AsyncFile& fileManager, const std::string& filename) {
-    std::cout << "📖 Reading file: " << filename << std::endl;
+void demonstrateSimpleReadWrite() {
+    std::cout << "\n=== Simple Async Read/Write ===" << std::endl;
 
-    auto result = co_await fileManager.readFile(filename);
+    auto context = std::make_shared<AsyncContext>();
+#ifdef ATOM_USE_ASIO
+    asio::io_context ioCtx;
+    auto wg = asio::make_work_guard(ioCtx);
+    std::jthread ioThread([&]() { ioCtx.run(); });
+    AsyncFile fileManager(ioCtx, context);
+#else
+    AsyncFile fileManager(context);
+#endif
 
-    if (result.success) {
-        std::cout << "✅ Successfully read " << filename << " ("
-                  << result.value.size() << " bytes)" << std::endl;
-        std::cout << "Content preview: " << result.value.substr(0, 50) << "..."
+    // Async read
+    std::cout << "1. Reading coro_test1.txt..." << std::endl;
+    std::promise<AsyncResult<std::string>> readPromise;
+    fileManager.asyncRead(std::string("coro_test1.txt"),
+                          [&](AsyncResult<std::string> result) {
+                              readPromise.set_value(std::move(result));
+                          });
+
+    auto readResult = readPromise.get_future().get();
+    if (readResult.success) {
+        std::cout << "  Read " << readResult.value.size() << " bytes"
+                  << std::endl;
+        std::cout << "  Preview: "
+                  << readResult.value.substr(
+                         0, std::min<size_t>(50, readResult.value.size()))
+                  << "..." << std::endl;
+    } else {
+        std::cerr << "  Read failed: " << readResult.error_message << std::endl;
+    }
+
+    // Async write
+    std::cout << "\n2. Writing coro_output.txt..." << std::endl;
+    std::string content =
+        "Hello from async operations!\nThis is async I/O.";
+    std::promise<AsyncResult<void>> writePromise;
+    fileManager.asyncWrite(
+        std::string("coro_output.txt"), content,
+        [&](AsyncResult<void> result) {
+            writePromise.set_value(std::move(result));
+        });
+
+    auto writeResult = writePromise.get_future().get();
+    if (writeResult.success) {
+        std::cout << "  Write successful (" << content.size() << " bytes)"
                   << std::endl;
     } else {
-        std::cout << "❌ Failed to read " << filename << ": "
-                  << result.error_message << std::endl;
+        std::cerr << "  Write failed: " << writeResult.error_message
+                  << std::endl;
     }
+
+#ifdef ATOM_USE_ASIO
+    wg.reset();
+    ioCtx.stop();
+#endif
 }
 
 /**
- * @brief Coroutine for writing a file
+ * @brief Demonstrates sequential file processing via chained callbacks
  */
-Task<void> simpleFileWrite(AsyncFile& fileManager, const std::string& filename,
-                           const std::string& content) {
-    std::cout << "✏️  Writing file: " << filename << std::endl;
+void demonstrateSequentialProcessing() {
+    std::cout << "\n=== Sequential File Processing ===" << std::endl;
 
-    std::span<const char> contentSpan(content.data(), content.size());
-    auto result = co_await fileManager.writeFile(filename, contentSpan);
-
-    if (result.success) {
-        std::cout << "✅ Successfully wrote " << filename << " ("
-                  << content.size() << " bytes)" << std::endl;
-    } else {
-        std::cout << "❌ Failed to write " << filename << ": "
-                  << result.error_message << std::endl;
-    }
-}
-
-/**
- * @brief Coroutine that processes multiple files sequentially
- */
-Task<void> processFilesSequentially(AsyncFile& fileManager) {
-    std::cout << "\n=== Sequential File Processing with Coroutines ==="
-              << std::endl;
+    auto context = std::make_shared<AsyncContext>();
+#ifdef ATOM_USE_ASIO
+    asio::io_context ioCtx;
+    auto wg = asio::make_work_guard(ioCtx);
+    std::jthread ioThread([&]() { ioCtx.run(); });
+    AsyncFile fileManager(ioCtx, context);
+#else
+    AsyncFile fileManager(context);
+#endif
 
     std::vector<std::string> filesToProcess = {
         "coro_test1.txt", "coro_test2.txt", "coro_input.txt"};
 
     for (const auto& filename : filesToProcess) {
         // Read file
-        auto readResult = co_await fileManager.readFile(filename);
+        std::promise<AsyncResult<std::string>> readPromise;
+        fileManager.asyncRead(std::string(filename),
+                              [&](AsyncResult<std::string> result) {
+                                  readPromise.set_value(std::move(result));
+                              });
 
+        auto readResult = readPromise.get_future().get();
         if (readResult.success) {
-            std::cout << "📖 Read " << filename << " ("
+            std::cout << "  Read " << filename << " ("
                       << readResult.value.size() << " bytes)" << std::endl;
 
             // Process content (convert to uppercase)
-            std::string processedContent = readResult.value;
-            std::transform(processedContent.begin(), processedContent.end(),
-                           processedContent.begin(), ::toupper);
+            std::string processed = readResult.value;
+            std::transform(processed.begin(), processed.end(),
+                           processed.begin(), ::toupper);
 
-            // Write processed content to new file
-            std::string outputFilename = "processed_" + filename;
-            std::span<const char> contentSpan(processedContent.data(),
-                                              processedContent.size());
-            auto writeResult =
-                co_await fileManager.writeFile(outputFilename, contentSpan);
+            // Write processed content
+            std::string outputName = "processed_" + filename;
+            std::promise<AsyncResult<void>> writePromise;
+            fileManager.asyncWrite(
+                std::string(outputName), processed,
+                [&](AsyncResult<void> result) {
+                    writePromise.set_value(std::move(result));
+                });
 
+            auto writeResult = writePromise.get_future().get();
             if (writeResult.success) {
-                std::cout << "✅ Processed and saved to " << outputFilename
-                          << std::endl;
+                std::cout << "  Processed -> " << outputName << std::endl;
             } else {
-                std::cout << "❌ Failed to write processed file: "
-                          << writeResult.error_message << std::endl;
+                std::cerr << "  Write failed: " << writeResult.error_message
+                          << std::endl;
             }
         } else {
-            std::cout << "❌ Failed to read " << filename << ": "
+            std::cerr << "  Read failed for " << filename << ": "
                       << readResult.error_message << std::endl;
         }
     }
 
-    std::cout << "🎉 Sequential processing completed" << std::endl;
+    std::cout << "  Sequential processing completed" << std::endl;
+
+#ifdef ATOM_USE_ASIO
+    wg.reset();
+    ioCtx.stop();
+#endif
 }
 
 /**
- * @brief Coroutine for directory operations
+ * @brief Demonstrates error handling in async operations
  */
-Task<void> directoryOperationsCoroutine(AsyncFile& fileManager) {
-    std::cout << "\n=== Directory Operations with Coroutines ===" << std::endl;
+void demonstrateErrorHandling() {
+    std::cout << "\n=== Error Handling ===" << std::endl;
 
-    // List current directory
-    std::cout << "📁 Listing current directory..." << std::endl;
-    auto listResult = co_await fileManager.listDirectory(".");
+    auto context = std::make_shared<AsyncContext>();
+#ifdef ATOM_USE_ASIO
+    asio::io_context ioCtx;
+    auto wg = asio::make_work_guard(ioCtx);
+    std::jthread ioThread([&]() { ioCtx.run(); });
+    AsyncFile fileManager(ioCtx, context);
+#else
+    AsyncFile fileManager(context);
+#endif
 
-    if (listResult.success) {
-        std::cout << "✅ Found " << listResult.value.size()
-                  << " items in current directory" << std::endl;
+    // Read non-existent file
+    std::cout << "1. Reading non-existent file..." << std::endl;
+    std::promise<AsyncResult<std::string>> readPromise;
+    fileManager.asyncRead(std::string("non_existent_file.txt"),
+                          [&](AsyncResult<std::string> result) {
+                              readPromise.set_value(std::move(result));
+                          });
 
-        // Show files related to our test
-        std::cout << "Test-related files:" << std::endl;
-        for (const auto& path : listResult.value) {
-            std::string filename = path.filename().string();
-            if (filename.find("coro_") != std::string::npos ||
-                filename.find("processed_") != std::string::npos) {
-                std::cout << "  📄 " << filename;
-                if (fs::is_regular_file(path)) {
-                    std::cout << " (" << fs::file_size(path) << " bytes)";
-                }
-                std::cout << std::endl;
-            }
-        }
-    } else {
-        std::cout << "❌ Failed to list directory: " << listResult.error_message
-                  << std::endl;
-    }
-}
-
-/**
- * @brief Coroutine that demonstrates error handling
- */
-Task<void> errorHandlingCoroutine(AsyncFile& fileManager) {
-    std::cout << "\n=== Error Handling in Coroutines ===" << std::endl;
-
-    // Try to read a non-existent file
-    std::cout << "Attempting to read non-existent file..." << std::endl;
-    auto result = co_await fileManager.readFile("non_existent_file.txt");
-
-    if (result.success) {
-        std::cout << "❌ This should not succeed!" << std::endl;
-    } else {
-        std::cout << "✅ Expected error caught: " << result.error_message
+    auto readResult = readPromise.get_future().get();
+    if (!readResult.success) {
+        std::cout << "  Expected error: " << readResult.error_message
                   << std::endl;
     }
 
-    // Try to write to an invalid path
-    std::cout << "Attempting to write to invalid path..." << std::endl;
-    std::string content = "Test content";
-    std::span<const char> contentSpan(content.data(), content.size());
-    auto writeResult =
-        co_await fileManager.writeFile("/invalid/path/file.txt", contentSpan);
+    // Check existence
+    std::cout << "\n2. Checking file existence..." << std::endl;
+    std::promise<AsyncResult<bool>> existsPromise;
+    fileManager.asyncExists(std::string("coro_test1.txt"),
+                            [&](AsyncResult<bool> result) {
+                                existsPromise.set_value(std::move(result));
+                            });
 
-    if (writeResult.success) {
-        std::cout << "❌ This should not succeed!" << std::endl;
-    } else {
-        std::cout << "✅ Expected write error caught: "
-                  << writeResult.error_message << std::endl;
+    auto existsResult = existsPromise.get_future().get();
+    if (existsResult.success) {
+        std::cout << "  coro_test1.txt exists: "
+                  << (existsResult.value ? "Yes" : "No") << std::endl;
     }
+
+    std::promise<AsyncResult<bool>> noExistsPromise;
+    fileManager.asyncExists(std::string("non_existent.txt"),
+                            [&](AsyncResult<bool> result) {
+                                noExistsPromise.set_value(std::move(result));
+                            });
+
+    auto noExistsResult = noExistsPromise.get_future().get();
+    if (noExistsResult.success) {
+        std::cout << "  non_existent.txt exists: "
+                  << (noExistsResult.value ? "Yes" : "No") << std::endl;
+    }
+
+#ifdef ATOM_USE_ASIO
+    wg.reset();
+    ioCtx.stop();
+#endif
 }
 
 /**
- * @brief Coroutine that combines multiple operations
+ * @brief Demonstrates combined read-process-write operations
  */
-Task<void> combinedOperationsCoroutine(AsyncFile& fileManager) {
-    std::cout << "\n=== Combined Operations Coroutine ===" << std::endl;
+void demonstrateCombinedOperations() {
+    std::cout << "\n=== Combined Read-Process-Write ===" << std::endl;
+
+    auto context = std::make_shared<AsyncContext>();
+#ifdef ATOM_USE_ASIO
+    asio::io_context ioCtx;
+    auto wg = asio::make_work_guard(ioCtx);
+    std::jthread ioThread([&]() { ioCtx.run(); });
+    AsyncFile fileManager(ioCtx, context);
+#else
+    AsyncFile fileManager(context);
+#endif
 
     // Read input file
-    auto inputResult = co_await fileManager.readFile("coro_input.txt");
+    std::promise<AsyncResult<std::string>> readPromise;
+    fileManager.asyncRead(std::string("coro_input.txt"),
+                          [&](AsyncResult<std::string> result) {
+                              readPromise.set_value(std::move(result));
+                          });
+
+    auto inputResult = readPromise.get_future().get();
     if (!inputResult.success) {
-        std::cout << "❌ Failed to read input file: "
-                  << inputResult.error_message << std::endl;
-        co_return;
+        std::cerr << "  Failed to read input: " << inputResult.error_message
+                  << std::endl;
+        return;
     }
 
-    std::cout << "📖 Read input file (" << inputResult.value.size() << " bytes)"
+    std::cout << "  Read input file (" << inputResult.value.size() << " bytes)"
               << std::endl;
 
-    // Split content into lines and process each
+    // Process: split into lines, create summary
     std::istringstream iss(inputResult.value);
     std::string line;
     std::vector<std::string> lines;
-
     while (std::getline(iss, line)) {
         lines.push_back(line);
     }
 
-    std::cout << "📝 Processing " << lines.size() << " lines..." << std::endl;
-
-    // Create summary file
     std::string summary = "File Processing Summary\n";
     summary += "=======================\n";
     summary += "Total lines: " + std::to_string(lines.size()) + "\n";
     summary +=
         "Total characters: " + std::to_string(inputResult.value.size()) + "\n";
     summary += "\nLines:\n";
-
     for (size_t i = 0; i < lines.size(); ++i) {
         summary += std::to_string(i + 1) + ". " + lines[i] + "\n";
     }
 
     // Write summary
-    std::span<const char> summarySpan(summary.data(), summary.size());
-    auto summaryResult =
-        co_await fileManager.writeFile("file_summary.txt", summarySpan);
+    std::promise<AsyncResult<void>> writePromise;
+    fileManager.asyncWrite(
+        std::string("file_summary.txt"), summary,
+        [&](AsyncResult<void> result) {
+            writePromise.set_value(std::move(result));
+        });
 
-    if (summaryResult.success) {
-        std::cout << "✅ Created summary file: file_summary.txt" << std::endl;
+    auto writeResult = writePromise.get_future().get();
+    if (writeResult.success) {
+        std::cout << "  Created summary: file_summary.txt" << std::endl;
     } else {
-        std::cout << "❌ Failed to create summary: "
-                  << summaryResult.error_message << std::endl;
+        std::cerr << "  Failed to write summary: "
+                  << writeResult.error_message << std::endl;
     }
-}
 
-/**
- * @brief Main coroutine that orchestrates all demonstrations
- */
-Task<void> mainCoroutine() {
-    auto context = std::make_shared<AsyncContext>();
-    AsyncFile fileManager(context);
+    // Verify with async delete (cleanup processed file)
+    std::promise<AsyncResult<void>> deletePromise;
+    fileManager.asyncDelete(std::string("file_summary.txt"),
+                            [&](AsyncResult<void> result) {
+                                deletePromise.set_value(std::move(result));
+                            });
 
-    std::cout << "🚀 Starting coroutine-based async operations..." << std::endl;
+    auto deleteResult = deletePromise.get_future().get();
+    if (deleteResult.success) {
+        std::cout << "  Deleted file_summary.txt" << std::endl;
+    }
 
-    // Simple file operations
-    co_await simpleFileRead(fileManager, "coro_test1.txt");
-    co_await simpleFileWrite(
-        fileManager, "coro_output.txt",
-        "Hello from coroutines!\nThis is async I/O with C++20 coroutines.");
-
-    // Sequential processing
-    co_await processFilesSequentially(fileManager);
-
-    // Directory operations
-    co_await directoryOperationsCoroutine(fileManager);
-
-    // Error handling
-    co_await errorHandlingCoroutine(fileManager);
-
-    // Combined operations
-    co_await combinedOperationsCoroutine(fileManager);
-
-    std::cout << "🎉 All coroutine operations completed!" << std::endl;
+#ifdef ATOM_USE_ASIO
+    wg.reset();
+    ioCtx.stop();
+#endif
 }
 
 /**
  * @brief Cleans up test files
  */
 void cleanup() {
-    std::cout << "\n🧹 Cleaning up test files..." << std::endl;
+    std::cout << "\nCleaning up test files..." << std::endl;
 
     std::vector<std::string> filesToRemove = {
         "coro_test1.txt",           "coro_test2.txt",
@@ -296,30 +342,28 @@ void cleanup() {
         }
     }
 
-    std::cout << "✅ Cleanup completed" << std::endl;
+    std::cout << "  Cleanup completed" << std::endl;
 }
 
 int main() {
     try {
-        std::cout << "🔄 Atom I/O Coroutine Operations Examples" << std::endl;
-        std::cout << "=========================================" << std::endl;
+        std::cout << "Atom I/O Async Operations Examples" << std::endl;
+        std::cout << "==================================" << std::endl;
 
-        // Setup
         createTestFiles();
 
-        // Run main coroutine
-        auto task = mainCoroutine();
-        // Note: In a real application, you would need to properly await the
-        // coroutine This is a simplified example for demonstration purposes
+        demonstrateSimpleReadWrite();
+        demonstrateSequentialProcessing();
+        demonstrateErrorHandling();
+        demonstrateCombinedOperations();
 
-        // Cleanup
         cleanup();
 
-        std::cout << "\n🎉 All coroutine examples completed successfully!"
+        std::cout << "\nAll async operations completed successfully!"
                   << std::endl;
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "💥 Fatal exception: " << e.what() << std::endl;
+        std::cerr << "Fatal exception: " << e.what() << std::endl;
         cleanup();
         return 1;
     }

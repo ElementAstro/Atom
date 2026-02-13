@@ -7,65 +7,15 @@
 #ifndef ATOM_SYSTEM_COMMAND_UTILS_HPP
 #define ATOM_SYSTEM_COMMAND_UTILS_HPP
 
-#include <chrono>
 #include <functional>
-#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "atom/macro.hpp"
-#include "executor.hpp"
+#include "types.hpp"
 
 namespace atom::system {
-
-/**
- * @brief Command validation result
- */
-struct ValidationResult {
-    bool isValid = false;
-    std::string errorMessage;
-    std::vector<std::string> warnings;
-    double securityScore = 0.0; // 0.0 = very dangerous, 1.0 = safe
-};
-
-/**
- * @brief Command performance metrics
- */
-struct CommandMetrics {
-    std::chrono::milliseconds executionTime{0};
-    size_t outputSize = 0;
-    size_t memoryUsage = 0;
-    double cpuUsage = 0.0;
-    bool wasSuccessful = false;
-};
-
-/**
- * @brief Pipe configuration for command chaining
- */
-struct PipeConfig {
-    bool captureStderr = true;
-    bool validateCommands = true;
-    std::chrono::milliseconds timeout{30000}; // 30 seconds default
-    size_t maxOutputSize = 1024 * 1024; // 1MB default
-};
-
-/**
- * @brief Validate a command with detailed security analysis
- *
- * @param command The command to validate
- * @return ValidationResult with detailed validation information
- */
-ATOM_NODISCARD auto validateCommandDetailed(const std::string &command)
-    -> ValidationResult;
-
-/**
- * @brief Sanitize a command by removing or escaping dangerous elements
- *
- * @param command The command to sanitize
- * @return Sanitized command string
- */
-ATOM_NODISCARD auto sanitizeCommand(const std::string &command) -> std::string;
 
 /**
  * @brief Parse command line arguments from a command string
@@ -182,14 +132,6 @@ ATOM_NODISCARD auto expandCommandAliases(const std::string &command) -> std::str
 ATOM_NODISCARD auto getCommandCompletions(
     const std::string &partialCommand,
     size_t maxSuggestions = 10) -> std::vector<std::string>;
-
-/**
- * @brief Check if a command requires elevated privileges
- *
- * @param command The command to check
- * @return true if the command typically requires elevated privileges
- */
-ATOM_NODISCARD auto requiresElevatedPrivileges(const std::string &command) -> bool;
 
 }  // namespace atom::system
 

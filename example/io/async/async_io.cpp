@@ -17,7 +17,7 @@
 #include <string>
 #include <thread>
 
-using namespace atom::async::io;
+using namespace atom::io::async;
 
 /**
  * @brief Demonstrates basic asynchronous file operations

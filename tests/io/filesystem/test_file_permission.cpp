@@ -10,7 +10,7 @@
 #include <windows.h>
 #endif
 
-#include "atom/io/file_permission.hpp"
+#include "atom/io/filesystem/file_permission.hpp"
 
 namespace fs = std::filesystem;
 

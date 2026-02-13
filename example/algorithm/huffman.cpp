@@ -1,4 +1,4 @@
-#include "atom/algorithm/huffman.hpp"
+#include "atom/algorithm/compression/huffman.hpp"
 
 #include <iostream>
 #include <unordered_map>

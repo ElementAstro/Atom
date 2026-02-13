@@ -14,7 +14,7 @@
  * @date 2024-12-19
  */
 
-#include "atom/algorithm/sha1.hpp"
+#include "atom/algorithm/crypto/sha1.hpp"
 
 #include <chrono>
 #include <filesystem>

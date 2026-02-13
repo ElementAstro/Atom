@@ -4,19 +4,26 @@
 #include <chrono>
 #include <utility>
 
+#include "cron_cache.hpp"
+#include "cron_config.hpp"
 #include "cron_storage.hpp"
 #include "cron_system.hpp"
-#include "cron_config.hpp"
-#include "cron_cache.hpp"
 #include "cron_thread_pool.hpp"
 #include "spdlog/spdlog.h"
+
+void CronManager::initSubComponents() {
+    query_ = std::make_unique<CronManagerQuery>(
+        jobs_, command_to_id_index_, category_index_, status_index_,
+        priority_index_, job_stats_, jobs_mutex_, stats_mutex_);
+    batch_ = std::make_unique<CronManagerBatch>(*this, jobs_, jobs_mutex_);
+}
 
 CronManager::CronManager() {
     // Load existing jobs from system with optimized storage
     auto system_jobs = CronSystem::listSystemJobs();
 
     std::unique_lock<std::shared_mutex> lock(jobs_mutex_);
-    jobs_.reserve(system_jobs.size() + 1000); // Reserve space for growth
+    jobs_.reserve(system_jobs.size() + 1000);  // Reserve space for growth
 
     for (auto& job : system_jobs) {
         auto job_ptr = std::make_shared<CronJob>(std::move(job));
@@ -24,6 +31,9 @@ CronManager::CronManager() {
         jobs_[job_id] = job_ptr;
         updateIndices(job_id, *job_ptr);
     }
+
+    lock.unlock();
+    initSubComponents();
 
     spdlog::info("CronManager initialized with {} jobs", jobs_.size());
 }
@@ -47,12 +57,16 @@ CronManager::CronManager(CronManager&& other) noexcept {
     job_stats_ = std::move(other.job_stats_);
     max_jobs_ = other.max_jobs_.load();
     auto_cleanup_enabled_ = other.auto_cleanup_enabled_.load();
+    lock.unlock();
+    initSubComponents();
 }
 
 CronManager& CronManager::operator=(CronManager&& other) noexcept {
     if (this != &other) {
-        std::unique_lock<std::shared_mutex> lock1(jobs_mutex_, std::defer_lock);
-        std::unique_lock<std::shared_mutex> lock2(other.jobs_mutex_, std::defer_lock);
+        std::unique_lock<std::shared_mutex> lock1(jobs_mutex_,
+                                                   std::defer_lock);
+        std::unique_lock<std::shared_mutex> lock2(other.jobs_mutex_,
+                                                   std::defer_lock);
         std::lock(lock1, lock2);
 
         jobs_ = std::move(other.jobs_);
@@ -63,6 +77,9 @@ CronManager& CronManager::operator=(CronManager&& other) noexcept {
         job_stats_ = std::move(other.job_stats_);
         max_jobs_ = other.max_jobs_.load();
         auto_cleanup_enabled_ = other.auto_cleanup_enabled_.load();
+        lock1.unlock();
+        lock2.unlock();
+        initSubComponents();
     }
     return *this;
 }
@@ -286,104 +303,84 @@ auto CronManager::removeJobInternal(const std::string& job_id) -> bool {
     return true;
 }
 
+// ============================================================================
+// Delegated Query Operations
+// ============================================================================
+
 auto CronManager::listCronJobs() -> std::vector<CronJob> {
-    spdlog::info("Listing all Cron jobs");
-
-    std::shared_lock<std::shared_mutex> lock(jobs_mutex_);
-
-    std::vector<CronJob> result;
-    result.reserve(jobs_.size());
-
-    for (const auto& [job_id, job_ptr] : jobs_) {
-        if (job_ptr) {
-            // Create a new CronJob with the same data (since copy is deleted)
-            CronJob job_copy(job_ptr->time_, job_ptr->command_,
-                           job_ptr->isEnabled(), job_ptr->getCategory(),
-                           job_ptr->getDescription());
-            job_copy.setPriority(job_ptr->getPriority());
-            job_copy.setMaxRetries(job_ptr->getMaxRetries());
-            job_copy.setOneTime(job_ptr->isOneTime());
-            result.push_back(std::move(job_copy));
-        }
-    }
-
-    spdlog::info("Retrieved {} Cron jobs", result.size());
-    return result;
+    return query_->listCronJobs();
 }
 
 auto CronManager::listCronJobsByCategory(const std::string& category)
     -> std::vector<CronJob> {
-    spdlog::info("Listing Cron jobs in category: {}", category);
-
-    std::shared_lock<std::shared_mutex> lock(jobs_mutex_);
-
-    auto it = category_index_.find(category);
-    if (it == category_index_.end()) {
-        spdlog::info("Found 0 jobs in category {}", category);
-        return {};
-    }
-
-    std::vector<CronJob> filteredJobs;
-    filteredJobs.reserve(it->second.size());
-
-    for (const std::string& job_id : it->second) {
-        auto job_it = jobs_.find(job_id);
-        if (job_it != jobs_.end() && job_it->second) {
-            auto job_ptr = job_it->second;
-            CronJob job_copy(job_ptr->time_, job_ptr->command_,
-                           job_ptr->isEnabled(), job_ptr->getCategory(),
-                           job_ptr->getDescription());
-            job_copy.setPriority(job_ptr->getPriority());
-            job_copy.setMaxRetries(job_ptr->getMaxRetries());
-            job_copy.setOneTime(job_ptr->isOneTime());
-            filteredJobs.push_back(std::move(job_copy));
-        }
-    }
-
-    spdlog::info("Found {} jobs in category {}", filteredJobs.size(), category);
-    return filteredJobs;
+    return query_->listCronJobsByCategory(category);
 }
 
 auto CronManager::getCategories() -> std::vector<std::string> {
-    std::shared_lock<std::shared_mutex> lock(jobs_mutex_);
-
-    std::vector<std::string> result;
-    result.reserve(category_index_.size());
-
-    for (const auto& [category, _] : category_index_) {
-        result.push_back(category);
-    }
-
-    std::sort(result.begin(), result.end());
-    return result;
+    return query_->getCategories();
 }
 
+auto CronManager::viewCronJob(const std::string& command) -> CronJob {
+    return query_->viewCronJob(command);
+}
+
+auto CronManager::viewCronJobById(const std::string& id) -> CronJob {
+    return query_->viewCronJobById(id);
+}
+
+auto CronManager::searchCronJobs(const std::string& query)
+    -> std::vector<CronJob> {
+    return query_->searchCronJobs(query);
+}
+
+auto CronManager::statistics() -> std::unordered_map<std::string, int> {
+    return query_->statistics();
+}
+
+auto CronManager::getJobsByPriority() -> std::vector<CronJob> {
+    return query_->getJobsByPriority();
+}
+
+auto CronManager::getJobsByCategory(const std::string& category)
+    -> std::vector<std::shared_ptr<CronJob>> {
+    return query_->getJobsByCategory(category);
+}
+
+auto CronManager::getJobsByStatus(JobStatus status)
+    -> std::vector<std::shared_ptr<CronJob>> {
+    return query_->getJobsByStatus(status);
+}
+
+auto CronManager::getJobsByPriorityRange(JobPriority min_priority,
+                                          JobPriority max_priority)
+    -> std::vector<std::shared_ptr<CronJob>> {
+    return query_->getJobsByPriorityRange(min_priority, max_priority);
+}
+
+auto CronManager::getJobStats(const std::string& job_id)
+    -> std::optional<JobStats> {
+    return query_->getJobStats(job_id);
+}
+
+auto CronManager::getOverallStats() -> JobStats {
+    return query_->getOverallStats();
+}
+
+// ============================================================================
+// Delegated Batch/IO Operations
+// ============================================================================
+
 auto CronManager::exportToJSON(const std::string& filename) -> bool {
-    auto job_list = listCronJobs(); // This creates copies we can export
-    return CronStorage::exportToJSON(job_list, filename);
+    return batch_->exportToJSON(filename);
 }
 
 auto CronManager::importFromJSON(const std::string& filename) -> bool {
-    spdlog::info("Importing Cron jobs from JSON file: {}", filename);
-
-    auto importedJobs = CronStorage::importFromJSON(filename);
-    if (importedJobs.empty()) {
-        return false;
-    }
-
-    int successCount = 0;
-    for (auto& job : importedJobs) {
-        if (createCronJob(std::move(job))) {
-            ++successCount;
-        } else {
-            spdlog::warn("Failed to import job: {} {}", job.time_, job.command_);
-        }
-    }
-
-    spdlog::info("Successfully imported {} of {} jobs", successCount,
-                 importedJobs.size());
-    return successCount > 0;
+    return batch_->importFromJSON(filename);
 }
+
+// ============================================================================
+// Core Update Operations
+// ============================================================================
 
 auto CronManager::updateCronJob(const std::string& oldCommand,
                                 const CronJob& newJob) -> bool {
@@ -395,9 +392,8 @@ auto CronManager::updateCronJob(const std::string& oldCommand,
         return false;
     }
 
-    // Create a new CronJob with the same data (since copy is deleted)
     CronJob job_copy(newJob.time_, newJob.command_, newJob.isEnabled(),
-                    newJob.getCategory(), newJob.getDescription());
+                     newJob.getCategory(), newJob.getDescription());
     job_copy.setPriority(newJob.getPriority());
     job_copy.setMaxRetries(newJob.getMaxRetries());
     job_copy.setOneTime(newJob.isOneTime());
@@ -415,105 +411,17 @@ auto CronManager::updateCronJobById(const std::string& id,
     return false;
 }
 
-auto CronManager::viewCronJob(const std::string& command) -> CronJob {
-    spdlog::info("Viewing Cron job with command: {}", command);
-
-    auto it = std::find_if(
-        jobs_.begin(), jobs_.end(),
-        [&command](const auto& pair) { return pair.second->command_ == command; });
-
-    if (it != jobs_.end()) {
-        spdlog::info("Cron job found");
-        auto& job = it->second;
-        // Create a new CronJob with the same data (since copy is deleted)
-        CronJob job_copy(job->time_, job->command_, job->isEnabled(),
-                        job->getCategory(), job->getDescription());
-        job_copy.setPriority(job->getPriority());
-        job_copy.setMaxRetries(job->getMaxRetries());
-        job_copy.setOneTime(job->isOneTime());
-        return job_copy;
-    }
-
-    spdlog::warn("Cron job not found");
-    return CronJob{"", "", false};
-}
-
-auto CronManager::viewCronJobById(const std::string& id) -> CronJob {
-    auto it = jobs_.find(id);
-    if (it != jobs_.end()) {
-        auto& job = it->second;
-        // Create a new CronJob with the same data (since copy is deleted)
-        CronJob job_copy(job->time_, job->command_, job->isEnabled(),
-                        job->getCategory(), job->getDescription());
-        job_copy.setPriority(job->getPriority());
-        job_copy.setMaxRetries(job->getMaxRetries());
-        job_copy.setOneTime(job->isOneTime());
-        return job_copy;
-    }
-    spdlog::warn("Cron job with ID {} not found", id);
-    return CronJob{"", "", false};
-}
-
-auto CronManager::searchCronJobs(const std::string& query)
-    -> std::vector<CronJob> {
-    spdlog::info("Searching Cron jobs with query: {}", query);
-
-    std::vector<CronJob> foundJobs;
-    for (const auto& [job_id, job_ptr] : jobs_) {
-        if (job_ptr && (job_ptr->command_.find(query) != std::string::npos ||
-                       job_ptr->time_.find(query) != std::string::npos ||
-                       job_ptr->getCategory().find(query) != std::string::npos ||
-                       job_ptr->getDescription().find(query) != std::string::npos)) {
-            // Create a new CronJob with the same data (since copy is deleted)
-            CronJob job_copy(job_ptr->time_, job_ptr->command_, job_ptr->isEnabled(),
-                            job_ptr->getCategory(), job_ptr->getDescription());
-            job_copy.setPriority(job_ptr->getPriority());
-            job_copy.setMaxRetries(job_ptr->getMaxRetries());
-            job_copy.setOneTime(job_ptr->isOneTime());
-            foundJobs.push_back(std::move(job_copy));
-        }
-    }
-
-    spdlog::info("Found {} matching Cron jobs", foundJobs.size());
-    return foundJobs;
-}
-
-auto CronManager::statistics() -> std::unordered_map<std::string, int> {
-    std::unordered_map<std::string, int> stats;
-
-    stats["total"] = static_cast<int>(jobs_.size());
-
-    int enabledCount = 0;
-    int totalExecutions = 0;
-
-    for (const auto& [job_id, job_ptr] : jobs_) {
-        if (job_ptr && job_ptr->isEnabled()) {
-            ++enabledCount;
-        }
-        // Note: run_count is not accessible, would need to be added to public interface
-    }
-
-    stats["enabled"] = enabledCount;
-    stats["disabled"] = static_cast<int>(jobs_.size()) - enabledCount;
-    stats["total_executions"] = totalExecutions;
-
-    for (const auto& [category, job_ids] : category_index_) {
-        stats["category_" + category] = static_cast<int>(job_ids.size());
-    }
-
-    spdlog::info(
-        "Generated statistics. Total jobs: {}, enabled: {}, disabled: {}",
-        stats["total"], stats["enabled"], stats["disabled"]);
-
-    return stats;
-}
+// ============================================================================
+// Enable/Disable Operations
+// ============================================================================
 
 auto CronManager::enableCronJob(const std::string& command) -> bool {
     spdlog::info("Enabling Cron job with command: {}", command);
 
-    auto it = std::find_if(
-        jobs_.begin(), jobs_.end(),
-        [&command](const auto& pair) { return pair.second->command_ == command; });
+    auto it = std::find_if(jobs_.begin(), jobs_.end(),
+                           [&command](const auto& pair) {
+                               return pair.second->command_ == command;
+                           });
 
     if (it != jobs_.end()) {
         it->second->enable();
@@ -527,9 +435,10 @@ auto CronManager::enableCronJob(const std::string& command) -> bool {
 auto CronManager::disableCronJob(const std::string& command) -> bool {
     spdlog::info("Disabling Cron job with command: {}", command);
 
-    auto it = std::find_if(
-        jobs_.begin(), jobs_.end(),
-        [&command](const auto& pair) { return pair.second->command_ == command; });
+    auto it = std::find_if(jobs_.begin(), jobs_.end(),
+                           [&command](const auto& pair) {
+                               return pair.second->command_ == command;
+                           });
 
     if (it != jobs_.end()) {
         it->second->disable();
@@ -555,7 +464,8 @@ auto CronManager::setJobEnabledById(const std::string& id, bool enabled)
     return false;
 }
 
-auto CronManager::enableCronJobsByCategory(const std::string& category) -> int {
+auto CronManager::enableCronJobsByCategory(const std::string& category)
+    -> int {
     spdlog::info("Enabling all cron jobs in category: {}", category);
 
     auto it = category_index_.find(category);
@@ -614,110 +524,14 @@ auto CronManager::disableCronJobsByCategory(const std::string& category)
     return count;
 }
 
-auto CronManager::exportToCrontab() -> bool {
-    std::vector<CronJob> job_vector;
-    job_vector.reserve(jobs_.size());
-
-    for (const auto& [job_id, job_ptr] : jobs_) {
-        if (job_ptr) {
-            // Create a new CronJob with the same data (since copy is deleted)
-            CronJob job_copy(job_ptr->time_, job_ptr->command_,
-                           job_ptr->isEnabled(), job_ptr->getCategory(),
-                           job_ptr->getDescription());
-            job_copy.setPriority(job_ptr->getPriority());
-            job_copy.setMaxRetries(job_ptr->getMaxRetries());
-            job_copy.setOneTime(job_ptr->isOneTime());
-            job_vector.push_back(std::move(job_copy));
-        }
-    }
-
-    auto result = CronSystem::exportJobsToSystem(job_vector);
-    return result.success;
-}
-
-auto CronManager::batchCreateJobs(const std::vector<CronJob>& jobs) -> int {
-    spdlog::info("Batch creating {} cron jobs", jobs.size());
-
-    int successCount = 0;
-    for (const auto& job : jobs) {
-        // Create a new CronJob with the same data (since copy is deleted)
-        CronJob job_copy(job.time_, job.command_, job.isEnabled(),
-                        job.getCategory(), job.getDescription());
-        job_copy.setPriority(job.getPriority());
-        job_copy.setMaxRetries(job.getMaxRetries());
-        job_copy.setOneTime(job.isOneTime());
-
-        if (createCronJob(std::move(job_copy))) {
-            ++successCount;
-        }
-    }
-
-    spdlog::info("Successfully created {} of {} jobs", successCount,
-                 jobs.size());
-    return successCount;
-}
-
-auto CronManager::batchDeleteJobs(const std::vector<std::string>& commands)
-    -> int {
-    spdlog::info("Batch deleting {} cron jobs", commands.size());
-
-    int successCount = 0;
-    for (const auto& command : commands) {
-        if (deleteCronJob(command)) {
-            ++successCount;
-        }
-    }
-
-    spdlog::info("Successfully deleted {} of {} jobs", successCount,
-                 commands.size());
-    return successCount;
-}
-
-auto CronManager::recordJobExecution(const std::string& command) -> bool {
-    auto it = std::find_if(
-        jobs_.begin(), jobs_.end(),
-        [&command](const auto& pair) { return pair.second->command_ == command; });
-
-    if (it != jobs_.end()) {
-        auto& job = it->second;
-        job->recordExecution(true);
-
-        if (job->isOneTime()) {
-            const std::string jobId = job->getId();
-            spdlog::info("One-time job completed, removing: {}", jobId);
-            return deleteCronJobById(jobId);
-        }
-
-        spdlog::info("Recorded execution of job: {}", command);
-        return true;
-    }
-
-    spdlog::warn("Tried to record execution for unknown job: {}", command);
-    return false;
-}
-
-auto CronManager::clearAllJobs() -> bool {
-    spdlog::info("Clearing all cron jobs");
-
-    auto result = CronSystem::clearSystemJobs();
-    if (!result.success) {
-        return false;
-    }
-
-    jobs_.clear();
-    command_to_id_index_.clear();
-    category_index_.clear();
-    status_index_.clear();
-    priority_index_.clear();
-
-    spdlog::info("All cron jobs cleared successfully");
-    return true;
-}
+// ============================================================================
+// Property Management
+// ============================================================================
 
 auto CronManager::setJobPriority(const std::string& id, int priority) -> bool {
     if (priority < 1 || priority > 10) {
         spdlog::error("Invalid priority value {}. Must be between 1-10",
-                      priority);
+                       priority);
         return false;
     }
 
@@ -736,7 +550,7 @@ auto CronManager::setJobMaxRetries(const std::string& id, int maxRetries)
     -> bool {
     if (maxRetries < 0) {
         spdlog::error("Invalid max retries value {}. Must be non-negative",
-                      maxRetries);
+                       maxRetries);
         return false;
     }
 
@@ -757,7 +571,7 @@ auto CronManager::setJobOneTime(const std::string& id, bool oneTime) -> bool {
     if (it != jobs_.end()) {
         it->second->setOneTime(oneTime);
         spdlog::info("Set one-time status to {} for job: {}",
-                     oneTime ? "true" : "false", id);
+                      oneTime ? "true" : "false", id);
         return true;
     }
 
@@ -765,21 +579,32 @@ auto CronManager::setJobOneTime(const std::string& id, bool oneTime) -> bool {
     return false;
 }
 
-auto CronManager::getJobExecutionHistory(const std::string& id)
-    -> std::vector<std::pair<std::chrono::system_clock::time_point, bool>> {
-    auto it = jobs_.find(id);
+// ============================================================================
+// Execution Tracking
+// ============================================================================
+
+auto CronManager::recordJobExecution(const std::string& command) -> bool {
+    auto it = std::find_if(jobs_.begin(), jobs_.end(),
+                           [&command](const auto& pair) {
+                               return pair.second->command_ == command;
+                           });
+
     if (it != jobs_.end()) {
-        auto history = it->second->getExecutionHistory();
-        std::vector<std::pair<std::chrono::system_clock::time_point, bool>> result;
-        result.reserve(history.size());
-        for (const auto& entry : history) {
-            result.emplace_back(entry.timestamp, entry.success);
+        auto& job = it->second;
+        job->recordExecution(true);
+
+        if (job->isOneTime()) {
+            const std::string jobId = job->getId();
+            spdlog::info("One-time job completed, removing: {}", jobId);
+            return deleteCronJobById(jobId);
         }
-        return result;
+
+        spdlog::info("Recorded execution of job: {}", command);
+        return true;
     }
 
-    spdlog::error("Failed to find job with ID: {}", id);
-    return {};
+    spdlog::warn("Tried to record execution for unknown job: {}", command);
+    return false;
 }
 
 auto CronManager::recordJobExecutionResult(const std::string& id, bool success)
@@ -791,14 +616,12 @@ auto CronManager::recordJobExecutionResult(const std::string& id, bool success)
 
         if (success && job->isOneTime()) {
             spdlog::info("One-time job completed successfully, removing: {}",
-                         id);
+                          id);
             return deleteCronJobById(id);
         }
 
         if (!success) {
-            // Handle job failure inline since handleJobFailure is not in header
             spdlog::warn("Job failed: {}", id);
-            // Could add retry logic here if needed
         }
 
         return true;
@@ -808,29 +631,89 @@ auto CronManager::recordJobExecutionResult(const std::string& id, bool success)
     return false;
 }
 
-
-
-auto CronManager::getJobsByPriority() -> std::vector<CronJob> {
-    std::vector<CronJob> sortedJobs;
-    sortedJobs.reserve(jobs_.size());
-
-    // Convert from map to vector
-    for (const auto& [job_id, job_ptr] : jobs_) {
-        if (job_ptr) {
-            // Create a new CronJob with the same data (since copy is deleted)
-            CronJob job_copy(job_ptr->time_, job_ptr->command_, job_ptr->isEnabled(),
-                            job_ptr->getCategory(), job_ptr->getDescription());
-            job_copy.setPriority(job_ptr->getPriority());
-            job_copy.setMaxRetries(job_ptr->getMaxRetries());
-            job_copy.setOneTime(job_ptr->isOneTime());
-            sortedJobs.push_back(std::move(job_copy));
+void CronManager::recordJobExecution(const std::string& job_id, bool success,
+                                     std::chrono::milliseconds execution_time) {
+    {
+        std::unique_lock<std::shared_mutex> lock(stats_mutex_);
+        auto& stats = job_stats_[job_id];
+        stats.total_executions++;
+        if (success) {
+            stats.successful_executions++;
+        } else {
+            stats.failed_executions++;
         }
+        stats.last_execution = std::chrono::system_clock::now();
+        auto total = stats.total_executions.load();
+        stats.avg_execution_time = std::chrono::milliseconds(
+            (stats.avg_execution_time.count() * (total - 1) +
+             execution_time.count()) /
+            total);
     }
 
-    std::sort(sortedJobs.begin(), sortedJobs.end(),
-              [](const CronJob& a, const CronJob& b) {
-                  return a.getPriority() < b.getPriority();
-              });
+    recordJobExecutionResult(job_id, success);
+}
 
-    return sortedJobs;
+auto CronManager::getJobExecutionHistory(const std::string& id)
+    -> std::vector<std::pair<std::chrono::system_clock::time_point, bool>> {
+    auto it = jobs_.find(id);
+    if (it != jobs_.end()) {
+        auto history = it->second->getExecutionHistory();
+        std::vector<std::pair<std::chrono::system_clock::time_point, bool>>
+            result;
+        result.reserve(history.size());
+        for (const auto& entry : history) {
+            result.emplace_back(entry.timestamp, entry.success);
+        }
+        return result;
+    }
+
+    spdlog::error("Failed to find job with ID: {}", id);
+    return {};
+}
+
+// ============================================================================
+// Delegated Batch/IO Operations (continued)
+// ============================================================================
+
+auto CronManager::exportToCrontab() -> bool {
+    return batch_->exportToCrontab();
+}
+
+auto CronManager::batchCreateJobs(const std::vector<CronJob>& jobs) -> int {
+    return batch_->batchCreateJobs(jobs);
+}
+
+auto CronManager::batchCreateJobsOptimized(std::vector<CronJob> jobs)
+    -> size_t {
+    return batch_->batchCreateJobsOptimized(std::move(jobs));
+}
+
+auto CronManager::batchDeleteJobs(const std::vector<std::string>& commands)
+    -> int {
+    return batch_->batchDeleteJobs(commands);
+}
+
+auto CronManager::batchUpdateJobs(
+    const std::vector<std::pair<std::string, CronJob>>& updates) -> size_t {
+    return batch_->batchUpdateJobs(updates);
+}
+
+auto CronManager::clearAllJobs() -> bool {
+    spdlog::info("Clearing all cron jobs");
+
+    auto result = CronSystem::clearSystemJobs();
+    if (!result.success) {
+        return false;
+    }
+
+    std::unique_lock<std::shared_mutex> lock(jobs_mutex_);
+    jobs_.clear();
+    command_to_id_index_.clear();
+    category_index_.clear();
+    status_index_.clear();
+    priority_index_.clear();
+    invalidateCache();
+
+    spdlog::info("All cron jobs cleared successfully");
+    return true;
 }

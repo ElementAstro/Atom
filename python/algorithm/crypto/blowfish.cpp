@@ -1,4 +1,4 @@
-#include "atom/algorithm/blowfish.hpp"
+#include "atom/algorithm/crypto/blowfish.hpp"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 

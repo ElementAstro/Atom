@@ -37,16 +37,33 @@ endif()
 # =============================================================================
 # Test Source Configuration
 # =============================================================================
-# For modules with .cpp test files
-file(GLOB_RECURSE TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
+# Core and compression tests (always built)
+set(TEST_SOURCES
+    ${PROJECT_SOURCE_DIR}/core/test_io.cpp
+    ${PROJECT_SOURCE_DIR}/core/test_io_main.cpp
+    ${PROJECT_SOURCE_DIR}/core/test_glob.cpp
+    ${PROJECT_SOURCE_DIR}/core/test_path_utils.cpp
+    ${PROJECT_SOURCE_DIR}/compression/test_compress.cpp
+    ${PROJECT_SOURCE_DIR}/filesystem/test_file_info.cpp)
 
-list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/test_file_permission.cpp$")
-list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/test_pushd.cpp$")
+# Filesystem tests that require platform-specific APIs
+list(APPEND TEST_SOURCES
+     ${PROJECT_SOURCE_DIR}/filesystem/test_file_permission.cpp)
 
-# Exclude async tests that require ASIO (not available in this build)
-list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/test_async_compress.cpp$")
-list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/test_async_io.cpp$")
-list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/test_async_glob.cpp$")
+# ASIO-dependent tests: DirectoryStack (pushd) and all async tests
+if(TARGET asio::asio OR ASIO_INCLUDE_DIR)
+  list(
+    APPEND
+    TEST_SOURCES
+    ${PROJECT_SOURCE_DIR}/filesystem/test_pushd.cpp
+    ${PROJECT_SOURCE_DIR}/async/test_async_io.cpp
+    ${PROJECT_SOURCE_DIR}/async/test_async_compress.cpp
+    ${PROJECT_SOURCE_DIR}/async/test_async_glob.cpp)
+  message(STATUS "IO tests: ASIO available - including async and pushd tests")
+else()
+  message(
+    STATUS "IO tests: ASIO not available - excluding async and pushd tests")
+endif()
 
 # =============================================================================
 # Create Test Executable

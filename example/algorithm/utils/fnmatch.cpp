@@ -14,7 +14,7 @@
  * @date 2024-12-19
  */
 
-#include "atom/algorithm/fnmatch.hpp"
+#include "atom/algorithm/utils/fnmatch.hpp"
 
 #include <chrono>
 #include <iomanip>

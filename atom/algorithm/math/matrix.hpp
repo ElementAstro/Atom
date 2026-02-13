@@ -11,7 +11,7 @@
 #include <random>
 #include <vector>
 
-#include "atom/algorithm/rust_numeric.hpp"
+#include "atom/algorithm/core/rust_numeric.hpp"
 #include "atom/error/exception.hpp"
 
 namespace atom::algorithm {

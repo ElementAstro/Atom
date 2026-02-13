@@ -1,4 +1,4 @@
-#include "atom/algorithm/fnmatch.hpp"
+#include "atom/algorithm/utils/fnmatch.hpp"
 
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>

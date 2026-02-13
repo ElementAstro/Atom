@@ -1,6 +1,6 @@
 #if defined(__linux__) && !defined(__APPLE__)
 
-#include "../clipboard.ipp"
+#include "../clipboard_impl.hpp"
 
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>

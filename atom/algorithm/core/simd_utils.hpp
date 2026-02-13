@@ -5,7 +5,7 @@
 #include <cstring>
 #include <type_traits>
 
-#include "rust_numeric.hpp"
+#include "atom/algorithm/core/rust_numeric.hpp"
 
 // SIMD capability detection
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || \

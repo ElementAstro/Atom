@@ -66,13 +66,14 @@ set(SOURCES
 
 # Platform-specific sources
 if(WIN32)
-  list(APPEND SOURCES clipboard/clipboard.cpp clipboard/clipboard_windows.cpp
-       hardware/voltage_windows.cpp)
+  list(APPEND SOURCES clipboard/clipboard.cpp
+       clipboard/platform/clipboard_windows.cpp hardware/voltage_windows.cpp)
 elseif(UNIX AND NOT APPLE)
-  list(APPEND SOURCES clipboard/clipboard.cpp clipboard/clipboard_linux.cpp
-       hardware/voltage_linux.cpp)
+  list(APPEND SOURCES clipboard/clipboard.cpp
+       clipboard/platform/clipboard_linux.cpp hardware/voltage_linux.cpp)
 elseif(APPLE)
-  list(APPEND SOURCES clipboard/clipboard.cpp clipboard/clipboard_macos.cpp)
+  list(APPEND SOURCES clipboard/clipboard.cpp
+       clipboard/platform/clipboard_macos.cpp)
 endif()
 
 set(HEADERS
@@ -135,7 +136,6 @@ set(HEADERS
     network/virtual_network.hpp
     storage/storage.hpp
     clipboard/clipboard.hpp
-    clipboard/clipboard.ipp
     clipboard/clipboard_error.hpp
     signals/signal.hpp
     signals/signal_monitor.hpp

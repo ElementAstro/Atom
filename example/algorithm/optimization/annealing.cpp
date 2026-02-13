@@ -1,4 +1,4 @@
-#include "atom/algorithm/annealing.hpp"
+#include "atom/algorithm/optimization/annealing.hpp"
 
 #include <chrono>
 #include <iomanip>

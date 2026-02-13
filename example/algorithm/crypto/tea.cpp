@@ -14,7 +14,7 @@
  * @date 2024-12-19
  */
 
-#include "atom/algorithm/tea.hpp"
+#include "atom/algorithm/crypto/tea.hpp"
 
 #include <cassert>
 #include <chrono>

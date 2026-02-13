@@ -13,10 +13,9 @@
 #include <mutex>
 #include <string>
 #include <thread>
-#include <unordered_map>
-#include <vector>
 
 #include "atom/macro.hpp"
+#include "rate_limiter.hpp"
 
 namespace atom::system {
 
@@ -111,44 +110,6 @@ struct CommandSystemMetrics {
         auto total = totalCommands.load();
         return total > 0 ? static_cast<double>(totalExecutionTime.load()) / total : 0.0;
     }
-};
-
-/**
- * @brief Rate limiter for command execution
- */
-class RateLimiter {
-public:
-    explicit RateLimiter(size_t maxRequests, std::chrono::milliseconds window);
-
-    /**
-     * @brief Check if a request is allowed
-     * @param identifier Optional identifier for per-user/per-source limiting
-     * @return true if request is allowed
-     */
-    bool allowRequest(const std::string& identifier = "");
-
-    /**
-     * @brief Get current request count for identifier
-     */
-    size_t getCurrentCount(const std::string& identifier = "") const;
-
-    /**
-     * @brief Reset rate limiter
-     */
-    void reset();
-
-private:
-    struct RequestWindow {
-        std::vector<std::chrono::steady_clock::time_point> requests;
-        mutable std::mutex mutex;
-    };
-
-    size_t maxRequests_;
-    std::chrono::milliseconds window_;
-    mutable std::mutex globalMutex_;
-    std::unordered_map<std::string, std::unique_ptr<RequestWindow>> windows_;
-
-    void cleanupOldRequests(RequestWindow& window) const;
 };
 
 /**

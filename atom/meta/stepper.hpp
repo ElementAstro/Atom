@@ -24,7 +24,7 @@
 #include <variant>
 #include <vector>
 
-#include "atom/algorithm/hash.hpp"
+#include "atom/algorithm/core/rust_numeric.hpp"
 
 namespace atom::meta {
 

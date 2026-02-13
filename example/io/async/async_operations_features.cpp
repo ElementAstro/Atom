@@ -1,26 +1,25 @@
 /**
- * @file advanced_async_operations.cpp
+ * @file async_operations_features.cpp
  * @brief Advanced demonstration of asynchronous I/O operations
  *
  * This example demonstrates:
- * - Batch file operations with parallel processing
- * - Timeout handling for async operations
+ * - Timeout handling for async read operations
  * - Context cancellation and cleanup
  * - File copying and moving operations
- * - Directory operations (create, remove, list)
- * - File status and permission operations
+ * - File status and existence checks
  * - Error handling and recovery patterns
  */
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <future>
 #include <iostream>
 #include <thread>
 #include <vector>
 #include "atom/io/async/async_io.hpp"
 
-using namespace atom::async::io;
+using namespace atom::io::async;
 namespace fs = std::filesystem;
 
 /**
@@ -34,11 +33,9 @@ void createTestFiles() {
          "Content of async test file 1\nMultiple lines for testing\nAsync "
          "operations"},
         {"async_test2.txt",
-         "Content of async test file 2\nDifferent content here\nFor batch "
-         "operations"},
+         "Content of async test file 2\nDifferent content here"},
         {"async_test3.txt",
-         "Content of async test file 3\nYet another file\nFor comprehensive "
-         "testing"},
+         "Content of async test file 3\nFor comprehensive testing"},
         {"large_async_test.txt", std::string(10000, 'A') +
                                      "\nLarge file for performance testing\n" +
                                      std::string(10000, 'B')}};
@@ -49,101 +46,67 @@ void createTestFiles() {
         file.close();
     }
 
-    std::cout << "✅ Created " << testFiles.size() << " test files"
-              << std::endl;
+    std::cout << "  Created " << testFiles.size() << " test files" << std::endl;
 }
 
 /**
- * @brief Demonstrates batch file reading operations
- */
-void demonstrateBatchOperations() {
-    std::cout << "\n=== Batch File Operations ===" << std::endl;
-
-    auto context = std::make_shared<AsyncContext>();
-    AsyncFile fileManager(context);
-
-    std::vector<std::string> filesToRead = {
-        "async_test1.txt", "async_test2.txt", "async_test3.txt"};
-
-    std::cout << "Reading " << filesToRead.size() << " files in batch..."
-              << std::endl;
-
-    std::promise<AsyncResult<std::vector<std::string>>> batchPromise;
-    auto start = std::chrono::high_resolution_clock::now();
-
-    fileManager.asyncBatchRead(
-        filesToRead, [&](AsyncResult<std::vector<std::string>> result) {
-            batchPromise.set_value(std::move(result));
-        });
-
-    auto batchResult = batchPromise.get_future().get();
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-
-    if (batchResult.success) {
-        std::cout << "✅ Batch read completed in " << duration.count() << "ms"
-                  << std::endl;
-        std::cout << "Read " << batchResult.value.size()
-                  << " files:" << std::endl;
-
-        for (size_t i = 0;
-             i < batchResult.value.size() && i < filesToRead.size(); ++i) {
-            std::cout << "  📄 " << filesToRead[i] << " ("
-                      << batchResult.value[i].size() << " bytes)" << std::endl;
-        }
-    } else {
-        std::cerr << "❌ Batch read failed: " << batchResult.error_message
-                  << std::endl;
-    }
-}
-
-/**
- * @brief Demonstrates timeout handling
+ * @brief Demonstrates timeout handling for async reads
  */
 void demonstrateTimeoutHandling() {
     std::cout << "\n=== Timeout Handling ===" << std::endl;
 
     auto context = std::make_shared<AsyncContext>();
+#ifdef ATOM_USE_ASIO
+    asio::io_context ioCtx;
+    auto wg = asio::make_work_guard(ioCtx);
+    std::jthread ioThread([&]() { ioCtx.run(); });
+    AsyncFile fileManager(ioCtx, context);
+#else
     AsyncFile fileManager(context);
+#endif
 
     // Test with a reasonable timeout
     std::cout << "1. Reading file with 5-second timeout..." << std::endl;
     std::promise<AsyncResult<std::string>> timeoutPromise1;
 
     fileManager.asyncReadWithTimeout(
-        "large_async_test.txt", std::chrono::milliseconds(5000),
+        std::string("large_async_test.txt"), std::chrono::milliseconds(5000),
         [&](AsyncResult<std::string> result) {
             timeoutPromise1.set_value(std::move(result));
         });
 
     auto timeoutResult1 = timeoutPromise1.get_future().get();
     if (timeoutResult1.success) {
-        std::cout << "✅ File read within timeout ("
+        std::cout << "  File read within timeout ("
                   << timeoutResult1.value.size() << " bytes)" << std::endl;
     } else {
-        std::cout << "❌ File read failed or timed out: "
+        std::cout << "  File read failed or timed out: "
                   << timeoutResult1.error_message << std::endl;
     }
 
-    // Test with a very short timeout (likely to timeout)
-    std::cout << "\n2. Reading file with 1ms timeout (should timeout)..."
+    // Test with a very short timeout
+    std::cout << "\n2. Reading file with 1ms timeout (may timeout)..."
               << std::endl;
     std::promise<AsyncResult<std::string>> timeoutPromise2;
 
     fileManager.asyncReadWithTimeout(
-        "large_async_test.txt", std::chrono::milliseconds(1),
+        std::string("large_async_test.txt"), std::chrono::milliseconds(1),
         [&](AsyncResult<std::string> result) {
             timeoutPromise2.set_value(std::move(result));
         });
 
     auto timeoutResult2 = timeoutPromise2.get_future().get();
     if (timeoutResult2.success) {
-        std::cout << "✅ File read within very short timeout" << std::endl;
+        std::cout << "  File read within very short timeout" << std::endl;
     } else {
-        std::cout << "⏰ Expected timeout or error: "
+        std::cout << "  Expected timeout or error: "
                   << timeoutResult2.error_message << std::endl;
     }
+
+#ifdef ATOM_USE_ASIO
+    wg.reset();
+    ioCtx.stop();
+#endif
 }
 
 /**
@@ -153,16 +116,21 @@ void demonstrateContextCancellation() {
     std::cout << "\n=== Context Cancellation ===" << std::endl;
 
     auto context = std::make_shared<AsyncContext>();
+#ifdef ATOM_USE_ASIO
+    asio::io_context ioCtx;
+    auto wg = asio::make_work_guard(ioCtx);
+    std::jthread ioThread([&]() { ioCtx.run(); });
+    AsyncFile fileManager(ioCtx, context);
+#else
     AsyncFile fileManager(context);
+#endif
 
     std::cout << "Starting async operation and cancelling context..."
               << std::endl;
 
-    // Start an async operation
     std::promise<AsyncResult<std::string>> cancelPromise;
-    bool operationStarted = false;
 
-    fileManager.asyncRead("large_async_test.txt",
+    fileManager.asyncRead(std::string("large_async_test.txt"),
                           [&](AsyncResult<std::string> result) {
                               cancelPromise.set_value(std::move(result));
                           });
@@ -170,20 +138,24 @@ void demonstrateContextCancellation() {
     // Cancel the context immediately
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     context->cancel();
-    std::cout << "Context cancelled: "
+    std::cout << "  Context cancelled: "
               << (context->is_cancelled() ? "Yes" : "No") << std::endl;
 
-    // The operation might still complete, but context is marked as cancelled
     auto cancelResult = cancelPromise.get_future().get();
-    std::cout << "Operation result after cancellation: "
+    std::cout << "  Operation result after cancellation: "
               << (cancelResult.success ? "Success" : "Failed") << std::endl;
 
     // Reset context for further operations
     context->reset();
-    std::cout << "Context reset: "
+    std::cout << "  Context reset: "
               << (context->is_cancelled() ? "Still cancelled"
                                           : "Ready for new operations")
               << std::endl;
+
+#ifdef ATOM_USE_ASIO
+    wg.reset();
+    ioCtx.stop();
+#endif
 }
 
 /**
@@ -193,31 +165,37 @@ void demonstrateFileCopyMove() {
     std::cout << "\n=== File Copy and Move Operations ===" << std::endl;
 
     auto context = std::make_shared<AsyncContext>();
+#ifdef ATOM_USE_ASIO
+    asio::io_context ioCtx;
+    auto wg = asio::make_work_guard(ioCtx);
+    std::jthread ioThread([&]() { ioCtx.run(); });
+    AsyncFile fileManager(ioCtx, context);
+#else
     AsyncFile fileManager(context);
+#endif
 
     // Async file copy
     std::cout << "1. Copying file asynchronously..." << std::endl;
     std::promise<AsyncResult<void>> copyPromise;
 
-    fileManager.asyncCopy("async_test1.txt", "copied_async_test.txt",
+    fileManager.asyncCopy(std::string("async_test1.txt"),
+                          std::string("copied_async_test.txt"),
                           [&](AsyncResult<void> result) {
                               copyPromise.set_value(std::move(result));
                           });
 
     auto copyResult = copyPromise.get_future().get();
     if (copyResult.success) {
-        std::cout << "✅ File copied successfully" << std::endl;
-
-        // Verify copy
+        std::cout << "  File copied successfully" << std::endl;
         if (fs::exists("copied_async_test.txt")) {
             auto originalSize = fs::file_size("async_test1.txt");
             auto copiedSize = fs::file_size("copied_async_test.txt");
-            std::cout << "Original size: " << originalSize
-                      << " bytes, Copied size: " << copiedSize << " bytes"
+            std::cout << "  Original: " << originalSize
+                      << " bytes, Copy: " << copiedSize << " bytes"
                       << std::endl;
         }
     } else {
-        std::cerr << "❌ File copy failed: " << copyResult.error_message
+        std::cerr << "  File copy failed: " << copyResult.error_message
                   << std::endl;
     }
 
@@ -225,89 +203,106 @@ void demonstrateFileCopyMove() {
     std::cout << "\n2. Moving file asynchronously..." << std::endl;
     std::promise<AsyncResult<void>> movePromise;
 
-    fileManager.asyncMove("copied_async_test.txt", "moved_async_test.txt",
+    fileManager.asyncMove(std::string("copied_async_test.txt"),
+                          std::string("moved_async_test.txt"),
                           [&](AsyncResult<void> result) {
                               movePromise.set_value(std::move(result));
                           });
 
     auto moveResult = movePromise.get_future().get();
     if (moveResult.success) {
-        std::cout << "✅ File moved successfully" << std::endl;
-        std::cout << "Original exists: "
+        std::cout << "  File moved successfully" << std::endl;
+        std::cout << "  Original exists: "
                   << (fs::exists("copied_async_test.txt") ? "Yes" : "No")
                   << std::endl;
-        std::cout << "Moved exists: "
+        std::cout << "  Moved exists: "
                   << (fs::exists("moved_async_test.txt") ? "Yes" : "No")
                   << std::endl;
     } else {
-        std::cerr << "❌ File move failed: " << moveResult.error_message
+        std::cerr << "  File move failed: " << moveResult.error_message
                   << std::endl;
     }
+
+#ifdef ATOM_USE_ASIO
+    wg.reset();
+    ioCtx.stop();
+#endif
 }
 
 /**
- * @brief Demonstrates directory operations
+ * @brief Demonstrates file stat and existence checks
  */
-void demonstrateDirectoryOperations() {
-    std::cout << "\n=== Directory Operations ===" << std::endl;
+void demonstrateFileStatus() {
+    std::cout << "\n=== File Status and Existence ===" << std::endl;
 
     auto context = std::make_shared<AsyncContext>();
+#ifdef ATOM_USE_ASIO
+    asio::io_context ioCtx;
+    auto wg = asio::make_work_guard(ioCtx);
+    std::jthread ioThread([&]() { ioCtx.run(); });
+    AsyncFile fileManager(ioCtx, context);
+#else
     AsyncFile fileManager(context);
+#endif
 
-    // Create directory
-    std::cout << "1. Creating directory asynchronously..." << std::endl;
-    std::promise<AsyncResult<void>> createDirPromise;
+    // Check file existence
+    std::cout << "1. Checking file existence..." << std::endl;
+    std::promise<AsyncResult<bool>> existsPromise;
+    fileManager.asyncExists(std::string("async_test1.txt"),
+                            [&](AsyncResult<bool> result) {
+                                existsPromise.set_value(std::move(result));
+                            });
 
-    fileManager.asyncCreateDirectory(
-        "async_test_dir", [&](AsyncResult<void> result) {
-            createDirPromise.set_value(std::move(result));
-        });
-
-    auto createDirResult = createDirPromise.get_future().get();
-    if (createDirResult.success) {
-        std::cout << "✅ Directory created successfully" << std::endl;
-    } else {
-        std::cerr << "❌ Directory creation failed: "
-                  << createDirResult.error_message << std::endl;
+    auto existsResult = existsPromise.get_future().get();
+    if (existsResult.success) {
+        std::cout << "  async_test1.txt exists: "
+                  << (existsResult.value ? "Yes" : "No") << std::endl;
     }
 
-    // List directory contents
-    std::cout << "\n2. Listing directory contents..." << std::endl;
-    std::promise<AsyncResult<std::vector<fs::path>>> listPromise;
+    // Check non-existent file
+    std::promise<AsyncResult<bool>> noExistsPromise;
+    fileManager.asyncExists(std::string("nonexistent.txt"),
+                            [&](AsyncResult<bool> result) {
+                                noExistsPromise.set_value(std::move(result));
+                            });
 
-    fileManager.asyncListDirectory(
-        ".", [&](AsyncResult<std::vector<fs::path>> result) {
-            listPromise.set_value(std::move(result));
+    auto noExistsResult = noExistsPromise.get_future().get();
+    if (noExistsResult.success) {
+        std::cout << "  nonexistent.txt exists: "
+                  << (noExistsResult.value ? "Yes" : "No") << std::endl;
+    }
+
+    // Get file status
+    std::cout << "\n2. Getting file status..." << std::endl;
+    std::promise<AsyncResult<fs::file_status>> statPromise;
+    fileManager.asyncStat(
+        std::string("async_test1.txt"),
+        [&](AsyncResult<fs::file_status> result) {
+            statPromise.set_value(std::move(result));
         });
 
-    auto listResult = listPromise.get_future().get();
-    if (listResult.success) {
-        std::cout << "✅ Directory listing completed ("
-                  << listResult.value.size() << " items)" << std::endl;
-        std::cout << "Sample items:" << std::endl;
-
-        int count = 0;
-        for (const auto& path : listResult.value) {
-            if (count++ >= 5)
-                break;  // Show only first 5 items
-            std::cout << "  " << (fs::is_directory(path) ? "📁" : "📄") << " "
-                      << path.filename() << std::endl;
-        }
-        if (listResult.value.size() > 5) {
-            std::cout << "  ... and " << (listResult.value.size() - 5)
-                      << " more items" << std::endl;
-        }
-    } else {
-        std::cerr << "❌ Directory listing failed: " << listResult.error_message
+    auto statResult = statPromise.get_future().get();
+    if (statResult.success) {
+        auto status = statResult.value;
+        std::cout << "  File type: "
+                  << (status.type() == fs::file_type::regular ? "Regular file"
+                                                              : "Other")
                   << std::endl;
+    } else {
+        std::cerr << "  Stat failed: " << statResult.error_message << std::endl;
     }
+
+#ifdef ATOM_USE_ASIO
+    wg.reset();
+    ioCtx.stop();
+#endif
 }
 
 /**
  * @brief Cleans up test files
  */
 void cleanup() {
-    std::cout << "\n🧹 Cleaning up test files..." << std::endl;
+    std::cout << "\nCleaning up test files..." << std::endl;
 
     std::vector<std::string> filesToRemove = {
         "async_test1.txt",       "async_test2.txt",
@@ -320,39 +315,29 @@ void cleanup() {
         }
     }
 
-    if (fs::exists("async_test_dir")) {
-        fs::remove("async_test_dir");
-    }
-
-    std::cout << "✅ Cleanup completed" << std::endl;
+    std::cout << "  Cleanup completed" << std::endl;
 }
 
 int main() {
     try {
-        std::cout << "⚡ Atom I/O Advanced Async Operations Examples"
-                  << std::endl;
-        std::cout << "============================================="
-                  << std::endl;
+        std::cout << "Atom I/O Advanced Async Operations Examples" << std::endl;
+        std::cout << "===========================================" << std::endl;
 
-        // Setup
         createTestFiles();
 
-        // Run demonstrations
-        demonstrateBatchOperations();
         demonstrateTimeoutHandling();
         demonstrateContextCancellation();
         demonstrateFileCopyMove();
-        demonstrateDirectoryOperations();
+        demonstrateFileStatus();
 
-        // Cleanup
         cleanup();
 
         std::cout
-            << "\n🎉 All advanced async operations completed successfully!"
+            << "\nAll advanced async operations completed successfully!"
             << std::endl;
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "💥 Fatal exception: " << e.what() << std::endl;
+        std::cerr << "Fatal exception: " << e.what() << std::endl;
         cleanup();
         return 1;
     }

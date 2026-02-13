@@ -22,7 +22,7 @@ Description: Base class for noise generators with shared functionality
 #include <span>
 #include <vector>
 
-#include "../rust_numeric.hpp"
+#include "../core/rust_numeric.hpp"
 
 namespace atom::algorithm {
 

@@ -1,5 +1,5 @@
 // snowflake_bindings.cpp
-#include "atom/algorithm/snowflake.hpp"
+#include "atom/algorithm/utils/snowflake.hpp"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 

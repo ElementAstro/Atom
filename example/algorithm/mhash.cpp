@@ -1,4 +1,4 @@
-#include "atom/algorithm/mhash.hpp"
+#include "atom/algorithm/hash/mhash.hpp"
 
 #include <iostream>
 #include <string>

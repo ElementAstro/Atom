@@ -19,7 +19,7 @@
 #include "atom/io/core/path_utils.hpp"
 
 namespace fs = std::filesystem;
-using namespace atom::io::path_utils;
+using namespace atom::io::detail;
 
 namespace atom::io::test {
 

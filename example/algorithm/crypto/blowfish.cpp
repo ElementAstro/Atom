@@ -14,7 +14,7 @@
  * @date 2024-12-19
  */
 
-#include "atom/algorithm/blowfish.hpp"
+#include "atom/algorithm/crypto/blowfish.hpp"
 
 #include <chrono>
 #include <filesystem>

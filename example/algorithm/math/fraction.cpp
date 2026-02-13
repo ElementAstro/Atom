@@ -1,4 +1,4 @@
-#include "atom/algorithm/fraction.hpp"
+#include "atom/algorithm/math/fraction.hpp"
 
 #include <iostream>
 

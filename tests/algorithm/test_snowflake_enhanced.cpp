@@ -9,7 +9,7 @@
 #include <thread>
 #include <unordered_set>
 #include <vector>
-#include "atom/algorithm/snowflake.hpp"
+#include "atom/algorithm/utils/snowflake.hpp"
 
 using namespace atom::algorithm;
 using namespace std::chrono_literals;

@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cmath>
 #include <concepts>
-#include <coroutine>
 #include <execution>
 #include <fstream>
 #include <functional>
@@ -17,18 +16,13 @@
 #include <thread>
 #include <vector>
 
-#ifdef USE_SIMD
-#ifdef __AVX__
-#include <immintrin.h>
-#elif defined(__ARM_NEON)
-#include <arm_neon.h>
-#endif
-#endif
-
 #include <spdlog/spdlog.h>
-#include "atom/algorithm/rust_numeric.hpp"
+#include "atom/algorithm/core/rust_numeric.hpp"
+#include "atom/algorithm/core/simd_utils.hpp"  // ATOM_SIMD_* macros + SIMD headers
 #include "atom/async/pool.hpp"
 #include "atom/error/exception.hpp"
+#include "levenberg_marquardt.hpp"
+#include "linear_solver.hpp"
 
 #ifdef ATOM_USE_BOOST
 #include <boost/numeric/ublas/io.hpp>
@@ -169,179 +163,20 @@ private:
         }
     }
 
-    using NonlinearFunction = std::function<T(T, const std::vector<T>&)>;
+    using NonlinearFunction = detail::NonlinearFunction<T>;
 
     /**
-     * Solve a system of linear equations using the Levenberg-Marquardt method
-     * @param x Vector of x values
-     * @param y Vector of y values
-     * @param func Nonlinear function to fit
-     * @param initial_params Initial guess for the parameters
-     * @param max_iterations Maximum number of iterations
-     * @param lambda Regularization parameter
-     * @param epsilon Convergence criterion
-     * @return Vector of optimized parameters
+     * Delegate to detail::levenbergMarquardt free function
      */
     auto levenbergMarquardt(const std::vector<T>& x, const std::vector<T>& y,
                             NonlinearFunction func,
                             std::vector<T> initial_params,
                             i32 max_iterations = 100, T lambda = 0.01,
                             T epsilon = 1e-8) -> std::vector<T> {
-        i32 n = static_cast<i32>(x.size());
-        i32 m = static_cast<i32>(initial_params.size());
-        std::vector<T> params = initial_params;
-        std::vector<T> prevParams(m);
-        std::vector<std::vector<T>> jacobian(n, std::vector<T>(m));
-
-        for (i32 iteration = 0; iteration < max_iterations; ++iteration) {
-            std::vector<T> residuals(n);
-            for (i32 i = 0; i < n; ++i) {
-                try {
-                    residuals[i] = y[i] - func(x[i], params);
-                } catch (const std::exception& e) {
-                    spdlog::error("Exception in func: {}", e.what());
-                    throw;
-                }
-                for (i32 j = 0; j < m; ++j) {
-                    T h = std::max(T(1e-6), std::abs(params[j]) * T(1e-6));
-                    std::vector<T> paramsPlusH = params;
-                    paramsPlusH[j] += h;
-                    try {
-                        jacobian[i][j] =
-                            (func(x[i], paramsPlusH) - func(x[i], params)) / h;
-                    } catch (const std::exception& e) {
-                        spdlog::error("Exception in jacobian computation: {}",
-                                      e.what());
-                        throw;
-                    }
-                }
-            }
-
-            std::vector<std::vector<T>> JTJ(m, std::vector<T>(m, 0.0));
-            std::vector<T> jTr(m, 0.0);
-            for (i32 i = 0; i < m; ++i) {
-                for (i32 j = 0; j < m; ++j) {
-                    for (i32 k = 0; k < n; ++k) {
-                        JTJ[i][j] += jacobian[k][i] * jacobian[k][j];
-                    }
-                    if (i == j)
-                        JTJ[i][j] += lambda;
-                }
-                for (i32 k = 0; k < n; ++k) {
-                    jTr[i] += jacobian[k][i] * residuals[k];
-                }
-            }
-
-#ifdef ATOM_USE_BOOST
-            // Using Boost's LU decomposition to solve linear system
-            boost::numeric::ublas::matrix<T> A(m, m);
-            boost::numeric::ublas::vector<T> b(m);
-            for (i32 i = 0; i < m; ++i) {
-                for (i32 j = 0; j < m; ++j) {
-                    A(i, j) = JTJ[i][j];
-                }
-                b(i) = jTr[i];
-            }
-
-            boost::numeric::ublas::permutation_matrix<usize> pm(A.size1());
-            bool singular = boost::numeric::ublas::lu_factorize(A, pm);
-            if (singular) {
-                THROW_RUNTIME_ERROR("Matrix is singular.");
-            }
-            boost::numeric::ublas::lu_substitute(A, pm, b);
-
-            std::vector<T> delta(m);
-            for (i32 i = 0; i < m; ++i) {
-                delta[i] = b(i);
-            }
-#else
-            // Using custom Gaussian elimination method
-            std::vector<T> delta;
-            try {
-                delta = solveLinearSystem(JTJ, jTr);
-            } catch (const std::exception& e) {
-                spdlog::error("Exception in solving linear system: {}",
-                              e.what());
-                throw;
-            }
-#endif
-
-            prevParams = params;
-            for (i32 i = 0; i < m; ++i) {
-                params[i] += delta[i];
-            }
-
-            T diff = 0;
-            for (i32 i = 0; i < m; ++i) {
-                diff += std::abs(params[i] - prevParams[i]);
-            }
-            if (diff < epsilon) {
-                break;
-            }
-        }
-
-        return params;
+        return detail::levenbergMarquardt<T>(x, y, std::move(func),
+                                            std::move(initial_params),
+                                            max_iterations, lambda, epsilon);
     }
-
-    /**
-     * Solve a system of linear equations using Gaussian elimination
-     * @param A Coefficient matrix
-     * @param b Right-hand side vector
-     * @return Solution vector
-     */
-#ifdef ATOM_USE_BOOST
-    // Using Boost's linear algebra library, no need for custom implementation
-#else
-    auto solveLinearSystem(const std::vector<std::vector<T>>& A,
-                           const std::vector<T>& b) -> std::vector<T> {
-        i32 n = static_cast<i32>(A.size());
-        std::vector<std::vector<T>> augmented(n, std::vector<T>(n + 1, 0.0));
-        for (i32 i = 0; i < n; ++i) {
-            for (i32 j = 0; j < n; ++j) {
-                augmented[i][j] = A[i][j];
-            }
-            augmented[i][n] = b[i];
-        }
-
-        for (i32 i = 0; i < n; ++i) {
-            // Partial pivoting
-            i32 maxRow = i;
-            for (i32 k = i + 1; k < n; ++k) {
-                if (std::abs(augmented[k][i]) >
-                    std::abs(augmented[maxRow][i])) {
-                    maxRow = k;
-                }
-            }
-            if (std::abs(augmented[maxRow][i]) < 1e-12) {
-                THROW_RUNTIME_ERROR("Matrix is singular or nearly singular.");
-            }
-            std::swap(augmented[i], augmented[maxRow]);
-
-            // Eliminate below
-            for (i32 k = i + 1; k < n; ++k) {
-                T factor = augmented[k][i] / augmented[i][i];
-                for (i32 j = i; j <= n; ++j) {
-                    augmented[k][j] -= factor * augmented[i][j];
-                }
-            }
-        }
-
-        std::vector<T> x(n, 0.0);
-        for (i32 i = n - 1; i >= 0; --i) {
-            if (std::abs(augmented[i][i]) < 1e-12) {
-                THROW_RUNTIME_ERROR(
-                    "Division by zero during back substitution.");
-            }
-            x[i] = augmented[i][n];
-            for (i32 j = i + 1; j < n; ++j) {
-                x[i] -= augmented[i][j] * x[j];
-            }
-            x[i] /= augmented[i][i];
-        }
-
-        return x;
-    }
-#endif
 
 public:
     ErrorCalibration()
@@ -796,62 +631,9 @@ public:
     [[nodiscard]] auto getMae() const -> T { return mae_; }
 };
 
-// Coroutine support for asynchronous calibration
-template <std::floating_point T>
-class AsyncCalibrationTask {
-public:
-    struct promise_type {
-        ErrorCalibration<T>* result;
-
-        auto get_return_object() {
-            return AsyncCalibrationTask{
-                std::coroutine_handle<promise_type>::from_promise(*this)};
-        }
-        auto initial_suspend() { return std::suspend_never{}; }
-        auto final_suspend() noexcept { return std::suspend_always{}; }
-        void unhandled_exception() {
-            spdlog::error(
-                "Exception in AsyncCalibrationTask: {}",
-                std::current_exception().__cxa_exception_type()->name());
-        }
-        void return_value(ErrorCalibration<T>* calibrator) {
-            result = calibrator;
-        }
-    };
-
-    std::coroutine_handle<promise_type> handle;
-
-    AsyncCalibrationTask(std::coroutine_handle<promise_type> h) : handle(h) {}
-    ~AsyncCalibrationTask() {
-        if (handle)
-            handle.destroy();
-    }
-
-    ErrorCalibration<T>* getResult() { return handle.promise().result; }
-};
-
-// Asynchronous calibration method using coroutines
-template <std::floating_point T>
-AsyncCalibrationTask<T> calibrateAsync(const std::vector<T>& measured,
-                                       const std::vector<T>& actual) {
-    auto calibrator = new ErrorCalibration<T>();
-
-    // Execute calibration in background thread
-    std::thread worker([calibrator, measured, actual]() {
-        try {
-            calibrator->linearCalibrate(measured, actual);
-        } catch (const std::exception& e) {
-            spdlog::error("Async calibration failed: {}", e.what());
-        }
-    });
-    worker.detach();  // Let the thread run in the background
-
-    // Wait for some ready flag
-    co_await std::suspend_always{};
-
-    co_return calibrator;
-}
-
 }  // namespace atom::algorithm
+
+// Include async calibration support (coroutines)
+#include "async_calibration.hpp"
 
 #endif  // ATOM_ALGORITHM_UTILS_ERROR_CALIBRATION_HPP

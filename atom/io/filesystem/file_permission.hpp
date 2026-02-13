@@ -60,14 +60,8 @@ std::string getFilePermissions(std::string_view filePath) noexcept;
  */
 std::string getSelfPermissions() noexcept;
 
-/**
- * @brief Modify file permissions using permission string
- * @param filePath Filesystem path to the target file
- * @param permissions Permission string in format "rwxrwxrwx"
- * @throws std::invalid_argument If permission string format is invalid
- * @throws std::runtime_error If file doesn't exist or permission change fails
- */
-void changeFilePermissions(const std::filesystem::path &filePath,
-                           const atom::containers::String &permissions);
-
 }  // namespace atom::io
+
+// Backward compatibility: include file_permission_change.hpp so existing code
+// that expects changeFilePermissions() from this header continues to work.
+#include "file_permission_change.hpp"

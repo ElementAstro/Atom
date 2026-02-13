@@ -8,7 +8,7 @@
 #include <vector>
 
 #include <spdlog/spdlog.h>
-#include "../rust_numeric.hpp"
+#include "../core/rust_numeric.hpp"
 
 #ifdef __AVX2__
 #include <immintrin.h>  // AVX2 instruction set

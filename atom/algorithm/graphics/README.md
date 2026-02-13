@@ -4,8 +4,27 @@ This directory contains algorithms for graphics processing, image manipulation, 
 
 ## Contents
 
-- **`flood.hpp/cpp`** - Flood fill algorithms for 2D grids with connectivity options and SIMD optimizations
-- **`perlin.hpp`** - Perlin noise generation for procedural content creation
+### Flood Fill
+
+- **`grid_concepts.hpp`** - Grid concepts (`Grid`, `SIMDCompatibleGrid`, `ContiguousGrid`, `SpanCompatibleGrid`) and `Connectivity` enum
+- **`flood.hpp`** - `FloodFill` class declaration (BFS, DFS, parallel, SIMD, block-optimized)
+- **`flood_impl.hpp`** - Template implementations for `FloodFill` (included automatically by `flood.hpp`)
+- **`flood.cpp`** - Non-template implementations (SIMD row/block processing, specializations)
+
+### Image Processing
+
+- **`convolution.hpp`** - `Convolution` class: `convolve`, `gaussianBlur`
+- **`edge_detection.hpp`** - `EdgeDetection` class: `sobelEdgeDetection`, `laplacianEdgeDetection`
+- **`image_adjust.hpp`** - `ImageAdjust` class: `adjustBrightnessContrast`, `threshold`, `invert`
+- **`histogram.hpp`** - `Histogram` class: `computeHistogram`, `histogramEqualization`
+- **`image_ops.hpp`** - `ImageOps` backward-compatible facade (inherits all 4 image classes above)
+
+### Noise Generation
+
+- **`noise_base.hpp`** - `NoiseBase` base class (permutation tables, fade, lerp, gradient)
+- **`perlin.hpp`** - `PerlinNoise` class (CPU noise + OpenCL dispatch)
+- **`perlin_opencl.hpp`** - `PerlinNoiseOpenCL` helper (OpenCL-only, used by `PerlinNoise`)
+- **`simplex.hpp`** - `SimplexNoise` class (2D/3D simplex + fractal noise)
 
 ## Features
 

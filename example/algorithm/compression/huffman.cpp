@@ -15,7 +15,7 @@
  * @date 2024-12-19
  */
 
-#include "atom/algorithm/huffman.hpp"
+#include "atom/algorithm/compression/huffman.hpp"
 
 #include <chrono>
 #include <fstream>

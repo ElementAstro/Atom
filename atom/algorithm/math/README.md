@@ -4,10 +4,20 @@ This directory contains mathematical computations, numerical algorithms, and mat
 
 ## Contents
 
-- **`math.hpp/cpp`** - Extended mathematical functions and number theory utilities
+- **`math.hpp`** - Umbrella header that includes all math sub-components
+- **`math_concepts.hpp`** - Mathematical concepts and type constraints (`UnsignedIntegral`, `Arithmetic`)
+- **`safe_math.hpp/cpp`** - Safe arithmetic operations with overflow/underflow detection (`safeAdd`, `safeSub`, `safeMul`, `safeDiv`, `mulDiv64`)
+- **`bit_ops.hpp/cpp`** - Bit manipulation operations (`rotl64`, `rotr64`, `clz64`, `normalize`, `isPowerOfTwo`, `nextPowerOfTwo`, `bitReverse64`)
+- **`number_theory.hpp/cpp`** - Number theory functions (`gcd64`, `lcm64`, `isPrime`, `generatePrimes`, `fastPow`, `montgomeryMultiply`, `modPow`, `approximateSqrt`, `MathCache`)
+- **`random.hpp/cpp`** - Secure random number generation (`secureRandom`, `randomInRange`)
+- **`math_memory.hpp/cpp`** - Custom memory pool and allocator (`MathMemoryPool`, `MathAllocator`)
+- **`parallel_math.hpp/cpp`** - Parallel mathematical operations (`parallelVectorAdd`)
 - **`matrix.hpp`** - Template-based matrix operations with compile-time optimizations
 - **`fraction.hpp/cpp`** - Rational number arithmetic with automatic simplification
 - **`bignumber.hpp/cpp`** - Arbitrary precision arithmetic for large numbers
+- **`statistics.hpp`** - Statistical functions (mean, median, variance, correlation, etc.)
+- **`numerical.hpp`** - Numerical methods (root finding, integration, differentiation)
+- **`gpu_math.hpp/cpp`** - GPU-accelerated mathematical operations via OpenCL
 
 ## Features
 
@@ -18,6 +28,8 @@ This directory contains mathematical computations, numerical algorithms, and mat
 - **Safe Arithmetic**: Overflow/underflow detection
 - **Parallel Operations**: Multi-threaded mathematical computations
 - **Caching**: Thread-safe caching for expensive computations (prime numbers)
+- **Random Generation**: Cryptographically secure random numbers
+- **Memory Pool**: Custom allocator for efficient math allocations
 
 ### Matrix Operations
 

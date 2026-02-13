@@ -42,8 +42,8 @@ target("atom-algorithm")
     add_files("graphics/*.cpp")
     add_files("utils/*.cpp")
 
-    -- Add header files from new structure
-    add_headerfiles("*.hpp")  -- Backwards compatibility headers
+    -- Add header files (barrel export + exception header + subdirectories)
+    add_headerfiles("index.hpp", "algorithm_exception.hpp")
     add_headerfiles("core/*.hpp")
     add_headerfiles("crypto/*.hpp")
     add_headerfiles("hash/*.hpp")

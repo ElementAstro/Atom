@@ -14,7 +14,7 @@
  * @date 2024-12-19
  */
 
-#include "atom/algorithm/perlin.hpp"
+#include "atom/algorithm/graphics/perlin.hpp"
 
 #include <chrono>
 #include <iomanip>

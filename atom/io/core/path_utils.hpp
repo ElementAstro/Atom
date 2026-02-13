@@ -16,6 +16,8 @@
 #ifndef ATOM_IO_CORE_PATH_UTILS_HPP
 #define ATOM_IO_CORE_PATH_UTILS_HPP
 
+#include <algorithm>
+#include <array>
 #include <filesystem>
 #include <regex>
 #include <string>
@@ -23,7 +25,7 @@
 
 #include <spdlog/spdlog.h>
 
-namespace atom::io::path_utils {
+namespace atom::io::detail {
 
 namespace fs = std::filesystem;
 
@@ -238,6 +240,6 @@ inline bool validatePermissions(std::string_view path,
     }
 }
 
-}  // namespace atom::io::path_utils
+}  // namespace atom::io::detail
 
 #endif  // ATOM_IO_CORE_PATH_UTILS_HPP

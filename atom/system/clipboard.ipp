@@ -7,6 +7,6 @@
 #ifndef ATOM_SYSTEM_CLIPBOARD_IPP
 #define ATOM_SYSTEM_CLIPBOARD_IPP
 
-#include "clipboard/clipboard.ipp"
+#include "clipboard/clipboard_impl.hpp"
 
 #endif  // ATOM_SYSTEM_CLIPBOARD_IPP

@@ -1,26 +1,28 @@
-#pragma once
+/*
+ * glob.hpp
+ *
+ * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ */
+
+/**
+ * @file glob.hpp
+ * @brief Glob pattern matching for file paths.
+ */
+
+#ifndef ATOM_IO_CORE_GLOB_HPP
+#define ATOM_IO_CORE_GLOB_HPP
 
 #include <cassert>
-#include <filesystem>
 #include <functional>
 #include <iterator>
 #include <regex>
 
-#include "atom/containers/high_performance.hpp"
 #include "atom/error/exception.hpp"
-#include "atom/macro.hpp"
+#include "atom/io/core/types.hpp"
 
-/**
- * @namespace atom::io
- * @brief Input/Output utilities for the Atom framework
- */
 namespace atom::io {
 
 using atom::containers::Map;
-using atom::containers::String;
-using atom::containers::Vector;
-
-namespace fs = std::filesystem;
 
 /**
  * @brief Replace the first occurrence of a substring in a string
@@ -543,3 +545,5 @@ static ATOM_INLINE auto rglob(const std::initializer_list<String> &pathnames)
 }
 
 }  // namespace atom::io
+
+#endif  // ATOM_IO_CORE_GLOB_HPP

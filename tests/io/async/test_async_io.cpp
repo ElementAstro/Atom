@@ -17,7 +17,7 @@
 
 #include "async_io.hpp"
 
-using namespace atom::async::io;
+using namespace atom::io::async;
 namespace fs = std::filesystem;
 using ::testing::HasSubstr;
 

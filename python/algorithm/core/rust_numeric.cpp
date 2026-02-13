@@ -1,4 +1,4 @@
-#include "atom/algorithm/rust_numeric.hpp"
+#include "atom/algorithm/core/rust_numeric.hpp"
 
 #include <pybind11/operators.h>
 #include <pybind11/pybind11.h>

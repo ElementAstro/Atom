@@ -1,4 +1,4 @@
-#include "atom/algorithm/weight.hpp"
+#include "atom/algorithm/utils/weight.hpp"
 
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>

@@ -1,15 +1,9 @@
 #ifndef ATOM_IO_FILE_INFO_HPP
 #define ATOM_IO_FILE_INFO_HPP
 
-#include <filesystem>
-
-#include "atom/containers/high_performance.hpp"
-#include "atom/macro.hpp"
+#include "atom/io/core/types.hpp"
 
 namespace atom::io {
-namespace fs = std::filesystem;
-
-using atom::containers::String;
 
 /**
  * @brief Structure to store detailed file information.
@@ -43,21 +37,10 @@ struct FileInfo {
  */
 FileInfo getFileInfo(const fs::path& filePath);
 
-/**
- * @brief Prints the file information to the console.
- *
- * @param info The FileInfo structure containing file details.
- */
-void printFileInfo(const FileInfo& info);
-
-/**
- * @brief Deletes a file.
- *
- * @param filePath The path to the file to delete.
- * @throws std::runtime_error if the file cannot be deleted.
- */
-void deleteFile(const fs::path& filePath);
-
 }  // namespace atom::io
+
+// Backward compatibility: include file_ops.hpp so existing code that expects
+// printFileInfo() and deleteFile() from this header continues to work.
+#include "file_ops.hpp"
 
 #endif  // ATOM_IO_FILE_INFO_HPP

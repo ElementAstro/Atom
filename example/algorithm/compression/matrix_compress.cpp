@@ -14,7 +14,7 @@
  * @date 2024-12-19
  */
 
-#include "atom/algorithm/matrix_compress.hpp"
+#include "atom/algorithm/compression/matrix_compress.hpp"
 
 #include <chrono>
 #include <filesystem>

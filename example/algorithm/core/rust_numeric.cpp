@@ -1,4 +1,4 @@
-#include "atom/algorithm/rust_numeric.hpp"
+#include "atom/algorithm/core/rust_numeric.hpp"
 
 #include <iostream>
 #include <string>

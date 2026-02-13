@@ -13,18 +13,7 @@
 #include <condition_variable>
 #include <thread>
 #include "cron_job.hpp"
-
-/**
- * @brief Timezone information for scheduling
- */
-struct TimezoneInfo {
-    std::string timezone_id;
-    int utc_offset_minutes;
-    bool observes_dst;
-
-    TimezoneInfo(std::string tz = "UTC", int offset = 0, bool dst = false)
-        : timezone_id(std::move(tz)), utc_offset_minutes(offset), observes_dst(dst) {}
-};
+#include "cron_types.hpp"
 
 /**
  * @brief Job dependency types

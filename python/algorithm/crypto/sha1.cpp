@@ -1,4 +1,4 @@
-#include "atom/algorithm/sha1.hpp"
+#include "atom/algorithm/crypto/sha1.hpp"
 
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>

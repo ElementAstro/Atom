@@ -1,4 +1,4 @@
-#include "atom/algorithm/bignumber.hpp"
+#include "atom/algorithm/math/bignumber.hpp"
 #include "atom/error/exception.hpp"
 
 #include <pybind11/operators.h>

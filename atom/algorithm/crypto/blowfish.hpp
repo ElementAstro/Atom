@@ -6,25 +6,10 @@
 #include <string_view>
 
 #include <spdlog/spdlog.h>
-#include "../rust_numeric.hpp"
+#include "../core/rust_numeric.hpp"
+#include "crypto_utils.hpp"
 
 namespace atom::algorithm {
-
-/**
- * @brief Concept to ensure the type is an unsigned integral type of size 1
- * byte.
- */
-template <typename T>
-concept ByteType = std::is_same_v<T, std::byte> || std::is_same_v<T, char> ||
-                   std::is_same_v<T, unsigned char>;
-
-/**
- * @brief Applies PKCS7 padding to the data.
- * @param data The data to pad.
- * @param length The length of the data, will be updated to include padding.
- */
-template <ByteType T>
-void pkcs7_padding(std::span<T> data, usize& length);
 
 /**
  * @class Blowfish

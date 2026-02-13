@@ -22,12 +22,13 @@
 #include "atom/io/core/path_utils.hpp"
 
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
 
 namespace fs = std::filesystem;
-using namespace atom::io::path_utils;
+using namespace atom::io::detail;
 
 // ============================================================================
 // UTILITY FUNCTIONS

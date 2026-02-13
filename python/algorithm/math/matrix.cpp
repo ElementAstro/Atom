@@ -1,4 +1,4 @@
-#include "atom/algorithm/matrix.hpp"
+#include "atom/algorithm/math/matrix.hpp"
 
 #include <pybind11/numpy.h>
 #include <pybind11/operators.h>

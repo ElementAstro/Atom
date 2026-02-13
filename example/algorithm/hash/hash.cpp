@@ -14,7 +14,7 @@
  * @date 2024-12-19
  */
 
-#include "atom/algorithm/hash.hpp"
+#include "atom/algorithm/hash/hash.hpp"
 
 #include <algorithm>
 #include <any>

@@ -15,37 +15,66 @@ include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 # Sources
 set(SOURCES
-    # Compression functionality
-    compression/compress.cpp
+    # Compression functionality (split into sub-modules)
+    compression/gz_compress.cpp
+    compression/zip_operations.cpp
+    compression/slice_compress.cpp
+    compression/data_compress.cpp
+    compression/backup.cpp
     # Filesystem operations
     filesystem/file_info.cpp
+    filesystem/file_ops.cpp
     filesystem/file_permission.cpp
-    filesystem/pushd.cpp
+    filesystem/file_permission_change.cpp
+    filesystem/directory_stack.cpp
+    filesystem/directory_stack_navigation.cpp
+    filesystem/directory_stack_persistence.cpp
     # Core I/O
     core/io.cpp)
 
 # Headers
 set(HEADERS
-    # Backwards compatibility headers (in root)
-    async_compress.hpp
-    async_glob.hpp
-    async_io.hpp
-    compress.hpp
-    file_info.hpp
-    file_permission.hpp
-    glob.hpp
-    io.hpp
-    pushd.hpp
-    # Actual implementation headers (in subdirectories)
+    # Barrel export header
+    index.hpp
+    # Implementation headers (in subdirectories)
+    async/async_types.hpp
+    async/async_file.hpp
+    async/async_directory.hpp
+    async/async_batch.hpp
+    async/async_stream.hpp
+    async/async_simd.hpp
+    async/async_compressor.hpp
+    async/async_decompressor.hpp
+    async/async_zip.hpp
     async/async_compress.hpp
     async/async_glob.hpp
     async/async_io.hpp
     compression/compress.hpp
+    compression/types.hpp
+    compression/utils.hpp
+    compression/gz_compress.hpp
+    compression/zip_operations.hpp
+    compression/slice_compress.hpp
+    compression/data_compress.hpp
+    compression/backup.hpp
     filesystem/file_info.hpp
+    filesystem/file_ops.hpp
     filesystem/file_permission.hpp
+    filesystem/file_permission_change.hpp
+    filesystem/task.hpp
+    filesystem/directory_stack.hpp
+    filesystem/directory_stack_impl.hpp
     filesystem/pushd.hpp
     core/glob.hpp
-    core/io.hpp)
+    core/io.hpp
+    core/types.hpp
+    core/path_convert.hpp
+    core/file_query.hpp
+    core/file_ops.hpp
+    core/directory_ops.hpp
+    core/directory_walk.hpp
+    core/file_split_merge.hpp
+    core/path_utils.hpp)
 
 # Dependencies
 find_package(spdlog QUIET)
@@ -100,22 +129,27 @@ if(WIN32)
 endif()
 
 # Check for ASIO support and add async sources if available
+set(ASYNC_SOURCES
+    async/async_file.cpp
+    async/async_directory.cpp
+    async/async_batch.cpp
+    async/async_stream.cpp
+    async/async_simd.cpp
+    async/async_compressor.cpp
+    async/async_decompressor.cpp
+    async/async_zip.cpp
+    async/async_glob.cpp)
+
 find_package(asio QUIET)
-if(asio_FOUND)
-  # Add async sources when ASIO is available
-  list(APPEND SOURCES async/async_compress.cpp async/async_glob.cpp
-       async/async_io.cpp)
+if(NOT asio_FOUND)
+  find_path(ASIO_INCLUDE_DIR NAMES asio.hpp)
+endif()
+
+if(asio_FOUND OR ASIO_INCLUDE_DIR)
+  list(APPEND SOURCES ${ASYNC_SOURCES})
   message(STATUS "ASIO found - async I/O features enabled")
 else()
-  find_path(ASIO_INCLUDE_DIR NAMES asio.hpp)
-  if(ASIO_INCLUDE_DIR)
-    # Add async sources when ASIO is available
-    list(APPEND SOURCES async/async_compress.cpp async/async_glob.cpp
-         async/async_io.cpp)
-    message(STATUS "ASIO found via include path - async I/O features enabled")
-  else()
-    message(STATUS "ASIO not found - async I/O features disabled")
-  endif()
+  message(STATUS "ASIO not found - async I/O features disabled")
 endif()
 
 # Create library target
@@ -142,5 +176,9 @@ if(ATOM_IO_NO_MINIZIP)
   target_compile_definitions(atom-io PRIVATE ATOM_IO_NO_MINIZIP)
 endif()
 
-# Install headers
-install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/io)
+# Install headers preserving subdirectory structure
+foreach(_header ${HEADERS})
+  get_filename_component(_dir ${_header} DIRECTORY)
+  install(FILES ${_header}
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/io/${_dir})
+endforeach()

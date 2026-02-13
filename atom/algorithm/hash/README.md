@@ -4,8 +4,22 @@ This directory contains general-purpose hashing algorithms and utilities for dat
 
 ## Contents
 
-- **`hash.hpp`** - High-performance hash functions with SIMD optimizations and caching
-- **`mhash.hpp/cpp`** - Multi-hash utilities including MinHash, Keccak, and similarity estimation
+### Core Hash (aggregated by `hash.hpp`)
+
+- **`hash_base.hpp`** - Core hash functions (FNV-1a with SIMD), `Hashable` concept, `HashAlgorithm` enum, `hashCombine`, `verifyHash`, `operator""_hash`
+- **`hash_compute.hpp`** - `HashCache<T>` thread-safe cache and `computeHash()` overloads for vector, tuple, array, pair, optional, variant, any
+
+### Multi-Hash Utilities (aggregated by `mhash.hpp`)
+
+- **`hex_utils.hpp/cpp`** - Hexadecimal string conversion utilities (`hexstringFromData`, `dataFromHexstring`, `supportsHexStringConversion`)
+- **`minhash.hpp/cpp`** - MinHash algorithm for Jaccard similarity estimation with optional OpenCL acceleration
+- **`keccak.hpp/cpp`** - Keccak-256 cryptographic hash function
+- **`hash_context.hpp/cpp`** - RAII-style hash context using OpenSSL EVP interface
+
+### Aggregation Headers
+
+- **`hash.hpp`** - Includes `hash_base.hpp` + `hash_compute.hpp`
+- **`mhash.hpp`** - Includes `hex_utils.hpp` + `minhash.hpp` + `keccak.hpp` + `hash_context.hpp`
 
 ## Features
 
@@ -14,6 +28,7 @@ This directory contains general-purpose hashing algorithms and utilities for dat
 - **Thread-Safe Caching**: LRU cache for frequently computed hashes
 - **Parallel Processing**: Multi-threaded hash computation
 - **Similarity Estimation**: MinHash for Jaccard similarity estimation
+- **Cryptographic Hashing**: Keccak-256 and OpenSSL-based HashContext
 - **Modern C++ Concepts**: Type-safe interfaces with concepts
 
 ## Use Cases
@@ -27,8 +42,14 @@ This directory contains general-purpose hashing algorithms and utilities for dat
 ## Usage Examples
 
 ```cpp
+// Use aggregation headers for convenience
 #include "atom/algorithm/hash/hash.hpp"
 #include "atom/algorithm/hash/mhash.hpp"
+
+// Or include specific sub-components
+#include "atom/algorithm/hash/hash_base.hpp"    // Core hash only
+#include "atom/algorithm/hash/minhash.hpp"      // MinHash only
+#include "atom/algorithm/hash/keccak.hpp"       // Keccak-256 only
 
 // Basic hashing
 auto hash_value = atom::algorithm::computeHash("Hello, World!");
@@ -49,5 +70,6 @@ auto similarity = atom::algorithm::MinHash::jaccardIndex(signature1, signature2)
 ## Dependencies
 
 - Core algorithm components
-- TBB for parallel processing
+- OpenSSL (for HashContext)
 - Optional: Boost for additional containers
+- Optional: OpenCL for GPU-accelerated MinHash

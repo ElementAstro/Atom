@@ -16,7 +16,7 @@
 #include <vector>
 
 #include <spdlog/spdlog.h>
-#include "../rust_numeric.hpp"
+#include "../core/rust_numeric.hpp"
 #include "atom/error/exception.hpp"
 
 class MatrixCompressException : public atom::error::Exception {
@@ -55,6 +55,10 @@ concept MatrixLike = requires(T m) {
  * @class MatrixCompressor
  * @brief A class for compressing and decompressing matrices with C++20
  * features.
+ *
+ * Core RLE compression/decompression is implemented directly.
+ * Parallel processing is delegated to matrix_compress_parallel.hpp.
+ * Utility functions are delegated to matrix_compress_utils.hpp.
  */
 class MatrixCompressor {
 public:
@@ -323,16 +327,6 @@ auto MatrixCompressor::calculateMSE(const M1& matrix1, const M2& matrix2)
 
     return totalElements > 0 ? (mse / totalElements) : 0.0;
 }
-
-#if ATOM_ENABLE_DEBUG
-/**
- * @brief Runs a performance test on matrix compression and decompression.
- * @param rows The number of rows in the test matrix.
- * @param cols The number of columns in the test matrix.
- * @param runParallel Whether to test parallel versions.
- */
-void performanceTest(i32 rows, i32 cols, bool runParallel = true);
-#endif
 
 }  // namespace atom::algorithm
 

@@ -13,7 +13,7 @@ Description: Shared hexadecimal conversion utilities
 #ifndef ATOM_ALGORITHM_CORE_HEX_UTILS_HPP
 #define ATOM_ALGORITHM_CORE_HEX_UTILS_HPP
 
-#include "../rust_numeric.hpp"
+#include "atom/algorithm/core/rust_numeric.hpp"
 #include "atom/type/expected.hpp"
 
 namespace atom::algorithm {

@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "../core/opencl_utils.hpp"
-#include "../rust_numeric.hpp"
+#include "../core/rust_numeric.hpp"
 
 namespace atom::algorithm::gpu {
 

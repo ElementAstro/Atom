@@ -1,4 +1,4 @@
-#include "atom/algorithm/tea.hpp"
+#include "atom/algorithm/crypto/tea.hpp"
 
 #include <iostream>
 #include <vector>

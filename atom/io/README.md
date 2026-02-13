@@ -1,113 +1,165 @@
 # Atom I/O Module
 
-This directory contains the input/output and file system components for the Atom framework.
+This directory contains the input/output and file system components for the Atom framework. All public interfaces live in `namespace atom::io`, with async operations under `namespace atom::io::async`.
 
 ## Directory Structure
 
-The I/O module has been refactored to follow a clean, organized structure:
-
 ```
 atom/io/
-├── CMakeLists.txt              # CMake build configuration
-├── xmake.lua                   # XMake build configuration
-├── README.md                   # This file
-├── [compatibility headers]     # Backward compatibility headers (deprecated)
-├── async/                      # Asynchronous I/O operations
-│   ├── async_compress.hpp     # Asynchronous compression operations
-│   ├── async_compress.cpp     # Async compression implementation
-│   ├── async_glob.hpp         # Asynchronous glob pattern matching
-│   ├── async_glob.cpp         # Async glob implementation
-│   ├── async_io.hpp           # Asynchronous file I/O operations
-│   └── async_io.cpp           # Async I/O implementation
-├── compression/                # Compression and decompression
-│   ├── compress.hpp           # Compression utilities (ZLib, MiniZip-ng)
-│   └── compress.cpp           # Compression implementation
-├── filesystem/                 # File system operations
-│   ├── file_info.hpp          # File information and metadata
-│   ├── file_info.cpp          # File info implementation
-│   ├── file_permission.hpp    # File permission management
-│   ├── file_permission.cpp    # File permission implementation
-│   ├── pushd.hpp              # Directory stack operations
-│   └── pushd.cpp              # Directory stack implementation
-└── core/                       # Core I/O functionality
-    ├── io.hpp                 # Core I/O operations and utilities
-    ├── io.cpp                 # Core I/O implementation
-    └── glob.hpp               # Glob pattern matching (header-only)
+├── CMakeLists.txt                          # CMake build configuration
+├── xmake.lua                               # XMake build configuration
+├── index.hpp                               # Barrel export header (include this for everything)
+│
+├── core/                                   # Core I/O (namespace atom::io)
+│   ├── types.hpp                           # PathLike concept, fs alias, shared types
+│   ├── io.hpp                              # Aggregator header for all core headers
+│   ├── io.cpp                              # Non-template implementations
+│   ├── path_convert.hpp                    # Path conversion (Linux/Windows/normalize)
+│   ├── path_utils.hpp                      # Path validation utilities (detail namespace)
+│   ├── file_ops.hpp                        # File CRUD: create, copy, move, remove, truncate
+│   ├── file_query.hpp                      # File queries: exists, size, type, permissions
+│   ├── file_split_merge.hpp                # File split/merge operations
+│   ├── directory_ops.hpp                   # Directory CRUD operations
+│   ├── directory_walk.hpp                  # Directory traversal (jwalk, fwalk)
+│   └── glob.hpp                            # Glob pattern matching
+│
+├── compression/                            # Compression (namespace atom::io)
+│   ├── types.hpp                           # CompressionResult, CompressionOptions
+│   ├── compress.hpp                        # Aggregator header
+│   ├── utils.hpp                           # CRC32, compression utilities
+│   ├── gz_compress.hpp/cpp                 # Gzip compress/decompress via zlib
+│   ├── zip_operations.hpp/cpp              # ZIP folder compress/extract via minizip-ng
+│   ├── slice_compress.hpp/cpp              # Slice-based compression with manifest
+│   ├── data_compress.hpp/cpp               # In-memory data compression
+│   └── backup.hpp/cpp                      # Backup/restore + async batch processing
+│
+├── filesystem/                             # Filesystem utilities (namespace atom::io)
+│   ├── file_info.hpp/cpp                   # FileInfo struct + getFileInfo()
+│   ├── file_ops.hpp/cpp                    # printFileInfo, deleteFile (deprecated)
+│   ├── file_permission.hpp/cpp             # File permission queries
+│   ├── file_permission_change.hpp/cpp      # Permission modification
+│   ├── task.hpp                            # Task<T> alias → atom::async::Task<T>
+│   ├── directory_stack.hpp                 # DirectoryStack class
+│   ├── directory_stack_impl.hpp            # DirectoryStack pimpl implementation
+│   ├── directory_stack.cpp                 # DirectoryStack core implementation
+│   ├── directory_stack_navigation.cpp      # DirectoryStack navigation methods
+│   ├── directory_stack_persistence.cpp     # DirectoryStack save/load methods
+│   └── pushd.hpp                           # Convenience include for directory stack
+│
+└── async/                                  # Async I/O (namespace atom::io::async, requires ASIO)
+    ├── async_types.hpp                     # AsyncResult, AsyncContext, PathString concept
+    ├── async_file.hpp/cpp                  # AsyncFile: read, write, append, delete, exists
+    ├── async_directory.hpp/cpp             # AsyncDirectoryOps: create, remove, list
+    ├── async_batch.hpp/cpp                 # AsyncBatchOps: batch read/write/delete
+    ├── async_stream.hpp/cpp                # AsyncStreamOps: streaming read/write
+    ├── async_simd.hpp/cpp                  # SIMD-optimized buffer operations
+    ├── async_compressor.hpp/cpp            # Async compression (zlib + ASIO)
+    ├── async_decompressor.hpp/cpp          # Async decompression
+    ├── async_zip.hpp/cpp                   # Async ZIP operations
+    ├── async_glob.hpp/cpp                  # Async glob (namespace atom::io)
+    ├── async_compress.hpp                  # Aggregator header
+    └── async_io.hpp                        # Aggregator header
 ```
 
-## Backward Compatibility
+## Usage
 
-All existing header file paths continue to work without modification. The root-level headers are now compatibility headers that forward to the new locations:
+### Barrel Header
 
-- `async_compress.hpp` → `async/async_compress.hpp`
-- `async_glob.hpp` → `async/async_glob.hpp`
-- `async_io.hpp` → `async/async_io.hpp`
-- `compress.hpp` → `compression/compress.hpp`
-- `file_info.hpp` → `filesystem/file_info.hpp`
-- `file_permission.hpp` → `filesystem/file_permission.hpp`
-- `pushd.hpp` → `filesystem/pushd.hpp`
-- `io.hpp` → `core/io.hpp`
-- `glob.hpp` → `core/glob.hpp`
-
-## Migration Guide
-
-### For New Code
-
-Use the new structured paths:
+Include a single header for all public interfaces:
 
 ```cpp
-#include "atom/io/async/async_io.hpp"
+#include "atom/io/index.hpp"
+```
+
+Or include individual sub-module headers for fine-grained control:
+
+```cpp
+#include "atom/io/core/io.hpp"
 #include "atom/io/compression/compress.hpp"
-#include "atom/io/filesystem/file_permission.hpp"
-```
+#include "atom/io/filesystem/file_info.hpp"
 
-### For Existing Code
-
-No changes required! Existing includes will continue to work:
-
-```cpp
-#include "atom/io/async_io.hpp"        // Still works
-#include "atom/io/compress.hpp"        // Still works
-#include "atom/io/file_permission.hpp" // Still works
+// Async (only available when ASIO is present)
+#include "atom/io/async/async_io.hpp"
 ```
 
 ## Key Components
 
-### Asynchronous I/O Operations
+### Core I/O (core/)
 
-- **AsyncFile**: High-performance asynchronous file operations with C++20 coroutine support
-- **AsyncGlob**: Asynchronous glob pattern matching with callback-based and coroutine interfaces
-- **AsyncCompress**: Asynchronous compression and decompression operations
+- **File Operations** (`file_ops.hpp`): Templated on `PathLike` — create, copy, move, remove, truncate, symlink
+- **File Queries** (`file_query.hpp`): exists, size, type, permissions checks
+- **Directory Operations** (`directory_ops.hpp`): create, remove, recursive create/delete
+- **Directory Traversal** (`directory_walk.hpp`): `jwalk`, `fwalk` for iterating directory trees
+- **File Split/Merge** (`file_split_merge.hpp`): Split large files and merge them back
+- **Path Conversion** (`path_convert.hpp`): Linux/Windows path conversion, normalization, validation
+- **Glob Matching** (`glob.hpp`): Shell-style pattern matching with `glob()` and recursive `rglob()`
 
-### Compression Support
+### Compression (compression/)
 
-- **ZLib Integration**: High-performance compression using ZLib
-- **MiniZip-ng Support**: Advanced ZIP archive operations
-- **Streaming Compression**: Memory-efficient streaming compression/decompression
+- **GZip** (`gz_compress.hpp`): Gzip compress/decompress via zlib
+- **ZIP** (`zip_operations.hpp`): ZIP folder compress/extract via minizip-ng
+- **Slice Compression** (`slice_compress.hpp`): Slice-based compression with manifest support
+- **Data Compression** (`data_compress.hpp`): In-memory data compression/decompression
+- **Backup** (`backup.hpp`): Backup/restore operations with async batch processing
 
-### File System Operations
+### Filesystem Utilities (filesystem/)
 
-- **File Information**: Comprehensive file metadata and information retrieval
-- **Permission Management**: Cross-platform file permission handling
-- **Directory Stack**: Push/pop directory operations (pushd/popd functionality)
+- **File Information** (`file_info.hpp`): `FileInfo` struct and `getFileInfo()` for metadata retrieval
+- **File Permissions** (`file_permission.hpp`, `file_permission_change.hpp`): Cross-platform permission queries and modification
+- **Directory Stack** (`directory_stack.hpp`): Push/pop directory operations (pushd/popd) with coroutine and persistence support
 
-### Core I/O Functionality
+### Async I/O (async/, requires ASIO)
 
-- **File Operations**: Basic file read/write operations with error handling
-- **Glob Matching**: Shell-style pattern matching with recursive support
-- **Path Utilities**: Cross-platform path manipulation and validation
+- **AsyncFile** (`async_file.hpp`): Asynchronous read, write, append, delete, exists
+- **AsyncDirectoryOps** (`async_directory.hpp`): Async directory create, remove, list
+- **AsyncBatchOps** (`async_batch.hpp`): Batch read/write/delete operations
+- **AsyncStreamOps** (`async_stream.hpp`): Streaming read/write for large files
+- **SIMD Operations** (`async_simd.hpp`): SIMD-optimized buffer operations
+- **Async Compression** (`async_compressor.hpp`, `async_decompressor.hpp`): Async compress/decompress via zlib + ASIO
+- **Async ZIP** (`async_zip.hpp`): Asynchronous ZIP archive operations
+- **Async Glob** (`async_glob.hpp`): Asynchronous glob pattern matching
+
+## Dependencies
+
+| Dependency | Required | Purpose |
+| --- | --- | --- |
+| **spdlog** | Yes | Logging |
+| **ZLIB** | Optional | Compression (gzip, data compression) |
+| **minizip-ng** | Optional | ZIP archive operations (define `ATOM_IO_NO_MINIZIP` to disable) |
+| **ASIO** | Optional | Async I/O (define `ATOM_USE_ASIO` to enable) |
+| **TBB** | Optional | Parallel algorithms |
+| **atom-async** | Yes | Coroutine `Task<T>` type |
+| **atom-containers** | Yes | High-performance `String`, `Vector`, `Map` |
+| **atom-error** | Yes | Exception hierarchy |
 
 ## Build System
 
-The module supports both CMake and XMake build systems. The build files have been updated to reflect the new directory structure while maintaining compatibility.
+The module supports both CMake and XMake build systems.
 
-### Dependencies
+### CMake
 
-- **Core**: C++20 compiler support, spdlog (logging)
-- **Compression**: ZLib, MiniZip-ng for compression operations
-- **Async**: ASIO (optional) for enhanced asynchronous operations
-- **Threading**: TBB (Intel Threading Building Blocks)
-- **Platform**: Platform-specific libraries (Windows: ws2_32, wsock32)
+```cmake
+add_library(atom-io STATIC ...)
+add_library(atom::io ALIAS atom-io)
+target_link_libraries(atom-io PRIVATE spdlog::spdlog ZLIB::ZLIB atom-async)
+
+# Optional: ASIO for async I/O
+if(asio_FOUND)
+    target_compile_definitions(atom-io PUBLIC ASIO_STANDALONE ATOM_USE_ASIO)
+    target_link_libraries(atom-io PUBLIC asio::asio)
+endif()
+```
+
+### XMake
+
+```bash
+# Basic build
+xmake build atom-io
+
+# With optional features
+xmake f --use_asio=y --use_minizip=y --use_tbb=y
+xmake build atom-io
+```
 
 ## Features
 
@@ -116,21 +168,25 @@ The module supports both CMake and XMake build systems. The build files have bee
 - C++20 coroutine support for modern async programming
 - ASIO integration for high-performance I/O
 - Thread pool-based execution for CPU-bound operations
-- Cancellation support through AsyncContext
+- Cancellation support through `AsyncContext`
+- SIMD-optimized buffer operations
 
 ### Compression
 
 - Multiple compression algorithms (ZLib, GZip)
 - Streaming compression for large files
 - Archive creation and extraction (ZIP format)
-- Progress callbacks and error handling
+- Slice-based compression with manifest
+- In-memory data compression
+- Backup/restore with async batch processing
 
 ### File System
 
-- Cross-platform file operations
+- Cross-platform file operations templated on `PathLike` concept
 - Comprehensive file metadata access
 - Permission management with security validation
 - Directory traversal and manipulation
+- Directory stack with persistence support
 
 ### Pattern Matching
 
@@ -146,7 +202,3 @@ The module supports both CMake and XMake build systems. The build files have bee
 - Pattern caching for repeated glob operations
 - SIMD optimizations where available
 - Zero-copy operations where possible
-
-## Notes
-
-This refactoring maintains 100% backward compatibility while providing a cleaner, more maintainable codebase structure that follows established patterns from other Atom modules. The organization separates concerns clearly: async operations, compression, filesystem operations, and core I/O functionality are now in dedicated subdirectories for better maintainability and discoverability.

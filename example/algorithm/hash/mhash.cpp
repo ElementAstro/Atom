@@ -14,7 +14,7 @@
  * @date 2024-12-19
  */
 
-#include "atom/algorithm/mhash.hpp"
+#include "atom/algorithm/hash/mhash.hpp"
 
 #include <algorithm>
 #include <chrono>

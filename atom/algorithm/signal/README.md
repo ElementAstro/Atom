@@ -4,7 +4,14 @@ This directory contains algorithms for digital signal processing and analysis.
 
 ## Contents
 
-- **`convolve.hpp/cpp`** - Convolution operations for 1D and 2D signals with multiple optimization strategies
+- **`convolve.hpp`** - Umbrella header (includes all sub-components for backward compatibility)
+- **`convolve_common.hpp`** - Shared types, concepts, error definitions, and configuration options
+- **`convolution_1d.hpp`** - One-dimensional convolution and deconvolution (header-only)
+- **`convolution_2d.hpp/cpp`** - Two-dimensional convolution, deconvolution, padding utilities, and OpenCL support
+- **`dft.hpp/cpp`** - Two-dimensional Discrete Fourier Transform (DFT) and Inverse DFT
+- **`gaussian_filter.hpp/cpp`** - Gaussian kernel generation and Gaussian filter operations
+- **`convolution_filters.hpp`** - Convolution-based image filters: Sobel, Laplacian, custom (header-only)
+- **`frequency_domain.hpp`** - Frequency domain convolution class (header-only)
 
 ## Features
 

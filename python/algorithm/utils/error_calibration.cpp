@@ -1,5 +1,5 @@
 // error_calibration_bindings.cpp
-#include "atom/algorithm/error_calibration.hpp"
+#include "atom/algorithm/utils/error_calibration.hpp"
 #include <pybind11/functional.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>

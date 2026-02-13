@@ -1,4 +1,4 @@
-#include "atom/algorithm/math.hpp"
+#include "atom/algorithm/math/math.hpp"
 
 #include <iostream>
 

@@ -4,8 +4,20 @@ This directory contains algorithms for optimization problems and pathfinding.
 
 ## Contents
 
-- **`annealing.hpp`** - Simulated annealing optimization with multiple cooling strategies
-- **`pathfinding.hpp/cpp`** - Graph pathfinding algorithms including A\*, Dijkstra, and Jump Point Search
+### Simulated Annealing (`annealing.hpp` — aggregation header)
+
+- **`annealing/annealing_concept.hpp`** — `AnnealingProblem` concept and `AnnealingStrategy` enum
+- **`annealing/cooling_schedule.hpp`** — Cooling schedule factory function (`createCoolingSchedule`)
+- **`annealing/simulated_annealing.hpp`** — `SimulatedAnnealing` template class with Builder pattern
+- **`annealing/tsp.hpp`** — TSP (Traveling Salesman Problem) example implementation
+
+### Pathfinding (`pathfinding.hpp` — aggregation header)
+
+- **`pathfinding/point.hpp`** — `Point` struct with arithmetic operators and `std::hash` specialization
+- **`pathfinding/graph.hpp`** — `IGraph` abstract interface and `Graph` concept
+- **`pathfinding/heuristics.hpp/.cpp`** — Heuristic concept and functions (Manhattan, Euclidean, diagonal, octile, zero)
+- **`pathfinding/grid_map.hpp/.cpp`** — `GridMap` class with terrain types and JPS support
+- **`pathfinding/pathfinder.hpp/.cpp`** — `PathFinder` class with A\*, Dijkstra, bidirectional search, JPS, path smoothing, funnel algorithm
 
 ## Features
 

@@ -4,7 +4,7 @@
 #include <random>
 #include <thread>
 
-#include "atom/algorithm/flood.hpp"
+#include "atom/algorithm/graphics/flood.hpp"
 
 namespace py = pybind11;
 

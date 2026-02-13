@@ -1,6 +1,6 @@
 #ifdef _WIN32
 
-#include "../clipboard.ipp"
+#include "../clipboard_impl.hpp"
 
 #include <windows.h>
 

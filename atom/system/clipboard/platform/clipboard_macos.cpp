@@ -1,7 +1,6 @@
 #if defined(__APPLE__)
 
-#include "../clipboard.ipp"
-#include "../clipboard_error.hpp"
+#include "../clipboard_impl.hpp"
 
 #include <AppKit/AppKit.h>
 #include <ApplicationServices/ApplicationServices.h>

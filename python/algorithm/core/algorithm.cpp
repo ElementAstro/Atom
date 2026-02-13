@@ -1,4 +1,4 @@
-#include "atom/algorithm/algorithm.hpp"
+#include "atom/algorithm/core/algorithm.hpp"
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>

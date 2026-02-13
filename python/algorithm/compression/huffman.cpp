@@ -1,4 +1,4 @@
-#include "atom/algorithm/huffman.hpp"
+#include "atom/algorithm/compression/huffman.hpp"
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>

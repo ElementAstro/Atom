@@ -3,8 +3,8 @@
 
 // Optional dependencies for compression/decompression
 #ifdef ATOM_ENABLE_STACKTRACE_COMPRESSION
-#include "atom/algorithm/base.hpp"
-#include "atom/io/compress.hpp"
+#include "atom/algorithm/hash/hash.hpp"
+#include "atom/io/compression/compress.hpp"
 #endif
 
 #include <algorithm>

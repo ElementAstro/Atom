@@ -1,5 +1,5 @@
 // hash_bindings.cpp
-#include "atom/algorithm/hash.hpp"
+#include "atom/algorithm/hash/hash.hpp"
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>

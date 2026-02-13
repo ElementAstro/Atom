@@ -1,5 +1,5 @@
 // convolve_bindings.cpp
-#include "atom/algorithm/convolve.hpp"
+#include "atom/algorithm/signal/convolve.hpp"
 #include <pybind11/complex.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>

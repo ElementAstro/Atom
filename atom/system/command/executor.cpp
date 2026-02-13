@@ -12,17 +12,13 @@
 #include <cstdio>
 #include <cstring>
 #include <future>
-#include <iomanip>
 #include <memory>
 #include <mutex>
-#include <regex>
 #include <sstream>
 #include <thread>
-#include <unordered_set>
 
-#include "cache.hpp"
-#include "config.hpp"
-#include "thread_pool.hpp"
+#include "statistics.hpp"
+#include "validation.hpp"
 
 #ifdef _WIN32
 #define SETENV(name, value) SetEnvironmentVariableA(name, value)
@@ -51,57 +47,6 @@
 
 namespace atom::system {
 
-// Global statistics tracking
-namespace {
-    std::mutex g_statsMutex;
-    std::atomic<size_t> g_totalExecutions{0};
-    std::atomic<size_t> g_successfulExecutions{0};
-    std::atomic<size_t> g_failedExecutions{0};
-    std::atomic<size_t> g_timedOutExecutions{0};
-    std::atomic<std::chrono::milliseconds::rep> g_totalExecutionTime{0};
-
-    // Command validation patterns
-    const std::unordered_set<std::string> DANGEROUS_COMMANDS = {
-        "rm", "del", "format", "fdisk", "mkfs", "dd", "shutdown", "reboot",
-        "halt", "poweroff", "init", "kill", "killall", "pkill"
-    };
-
-    const std::regex COMMAND_INJECTION_PATTERN(R"([;&|`$(){}[\]<>])");
-}
-
-auto validateCommand(const std::string &command) -> bool {
-    if (command.empty()) {
-        spdlog::warn("Empty command provided for validation");
-        return false;
-    }
-
-    // Check for command injection patterns
-    if (std::regex_search(command, COMMAND_INJECTION_PATTERN)) {
-        spdlog::warn("Command contains potentially dangerous characters: {}", command);
-        return false;
-    }
-
-    // Extract the base command (first word)
-    std::istringstream iss(command);
-    std::string baseCommand;
-    iss >> baseCommand;
-
-    // Remove path if present
-    size_t lastSlash = baseCommand.find_last_of("/\\");
-    if (lastSlash != std::string::npos) {
-        baseCommand = baseCommand.substr(lastSlash + 1);
-    }
-
-    // Check against dangerous commands list
-    if (DANGEROUS_COMMANDS.find(baseCommand) != DANGEROUS_COMMANDS.end()) {
-        spdlog::warn("Command '{}' is in the dangerous commands list", baseCommand);
-        return false;
-    }
-
-    spdlog::debug("Command validation passed for: {}", command);
-    return true;
-}
-
 auto executeCommandInternalEnhanced(
     const std::string &command,
     const ExecutionConfig &config,
@@ -115,7 +60,7 @@ auto executeCommandInternalEnhanced(
     ExecutionResult result;
 
     // Update statistics
-    g_totalExecutions++;
+    incrementTotalExecutions();
 
     if (config.enableLogging) {
         spdlog::debug("Executing enhanced command: {}, openTerminal: {}",
@@ -128,7 +73,7 @@ auto executeCommandInternalEnhanced(
         if (config.enableLogging) {
             spdlog::error("Command is empty");
         }
-        g_failedExecutions++;
+        incrementFailedExecutions();
         return result;
     }
 
@@ -139,7 +84,7 @@ auto executeCommandInternalEnhanced(
         if (config.enableLogging) {
             spdlog::error("Command validation failed for: {}", command);
         }
-        g_failedExecutions++;
+        incrementFailedExecutions();
         return result;
     }
 
@@ -164,7 +109,7 @@ auto executeCommandInternalEnhanced(
                 spdlog::error("Failed to run command '{}' as user '{}\\{}'",
                               command, domain, username);
             }
-            g_failedExecutions++;
+            incrementFailedExecutions();
             return result;
         }
         result.exitCode = 0;
@@ -172,11 +117,11 @@ auto executeCommandInternalEnhanced(
             spdlog::info("Command '{}' executed as user '{}\\{}'",
                         command, domain, username);
         }
-        g_successfulExecutions++;
+        incrementSuccessfulExecutions();
         auto endTime = std::chrono::steady_clock::now();
         result.executionTime = std::chrono::duration_cast<std::chrono::milliseconds>(
             endTime - startTime);
-        g_totalExecutionTime += result.executionTime.count();
+        addExecutionTime(result.executionTime.count());
         return result;
     }
 
@@ -200,7 +145,7 @@ auto executeCommandInternalEnhanced(
         if (config.enableLogging) {
             spdlog::error("Failed to run command '{}'", command);
         }
-        g_failedExecutions++;
+        incrementFailedExecutions();
         return result;
     }
 
@@ -213,7 +158,7 @@ auto executeCommandInternalEnhanced(
             if (config.enableLogging) {
                 spdlog::error("Failed to write input to pipe for command '{}'", command);
             }
-            g_failedExecutions++;
+            incrementFailedExecutions();
             return result;
         }
         if (fflush(pipe.get()) != 0) {
@@ -222,7 +167,7 @@ auto executeCommandInternalEnhanced(
             if (config.enableLogging) {
                 spdlog::error("Failed to flush pipe for command '{}'", command);
             }
-            g_failedExecutions++;
+            incrementFailedExecutions();
             return result;
         }
     }
@@ -306,13 +251,13 @@ auto executeCommandInternalEnhanced(
         endTime - startTime);
 
     // Update statistics
-    g_totalExecutionTime += result.executionTime.count();
+    addExecutionTime(result.executionTime.count());
     if (timedOut) {
-        g_timedOutExecutions++;
+        incrementTimedOutExecutions();
     } else if (result.exitCode == 0) {
-        g_successfulExecutions++;
+        incrementSuccessfulExecutions();
     } else {
-        g_failedExecutions++;
+        incrementFailedExecutions();
     }
 
     if (config.enableLogging) {
@@ -687,154 +632,6 @@ auto executeCommandsEnhanced(
 
     spdlog::debug("Enhanced commands completed with {} results", results.size());
     return results;
-}
-
-auto getExecutionStatistics() -> std::string {
-    std::lock_guard<std::mutex> lock(g_statsMutex);
-
-    std::ostringstream stats;
-    stats << "Command Execution Statistics:\n";
-    stats << "  Total Executions: " << g_totalExecutions.load() << "\n";
-    stats << "  Successful: " << g_successfulExecutions.load() << "\n";
-    stats << "  Failed: " << g_failedExecutions.load() << "\n";
-    stats << "  Timed Out: " << g_timedOutExecutions.load() << "\n";
-
-    auto totalTime = g_totalExecutionTime.load();
-    stats << "  Total Execution Time: " << totalTime << "ms\n";
-
-    if (g_totalExecutions.load() > 0) {
-        auto avgTime = totalTime / g_totalExecutions.load();
-        stats << "  Average Execution Time: " << avgTime << "ms\n";
-
-        auto successRate = (g_successfulExecutions.load() * 100.0) / g_totalExecutions.load();
-        stats << "  Success Rate: " << std::fixed << std::setprecision(2) << successRate << "%\n";
-    }
-
-    return stats.str();
-}
-
-void clearExecutionStatistics() {
-    std::lock_guard<std::mutex> lock(g_statsMutex);
-
-    g_totalExecutions = 0;
-    g_successfulExecutions = 0;
-    g_failedExecutions = 0;
-    g_timedOutExecutions = 0;
-    g_totalExecutionTime = 0;
-
-    spdlog::info("Execution statistics cleared");
-}
-
-// ============================================================================
-// Optimized Execution Functions Implementation
-// ============================================================================
-
-auto executeCommandAsync(const std::string& command,
-                         const ExecutionConfig& config,
-                         int priority) -> std::future<ExecutionResult> {
-
-    // Check rate limiting
-    if (COMMAND_CONFIG().enableRateLimit) {
-        if (!COMMAND_RATE_LIMITER().allowRequest()) {
-            ExecutionResult result;
-            result.exitCode = -1;
-            result.error = "Rate limit exceeded";
-            return std::async(std::launch::deferred, [result]() { return result; });
-        }
-    }
-
-    // Convert priority
-    TaskPriority taskPriority = static_cast<TaskPriority>(
-        std::clamp(priority, 0, 3));
-
-    return CommandThreadPool::getInstance().submit(
-        taskPriority,
-        [command, config]() -> ExecutionResult {
-            return executeCommandEnhanced(command, config);
-        }
-    );
-}
-
-auto executeCommandCached(const std::string& command,
-                         const ExecutionConfig& config) -> ExecutionResult {
-
-    // Check cache first for validation
-    auto& cacheManager = CommandCacheManager::getInstance();
-    auto cachedValidation = cacheManager.getValidationResult(command);
-
-    if (cachedValidation && !cachedValidation->isValid) {
-        ExecutionResult result;
-        result.exitCode = -1;
-        result.error = "Command validation failed: " + cachedValidation->errorMessage;
-        return result;
-    }
-
-    // Execute command
-    auto result = executeCommandEnhanced(command, config);
-
-    // Cache metrics if successful
-    if (result.exitCode == 0) {
-        CommandMetrics metrics;
-        metrics.executionTime = result.executionTime;
-        metrics.outputSize = result.output.size();
-        metrics.wasSuccessful = true;
-        cacheManager.cacheCommandMetrics(command, metrics);
-    }
-
-    return result;
-}
-
-auto executeCommandsBatch(const std::vector<std::string>& commands,
-                         const ExecutionConfig& config,
-                         size_t maxConcurrency) -> std::vector<ExecutionResult> {
-
-    if (maxConcurrency == 0) {
-        maxConcurrency = COMMAND_CONFIG().maxConcurrentCommands;
-    }
-
-    std::vector<std::future<ExecutionResult>> futures;
-    std::vector<ExecutionResult> results;
-
-    futures.reserve(commands.size());
-    results.reserve(commands.size());
-
-    // Submit all commands
-    for (const auto& command : commands) {
-        futures.push_back(executeCommandAsync(command, config, 1)); // Normal priority
-    }
-
-    // Collect results
-    for (auto& future : futures) {
-        results.push_back(future.get());
-    }
-
-    return results;
-}
-
-auto executeCommandRateLimited(const std::string& command,
-                              const ExecutionConfig& config,
-                              const std::string& identifier) -> ExecutionResult {
-
-    if (COMMAND_CONFIG().enableRateLimit) {
-        if (!COMMAND_RATE_LIMITER().allowRequest(identifier)) {
-            ExecutionResult result;
-            result.exitCode = -1;
-            result.error = "Rate limit exceeded for identifier: " + identifier;
-            const_cast<CommandSystemMetrics&>(COMMAND_METRICS()).blockedCommands++;
-            return result;
-        }
-    }
-
-    return executeCommandEnhanced(command, config);
-}
-
-auto getExecutionMetrics() -> const CommandSystemMetrics& {
-    return COMMAND_METRICS();
-}
-
-void resetExecutionStatistics() {
-    const_cast<CommandSystemMetrics&>(COMMAND_METRICS()).reset();
-    clearExecutionStatistics(); // Also clear legacy statistics
 }
 
 }  // namespace atom::system

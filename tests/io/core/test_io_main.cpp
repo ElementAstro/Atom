@@ -1,79 +1,177 @@
+/*
+ * test_io_main.cpp
+ *
+ * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ */
+
+/**
+ * @file test_io_main.cpp
+ * @brief Integration tests for atom::io core module
+ *
+ * Verifies that combined file operations (create, query, split, merge, cleanup)
+ * work correctly together in an end-to-end workflow.
+ */
+
+#include <gtest/gtest.h>
+
 #include <filesystem>
 #include <fstream>
-#include <iostream>
+#include <string>
 #include <vector>
+
 #include "atom/io/core/io.hpp"
 
 namespace fs = std::filesystem;
 
-// Function to create a sample file
-void createSampleFiles(const std::string& baseDir) {
-    fs::create_directory(baseDir);
+class IoIntegrationTest : public ::testing::Test {
+protected:
+    fs::path test_dir;
 
-    std::ofstream outFile(baseDir + "/file1.txt");
-    outFile << "Contents of file 1." << std::endl;
-    outFile.close();
-
-    outFile.open(baseDir + "/file2.txt");
-    outFile << "Contents of file 2." << std::endl;
-    outFile.close();
-
-    outFile.open(baseDir + "/file3.txt");
-    outFile << "Contents of file 3." << std::endl;
-    outFile.close();
-}
-
-// Function to demonstrate file operations
-void demonstrateFileOperations() {
-    const std::string directory = "sample_dir";  // Directory for test files
-    createSampleFiles(directory);
-
-    // Check if folder exists
-    if (atom::io::isFolderExists(directory)) {
-        std::cout << "Folder '" << directory << "' exists." << std::endl;
+    void SetUp() override {
+        test_dir = fs::temp_directory_path() / "atom_io_integration_test";
+        if (fs::exists(test_dir)) {
+            fs::remove_all(test_dir);
+        }
+        fs::create_directories(test_dir);
     }
 
-    // Check if files exist
-    std::vector<std::string> filenames = {
-        "sample_dir/file1.txt", "sample_dir/file2.txt", "sample_dir/file3.txt"};
-
-    for (const auto& filename : filenames) {
-        if (atom::io::isFileExists(filename)) {
-            std::cout << "File '" << filename << "' exists." << std::endl;
+    void TearDown() override {
+        try {
+            if (fs::exists(test_dir)) {
+                fs::remove_all(test_dir);
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Cleanup error: " << e.what() << std::endl;
         }
     }
 
-    // Get file sizes
+    void createTestFile(const fs::path& path, const std::string& content) {
+        std::ofstream file(path);
+        file << content;
+        file.close();
+        ASSERT_TRUE(fs::exists(path));
+    }
+};
+
+// End-to-end workflow: create files, query, split, merge, cleanup
+TEST_F(IoIntegrationTest, FileLifecycleWorkflow) {
+    // 1. Create sample files
+    fs::path sample_dir = test_dir / "sample_dir";
+    ASSERT_TRUE(atom::io::createDirectory(sample_dir));
+
+    createTestFile(sample_dir / "file1.txt", "Contents of file 1.\n");
+    createTestFile(sample_dir / "file2.txt", "Contents of file 2.\n");
+    createTestFile(sample_dir / "file3.txt", "Contents of file 3.\n");
+
+    // 2. Verify folder and file existence
+    EXPECT_TRUE(atom::io::isFolderExists(sample_dir));
+
+    std::vector<fs::path> filenames = {
+        sample_dir / "file1.txt", sample_dir / "file2.txt",
+        sample_dir / "file3.txt"};
+
     for (const auto& filename : filenames) {
-        std::size_t size = atom::io::fileSize(filename);
-        std::cout << "Size of " << filename << ": " << size << " bytes."
-                  << std::endl;
+        EXPECT_TRUE(atom::io::isFileExists(filename));
     }
 
-    // Split a file
-    const std::string fileToSplit = "sample_dir/file1.txt";
-    const std::size_t chunkSize = 10;  // Split into chunks of 10 bytes
-    atom::io::splitFile(fileToSplit, chunkSize, "part_");
+    // 3. Get file sizes
+    for (const auto& filename : filenames) {
+        EXPECT_GT(atom::io::fileSize(filename), 0u);
+    }
 
-    // Check split files
-    for (size_t i = 0; i < 3; ++i) {  // Assuming 3 parts created from file1.txt
-        std::string partName = "part_" + std::to_string(i) + ".txt";
-        if (atom::io::isFileExists(partName)) {
-            std::cout << "Split file '" << partName << "' exists." << std::endl;
+    // 4. Split a file
+    fs::path file_to_split = sample_dir / "file1.txt";
+    size_t chunk_size = 10;
+    atom::io::splitFile(file_to_split, chunk_size);
+
+    // Verify split files exist
+    bool found_parts = false;
+    for (int i = 0; i < 5; ++i) {
+        fs::path part = fs::path(file_to_split.string() + ".part" +
+                                 std::to_string(i));
+        if (fs::exists(part)) {
+            found_parts = true;
         }
     }
+    EXPECT_TRUE(found_parts);
 
-    // Merge split files
-    std::vector<std::string> partFiles = {"part_0.txt", "part_1.txt",
-                                          "part_2.txt"};
-    atom::io::mergeFiles("merged_file1.txt", partFiles);
-    std::cout << "Merged files into 'merged_file1.txt'" << std::endl;
+    // 5. Merge split files
+    fs::path merged_file = sample_dir / "merged_file1.txt";
+    std::vector<std::string> part_files;
+    for (int i = 0; fs::exists(fs::path(file_to_split.string() + ".part" +
+                                        std::to_string(i)));
+         ++i) {
+        part_files.push_back(file_to_split.string() + ".part" +
+                             std::to_string(i));
+    }
+    ASSERT_FALSE(part_files.empty());
 
-    // Clean up by removing sample directory
-    fs::remove_all(directory);
-    std::cout << "Removed sample directory and its contents." << std::endl;
+    atom::io::mergeFiles(merged_file, part_files);
+    EXPECT_TRUE(fs::exists(merged_file));
+    EXPECT_EQ(fs::file_size(merged_file), fs::file_size(file_to_split));
+
+    // 6. Copy and move operations
+    fs::path copied = sample_dir / "file1_copy.txt";
+    EXPECT_TRUE(atom::io::copyFile(filenames[0], copied));
+    EXPECT_TRUE(fs::exists(copied));
+
+    fs::path moved = sample_dir / "file1_moved.txt";
+    EXPECT_TRUE(atom::io::moveFile(copied, moved));
+    EXPECT_FALSE(fs::exists(copied));
+    EXPECT_TRUE(fs::exists(moved));
+
+    // 7. Cleanup
+    EXPECT_TRUE(atom::io::removeDirectory(sample_dir));
+    EXPECT_FALSE(fs::exists(sample_dir));
 }
 
-// Note: This file was converted from a demo to be included in the test suite
-// The demonstrateFileOperations() function can be called from actual tests if
-// needed
+// End-to-end workflow: directory operations
+TEST_F(IoIntegrationTest, DirectoryLifecycleWorkflow) {
+    fs::path base = test_dir / "dir_lifecycle";
+    std::vector<std::string> subdirs = {"alpha", "beta", "gamma/delta"};
+
+    // Create recursive
+    EXPECT_TRUE(atom::io::createDirectoriesRecursive(base, subdirs));
+    for (const auto& sub : subdirs) {
+        EXPECT_TRUE(fs::exists(base / sub));
+    }
+
+    // Verify folder is not empty
+    EXPECT_FALSE(atom::io::isFolderEmpty(base));
+
+    // Walk and verify
+    std::string json = atom::io::jwalk(base);
+    EXPECT_FALSE(json.empty());
+
+    std::vector<fs::path> walked_paths;
+    atom::io::fwalk(base, [&walked_paths](const fs::path& p) {
+        walked_paths.push_back(p);
+    });
+    EXPECT_GE(walked_paths.size(), 3u);
+
+    // Remove recursive
+    EXPECT_TRUE(atom::io::removeDirectoriesRecursive(base, subdirs));
+}
+
+// End-to-end workflow: file classification
+TEST_F(IoIntegrationTest, FileClassificationWorkflow) {
+    createTestFile(test_dir / "doc1.txt", "text1");
+    createTestFile(test_dir / "doc2.txt", "text2");
+    createTestFile(test_dir / "img.jpg", "jpeg");
+    createTestFile(test_dir / "code.cpp", "cpp");
+    createTestFile(test_dir / "data.json", "json");
+
+    // Classify
+    auto classified = atom::io::classifyFiles(test_dir);
+    EXPECT_TRUE(classified.contains(".txt"));
+    EXPECT_EQ(classified[".txt"].size(), 2u);
+    EXPECT_TRUE(classified.contains(".jpg"));
+    EXPECT_TRUE(classified.contains(".cpp"));
+    EXPECT_TRUE(classified.contains(".json"));
+
+    // Check file types in folder
+    std::vector<std::string> exts = {".txt", ".cpp"};
+    auto found = atom::io::checkFileTypeInFolder(test_dir, exts,
+                                                 atom::io::FileOption::NAME);
+    EXPECT_EQ(found.size(), 3u);
+}
