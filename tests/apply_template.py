@@ -7,6 +7,7 @@ the appropriate template based on the module's test structure.
 """
 
 import argparse
+import os
 import shutil
 import sys
 from pathlib import Path

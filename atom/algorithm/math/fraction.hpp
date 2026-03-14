@@ -384,8 +384,8 @@ public:
      * @param f The fraction to output.
      * @return Reference to the output stream.
      */
-    friend auto operator<<(std::ostream& os, const Fraction& f)
-        -> std::ostream&;
+    friend auto operator<<(std::ostream& os,
+                           const Fraction& f) -> std::ostream&;
 
     /**
      * @brief Inputs the fraction from the input stream.

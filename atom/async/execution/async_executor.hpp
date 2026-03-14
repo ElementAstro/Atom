@@ -192,7 +192,7 @@ public:
      */
     template <typename Func>
         requires std::invocable<Func> &&
-                 (!std::same_as<void, std::invoke_result_t<Func>>)
+                     (!std::same_as<void, std::invoke_result_t<Func>>)
     auto execute(Func&& func, Priority priority = Priority::Normal)
         -> std::future<std::invoke_result_t<Func>> {
         if (!isRunning()) {

@@ -13,6 +13,7 @@ I will provide you with two folders: an implementation folder containing the sou
    - Ensuring all branches and conditional logic are exampleed
 
 Requirements:
+
 - Use the same exampleing framework and patterns as the existing examples
 - Maintain consistency with existing example naming conventions and structure
 - Ensure all new examples are properly documented with clear example descriptions

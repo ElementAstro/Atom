@@ -9,6 +9,8 @@
 #include "atom/web/address.hpp"
 // Removed: atom/log/loguru.hpp not available
 #include <spdlog/spdlog.h>
+#include "atom/log/loguru.hpp"
+#include "atom/web/address.hpp"
 
 using namespace atom::web;
 using ::testing::HasSubstr;

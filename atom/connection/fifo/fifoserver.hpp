@@ -21,6 +21,7 @@ Description: FIFO Server
 #include <ranges>
 #include <string>
 #include <string_view>
+#include "fifoclient.hpp"  // For MessagePriority enum
 
 #include "fifo_common.hpp"
 
