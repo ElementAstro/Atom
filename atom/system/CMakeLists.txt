@@ -91,9 +91,9 @@ set(SOURCES
     debug/crash_quotes.cpp
     debug/crash.cpp
     debug/nodebugger.cpp
-    # Scheduling (crontab) - modular implementation. cron_system.cpp (the
-    # facade tying crontab to the command subsystem) is intentionally omitted
-    # until the command subsystem is adopted into the build.
+    # Scheduling (crontab) - modular implementation. cron_system.cpp (the facade
+    # tying crontab to the command subsystem) is intentionally omitted until the
+    # command subsystem is adopted into the build.
     crontab/cron_job.cpp
     crontab/cron_config.cpp
     crontab/cron_cache.cpp

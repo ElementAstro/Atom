@@ -575,6 +575,7 @@ ctest --test-dir build/meta -L meta --output-on-failure
 ### 2026-06-11 — Module-wide overhaul
 
 Correctness fixes (compile):
+
 - `member.hpp`: implemented missing `member_traits`; `member_offset` is
   runtime-only (was an uncallable `consteval` + `reinterpret_cast`)
 - `ffi.hpp`: `FFITypeMap` specializes on fundamental integer types instead of
@@ -593,6 +594,7 @@ Correctness fixes (compile):
 - `proxy.hpp`: lambdas/functors no longer dispatched as member functions
 
 Correctness fixes (runtime):
+
 - `vany.hpp`: heap corruption — `_aligned_malloc` paired with `std::free`,
   `memcpy` of non-trivially-copyable inline objects, moved-from inline
   objects never destroyed, include-guard collision with any.hpp; SBO widened
@@ -618,6 +620,7 @@ Correctness fixes (runtime):
   (binutils emits unloadable binaries)
 
 New features:
+
 - `refl_field.hpp`: shared `FieldBase` for JSON/YAML field descriptors
   (C++23 deducing-this builder chaining)
 - `any.hpp`: `BoxedValue::tryCastPtr<T>()` mutable in-place access;
@@ -632,6 +635,7 @@ New features:
 - `global_ptr.hpp`: `addWeakPtr` / `getSharedPtrFromWeakPtr`
 
 Test infrastructure:
+
 - Removed 18 stale duplicate flat tests superseded by the subdirectory
   layout; removed the MinGW exclusion list that disabled nearly all tests
 - yaml-cpp linked when present; the YAML reflection path now actually

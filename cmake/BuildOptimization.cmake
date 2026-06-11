@@ -259,8 +259,8 @@ function(atom_setup_fast_linking)
       endif()
     endif()
 
-    # Enable split-dwarf for faster linking (debug info in separate file).
-    # Not on Windows/PE: binutils emits sections below the image base and the
+    # Enable split-dwarf for faster linking (debug info in separate file). Not
+    # on Windows/PE: binutils emits sections below the image base and the
     # resulting binaries fail to load.
     if(CMAKE_BUILD_TYPE MATCHES "Debug|RelWithDebInfo" AND NOT WIN32)
       add_compile_options(-gsplit-dwarf)
@@ -280,8 +280,8 @@ function(atom_setup_fast_linking)
       message(STATUS "Fast linking enabled (using gold)")
     endif()
 
-    # Enable split-dwarf for faster linking. Not on Windows/PE: binutils
-    # emits sections below the image base and the binaries fail to load.
+    # Enable split-dwarf for faster linking. Not on Windows/PE: binutils emits
+    # sections below the image base and the binaries fail to load.
     if(CMAKE_BUILD_TYPE MATCHES "Debug|RelWithDebInfo" AND NOT WIN32)
       add_compile_options(-gsplit-dwarf)
     endif()

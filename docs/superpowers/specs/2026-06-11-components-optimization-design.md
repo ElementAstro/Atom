@@ -63,6 +63,7 @@ are kept**.
 Each WP ends with: full rebuild + `atom_components_tests` run; no regressions.
 
 ### WP1 — core hygiene (`core/component.hpp`, `component.template`, `lifecycle/dispatch.hpp`)
+
 - Fix `ComponentPerformanceStats` indentation; drop the `#if defined(_MSC_VER)`
   constexpr fork (plain `void reset() noexcept` — atomics are not constexpr anyway).
 - Inline `component.template` into `Component::def(Callable&&)` using
@@ -74,12 +75,14 @@ Each WP ends with: full rebuild + `atom_components_tests` run; no regressions.
 - Reduce hot-path logging to `spdlog::trace`/`debug` where it is per-call spam.
 
 ### WP2 — module macros + registry coherence (`core/module_macro.hpp`, `core/registry.*`)
+
 - Make `ATOM_MODULE_INIT`/`ATOM_MODULE`/`ATOM_EMBED_MODULE` actually compile against
   the real `Registry`/`Component::InitFunc` signatures (adapt the lambdas; the
   Registry API is the source of truth).
 - Re-enable `types_and_macros.cpp`, fixing the test to target the real macros/API.
 
 ### WP3 — event system completion (`core/types.hpp`, `core/component.*`, `core/registry.*`)
+
 - Define `atom::components::Event` (name + `std::any` payload + timestamp + source),
   `EventCallback`, `EventCallbackId` in `core/types.hpp`.
 - Replace `ENABLE_EVENT_SYSTEM` with CMake option `ATOM_COMPONENTS_ENABLE_EVENTS`
@@ -88,6 +91,7 @@ Each WP ends with: full rebuild + `atom_components_tests` run; no regressions.
   subscribe/trigger).
 
 ### WP4 — data/: reuse meta, drop absl (`data/type_conversion.hpp`, `data/var.*`, `core/package.hpp`)
+
 - Rebase `type_conversion.hpp` traits on `atom/meta` (delete local trait
   duplicates); fix/align converter methods; re-enable `type_conversion.cpp` test.
 - `package.hpp`: remove the absl include (string_view replacements), scope constants
@@ -96,11 +100,13 @@ Each WP ends with: full rebuild + `atom_components_tests` run; no regressions.
 - `var.hpp`: keep `Trackable<T>` reuse; logging to trace level.
 
 ### WP5 — scripting/: align API with tests, re-enable 4 test files
+
 - For each of `scripting_api`, `script_sandbox`, `script_engine`,
   `advanced_bindings`: implementation is the source of truth; update tests to the
   real API, but add genuinely missing small APIs where tests reveal sensible gaps.
 
 ### WP6 — namespace unification with compat aliases
+
 - Move `Component`, `Registry`, `CommandDispatcher`, `VariableManager`,
   `ObjectExpiredError`, `VariableTypeError`, `DispatchException`, `DispatchTimeout`,
   `ComponentState`, `ComponentPerformanceStats`, `ComponentType` into
@@ -111,17 +117,20 @@ Each WP ends with: full rebuild + `atom_components_tests` run; no regressions.
   it remains scripting-coupled; otherwise `atom::components`.
 
 ### WP7 — CMake cleanup (`atom/components/CMakeLists.txt`)
+
 - Drop `link_directories` hacks (targets come from the top-level build), the
   phantom `add_subdirectory(tests)`, and the duplicated header install list.
 - Remove `component.template` from installs; add the events option.
 
 ### Added functionality (beyond restoration)
+
 - `Component::def(...)` returns `Component&` for fluent chaining (pybind11 style).
 - `Component::dispatchAs<T>(name, args...)` — typed `any_cast` wrapper.
 - Command introspection: `Component::getCommandInfo(name)` → JSON (name, group,
   description, aliases) for tooling/scripting UIs.
 
 ### Out of scope
+
 - Lua/Python engine enablement (optional deps, not installed in CI baseline).
 - `lifecycle/iteration.hpp` SoA/SIMD redesign (works; performance work is separate).
 - `example/components/*` glued-comment corruption (documented; examples are not the

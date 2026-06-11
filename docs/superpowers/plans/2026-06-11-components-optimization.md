@@ -23,6 +23,7 @@ Expected: exit 0, `[  PASSED  ]` with count ≥ previous task's count.
 ### Task 1: ComponentPerformanceStats cleanup (WP1)
 
 **Files:**
+
 - Modify: `atom/components/core/component.hpp:134-202`
 
 - [ ] **Step 1:** Replace the `#if defined(_MSC_VER)` constexpr fork and mis-indented bodies of `reset()` / `updateExecutionTime()` / the legacy getters with properly indented, single-variant code. `reset()` is plain `void reset() noexcept` (atomics are never constexpr-storable). Keep behavior identical.
@@ -32,6 +33,7 @@ Expected: exit 0, `[  PASSED  ]` with count ≥ previous task's count.
 ### Task 2: Replace component.template with index_sequence expansion (WP1)
 
 **Files:**
+
 - Modify: `atom/components/core/component.hpp:1133-1147`
 - Delete: `atom/components/component.template`
 
@@ -64,6 +66,7 @@ void Component::def(std::string_view name, Callable&& func,
 ### Task 3: De-leak macros; concept-based registerOperators (WP1)
 
 **Files:**
+
 - Modify: `atom/components/core/component.hpp:779-834` (operators), `:544-555` and `:588-603` and `:1175-1201` (`#undef` after use)
 
 - [ ] **Step 1:** Delete `OP_*`, `CONDITION_*`, `REGISTER_OPERATOR` macros. Rewrite:
@@ -103,6 +106,7 @@ void Component::registerOperators(std::string_view typeName) {
 ### Task 4: Unpollute dispatch.hpp global namespace (WP1)
 
 **Files:**
+
 - Modify: `atom/components/lifecycle/dispatch.hpp:26`, plus every bare `json` use in `dispatch.hpp` / `lifecycle/dispatch.cpp`
 
 - [ ] **Step 1:** Remove `using json = nlohmann::json;`; qualify uses as `nlohmann::json`.
@@ -112,6 +116,7 @@ void Component::registerOperators(std::string_view typeName) {
 ### Task 5: Hot-path log levels (WP1)
 
 **Files:**
+
 - Modify: `atom/components/data/var.cpp`, `atom/components/core/registry.cpp` (per-variable / per-command `spdlog::info` calls only)
 
 - [ ] **Step 1:** Downgrade per-call `spdlog::info` (e.g. "Adding variable: …") to `spdlog::trace`. Keep lifecycle-level messages (init/cleanup) at info.
@@ -120,6 +125,7 @@ void Component::registerOperators(std::string_view typeName) {
 ### Task 6: Fix module macros, re-enable types_and_macros test (WP2)
 
 **Files:**
+
 - Modify: `atom/components/core/module_macro.hpp`, `tests/components/types_and_macros.cpp`, `tests/components/CMakeLists.txt:101-108`
 
 - [ ] **Step 1:** Read `core/registry.cpp` (`registerModule`, `addInitializer`, `initializeAll`, `getComponent`) to pin real semantics.
@@ -130,6 +136,7 @@ void Component::registerOperators(std::string_view typeName) {
 ### Task 7: Event system — define types, enable, test (WP3)
 
 **Files:**
+
 - Modify: `atom/components/core/types.hpp`, `atom/components/core/component.hpp/.cpp`, `atom/components/core/registry.hpp/.cpp`, `atom/components/CMakeLists.txt`
 - Test: `tests/components/component.cpp` (new event test cases)
 
@@ -159,6 +166,7 @@ using EventCallback = std::function<void(const Event&)>;
 ### Task 8: data/type_conversion.hpp — reuse atom/meta, re-enable test (WP4)
 
 **Files:**
+
 - Modify: `atom/components/data/type_conversion.hpp`, `tests/components/type_conversion.cpp`, `tests/components/CMakeLists.txt`
 
 - [ ] **Step 1:** Delete local `type_traits` namespace duplicates (`is_container`, `is_associative`, `is_optional`, `is_smart_pointer`, `is_tuple`); replace uses with `atom::meta::ContainerTraits`/`is_associative_container_v` (atom/meta/container_traits.hpp), `atom::meta::TupleLike` (template_traits.hpp), `SmartPointer` concept (concept.hpp). Keep public converter API.
@@ -168,6 +176,7 @@ using EventCallback = std::function<void(const Event&)>;
 ### Task 9: package.hpp — drop absl, scope constants (WP4)
 
 **Files:**
+
 - Modify: `atom/components/core/package.hpp`, `tests/components/package.cpp` (only if names move)
 
 - [ ] **Step 1:** Remove `#include <absl/strings/match.h>`; replace any `absl::` calls with `std::string_view` equivalents (e.g. `sv.starts_with(...)`).
@@ -177,9 +186,11 @@ using EventCallback = std::function<void(const Event&)>;
 ### Task 10: Scripting tests — align and re-enable (WP5)
 
 **Files:**
+
 - Modify: `tests/components/scripting_api.cpp`, `script_sandbox.cpp`, `script_engine.cpp`, `advanced_bindings.cpp`, `tests/components/CMakeLists.txt`; scripting headers/sources only for small genuine API gaps
 
 One sub-cycle per file (4×):
+
 - [ ] **Step A:** Diff the test's expected API vs the real header; rewrite test to the real API.
 - [ ] **Step B:** Re-add to `TEST_SOURCES`; rebuild; fix compile errors (test side first; implementation only for clear gaps).
 - [ ] **Step C:** Run; commit `test(components): re-enable <name> tests against current API`.
@@ -187,6 +198,7 @@ One sub-cycle per file (4×):
 ### Task 11: Fluent def + typed dispatch + command introspection (added functionality)
 
 **Files:**
+
 - Modify: `atom/components/core/component.hpp` (+ `.cpp`)
 - Test: `tests/components/component.cpp`
 
@@ -206,6 +218,7 @@ auto dispatchAs(std::string_view name, Args&&... args) -> T {
 ### Task 12: Namespace unification with compat aliases (WP6)
 
 **Files:**
+
 - Modify: `atom/components/core/component.hpp/.cpp`, `core/registry.hpp/.cpp`, `lifecycle/dispatch.hpp/.cpp`, `data/var.hpp/.cpp`, `core/types.hpp`, `core/package.hpp`
 
 - [ ] **Step 1:** Wrap declarations in `namespace atom::components { ... }`; at the end of each header add compat aliases, e.g.:
@@ -225,6 +238,7 @@ using atom::components::VariableManager;
 ### Task 13: CMake cleanup (WP7)
 
 **Files:**
+
 - Modify: `atom/components/CMakeLists.txt`
 
 - [ ] **Step 1:** Remove `link_directories(...)` block (lines 119-125), phantom `add_subdirectory(tests)` block (lines 220-225), and the duplicated compat-header install (lines 176-196 duplicate 173-174's `${HEADERS}` install).
@@ -234,6 +248,7 @@ using atom::components::VariableManager;
 ### Task 14: Docs + final verification
 
 **Files:**
+
 - Modify: `atom/components/CLAUDE.md` (changelog + corrected API examples), `docs/superpowers/plans/2026-06-11-components-optimization.md` (checkboxes)
 
 - [ ] **Step 1:** Update module CLAUDE.md: real namespace story, event system option, removed absl, new APIs.

@@ -179,8 +179,7 @@ install(FILES ${HEADERS} ${OPTIONAL_HEADERS}
 
 # Install headers Install backwards compatibility headers
 install(
-  FILES
-        component.hpp
+  FILES component.hpp
         component_pool.hpp
         dispatch.hpp
         iteration.hpp
