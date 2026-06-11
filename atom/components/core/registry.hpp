@@ -397,6 +397,9 @@ private:
         atom::components::EventCallback callback;
     };
 
+    // Events use their own lock so triggerEvent can be called from code
+    // paths that already hold mutex_ (e.g. initializeAll/cleanupAll).
+    mutable std::shared_mutex eventMutex_;
     std::unordered_map<std::string, std::vector<EventSubscription>>
         eventSubscriptions_;
     std::atomic<atom::components::EventCallbackId> nextEventId_{1};

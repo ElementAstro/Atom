@@ -672,22 +672,20 @@ bool Registry::removeComponent(const std::string& name) {
 #if ENABLE_EVENT_SYSTEM
 atom::components::EventCallbackId Registry::subscribeToEvent(
     const std::string& eventName, atom::components::EventCallback callback) {
-    std::unique_lock lock(mutex_);
+    std::unique_lock lock(eventMutex_);
 
-    EventSubscription sub;
-    sub.id = nextEventId_++;
-    sub.callback = std::move(callback);
+    const auto id = nextEventId_++;
+    eventSubscriptions_[eventName].push_back(
+        EventSubscription{id, std::move(callback)});
 
-    eventSubscriptions_[eventName].push_back(std::move(sub));
-
-    spdlog::trace("Subscribed to event '{}' with ID {}", eventName, sub.id);
-    return sub.id;
+    spdlog::trace("Subscribed to event '{}' with ID {}", eventName, id);
+    return id;
 }
 
 bool Registry::unsubscribeFromEvent(
     const std::string& eventName,
     atom::components::EventCallbackId callbackId) {
-    std::unique_lock lock(mutex_);
+    std::unique_lock lock(eventMutex_);
 
     auto it = eventSubscriptions_.find(eventName);
     if (it == eventSubscriptions_.end()) {
@@ -722,7 +720,7 @@ void Registry::triggerEvent(const atom::components::Event& event) {
     std::vector<atom::components::EventCallback> callbacks;
 
     {
-        std::shared_lock lock(mutex_);
+        std::shared_lock lock(eventMutex_);
         auto it = eventSubscriptions_.find(event.name);
         if (it != eventSubscriptions_.end()) {
             callbacks.reserve(it->second.size());

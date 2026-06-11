@@ -73,6 +73,9 @@ set(HEADERS
 option(ATOM_ENABLE_LUA "Enable Lua scripting support" OFF)
 option(ATOM_ENABLE_PYTHON "Enable Python scripting support" OFF)
 
+# Component event system (emitEvent/on/once/off + registry-level pub/sub)
+option(ATOM_COMPONENTS_ENABLE_EVENTS "Enable component event system" ON)
+
 # Conditional source files
 set(OPTIONAL_SOURCES)
 set(OPTIONAL_HEADERS)
@@ -152,6 +155,10 @@ target_link_libraries(atom-component PRIVATE ${LIBS})
 
 # Set C++20 for the target
 target_compile_features(atom-component PUBLIC cxx_std_20)
+
+if(ATOM_COMPONENTS_ENABLE_EVENTS)
+  target_compile_definitions(atom-component PUBLIC ENABLE_EVENT_SYSTEM=1)
+endif()
 
 # Install library target
 install(

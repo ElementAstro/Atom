@@ -18,6 +18,7 @@ Description: Basic Component Definition
 #include "../data/var.hpp"
 #include "../lifecycle/dispatch.hpp"
 #include "module_macro.hpp"
+#include "types.hpp"
 
 #include "atom/memory/memory_pool.hpp"
 #include "atom/memory/object.hpp"
