@@ -532,20 +532,21 @@ void demo_parallel_async() {
 void demo_transformation_composition() {
     print_section("5. Transformation and Composition");
 
-    // Example 1: compose - function composition
-    std::cout << "5.1 compose - function composition\n";
+    // Example 1: pipe - left-to-right function pipeline
+    std::cout << "5.1 pipe - left-to-right function pipeline\n";
     {
         // Define some simple functions
         auto add_one = [](int x) -> int { return x + 1; };
         auto multiply_by_two = [](int x) -> int { return x * 2; };
         auto square = [](int x) -> int { return x * x; };
 
-        // Compose functions: square(multiply_by_two(add_one(x)))
-        auto composed = compose(add_one, multiply_by_two, square);
+        // pipe runs left-to-right: square(multiply_by_two(add_one(x)))
+        // (use compose for the right-to-left mathematical composition)
+        auto composed = pipe(add_one, multiply_by_two, square);
 
         // Test the composed function
         int result = composed(3);
-        std::cout << "  compose(add_one, multiply_by_two, square)(3) = "
+        std::cout << "  pipe(add_one, multiply_by_two, square)(3) = "
                   << result << "\n";
         std::cout
             << "  This is equivalent to square(multiply_by_two(add_one(3)))\n";
@@ -554,8 +555,8 @@ void demo_transformation_composition() {
         std::cout << "  = 64\n";
     }
 
-    // Example 2: compose with different types
-    std::cout << "\n5.2 compose with different types\n";
+    // Example 2: pipe with different types
+    std::cout << "\n5.2 pipe with different types\n";
     {
         // Define functions with different type signatures
         auto to_string = [](int x) -> std::string { return std::to_string(x); };
@@ -566,12 +567,12 @@ void demo_transformation_composition() {
             return s.length();
         };
 
-        // Compose functions: count_chars(add_prefix(to_string(x)))
-        auto composed = compose(to_string, add_prefix, count_chars);
+        // pipe runs left-to-right: count_chars(add_prefix(to_string(x)))
+        auto composed = pipe(to_string, add_prefix, count_chars);
 
         // Test the composed function
         size_t result = composed(42);
-        std::cout << "  compose(to_string, add_prefix, count_chars)(42) = "
+        std::cout << "  pipe(to_string, add_prefix, count_chars)(42) = "
                   << result << "\n";
         std::cout << "  This counts the length of \"Number: 42\" which is "
                   << result << " characters\n";

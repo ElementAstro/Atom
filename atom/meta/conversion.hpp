@@ -255,6 +255,33 @@ protected:
     mutable ConversionMetrics metrics_;
 };
 
+namespace detail {
+/**
+ * @brief Extract a pointer to a referenced object stored in a std::any.
+ *
+ * Reference semantics through std::any are commonly expressed either as a
+ * std::reference_wrapper<T> or as a stored T value; both are supported.
+ *
+ * @tparam Bare The (possibly const) unqualified referenced type
+ * @return Pointer to the referenced object, or nullptr if the std::any does
+ *         not hold a compatible value
+ */
+template <typename Bare>
+auto anyToReferencePtr(const std::any& value) noexcept -> Bare* {
+    if (auto* wrapper =
+            std::any_cast<std::reference_wrapper<Bare>>(&value)) {
+        return &wrapper->get();
+    }
+    if constexpr (std::is_const_v<Bare>) {
+        if (auto* wrapper = std::any_cast<
+                std::reference_wrapper<std::remove_const_t<Bare>>>(&value)) {
+            return &wrapper->get();
+        }
+    }
+    return std::any_cast<Bare>(&const_cast<std::any&>(value));
+}
+}  // namespace detail
+
 /**
  * @brief Static conversion implementation for compile-time type casting
  */
@@ -263,7 +290,7 @@ class StaticConversion : public TypeConversionBase {
 public:
     StaticConversion() : TypeConversionBase(userType<To>(), userType<From>()) {}
 
-    ATOM_NODISCARD auto convert(const std::any& from) const
+    ATOM_NODISCARD auto convertImpl(const std::any& from) const
         -> std::any override {
         try {
             if constexpr (std::is_pointer_v<From> && std::is_pointer_v<To>) {
@@ -272,8 +299,7 @@ public:
             } else if constexpr (std::is_reference_v<From> &&
                                  std::is_reference_v<To>) {
                 using FromBare = std::remove_reference_t<From>;
-                auto* fromPtr =
-                    std::any_cast<FromBare>(&const_cast<std::any&>(from));
+                auto* fromPtr = detail::anyToReferencePtr<FromBare>(from);
                 if (!fromPtr) {
                     THROW_CONVERSION_ERROR("Failed to convert reference types");
                 }
@@ -289,7 +315,7 @@ public:
         }
     }
 
-    ATOM_NODISCARD auto convertDown(const std::any& toAny) const
+    ATOM_NODISCARD auto convertDownImpl(const std::any& toAny) const
         -> std::any override {
         try {
             if constexpr (std::is_pointer_v<From> && std::is_pointer_v<To>) {
@@ -298,8 +324,7 @@ public:
             } else if constexpr (std::is_reference_v<From> &&
                                  std::is_reference_v<To>) {
                 using ToBare = std::remove_reference_t<To>;
-                auto* toPtr =
-                    std::any_cast<ToBare>(&const_cast<std::any&>(toAny));
+                auto* toPtr = detail::anyToReferencePtr<ToBare>(toAny);
                 if (!toPtr) {
                     throw std::bad_cast();
                 }
@@ -325,20 +350,31 @@ public:
     DynamicConversion()
         : TypeConversionBase(userType<To>(), userType<From>()) {}
 
-    ATOM_NODISCARD auto convert(const std::any& from) const
+    ATOM_NODISCARD auto convertImpl(const std::any& from) const
         -> std::any override {
         if constexpr (std::is_pointer_v<From> && std::is_pointer_v<To>) {
-            auto fromPtr = std::any_cast<From>(from);
-            auto convertedPtr = dynamic_cast<To>(fromPtr);
-            if (!convertedPtr && fromPtr != nullptr) {
-                throw std::bad_cast();
+            try {
+                auto fromPtr = std::any_cast<From>(from);
+                auto convertedPtr = dynamic_cast<To>(fromPtr);
+                if (!convertedPtr && fromPtr != nullptr) {
+                    throw std::bad_cast();
+                }
+                return std::any(convertedPtr);
+            } catch (const std::bad_cast&) {
+                // Covers both failed dynamic_cast and std::bad_any_cast
+                THROW_CONVERSION_ERROR("Failed to convert ", fromType.name(),
+                                       " to ", toType.name());
             }
-            return std::any(convertedPtr);
         } else if constexpr (std::is_reference_v<From> &&
                              std::is_reference_v<To>) {
             try {
-                auto& fromRef = std::any_cast<From&>(from);
-                return std::any(dynamic_cast<To&>(fromRef));
+                using FromBare = std::remove_reference_t<From>;
+                auto* fromPtr = detail::anyToReferencePtr<FromBare>(from);
+                if (!fromPtr) {
+                    throw std::bad_cast();
+                }
+                return std::any(std::ref(
+                    dynamic_cast<std::remove_reference_t<To>&>(*fromPtr)));
             } catch (const std::bad_cast&) {
                 THROW_CONVERSION_ERROR("Failed to convert ", fromType.name(),
                                        " to ", toType.name());
@@ -349,21 +385,26 @@ public:
         }
     }
 
-    ATOM_NODISCARD auto convertDown(const std::any& toAny) const
+    ATOM_NODISCARD auto convertDownImpl(const std::any& toAny) const
         -> std::any override {
         if constexpr (std::is_pointer_v<From> && std::is_pointer_v<To>) {
-            auto toPtr = std::any_cast<To>(toAny);
-            auto convertedPtr = dynamic_cast<From>(toPtr);
-            if (!convertedPtr && toPtr != nullptr) {
-                throw std::bad_cast();
+            try {
+                auto toPtr = std::any_cast<To>(toAny);
+                auto convertedPtr = dynamic_cast<From>(toPtr);
+                if (!convertedPtr && toPtr != nullptr) {
+                    throw std::bad_cast();
+                }
+                return std::any(convertedPtr);
+            } catch (const std::bad_cast&) {
+                // Covers both failed dynamic_cast and std::bad_any_cast
+                THROW_CONVERSION_ERROR("Failed to convert ", toType.name(),
+                                       " to ", fromType.name());
             }
-            return std::any(convertedPtr);
         } else if constexpr (std::is_reference_v<From> &&
                              std::is_reference_v<To>) {
             try {
                 using ToBare = std::remove_reference_t<To>;
-                auto* toPtr =
-                    std::any_cast<ToBare>(&const_cast<std::any&>(toAny));
+                auto* toPtr = detail::anyToReferencePtr<ToBare>(toAny);
                 if (!toPtr) {
                     throw std::bad_cast();
                 }
@@ -403,7 +444,7 @@ public:
         : TypeConversionBase(userType<std::vector<To>>(),
                              userType<std::vector<From>>()) {}
 
-    [[nodiscard]] auto convert(const std::any& from) const
+    [[nodiscard]] auto convertImpl(const std::any& from) const
         -> std::any override {
         try {
             const auto& fromVec = std::any_cast<const std::vector<From>&>(from);
@@ -426,7 +467,7 @@ public:
         }
     }
 
-    ATOM_NODISCARD auto convertDown(const std::any& toAny) const
+    ATOM_NODISCARD auto convertDownImpl(const std::any& toAny) const
         -> std::any override {
         try {
             const auto& toVec = std::any_cast<const std::vector<To>&>(toAny);
@@ -462,7 +503,7 @@ public:
         : TypeConversionBase(userType<MapType<K2, V2>>(),
                              userType<MapType<K1, V1>>()) {}
 
-    [[nodiscard]] auto convert(const std::any& from) const
+    [[nodiscard]] auto convertImpl(const std::any& from) const
         -> std::any override {
         try {
             const auto& fromMap = std::any_cast<const MapType<K1, V1>&>(from);
@@ -485,7 +526,7 @@ public:
         }
     }
 
-    ATOM_NODISCARD auto convertDown(const std::any& toAny) const
+    ATOM_NODISCARD auto convertDownImpl(const std::any& toAny) const
         -> std::any override {
         try {
             const auto& toMap = std::any_cast<const MapType<K2, V2>&>(toAny);
@@ -519,7 +560,7 @@ public:
         : TypeConversionBase(userType<SeqType<To>>(),
                              userType<SeqType<From>>()) {}
 
-    [[nodiscard]] auto convert(const std::any& from) const
+    [[nodiscard]] auto convertImpl(const std::any& from) const
         -> std::any override {
         try {
             const auto& fromSeq = std::any_cast<const SeqType<From>&>(from);
@@ -541,7 +582,7 @@ public:
         }
     }
 
-    ATOM_NODISCARD auto convertDown(const std::any& toAny) const
+    ATOM_NODISCARD auto convertDownImpl(const std::any& toAny) const
         -> std::any override {
         try {
             const auto& toSeq = std::any_cast<const SeqType<To>&>(toAny);
@@ -575,7 +616,7 @@ public:
         : TypeConversionBase(userType<SetType<To>>(),
                              userType<SetType<From>>()) {}
 
-    [[nodiscard]] auto convert(const std::any& from) const
+    [[nodiscard]] auto convertImpl(const std::any& from) const
         -> std::any override {
         try {
             const auto& fromSet = std::any_cast<const SetType<From>&>(from);
@@ -597,7 +638,7 @@ public:
         }
     }
 
-    ATOM_NODISCARD auto convertDown(const std::any& toAny) const
+    ATOM_NODISCARD auto convertDownImpl(const std::any& toAny) const
         -> std::any override {
         try {
             const auto& toSet = std::any_cast<const SetType<To>&>(toAny);

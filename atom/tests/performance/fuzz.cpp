@@ -25,23 +25,6 @@ thread_local std::random_device rd;
 thread_local RandomDataGenerator* threadLocalGenerator = nullptr;
 }  // namespace
 
-void RandomDataGenerator::validateCount(int count,
-                                        std::string_view paramName) const {
-    if (count < 0) {
-        throw RandomGenerationError(std::format(
-            "Invalid {} value: {} (must be non-negative)", paramName, count));
-    }
-}
-
-void RandomDataGenerator::validateProbability(
-    double probability, std::string_view paramName) const {
-    if (probability < 0.0 || probability > 1.0) {
-        throw RandomGenerationError(
-            std::format("Invalid {} value: {} (must be between 0.0 and 1.0)",
-                        paramName, probability));
-    }
-}
-
 RandomDataGenerator::RandomDataGenerator(
     std::variant<RandomConfig, int> configOrSeed) {
     if (std::holds_alternative<RandomConfig>(configOrSeed)) {

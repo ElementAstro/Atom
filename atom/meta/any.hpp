@@ -56,6 +56,34 @@ public:
     struct VoidType {};
 
 private:
+    template <typename>
+    struct IsRefWrapperT : std::false_type {};
+    template <typename U>
+    struct IsRefWrapperT<std::reference_wrapper<U>> : std::true_type {};
+
+    /*!
+     * \brief True if the decayed type is a std::reference_wrapper.
+     */
+    template <typename T>
+    static constexpr bool kIsRefWrapper = IsRefWrapperT<std::decay_t<T>>::value;
+
+    template <typename T>
+    struct UnwrapRefWrapper {
+        using type = T;
+    };
+    template <typename U>
+    struct UnwrapRefWrapper<std::reference_wrapper<U>> {
+        using type = std::decay_t<U>;
+    };
+
+    /*!
+     * \brief The referenced type for reference_wrapper, the type itself
+     * otherwise. Used so a BoxedValue wrapping std::ref(x) reports the type
+     * of x.
+     */
+    template <typename T>
+    using UnwrappedType = typename UnwrapRefWrapper<std::decay_t<T>>::type;
+
     /*!
      * \struct Data
      * \brief Internal data structure to hold the value and its metadata.
@@ -85,7 +113,7 @@ private:
             requires(!std::is_same_v<std::decay_t<T>, VoidType>)
         Data(T&& object, bool is_ref, bool return_value, bool is_readonly)
             : obj(std::forward<T>(object)),
-              typeInfo(userType<std::decay_t<T>>()),
+              typeInfo(userType<UnwrappedType<T>>()),
               isRef(is_ref),
               returnValue(return_value),
               readonly(is_readonly),
@@ -107,7 +135,8 @@ private:
             requires(std::is_same_v<std::decay_t<T>, VoidType>)
         Data([[maybe_unused]] T&& object, bool is_ref, bool return_value,
              bool is_readonly)
-            : typeInfo(userType<std::decay_t<T>>()),
+            : obj(VoidType{}),  // void is a defined value, not null
+              typeInfo(userType<std::decay_t<T>>()),
               isRef(is_ref),
               returnValue(return_value),
               readonly(is_readonly),
@@ -132,17 +161,8 @@ public:
     BoxedValue(T&& value, bool return_value = false, bool is_readonly = false)
         : data_(std::make_shared<Data>(
               std::forward<T>(value),
-              std::is_reference_v<T> ||
-                  std::is_same_v<
-                      std::decay_t<T>,
-                      std::reference_wrapper<std::remove_reference_t<T>>>,
-              return_value, is_readonly)) {
-        if constexpr (std::is_same_v<
-                          std::decay_t<T>,
-                          std::reference_wrapper<std::remove_reference_t<T>>>) {
-            data_->isRef = true;
-        }
-    }
+              std::is_reference_v<T> || kIsRefWrapper<T>, return_value,
+              is_readonly)) {}
 
     /*!
      * \brief Default constructor for VoidType.
@@ -493,6 +513,33 @@ public:
     }
 
     /*!
+     * \brief Get a mutable pointer to the contained value.
+     *
+     * Unlike tryCast(), which returns a copy, this grants in-place mutable
+     * access to the held value (or to the referenced object when the
+     * BoxedValue wraps a std::reference_wrapper<T>).
+     *
+     * \tparam T The exact type of the contained value.
+     * \return Pointer to the value, or nullptr if the type does not match or
+     * the value is read-only/const.
+     * \note The pointer is only valid while this BoxedValue (and any copies
+     * sharing its data) is alive and not reassigned. Mutations through the
+     * pointer are not synchronized; callers must serialize access themselves.
+     */
+    template <typename T>
+    [[nodiscard]] auto tryCastPtr() noexcept -> T* {
+        std::shared_lock lock(mutex_);
+        if (!data_ || data_->readonly || data_->typeInfo.isConst()) {
+            return nullptr;
+        }
+        if (auto* refWrapper =
+                std::any_cast<std::reference_wrapper<T>>(&data_->obj)) {
+            return &refWrapper->get();
+        }
+        return std::any_cast<T>(&data_->obj);
+    }
+
+    /*!
      * \brief Cast the internal value to a specified type.
      * \tparam T The type to cast to.
      * \return The casted value.
@@ -560,7 +607,6 @@ public:
     auto visit(Visitor&& visitor) const {
         using ResultType = std::invoke_result_t<Visitor, int&>;
 
-        std::shared_lock lock(mutex_);
         if (isUndef() || isNull()) {
             if constexpr (requires { visitor.fallback(); }) {
                 return visitor.fallback();
@@ -571,7 +617,8 @@ public:
             }
         }
 
-        return visitImpl(std::forward<Visitor>(visitor));
+        std::shared_lock lock(mutex_);
+        return visitImpl<false>(std::forward<Visitor>(visitor));
     }
 
     /*!
@@ -584,8 +631,7 @@ public:
     auto visit(Visitor&& visitor) {
         using ResultType = std::invoke_result_t<Visitor, int&>;
 
-        std::unique_lock lock(mutex_);
-        if (isUndef() || isNull() || isReadonly()) {
+        if (isUndef() || isNull() || isConst() || isReadonly()) {
             if constexpr (requires { visitor.fallback(); }) {
                 return visitor.fallback();
             } else if constexpr (std::is_default_constructible_v<ResultType>) {
@@ -595,9 +641,15 @@ public:
             }
         }
 
-        auto result = visitImpl(std::forward<Visitor>(visitor));
-        data_->modificationTime = std::chrono::system_clock::now();
-        return result;
+        std::unique_lock lock(mutex_);
+        if constexpr (std::is_void_v<ResultType>) {
+            visitImpl<true>(std::forward<Visitor>(visitor));
+            data_->modificationTime = std::chrono::system_clock::now();
+        } else {
+            auto result = visitImpl<true>(std::forward<Visitor>(visitor));
+            data_->modificationTime = std::chrono::system_clock::now();
+            return result;
+        }
     }
 
 private:
@@ -616,16 +668,16 @@ private:
     using TupleStringString = std::tuple<std::string, std::string>;
     using VariantTypes = std::variant<int, double, std::string>;
 
-    template <typename Visitor>
+    template <bool Mutable, typename Visitor>
     auto visitImpl(Visitor&& visitor) const {
         using ResultType = std::invoke_result_t<Visitor, int&>;
 
 #define VISIT_TYPE(Type)                                             \
     if (data_->obj.type() == typeid(Type)) {                         \
-        if (isConst() || isReadonly()) {                             \
-            return visitor(*std::any_cast<const Type>(&data_->obj)); \
-        } else {                                                     \
+        if constexpr (Mutable) {                                     \
             return visitor(*std::any_cast<Type>(&data_->obj));       \
+        } else {                                                     \
+            return visitor(*std::any_cast<const Type>(&data_->obj)); \
         }                                                            \
     }
 
@@ -709,15 +761,19 @@ private:
 
         VISIT_TYPE(VariantTypes)
 
-#define VISIT_REF_TYPE(Type)                                                \
-    if (data_->obj.type() == typeid(std::reference_wrapper<Type>)) {        \
-        return visitor(                                                     \
-            std::any_cast<std::reference_wrapper<Type>>(data_->obj).get()); \
-    }                                                                       \
-    if (data_->obj.type() == typeid(std::reference_wrapper<const Type>)) {  \
-        return visitor(                                                     \
-            std::any_cast<std::reference_wrapper<const Type>>(data_->obj)   \
-                .get());                                                    \
+#define VISIT_REF_TYPE(Type)                                                  \
+    if (data_->obj.type() == typeid(std::reference_wrapper<Type>)) {          \
+        return visitor(                                                       \
+            std::any_cast<std::reference_wrapper<Type>>(data_->obj).get());   \
+    }                                                                         \
+    if constexpr (!Mutable) {                                                 \
+        if (data_->obj.type() == typeid(std::reference_wrapper<const Type>)) \
+        {                                                                     \
+            return visitor(                                                   \
+                std::any_cast<std::reference_wrapper<const Type>>(            \
+                    data_->obj)                                               \
+                    .get());                                                  \
+        }                                                                     \
     }
 
         VISIT_REF_TYPE(int)

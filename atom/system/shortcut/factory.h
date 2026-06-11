@@ -6,7 +6,7 @@
 #include <memory>
 #include <functional>
 #include "shortcut.h"
-#include "advanced_shortcut.h"
+#include "shortcut_binding.h"
 
 namespace shortcut_detector {
 
@@ -85,9 +85,9 @@ public:
     Shortcut build();
 
     /**
-     * @brief Build advanced shortcut with metadata
+     * @brief Build shortcut binding with metadata
      */
-    AdvancedShortcut buildAdvanced();
+    ShortcutBinding buildBinding();
 
     /**
      * @brief Reset builder to initial state

@@ -14,14 +14,7 @@ Description: System Information Module - Disk Information
 
 #include "disk_info.hpp"
 #include "disk_device.hpp"
-<<<<<<<<HEAD : atom / sysinfo / src / disk / components / disk_info.cpp
-#include "../common/disk_util.hpp"
-        == == == ==
 #include "disk_util.hpp"
-        >>>>>>>> test -
-    fixes / systematic -
-    testing : atom / sysinfo / storage / disk /
-              disk_info.cpp
 
 #include <atomic>
 #include <chrono>
@@ -53,7 +46,7 @@ Description: System Information Module - Disk Information
 
 #include <spdlog/spdlog.h>
 
-              namespace atom::system {
+namespace atom::system {
 
     namespace {
     std::mutex g_cacheMutex;

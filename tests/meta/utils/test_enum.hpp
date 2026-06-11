@@ -76,52 +76,58 @@ struct EnumTraits<test::Permissions> {
     using underlying_type = std::underlying_type_t<test::Permissions>;
 
     static constexpr std::array<test::Permissions, 5> values = {
-        < < < < < < < <
-            HEAD : tests / meta / test_enum.cpp test::Permissions::None,
+        test::Permissions::None,
         test::Permissions::Read,
         test::Permissions::Write,
         test::Permissions::Execute,
-        test::Permissions::All
+        test::Permissions::All,
     };
-    == == == == test::Permissions::None, test::Permissions::Read,
-        test::Permissions::Write, test::Permissions::Execute,
-        test::Permissions::All
-};
->>>>>>>> test - fixes / systematic -
-             testing : tests / meta / utils /
-                       test_enum.hpp
 
-                       static constexpr std::array<std::string_view, 5>
-                           names = {"None", "Read", "Write", "Execute", "All"};
+    static constexpr std::array<std::string_view, 5> names = {
+        "None",
+        "Read",
+        "Write",
+        "Execute",
+        "All",
+    };
 
-static constexpr std::array<std::string_view, 5> descriptions = {
-    "No permissions", "Read permission", "Write permission",
-    "Execute permission", "All permissions"};
+    static constexpr std::array<std::string_view, 5> descriptions = {
+        "No permissions",
+        "Read permission",
+        "Write permission",
+        "Execute permission",
+        "All permissions",
+    };
 
-static constexpr std::array<std::string_view, 5> aliases = {"Empty", "R", "W",
-                                                            "X", "RWX"};
+    static constexpr std::array<std::string_view, 5> aliases = {
+        "Empty",
+        "R",
+        "W",
+        "X",
+        "RWX",
+    };
 
-static constexpr bool is_flags = true;
-static constexpr bool is_sequential = false;
-static constexpr bool is_continuous = false;
-static constexpr test::Permissions default_value = test::Permissions::None;
-static constexpr std::string_view type_name = "Permissions";
-static constexpr std::string_view type_description = "Permission flags";
+    static constexpr bool is_flags = true;
+    static constexpr bool is_sequential = false;
+    static constexpr bool is_continuous = false;
+    static constexpr test::Permissions default_value = test::Permissions::None;
+    static constexpr std::string_view type_name = "Permissions";
+    static constexpr std::string_view type_description = "Permission flags";
 
-static constexpr underlying_type min_value() noexcept { return 0; }
+    static constexpr underlying_type min_value() noexcept { return 0; }
+    static constexpr underlying_type max_value() noexcept { return 7; }
 
-static constexpr underlying_type max_value() noexcept { return 7; }
+    static constexpr size_t size() noexcept { return values.size(); }
+    static constexpr bool empty() noexcept { return false; }
 
-static constexpr size_t size() noexcept { return values.size(); }
-static constexpr bool empty() noexcept { return false; }
-
-static constexpr bool contains(test::Permissions value) noexcept {
-    for (const auto& val : values) {
-        if (val == value)
-            return true;
+    static constexpr bool contains(test::Permissions value) noexcept {
+        for (const auto& val : values) {
+            if (val == value) {
+                return true;
+            }
+        }
+        return false;
     }
-    return false;
-}
 };
 
 }  // namespace atom::meta
@@ -632,20 +638,20 @@ TEST_F(EnumTest, StringHelperFunctions) {
     EXPECT_FALSE(iequals("Red", "Blue"));
     EXPECT_FALSE(iequals("Red", "Reda"));
 
-    // Test starts_with
-    EXPECT_TRUE(starts_with("Red", "R"));
-    EXPECT_TRUE(starts_with("Green", "Gr"));
-    EXPECT_TRUE(starts_with("Blue", "Blue"));
-    EXPECT_FALSE(starts_with("Red", "Bl"));
-    EXPECT_FALSE(starts_with("Red", "Reda"));
+    // Prefix matching (now std::string_view::starts_with)
+    EXPECT_TRUE(std::string_view("Red").starts_with("R"));
+    EXPECT_TRUE(std::string_view("Green").starts_with("Gr"));
+    EXPECT_TRUE(std::string_view("Blue").starts_with("Blue"));
+    EXPECT_FALSE(std::string_view("Red").starts_with("Bl"));
+    EXPECT_FALSE(std::string_view("Red").starts_with("Reda"));
 
-    // Test contains_substring
-    EXPECT_TRUE(contains_substring("Blue", "lu"));
-    EXPECT_TRUE(contains_substring("Green", "ree"));
-    EXPECT_TRUE(contains_substring("Red", "Red"));
-    EXPECT_TRUE(contains_substring("Yellow", ""));
-    EXPECT_FALSE(contains_substring("Red", "Blue"));
-    EXPECT_FALSE(contains_substring("Red", "RedBlue"));
+    // Substring matching (now std::string_view::contains, C++23)
+    EXPECT_TRUE(std::string_view("Blue").contains("lu"));
+    EXPECT_TRUE(std::string_view("Green").contains("ree"));
+    EXPECT_TRUE(std::string_view("Red").contains("Red"));
+    EXPECT_TRUE(std::string_view("Yellow").contains(""));
+    EXPECT_FALSE(std::string_view("Red").contains("Blue"));
+    EXPECT_FALSE(std::string_view("Red").contains("RedBlue"));
 }
 
 // Test serialization and deserialization
@@ -698,6 +704,39 @@ TEST_F(EnumTest, IntegerInEnumRange) {
     EXPECT_TRUE(atom::meta::integer_in_enum_range<Permissions>(7));  // All
     EXPECT_FALSE(
         atom::meta::integer_in_enum_range<Permissions>(99));  // Invalid
+}
+
+// Test enum_switch: runtime value dispatched to a compile-time constant
+TEST_F(EnumTest, EnumSwitchDispatch) {
+    int matched = -1;
+    bool found = atom::meta::enum_switch(Color::Green, [&](auto constant) {
+        if constexpr (constant() == Color::Green) {
+            matched = 1;
+        } else {
+            matched = 0;
+        }
+    });
+    EXPECT_TRUE(found);
+    EXPECT_EQ(matched, 1);
+
+    // Unregistered value matches nothing
+    matched = -1;
+    found = atom::meta::enum_switch(static_cast<Color>(99),
+                                    [&](auto) { matched = 0; });
+    EXPECT_FALSE(found);
+    EXPECT_EQ(matched, -1);
+}
+
+// Test enum_for_each: visits every registered enumerator exactly once
+TEST_F(EnumTest, EnumForEachVisitsAll) {
+    std::size_t count = 0;
+    std::underlying_type_t<Color> sum = 0;
+    atom::meta::enum_for_each<Color>([&](auto constant) {
+        ++count;
+        sum += atom::meta::enum_to_integer(constant());
+    });
+    EXPECT_EQ(count, atom::meta::EnumTraits<Color>::values.size());
+    EXPECT_EQ(sum, 0 + 1 + 2 + 3);
 }
 
 }  // namespace atom::test

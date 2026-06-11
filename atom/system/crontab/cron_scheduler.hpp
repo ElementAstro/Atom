@@ -46,8 +46,9 @@ struct ExecutionCondition {
     std::string job_id;
     std::function<bool()> condition_func;
     std::string description;
-    bool is_enabled;
+    bool is_enabled{true};
 
+    ExecutionCondition() = default;
     ExecutionCondition(std::string id, std::string j_id, std::function<bool()> func, std::string desc)
         : condition_id(std::move(id)), job_id(std::move(j_id)), condition_func(std::move(func)),
           description(std::move(desc)), is_enabled(true) {}

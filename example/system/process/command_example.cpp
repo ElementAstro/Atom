@@ -25,6 +25,7 @@
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <unordered_map>
 #include <sstream>
 #include <thread>
 #include <vector>
@@ -53,14 +54,17 @@ void printOutput(const std::string& title, const std::string& output) {
 /**
  * @brief Utility function to print command result with status
  */
-void printCommandResult(const std::string& title, const CommandResult& result) {
+// executeCommandWithStatus / executeCommandsWithCommonEnv return
+// std::pair<output, exitCode>.
+void printCommandResult(const std::string& title,
+                        const std::pair<std::string, int>& result) {
     std::cout << "\n--- " << title << " ---" << std::endl;
-    std::cout << "Exit Status: " << result.exitStatus << std::endl;
+    std::cout << "Exit Status: " << result.second << std::endl;
     std::cout << "Output:" << std::endl;
-    if (result.output.empty()) {
+    if (result.first.empty()) {
         std::cout << "(No output)" << std::endl;
     } else {
-        std::string displayOutput = result.output;
+        std::string displayOutput = result.first;
         if (displayOutput.length() > 300) {
             displayOutput = displayOutput.substr(0, 300) + "\n... (truncated)";
         }
@@ -249,7 +253,7 @@ int main() {
 #endif
         };
 
-        std::map<std::string, std::string> envVars = {
+        std::unordered_map<std::string, std::string> envVars = {
             {"CUSTOM_VAR", "Hello from environment!"}};
 
         auto results = executeCommandsWithCommonEnv(commands, envVars, true);

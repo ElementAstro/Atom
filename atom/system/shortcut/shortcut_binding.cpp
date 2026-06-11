@@ -1,4 +1,4 @@
-#include "advanced_shortcut.h"
+#include "shortcut_binding.h"
 #include <sstream>
 #include <algorithm>
 #include <unordered_set>
@@ -10,18 +10,18 @@
 
 namespace shortcut_detector {
 
-// AdvancedShortcut implementation
-AdvancedShortcut::AdvancedShortcut(ShortcutType t) : type(t) {}
+// ShortcutBinding implementation
+ShortcutBinding::ShortcutBinding(ShortcutType t) : type(t) {}
 
-AdvancedShortcut AdvancedShortcut::createKeyboard(const Shortcut& shortcut) {
-    AdvancedShortcut result(ShortcutType::Keyboard);
+ShortcutBinding ShortcutBinding::createKeyboard(const Shortcut& shortcut) {
+    ShortcutBinding result(ShortcutType::Keyboard);
     result.keySequence.push_back(shortcut);
     return result;
 }
 
-AdvancedShortcut AdvancedShortcut::createMouse(const std::vector<MouseButton>& buttons,
+ShortcutBinding ShortcutBinding::createMouse(const std::vector<MouseButton>& buttons,
                                               const Shortcut& modifiers) {
-    AdvancedShortcut result(ShortcutType::Mouse);
+    ShortcutBinding result(ShortcutType::Mouse);
     result.mouseButtons = buttons;
     if (modifiers.vkCode != 0 || modifiers.hasModifiers()) {
         result.keySequence.push_back(modifiers);
@@ -29,21 +29,21 @@ AdvancedShortcut AdvancedShortcut::createMouse(const std::vector<MouseButton>& b
     return result;
 }
 
-AdvancedShortcut AdvancedShortcut::createMultimedia(MultimediaKey key) {
-    AdvancedShortcut result(ShortcutType::Multimedia);
+ShortcutBinding ShortcutBinding::createMultimedia(MultimediaKey key) {
+    ShortcutBinding result(ShortcutType::Multimedia);
     result.multimediaKeys.push_back(key);
     return result;
 }
 
-AdvancedShortcut AdvancedShortcut::createSequential(const std::vector<Shortcut>& sequence,
+ShortcutBinding ShortcutBinding::createSequential(const std::vector<Shortcut>& sequence,
                                                    std::chrono::milliseconds maxTime) {
-    AdvancedShortcut result(ShortcutType::Sequential);
+    ShortcutBinding result(ShortcutType::Sequential);
     result.keySequence = sequence;
     result.maxSequenceTime = maxTime;
     return result;
 }
 
-std::string AdvancedShortcut::toString() const {
+std::string ShortcutBinding::toString() const {
     std::stringstream ss;
 
     switch (type) {
@@ -93,7 +93,7 @@ std::string AdvancedShortcut::toString() const {
     return ss.str();
 }
 
-bool AdvancedShortcut::isValid() const {
+bool ShortcutBinding::isValid() const {
     switch (type) {
         case ShortcutType::Keyboard:
             return !keySequence.empty() && keySequence[0].isValid();
@@ -115,7 +115,7 @@ bool AdvancedShortcut::isValid() const {
     }
 }
 
-size_t AdvancedShortcut::hash() const {
+size_t ShortcutBinding::hash() const {
     size_t h = std::hash<int>{}(static_cast<int>(type));
 
     for (const auto& key : keySequence) {
@@ -133,7 +133,7 @@ size_t AdvancedShortcut::hash() const {
     return h;
 }
 
-bool AdvancedShortcut::operator==(const AdvancedShortcut& other) const {
+bool ShortcutBinding::operator==(const ShortcutBinding& other) const {
     return type == other.type &&
            keySequence == other.keySequence &&
            mouseButtons == other.mouseButtons &&
@@ -141,14 +141,14 @@ bool AdvancedShortcut::operator==(const AdvancedShortcut& other) const {
            maxSequenceTime == other.maxSequenceTime;
 }
 
-// AdvancedShortcutManager implementation
-AdvancedShortcutManager::AdvancedShortcutManager() {
-    spdlog::debug("AdvancedShortcutManager initialized");
+// ShortcutBindingManager implementation
+ShortcutBindingManager::ShortcutBindingManager() {
+    spdlog::debug("ShortcutBindingManager initialized");
 }
 
-AdvancedShortcutManager::~AdvancedShortcutManager() = default;
+ShortcutBindingManager::~ShortcutBindingManager() = default;
 
-bool AdvancedShortcutManager::registerShortcut(const AdvancedShortcut& shortcut, const std::string& owner) {
+bool ShortcutBindingManager::registerShortcut(const ShortcutBinding& shortcut, const std::string& owner) {
     if (!shortcut.isValid()) {
         spdlog::warn("Attempted to register invalid shortcut: {}", shortcut.toString());
         return false;
@@ -170,7 +170,7 @@ bool AdvancedShortcutManager::registerShortcut(const AdvancedShortcut& shortcut,
     return true;
 }
 
-bool AdvancedShortcutManager::unregisterShortcut(const AdvancedShortcut& shortcut) {
+bool ShortcutBindingManager::unregisterShortcut(const ShortcutBinding& shortcut) {
     auto it = registeredShortcuts_.find(shortcut);
     if (it != registeredShortcuts_.end()) {
         registeredShortcuts_.erase(it);
@@ -180,7 +180,7 @@ bool AdvancedShortcutManager::unregisterShortcut(const AdvancedShortcut& shortcu
     return false;
 }
 
-std::vector<ShortcutConflict> AdvancedShortcutManager::checkConflicts(const AdvancedShortcut& shortcut) const {
+std::vector<ShortcutConflict> ShortcutBindingManager::checkConflicts(const ShortcutBinding& shortcut) const {
     std::vector<ShortcutConflict> conflicts;
 
     for (const auto& [existing, owner] : registeredShortcuts_) {
@@ -194,8 +194,8 @@ std::vector<ShortcutConflict> AdvancedShortcutManager::checkConflicts(const Adva
     return conflicts;
 }
 
-std::vector<AdvancedShortcut> AdvancedShortcutManager::getAllShortcuts() const {
-    std::vector<AdvancedShortcut> result;
+std::vector<ShortcutBinding> ShortcutBindingManager::getAllShortcuts() const {
+    std::vector<ShortcutBinding> result;
     result.reserve(registeredShortcuts_.size());
 
     for (const auto& [shortcut, owner] : registeredShortcuts_) {
@@ -205,8 +205,8 @@ std::vector<AdvancedShortcut> AdvancedShortcutManager::getAllShortcuts() const {
     return result;
 }
 
-std::vector<AdvancedShortcut> AdvancedShortcutManager::getShortcutsByCategory(const std::string& category) const {
-    std::vector<AdvancedShortcut> result;
+std::vector<ShortcutBinding> ShortcutBindingManager::getShortcutsByCategory(const std::string& category) const {
+    std::vector<ShortcutBinding> result;
 
     for (const auto& [shortcut, owner] : registeredShortcuts_) {
         if (shortcut.category == category) {
@@ -217,14 +217,14 @@ std::vector<AdvancedShortcut> AdvancedShortcutManager::getShortcutsByCategory(co
     return result;
 }
 
-void AdvancedShortcutManager::addKeyMapping(const KeyMapping& mapping) {
+void ShortcutBindingManager::addKeyMapping(const KeyMapping& mapping) {
     // Remove existing mapping for the same 'from' shortcut
     removeKeyMapping(mapping.from);
     keyMappings_.push_back(mapping);
     spdlog::debug("Added key mapping: {} → {}", mapping.from.toString(), mapping.to.toString());
 }
 
-void AdvancedShortcutManager::removeKeyMapping(const AdvancedShortcut& from) {
+void ShortcutBindingManager::removeKeyMapping(const ShortcutBinding& from) {
     auto it = std::remove_if(keyMappings_.begin(), keyMappings_.end(),
                             [&from](const KeyMapping& mapping) {
                                 return mapping.from == from;
@@ -235,11 +235,11 @@ void AdvancedShortcutManager::removeKeyMapping(const AdvancedShortcut& from) {
     }
 }
 
-std::vector<KeyMapping> AdvancedShortcutManager::getKeyMappings() const {
+std::vector<KeyMapping> ShortcutBindingManager::getKeyMappings() const {
     return keyMappings_;
 }
 
-AdvancedShortcut AdvancedShortcutManager::resolveShortcut(const AdvancedShortcut& shortcut,
+ShortcutBinding ShortcutBindingManager::resolveShortcut(const ShortcutBinding& shortcut,
                                                          const std::string& application) const {
     // Check for application-specific mapping first
     for (const auto& mapping : keyMappings_) {
@@ -255,8 +255,8 @@ AdvancedShortcut AdvancedShortcutManager::resolveShortcut(const AdvancedShortcut
     return shortcut; // No mapping found, return original
 }
 
-std::vector<AdvancedShortcut> AdvancedShortcutManager::suggestAlternatives(const AdvancedShortcut& shortcut) const {
-    std::vector<AdvancedShortcut> alternatives;
+std::vector<ShortcutBinding> ShortcutBindingManager::suggestAlternatives(const ShortcutBinding& shortcut) const {
+    std::vector<ShortcutBinding> alternatives;
 
     if (shortcut.type == ShortcutType::Keyboard && !shortcut.keySequence.empty()) {
         const Shortcut& original = shortcut.keySequence[0];
@@ -273,7 +273,7 @@ std::vector<AdvancedShortcut> AdvancedShortcutManager::suggestAlternatives(const
 
         for (const auto& [ctrl, alt, shift, win] : modifierCombos) {
             Shortcut alternative(original.vkCode, ctrl, alt, shift, win);
-            AdvancedShortcut altShortcut = AdvancedShortcut::createKeyboard(alternative);
+            ShortcutBinding altShortcut = ShortcutBinding::createKeyboard(alternative);
 
             if (checkConflicts(altShortcut).empty()) {
                 alternatives.push_back(altShortcut);
@@ -284,13 +284,13 @@ std::vector<AdvancedShortcut> AdvancedShortcutManager::suggestAlternatives(const
     return alternatives;
 }
 
-void AdvancedShortcutManager::clear() {
+void ShortcutBindingManager::clear() {
     registeredShortcuts_.clear();
     keyMappings_.clear();
     spdlog::debug("Cleared all shortcuts and mappings");
 }
 
-bool AdvancedShortcutManager::hasConflict(const AdvancedShortcut& s1, const AdvancedShortcut& s2) const {
+bool ShortcutBindingManager::hasConflict(const ShortcutBinding& s1, const ShortcutBinding& s2) const {
     // Same type shortcuts can conflict
     if (s1.type == s2.type) {
         switch (s1.type) {
@@ -314,15 +314,15 @@ bool AdvancedShortcutManager::hasConflict(const AdvancedShortcut& s1, const Adva
     return false;
 }
 
-std::string AdvancedShortcutManager::getConflictReason(const AdvancedShortcut& s1, const AdvancedShortcut& s2) const {
+std::string ShortcutBindingManager::getConflictReason(const ShortcutBinding& s1, const ShortcutBinding& s2) const {
     if (s1.type == s2.type) {
         return "Identical shortcut combination";
     }
     return "Unknown conflict";
 }
 
-ShortcutConflict::Severity AdvancedShortcutManager::assessConflictSeverity(const AdvancedShortcut& s1,
-                                                                          const AdvancedShortcut& s2) const {
+ShortcutConflict::Severity ShortcutBindingManager::assessConflictSeverity(const ShortcutBinding& s1,
+                                                                          const ShortcutBinding& s2) const {
     // System shortcuts are critical conflicts
     if (s1.category == "System" || s2.category == "System") {
         return ShortcutConflict::Severity::Critical;

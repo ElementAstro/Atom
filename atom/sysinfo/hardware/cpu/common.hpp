@@ -20,14 +20,8 @@ Description: System Information Module - CPU Common Header
 #include <atomic>
 #include <chrono>
 #include <mutex>
-<<<<<<<<HEAD : atom / sysinfo / src / cpu / common.hpp
-#include <shared_mutex>
-        == == == ==
+#include <string>
 #include <vector>
-        >>>>>>>> test -
-    fixes / systematic -
-    testing : atom / sysinfo / hardware / cpu /
-              common.hpp
 
 #ifdef _WIN32
 // clang-format off
@@ -106,58 +100,22 @@ using _bstr_t = bstr_t;
 #include <sys/types.h>
 #endif
 
-              namespace atom::system {
+namespace atom::system {
 
-    < < < < < < < < HEAD : atom / sysinfo / src / cpu / common.hpp namespace {
-        // Cache variables with a validity duration
-        extern std::shared_mutex g_cacheMutex;
-        extern std::atomic<std::chrono::steady_clock::time_point>
-            g_lastCacheRefresh;
-        == == == ==
-            // Cache variables with a validity duration (moved out of anonymous
-            // namespace)
-            extern std::mutex g_cacheMutex;
-        extern std::chrono::steady_clock::time_point g_lastCacheRefresh;
-        >>>>>>>> test - fixes / systematic -
-                     testing
-            : atom /
-              sysinfo / hardware / cpu /
-              common.hpp extern const std::chrono::seconds g_cacheValidDuration;
+// Cache variables (moved out of anonymous namespace)
+extern std::mutex g_cacheMutex;
+extern std::chrono::steady_clock::time_point g_lastCacheRefresh;
+extern const std::chrono::seconds g_cacheValidDuration;
 
-        // Cached CPU info
-        extern std::atomic<bool> g_cacheInitialized;
-        extern CpuInfo g_cpuInfoCache;
+// Cached CPU info
+extern std::atomic<bool> g_cacheInitialized;
+extern CpuInfo g_cpuInfoCache;
 
-        // Platform-specific function declarations - these will be implemented
-        // in platform-specific files
+// Forward declarations for functions implemented in common.cpp
+size_t stringToBytes(const std::string& str);
+CpuVendor getVendorFromString(const std::string& vendorId);
+bool needsCacheRefresh();
 
-#ifdef _WIN32
-// Windows-specific function declarations
-#elif defined(__linux__)
-// Linux-specific function declarations
-#elif defined(__APPLE__)
-// macOS-specific function declarations
-#elif defined(__FreeBSD__)
-// FreeBSD-specific function declarations
-#endif
-
-        // Forward declarations for functions implemented in common.cpp
-        /**
-         * @brief Converts a string to bytes
-         * @param str String like "8K" or "4M"
-         * @return Size in bytes
-         */
-        size_t stringToBytes(const std::string& str);
-
-        /**
-         * @brief Get vendor from CPU identifier string
-         * @param vendorId CPU vendor ID string
-         * @return CPU vendor enum
-         */
-        CpuVendor getVendorFromString(const std::string& vendorId);
-
-        bool needsCacheRefresh();
-
-    }  // namespace atom::system
+}  // namespace atom::system
 
 #endif /* ATOM_SYSTEM_MODULE_CPU_COMMON_HPP */

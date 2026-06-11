@@ -6,10 +6,10 @@
  * "atom/system/process/process_info.hpp" instead.
  */
 
-#ifndef ATOM_SYSTEM_PROCESS_INFO_HPP
-#define ATOM_SYSTEM_PROCESS_INFO_HPP
+#ifndef ATOM_SYSTEM_PROCESS_INFO_COMPAT_HPP
+#define ATOM_SYSTEM_PROCESS_INFO_COMPAT_HPP
 
 // Forward to the new location
 #include "process/process_info.hpp"
 
-#endif  // ATOM_SYSTEM_PROCESS_INFO_HPP
+#endif  // ATOM_SYSTEM_PROCESS_INFO_COMPAT_HPP

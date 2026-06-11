@@ -6,51 +6,42 @@
 #include <functional>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 #include "atom/error/exception.hpp"
+#include "atom/meta/refl_field.hpp"
 #include "atom/type/json.hpp"
 using json = nlohmann::json;
 
 namespace atom::meta {
-// Enhanced helper structure: used to store field names and member pointers
+// JSON field descriptor: shared base plus JSON-specific key mapping and
+// value transformers
 template <typename T, typename MemberType>
-struct Field {
-    const char* name;
-    MemberType T::* member;
-    bool required;
-    MemberType default_value;
-    using Validator = std::function<bool(const MemberType&)>;
+struct Field : FieldBase<T, MemberType> {
+    using Base = FieldBase<T, MemberType>;
+    using typename Base::Validator;
     using Transformer = std::function<MemberType(const MemberType&)>;
-    Validator validator;
+
     Transformer serializer;    // Transform value before serialization
     Transformer deserializer;  // Transform value after deserialization
-
-    // Enhanced: Metadata for better introspection
-    const char* description = nullptr;
     const char* json_key = nullptr;  // Custom JSON key (if different from name)
-    bool deprecated = false;
-    int version = 1;  // Field version for migration support
 
     Field(const char* n, MemberType T::* m, bool r = true, MemberType def = {},
-          Validator v = nullptr, Transformer ser = nullptr, Transformer deser = nullptr)
-        : name(n),
-          member(m),
-          required(r),
-          default_value(std::move(def)),
-          validator(std::move(v)),
+          Validator v = nullptr, Transformer ser = nullptr,
+          Transformer deser = nullptr)
+        : Base(n, m, r, std::move(def), std::move(v)),
           serializer(std::move(ser)),
           deserializer(std::move(deser)) {}
 
-    // Enhanced: Builder pattern for easier field configuration
-    Field& withDescription(const char* desc) { description = desc; return *this; }
-    Field& withJsonKey(const char* key) { json_key = key; return *this; }
-    Field& withDeprecated(bool dep = true) { deprecated = dep; return *this; }
-    Field& withVersion(int ver) { version = ver; return *this; }
+    Field& withJsonKey(const char* key) {
+        json_key = key;
+        return *this;
+    }
 
-    // Enhanced: Get effective JSON key
+    // Get effective JSON key
     [[nodiscard]] const char* getJsonKey() const noexcept {
-        return json_key ? json_key : name;
+        return json_key ? json_key : this->name;
     }
 };
 
@@ -65,7 +56,7 @@ struct Reflectable {
     [[nodiscard]] auto from_json(const json& j, int target_version = 1) const -> T {
         T obj;
         std::apply(
-            [&](auto... field) {
+            [&](const auto&... field) {
                 (([&] {
                      const char* json_key = field.getJsonKey();
 
@@ -75,7 +66,9 @@ struct Reflectable {
                      }
 
                      if (j.contains(json_key)) {
-                         auto value = j.at(json_key).template get<decltype(obj.*(field.member))>();
+                         auto value = j.at(json_key)
+                                          .template get<std::remove_cvref_t<
+                                              decltype(obj.*(field.member))>>();
 
                          // Enhanced: Apply deserializer transformation
                          if (field.deserializer) {
@@ -108,7 +101,7 @@ struct Reflectable {
                                bool include_metadata = false) const -> json {
         json j;
         std::apply(
-            [&](auto... field) {
+            [&](const auto&... field) {
                 (([&] {
                      // Enhanced: Skip deprecated fields unless explicitly requested
                      if (field.deprecated && !include_deprecated) {
@@ -148,7 +141,7 @@ struct Reflectable {
     [[nodiscard]] auto validate(const T& obj) const -> std::vector<std::string> {
         std::vector<std::string> errors;
         std::apply(
-            [&](auto... field) {
+            [&](const auto&... field) {
                 (([&] {
                      if (field.validator && !field.validator(obj.*(field.member))) {
                          errors.emplace_back(std::string("Validation failed for field '") +
@@ -170,7 +163,7 @@ struct Reflectable {
         schema["required"] = json::array();
 
         std::apply(
-            [&](auto... field) {
+            [&](const auto&... field) {
                 (([&] {
                      const char* json_key = field.getJsonKey();
                      json field_schema;

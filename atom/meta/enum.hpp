@@ -149,17 +149,12 @@ struct EnumTraits {
             if constexpr (is_sequential) {
                 constexpr auto sorted_values = []() constexpr {
                     auto vals = values;
-                    // Simple bubble sort for constexpr context
-                    for (size_t i = 0; i < vals.size(); ++i) {
-                        for (size_t j = i + 1; j < vals.size(); ++j) {
-                            if (static_cast<underlying_type>(vals[i]) >
-                                static_cast<underlying_type>(vals[j])) {
-                                auto temp = vals[i];
-                                vals[i] = vals[j];
-                                vals[j] = temp;
-                            }
-                        }
-                    }
+                    // std::sort is constexpr since C++20
+                    std::sort(vals.begin(), vals.end(),
+                              [](T lhs, T rhs) constexpr {
+                                  return static_cast<underlying_type>(lhs) <
+                                         static_cast<underlying_type>(rhs);
+                              });
                     return vals;
                 }();
 
@@ -313,44 +308,12 @@ static constexpr auto lookup_table = EnumLookupTable<T>{};
 
 // **String comparison helper functions**
 constexpr bool iequals(std::string_view a, std::string_view b) noexcept {
-    if (a.size() != b.size())
-        return false;
-
-    for (size_t i = 0; i < a.size(); ++i) {
-        char ca = a[i];
-        char cb = b[i];
-
-        // Convert to lowercase
-        if (ca >= 'A' && ca <= 'Z')
-            ca += 32;
-        if (cb >= 'A' && cb <= 'Z')
-            cb += 32;
-
-        if (ca != cb)
-            return false;
-    }
-    return true;
-}
-
-constexpr bool starts_with(std::string_view str,
-                           std::string_view prefix) noexcept {
-    return str.size() >= prefix.size() &&
-           str.substr(0, prefix.size()) == prefix;
-}
-
-constexpr bool contains_substring(std::string_view str,
-                                  std::string_view substr) noexcept {
-    if (substr.empty())
-        return true;
-    if (str.size() < substr.size())
-        return false;
-
-    for (size_t i = 0; i <= str.size() - substr.size(); ++i) {
-        if (str.substr(i, substr.size()) == substr) {
-            return true;
-        }
-    }
-    return false;
+    constexpr auto to_lower = [](char c) constexpr {
+        return (c >= 'A' && c <= 'Z') ? static_cast<char>(c + 32) : c;
+    };
+    return std::ranges::equal(a, b, [to_lower](char ca, char cb) {
+        return to_lower(ca) == to_lower(cb);
+    });
 }
 }  // namespace detail
 
@@ -458,7 +421,7 @@ std::vector<T> enum_cast_prefix(std::string_view prefix) noexcept {
         constexpr auto& VALUES = EnumTraits<T>::values;
 
         for (size_t i = 0; i < NAMES.size(); ++i) {
-            if (detail::starts_with(NAMES[i], prefix)) {
+            if (NAMES[i].starts_with(prefix)) {
                 results.push_back(VALUES[i]);
             }
         }
@@ -482,7 +445,7 @@ std::vector<T> enum_cast_fuzzy(std::string_view pattern) noexcept {
         constexpr auto& VALUES = EnumTraits<T>::values;
 
         for (size_t i = 0; i < NAMES.size(); ++i) {
-            if (detail::contains_substring(NAMES[i], pattern)) {
+            if (NAMES[i].contains(pattern)) {
                 results.push_back(VALUES[i]);
             }
         }
@@ -781,9 +744,17 @@ std::vector<T> get_set_flags(T flags) noexcept {
     std::vector<T> result;
 
     if constexpr (EnumTraits<T>::size() > 0) {
+        using underlying = std::underlying_type_t<T>;
         constexpr auto& VALUES = EnumTraits<T>::values;
+        const bool flags_is_zero = static_cast<underlying>(flags) == 0;
         for (const auto& flag : VALUES) {
-            if (has_flag(flags, flag)) {
+            if (static_cast<underlying>(flag) == 0) {
+                // A zero-valued enumerator (e.g. None) is trivially contained
+                // in every value; only report it when the value itself is 0.
+                if (flags_is_zero) {
+                    result.push_back(flag);
+                }
+            } else if (has_flag(flags, flag)) {
                 result.push_back(flag);
             }
         }
@@ -1328,6 +1299,36 @@ constexpr auto make_enum_switch(T value) {
 }
 
 /**
+ * @brief Dispatch a runtime enum value to a compile-time constant
+ *
+ * Invokes f with std::integral_constant<T, V> for the matching registered
+ * value, so the callee can use the value in constant expressions
+ * (if constexpr, template arguments, array sizes).
+ *
+ * @return True if the value matched a registered enumerator
+ */
+template <EnumerationType T, typename F>
+constexpr bool enum_switch(T value, F&& f) {
+    return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+        return ((EnumTraits<T>::values[Is] == value
+                     ? (f(std::integral_constant<T, EnumTraits<T>::values[Is]>{}),
+                        true)
+                     : false) ||
+                ...);
+    }(std::make_index_sequence<EnumTraits<T>::values.size()>{});
+}
+
+/**
+ * @brief Invoke f for every registered enumerator as a compile-time constant
+ */
+template <EnumerationType T, typename F>
+constexpr void enum_for_each(F&& f) {
+    [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+        (f(std::integral_constant<T, EnumTraits<T>::values[Is]>{}), ...);
+    }(std::make_index_sequence<EnumTraits<T>::values.size()>{});
+}
+
+/**
  * @brief Enum value range for iteration
  */
 template <typename T>
@@ -1473,7 +1474,7 @@ struct ExtendedEnumInfo {
     static auto getTypeInfo() -> TypeInfo { return TypeInfo::fromType<T>(); }
 
     static auto getDemangledName() -> std::string {
-        return DemangleHelper::demangle(typeid(T));
+        return std::string(DemangleHelper::demangle(typeid(T).name()));
     }
 
     static auto summary() -> std::string {

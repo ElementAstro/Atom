@@ -105,18 +105,36 @@ Examples:
                        "Scheduled time for the Cron job in crontab format.")
         .def_readwrite("command", &CronJob::command_,
                        "Command to be executed by the Cron job.")
-        .def_readwrite("enabled", &CronJob::enabled_,
-                       "Status of the Cron job (enabled/disabled).")
-        .def_readwrite("category", &CronJob::category_,
-                       "Category of the Cron job for organization.")
-        .def_readwrite("description", &CronJob::description_,
-                       "Description of what the job does.")
-        .def_readonly("created_at", &CronJob::created_at_,
-                      "Creation timestamp of the job.")
-        .def_readonly("last_run", &CronJob::last_run_,
-                      "Last execution timestamp of the job.")
-        .def_readonly("run_count", &CronJob::run_count_,
-                      "Number of times this job has been executed.")
+        .def_property(
+            "enabled", [](const CronJob& self) { return self.isEnabled(); },
+            [](CronJob& self, bool enabled) {
+                self.setStatus(enabled ? JobStatus::ENABLED
+                                       : JobStatus::DISABLED);
+            },
+            "Status of the Cron job (enabled/disabled).")
+        .def_property(
+            "category", [](const CronJob& self) { return self.getCategory(); },
+            [](CronJob& self, std::string category) {
+                self.setCategory(std::move(category));
+            },
+            "Category of the Cron job for organization.")
+        .def_property(
+            "description",
+            [](const CronJob& self) { return self.getDescription(); },
+            [](CronJob& self, std::string description) {
+                self.setDescription(std::move(description));
+            },
+            "Description of what the job does.")
+        .def_property_readonly(
+            "created_at",
+            [](const CronJob& self) { return self.getCreatedAt(); },
+            "Creation timestamp of the job.")
+        .def_property_readonly(
+            "last_run", [](const CronJob& self) { return self.getLastRun(); },
+            "Last execution timestamp of the job.")
+        .def_property_readonly(
+            "run_count", [](const CronJob& self) { return self.getRunCount(); },
+            "Number of times this job has been executed.")
         .def("to_json", &CronJob::toJson,
              "Converts the CronJob object to a JSON representation.")
         .def_static("from_json", &CronJob::fromJson, py::arg("json_obj"),
@@ -127,7 +145,7 @@ Examples:
             "__str__",
             [](const CronJob& self) {
                 return self.time_ + " " + self.command_ +
-                       (self.enabled_ ? " (enabled)" : " (disabled)");
+                       (self.isEnabled() ? " (enabled)" : " (disabled)");
             },
             "String representation of the cron job.");
 }

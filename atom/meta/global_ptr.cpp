@@ -9,6 +9,8 @@
 
 #include "global_ptr.hpp"
 
+#include <algorithm>
+
 #if ATOM_ENABLE_DEBUG
 #include <iostream>
 #include <sstream>
@@ -38,22 +40,13 @@ size_t GlobalSharedPtrManager::removeExpiredWeakPtrs() {
     size_t removed = 0;
 
     for (auto iter = pointer_map_.begin(); iter != pointer_map_.end();) {
-        try {
-            if (iter->second.metadata.flags.is_weak) {
-                if (std::any_cast<std::weak_ptr<void>>(iter->second.ptr_data)
-                        .expired()) {
-                    spdlog::debug("Removing expired weak pointer with key: {}",
-                                  iter->first);
-                    iter = pointer_map_.erase(iter);
-                    ++removed;
-                } else {
-                    ++iter;
-                }
-            } else {
-                ++iter;
-            }
-        } catch (const std::bad_any_cast&) {
-            spdlog::warn("Bad any_cast for key: {}", iter->first);
+        if (iter->second.metadata.flags.is_weak && iter->second.expired_check &&
+            iter->second.expired_check()) {
+            spdlog::debug("Removing expired weak pointer with key: {}",
+                          iter->first);
+            iter = pointer_map_.erase(iter);
+            ++removed;
+        } else {
             ++iter;
         }
     }
@@ -77,10 +70,18 @@ size_t GlobalSharedPtrManager::cleanOldPointers(
         std::chrono::duration_cast<std::chrono::microseconds>(older_than)
             .count();
 
+    // Grace period: entries created or accessed within the last 50ms are
+    // never considered "old", even with a zero threshold. This prevents
+    // removing pointers that are actively in use.
+    static constexpr int64_t MIN_IDLE_MICROS = 50'000;
+    const auto idle_threshold_micros =
+        std::max<int64_t>(older_than_micros, MIN_IDLE_MICROS);
+
     for (auto iter = pointer_map_.begin(); iter != pointer_map_.end();) {
-        if (now_micros - static_cast<int64_t>(
-                             iter->second.metadata.creation_time_micros) >
-            older_than_micros) {
+        const auto last_access_micros = static_cast<int64_t>(
+            iter->second.metadata.last_access_micros.load(
+                std::memory_order_relaxed));
+        if (now_micros - last_access_micros > idle_threshold_micros) {
             iter = pointer_map_.erase(iter);
             ++removed;
         } else {
@@ -153,7 +154,25 @@ auto GlobalSharedPtrManager::getPtrInfo(std::string_view key) const
 
     if (const auto iter = pointer_map_.find(std::string(key));
         iter != pointer_map_.end()) {
-        return iter->second.metadata;
+        const auto& entry = iter->second;
+        // Querying metadata counts as an access; counters are mutable atomics.
+        entry.metadata.recordAccess();
+        if (entry.use_count_fn) {
+            // Refresh the reference count from the live ownership group.
+            entry.metadata.ref_count.store(
+                static_cast<uint32_t>(entry.use_count_fn()),
+                std::memory_order_relaxed);
+        }
+        return entry.metadata;
     }
     return std::nullopt;
+}
+
+void GlobalSharedPtrManager::markCustomDeleter(std::string_view key) {
+    std::unique_lock lock(mutex_);
+
+    if (const auto iter = pointer_map_.find(std::string(key));
+        iter != pointer_map_.end()) {
+        iter->second.metadata.flags.has_custom_deleter = true;
+    }
 }

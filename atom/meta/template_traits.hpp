@@ -58,7 +58,15 @@ struct identity {
         return std::get<N>(std::tuple{Values...});
     }
 
-    static constexpr auto value = has_value ? value_at<0>() : T{};
+    // Guarded with if constexpr so value_at<0>() is never instantiated for an
+    // empty value pack (which would trigger the out-of-range static_assert).
+    static constexpr auto value = [] {
+        if constexpr (has_value) {
+            return value_at<0>();
+        } else {
+            return T{};
+        }
+    }();
 
     template <std::size_t I>
     static constexpr auto get() noexcept {
@@ -85,9 +93,45 @@ struct tuple_element<I, atom::meta::identity<T, Values...>> {
     using type =
         decltype(atom::meta::identity<T, Values...>::template get<I>());
 };
+
+// Declared here (not at the end of the file) so that qualified std::get calls
+// inside concepts such as has_tuple_element can find this overload.
+template <size_t I, typename T, auto... Values>
+constexpr auto get(const atom::meta::identity<T, Values...>&) {
+    return atom::meta::identity<T, Values...>::template get<I>();
+}
 }  // namespace std
 
 namespace atom::meta {
+
+template <typename... Ts>
+struct type_list;
+
+namespace detail {
+
+// Head/tail computed via partial specialization so the out-of-range branch is
+// never instantiated for empty lists.
+template <typename... Ts>
+struct type_list_head {
+    using type = void;
+};
+
+template <typename T, typename... Rest>
+struct type_list_head<T, Rest...> {
+    using type = T;
+};
+
+template <typename... Ts>
+struct type_list_tail {
+    using type = type_list<>;
+};
+
+template <typename T, typename... Rest>
+struct type_list_tail<T, Rest...> {
+    using type = type_list<Rest...>;
+};
+
+}  // namespace detail
 
 /**
  * @brief Optimized type list implementation with enhanced operations
@@ -110,15 +154,9 @@ struct type_list {
     template <std::size_t I>
     using at = std::tuple_element_t<I, std::tuple<Ts...>>;
 
-    // Optimized: Fast head/tail operations
-    using head = std::conditional_t<empty, void,
-                                    std::tuple_element_t<0, std::tuple<Ts...>>>;
-    using tail = std::conditional_t<
-        size <= 1, type_list<>,
-        decltype([]<std::size_t... Is>(std::index_sequence<Is...>) {
-            return type_list<
-                std::tuple_element_t<Is + 1, std::tuple<Ts...>>...>{};
-        }(std::make_index_sequence<size - 1>{}))>;
+    // Optimized: Fast head/tail operations (see detail helpers above).
+    using head = typename detail::type_list_head<Ts...>::type;
+    using tail = typename detail::type_list_tail<Ts...>::type;
 
     // Optimized: Contains check with fold expression
     template <typename T>
@@ -456,6 +494,9 @@ public:
         indices_impl(std::index_sequence_for<Args...>{});
     static constexpr std::size_t count = value.size();
 };
+
+template <typename T, typename... Args>
+inline constexpr auto find_all_indices_v = find_all_indices<T, Args...>::value;
 
 /**
  * @brief Extract reference wrapper or pointer types
@@ -826,9 +867,15 @@ struct container_traits {
             } -> std::same_as<typename T::iterator>;
         };
 
-    static constexpr bool is_fixed_size = requires(T) {
-        { T::static_size } -> std::convertible_to<std::size_t>;
-    };
+    static constexpr bool is_fixed_size =
+        requires(T) {
+            { T::static_size } -> std::convertible_to<std::size_t>;
+        } ||
+        requires {
+            // std::array and similar fixed-size containers expose their size
+            // via std::tuple_size
+            { std::tuple_size<T>::value } -> std::convertible_to<std::size_t>;
+        };
 };
 
 template <bool Condition, const char* Message = nullptr>
@@ -845,11 +892,8 @@ struct static_error {
 };
 
 template <typename T>
-inline constexpr auto type_name = [] {
-    std::string name = DemangleHelper::demangle(typeid(T).name());
-    static std::string stored_name = name;
-    return stored_name;
-}();
+inline const std::string type_name =
+    std::string(DemangleHelper::demangle(typeid(T).name()));
 
 //==============================================================================
 // C++23 Enhanced Template Traits
@@ -978,12 +1022,5 @@ inline constexpr std::size_t count_if_v =
     (static_cast<std::size_t>(Pred<Types>::value) + ...);
 
 }  // namespace atom::meta
-
-namespace std {
-template <size_t I, typename T, auto... Values>
-auto get(const atom::meta::identity<T, Values...>&) {
-    return atom::meta::identity<T, Values...>::template get<I>();
-}
-}  // namespace std
 
 #endif

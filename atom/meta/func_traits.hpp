@@ -16,11 +16,15 @@
 #ifndef ATOM_META_FUNC_TRAITS_HPP
 #define ATOM_META_FUNC_TRAITS_HPP
 
+#include <any>
 #include <format>
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <unordered_map>
 #include <version>
 
 #include "atom/meta/abi.hpp"
@@ -571,7 +575,8 @@ template <typename T, typename Ret, typename... Args>
 struct has_method<
     T, Ret(Args...),
     std::void_t<decltype(std::declval<T>().method(std::declval<Args>()...))>>
-    : std::true_type {};
+    : std::is_same<decltype(std::declval<T>().method(std::declval<Args>()...)),
+                   Ret> {};
 
 /**
  * \brief Primary template to detect static member function
@@ -589,7 +594,7 @@ template <typename T, typename Ret, typename... Args>
 struct has_static_method<
     T, Ret(Args...),
     std::void_t<decltype(T::static_method(std::declval<Args>()...))>>
-    : std::true_type {};
+    : std::is_same<decltype(T::static_method(std::declval<Args>()...)), Ret> {};
 
 /**
  * \brief Primary template to detect const member function
@@ -862,12 +867,46 @@ struct ComposedFunction {
 };
 
 /**
- * @brief Compose two functions
+ * @brief Compose functions, applied right-to-left (mathematical composition)
+ *
+ * `compose(f, g, h)(x) == f(g(h(x)))` for any arity; the binary case
+ * `compose(f, g)(x) == f(g(x))` is unchanged. The direction is consistent at
+ * every arity. For a left-to-right pipeline (`x` flows into `f` first), use
+ * `pipe`.
  */
-template <typename F, typename G>
-constexpr auto compose(F&& f, G&& g)
-    -> ComposedFunction<std::decay_t<F>, std::decay_t<G>> {
-    return {std::forward<F>(f), std::forward<G>(g)};
+template <typename F>
+constexpr auto compose(F&& f) -> std::decay_t<F> {
+    return std::forward<F>(f);
+}
+
+template <typename F, typename G, typename... Rest>
+constexpr auto compose(F&& f, G&& g, Rest&&... rest) {
+    return ComposedFunction<
+        std::decay_t<F>,
+        decltype(compose(std::forward<G>(g), std::forward<Rest>(rest)...))>{
+        std::forward<F>(f),
+        compose(std::forward<G>(g), std::forward<Rest>(rest)...)};
+}
+
+/**
+ * @brief Compose functions as a left-to-right pipeline
+ *
+ * `pipe(f, g, h)(x) == h(g(f(x)))`: the argument flows into `f` first and each
+ * result feeds the next function. This is the mirror of `compose`, which
+ * applies right-to-left.
+ */
+template <typename F>
+constexpr auto pipe(F&& f) -> std::decay_t<F> {
+    return std::forward<F>(f);
+}
+
+template <typename F, typename G, typename... Rest>
+constexpr auto pipe(F&& f, G&& g, Rest&&... rest) {
+    return ComposedFunction<
+        decltype(pipe(std::forward<G>(g), std::forward<Rest>(rest)...)),
+        std::decay_t<F>>{
+        pipe(std::forward<G>(g), std::forward<Rest>(rest)...),
+        std::forward<F>(f)};
 }
 
 /**

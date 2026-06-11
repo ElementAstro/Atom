@@ -43,9 +43,10 @@ TEST_F(InvocationUtilsTest, ValidateThenInvoke) {
     // Test with valid inputs
     EXPECT_EQ(validateAddPositive(5, 3), 8);
 
-    // Test with invalid inputs
-    EXPECT_THROW(validateAddPositive(-5, 3), std::invalid_argument);
-    EXPECT_THROW(validateAddPositive(5, -3), std::invalid_argument);
+    // Test with invalid inputs (validation failure throws the atom error
+    // type, consistent with the rest of the atom::error system)
+    EXPECT_THROW(validateAddPositive(-5, 3), atom::error::InvalidArgument);
+    EXPECT_THROW(validateAddPositive(5, -3), atom::error::InvalidArgument);
 }
 
 // Test delay invoke functions
@@ -114,17 +115,23 @@ protected:
 
 // Test function composition
 TEST_F(FunctionCompositionTest, BasicComposition) {
-    // Compose two functions: double_value then add_ten
-    auto composed = compose(double_value, add_ten);
-    EXPECT_EQ(composed(5), 20);  // (5 * 2) + 10 = 20
+    // compose is right-to-left at every arity: compose(f, g)(x) == f(g(x))
+    auto composed = compose(add_ten, double_value);
+    EXPECT_EQ(composed(5), 20);  // add_ten(double_value(5)) = (5 * 2) + 10 = 20
 
-    // Compose three functions: double_value, add_ten, stringify
-    auto composed2 = compose(double_value, add_ten, stringify);
+    // pipe is the left-to-right mirror: x flows into the first function first.
+    // pipe(double_value, add_ten, stringify)(5) ==
+    //     stringify(add_ten(double_value(5)))
+    auto composed2 = pipe(double_value, add_ten, stringify);
     EXPECT_EQ(composed2(5), "Result: 20");
 
-    // Compose with lambdas
+    // Variadic compose stays right-to-left: compose(f, g, h)(x) == f(g(h(x)))
+    auto composed2b = compose(stringify, add_ten, double_value);
+    EXPECT_EQ(composed2b(5), "Result: 20");  // same value, mirrored argument order
+
+    // Compose with lambdas (right-to-left)
     auto composed3 =
-        compose([](int x) { return x * x; }, [](int x) { return x + 1; });
+        compose([](int x) { return x + 1; }, [](int x) { return x * x; });
     EXPECT_EQ(composed3(4), 17);  // (4 * 4) + 1 = 17
 }
 
@@ -158,8 +165,9 @@ TEST_F(ExceptionHandlingTest, SafeCall) {
     // Test with function that doesn't throw
     EXPECT_EQ(safeCall(add, 5, 3), 8);
 
-    // Test with throwing function
-    EXPECT_EQ(safeCall(throwingFunction, -5), 0);  // Returns default value
+    // Test with throwing function: safeCall returns a Result, so an
+    // exception yields an errored Result instead of a value
+    EXPECT_FALSE(safeCall(throwingFunction, -5).has_value());
 
     // Test with non-default-constructible return type wrapped in lambda
     struct NonDefault {
@@ -173,32 +181,38 @@ TEST_F(ExceptionHandlingTest, SafeCall) {
         return NonDefault(v);
     };
 
-    // This should throw since NonDefault is not default constructible
-    EXPECT_THROW(safeCall([&](int v) { return makeNonDefault(v); }, -5),
-                 atom::error::RuntimeError);
+    // Result-based safeCall captures the exception as an error state even
+    // for non-default-constructible return types
+    auto nonDefaultResult =
+        safeCall([&](int v) { return makeNonDefault(v); }, -5);
+    EXPECT_FALSE(nonDefaultResult.has_value());
+
+    auto okResult = safeCall([&](int v) { return makeNonDefault(v); }, 7);
+    ASSERT_TRUE(okResult.has_value());
+    EXPECT_EQ(okResult.value().value, 7);
 }
 
-// Test safeCallResult
+// Test safeCall returning Result
 TEST_F(ExceptionHandlingTest, SafeCallResult) {
     // Test successful call
-    auto result1 = safeCallResult(add, 5, 3);
+    auto result1 = safeCall(add, 5, 3);
     EXPECT_TRUE(result1.has_value());
     EXPECT_EQ(result1.value(), 8);
 
     // Test call that throws
-    auto result2 = safeCallResult(throwingFunction, -5);
+    auto result2 = safeCall(throwingFunction, -5);
     EXPECT_FALSE(result2.has_value());
     EXPECT_EQ(result2.error().error(),
-              static_cast<int>(std::errc::invalid_argument));
+              std::make_error_code(std::errc::invalid_argument));
 
     // Test void function success
     int counter = 0;
-    auto result3 = safeCallResult([&counter]() { counter = 42; });
+    auto result3 = safeCall([&counter]() { counter = 42; });
     EXPECT_TRUE(result3.has_value());
     EXPECT_EQ(counter, 42);
 
     // Test void function failure
-    auto result4 = safeCallResult([&counter]() {
+    auto result4 = safeCall([&counter]() {
         counter = 100;
         throw std::runtime_error("Error");
     });
@@ -206,17 +220,19 @@ TEST_F(ExceptionHandlingTest, SafeCallResult) {
     EXPECT_EQ(counter, 100);  // Side effect still occurred
 }
 
-// Test safeTryCatch
+// Test safeTryWithDiagnostics success/exception alternatives
 TEST_F(ExceptionHandlingTest, SafeTryCatch) {
     // Test successful call
-    auto result1 = safeTryCatch(add, 5, 3);
+    auto result1 = safeTryWithDiagnostics(add, "add", 5, 3);
     EXPECT_TRUE(std::holds_alternative<int>(result1));
     EXPECT_EQ(std::get<int>(result1), 8);
 
     // Test throwing function
-    auto result2 = safeTryCatch(throwingFunction, -5);
-    EXPECT_TRUE(std::holds_alternative<std::exception_ptr>(result2));
-    EXPECT_THROW(std::rethrow_exception(std::get<std::exception_ptr>(result2)),
+    auto result2 = safeTryWithDiagnostics(throwingFunction, "throwing", -5);
+    EXPECT_TRUE((
+        std::holds_alternative<std::pair<std::exception_ptr, FunctionCallInfo>>(
+            result2)));
+    EXPECT_THROW(std::rethrow_exception(std::get<1>(result2).first),
                  std::runtime_error);
 }
 
@@ -239,10 +255,10 @@ TEST_F(ExceptionHandlingTest, SafeTryWithDiagnostics) {
     EXPECT_THROW(std::rethrow_exception(exPtr), std::runtime_error);
 }
 
-// Test safeTryCatchOrDefault and safeTryCatchWithCustomHandler
+// Test safeTryOrDefault and safeTryWithHandler
 TEST_F(ExceptionHandlingTest, SafeTryCatchVariants) {
     // Test with default value
-    EXPECT_EQ(safeTryCatchOrDefault(throwingFunction, 42, -5), 42);
+    EXPECT_EQ(safeTryOrDefault(throwingFunction, 42, -5), 42);
 
     // Test with custom handler
     std::string error_message;
@@ -254,7 +270,7 @@ TEST_F(ExceptionHandlingTest, SafeTryCatchVariants) {
         }
     };
 
-    EXPECT_EQ(safeTryCatchWithCustomHandler(throwingFunction, handler, -5), 0);
+    EXPECT_EQ(safeTryWithHandler(throwingFunction, handler, -5), 0);
     EXPECT_TRUE(error_message.find("Negative value") != std::string::npos);
 }
 
@@ -397,7 +413,9 @@ TEST_F(CachingTest, Memoize) {
     EXPECT_EQ(countExpensive(5, 3), 8);
     EXPECT_EQ(callCount, 2);  // Cache expired after 2 uses
 
-    // Test time policy by using time check manually
+    // Test time policy by using time check manually.
+    // Note: cacheCall's cache persists for the whole test, so use argument
+    // values not cached by the earlier sections of this test.
     callCount = 0;
     auto startTime = std::chrono::steady_clock::now();
     auto timeExpensive = [&](int a, int b) {
@@ -411,14 +429,14 @@ TEST_F(CachingTest, Memoize) {
         return cacheCall(expensive, a, b);
     };
 
-    EXPECT_EQ(timeExpensive(5, 3), 8);
+    EXPECT_EQ(timeExpensive(6, 4), 10);
     EXPECT_EQ(callCount, 1);
-    EXPECT_EQ(timeExpensive(5, 3), 8);
+    EXPECT_EQ(timeExpensive(6, 4), 10);
     EXPECT_EQ(callCount, 1);  // Still cached
 
     // Wait for cache to expire
     std::this_thread::sleep_for(std::chrono::milliseconds(60));
-    EXPECT_EQ(timeExpensive(5, 3), 8);
+    EXPECT_EQ(timeExpensive(6, 4), 10);
     EXPECT_EQ(callCount, 2);  // Cache expired due to time
 }
 
@@ -448,14 +466,10 @@ TEST_F(CachingTest, MemoizeCacheSize) {
     EXPECT_EQ(cacheCall(expensive, 2), 4);
     EXPECT_EQ(callCount, 3);  // Still 3, using cache
 
-    // To simulate cache eviction in a limited-size cache:
-    // Clear the cache for this particular function and args
-    // (Note: In a real implementation with max_size=2, key=1 would be evicted)
-    // clearFunctionCache();
-
-    // Now key=1 needs recomputation
+    // cacheCall's per-function cache is unbounded, so key=1 is never
+    // evicted and remains a cache hit
     EXPECT_EQ(cacheCall(expensive, 1), 2);
-    EXPECT_EQ(callCount, 4);  // Should increment
+    EXPECT_EQ(callCount, 3);  // Still 3, served from cache
 }
 
 class BatchProcessingTest : public ::testing::Test {
@@ -550,8 +564,9 @@ struct MetricsMock {
 
 // Test instrumentation
 TEST_F(InstrumentationTest, BasicInstrumentation) {
-    // Create instrumented function
-    auto instrumented = instrument(slowOperation, "slow_op");
+    // Create instrumented function (throwingFunction throws for negative
+    // input, which lets us verify the exception counter)
+    auto instrumented = instrument(throwingFunction, "slow_op");
 
     // Call it a few times
     instrumented(10);
@@ -559,7 +574,7 @@ TEST_F(InstrumentationTest, BasicInstrumentation) {
 
     // Call with exception
     try {
-        instrumented(-10);  // This will throw from inside slowOperation
+        instrumented(-10);  // throwingFunction throws for negative values
     } catch (...) {
         // Ignore the exception
     }
@@ -608,9 +623,3 @@ TEST(FunctionCallInfoTest, BasicFunctionality) {
 }
 
 }  // namespace atom::meta::test
-
-// Main function to run the tests
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}

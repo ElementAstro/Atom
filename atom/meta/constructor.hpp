@@ -435,30 +435,13 @@ auto asyncConstructor(std::launch policy = std::launch::async) {
 template <typename Class, bool ThreadSafe = true>
     requires DefaultConstructible<Class>
 auto singletonConstructor() {
-    if constexpr (ThreadSafe) {
-        // Thread-safe implementation using double-checked locking
-        return []() -> std::shared_ptr<Class> {
-            static std::mutex instanceMutex;
-            static std::atomic<std::shared_ptr<Class>> instance{nullptr};
-
-            auto currentInstance = instance.load(std::memory_order_acquire);
-            if (!currentInstance) {
-                std::lock_guard<std::mutex> lock(instanceMutex);
-                currentInstance = instance.load(std::memory_order_relaxed);
-                if (!currentInstance) {
-                    currentInstance = std::make_shared<Class>();
-                    instance.store(currentInstance, std::memory_order_release);
-                }
-            }
-            return currentInstance;
-        };
-    } else {
-        // Non-thread-safe but more efficient implementation
-        return []() -> std::shared_ptr<Class> {
-            static std::shared_ptr<Class> instance = std::make_shared<Class>();
-            return instance;
-        };
-    }
+    // Function-local static initialization is already thread-safe (magic
+    // statics), so manual double-checked locking is unnecessary. ThreadSafe
+    // is kept for API compatibility.
+    return []() -> std::shared_ptr<Class> {
+        static std::shared_ptr<Class> instance = std::make_shared<Class>();
+        return instance;
+    };
 }
 
 /**
@@ -559,40 +542,45 @@ auto factoryConstructor() {
 template <typename Class>
 class ObjectBuilder {
 private:
-    std::function<std::shared_ptr<Class>()> m_buildFunc;
+    // Steps are applied in order at build(); storing them flat avoids the
+    // O(n^2) closure-chain copies of composing a new lambda per step.
+    std::vector<std::function<void(Class&)>> m_steps;
 
 public:
-    ObjectBuilder() : m_buildFunc([]() { return std::make_shared<Class>(); }) {}
+    ObjectBuilder() = default;
 
     template <typename Prop, typename Value>
     ObjectBuilder& with(Prop Class::*prop, Value&& value) {
-        auto prevFunc = m_buildFunc;
-        m_buildFunc = [prevFunc, prop, value = std::forward<Value>(value)]() {
-            auto obj = prevFunc();
-            obj->*prop = value;
-            return obj;
-        };
+        m_steps.emplace_back(
+            [prop, value = std::forward<Value>(value)](Class& obj) {
+                obj.*prop = value;
+            });
         return *this;
     }
 
     template <typename Func, typename... Args>
     ObjectBuilder& call(Func Class::*method, Args&&... args) {
-        auto prevFunc = m_buildFunc;
-        m_buildFunc = [prevFunc, method,
-                       args = std::make_tuple(std::forward<Args>(args)...)]() {
-            auto obj = prevFunc();
-            std::apply(
-                [&obj, method](auto&&... callArgs) {
-                    std::invoke(method, *obj,
-                                std::forward<decltype(callArgs)>(callArgs)...);
-                },
-                args);
-            return obj;
-        };
+        m_steps.emplace_back(
+            [method, args = std::make_tuple(std::forward<Args>(args)...)](
+                Class& obj) {
+                std::apply(
+                    [&obj, method](auto&&... callArgs) {
+                        std::invoke(
+                            method, obj,
+                            std::forward<decltype(callArgs)>(callArgs)...);
+                    },
+                    args);
+            });
         return *this;
     }
 
-    std::shared_ptr<Class> build() { return m_buildFunc(); }
+    std::shared_ptr<Class> build() {
+        auto obj = std::make_shared<Class>();
+        for (const auto& step : m_steps) {
+            step(*obj);
+        }
+        return obj;
+    }
 };
 
 /**

@@ -6,6 +6,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -696,7 +697,7 @@ TEST_F(GodTest, AtomicThreadSafetyTest) {
     for (int i = 0; i < kNumThreads; ++i) {
         threads.emplace_back([&counter, kIterationsPerThread]() {
             for (int j = 0; j < kIterationsPerThread; ++j) {
-                atomicFetchAdd(&counter, 1);
+                std::ignore = atomicFetchAdd(&counter, 1);
             }
         });
     }

@@ -17,6 +17,10 @@ Description: Persistent environment variable management
 
 #include <mutex>
 
+#ifdef _WIN32
+#include <windows.h>  // HKEY and registry APIs used in the _WIN32 declarations below
+#endif
+
 #include "atom/containers/high_performance.hpp"
 #include "env_core.hpp"
 

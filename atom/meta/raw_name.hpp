@@ -24,15 +24,25 @@ namespace detail {
  */
 constexpr std::string_view extract_type_name(std::string_view name) noexcept {
 #if defined(__GNUC__) && !defined(__clang__)
-    constexpr std::size_t prefix_len =
-        sizeof(
-            "constexpr auto "
-            "atom::meta::detail::extract_type_name(std::string_view) [with T "
-            "= ") -
-        1;
-    constexpr std::size_t suffix_len = 1;
-    if (name.size() > prefix_len + suffix_len) {
-        return name.substr(prefix_len, name.size() - prefix_len - suffix_len);
+    // GCC formats __PRETTY_FUNCTION__ as
+    //   "... raw_name_of() [with T = <name>; std::string_view =
+    //   std::basic_string_view<char>]"
+    // Locate the value after the first "= " inside "[with ...]" instead of
+    // relying on a hard-coded prefix length (the prefix depends on the
+    // enclosing function signature), and strip the alias bindings that GCC
+    // appends after ';' as well as the trailing ']'.
+    if (auto pos = name.find("[with "); pos != std::string_view::npos) {
+        auto start = name.find("= ", pos);
+        if (start != std::string_view::npos) {
+            start += 2;
+            auto end = name.find(';', start);
+            if (end == std::string_view::npos) {
+                end = name.rfind(']');
+            }
+            if (end != std::string_view::npos && end > start) {
+                return name.substr(start, end - start);
+            }
+        }
     }
     return name;
 #elif defined(__clang__)
@@ -73,7 +83,16 @@ constexpr std::string_view extract_type_name(std::string_view name) noexcept {
  * @return Extracted enum value name
  */
 constexpr std::string_view extract_enum_name(std::string_view name) noexcept {
-#if defined(__GNUC__) || defined(__clang__)
+#if defined(__GNUC__) && !defined(__clang__)
+    // First isolate the "[with auto Value = Enum::Name; ...]" value, then
+    // strip the qualification. Searching the full signature for "::" would
+    // hit the "std::basic_string_view<char>" alias binding GCC appends.
+    auto value = extract_type_name(name);
+    if (auto pos = value.rfind("::"); pos != std::string_view::npos) {
+        return value.substr(pos + 2);
+    }
+    return value;
+#elif defined(__clang__)
     if (auto pos = name.rfind("::"); pos != std::string_view::npos) {
         return name.substr(pos + 2);
     }
@@ -108,19 +127,22 @@ constexpr std::string_view extract_enum_name(std::string_view name) noexcept {
  */
 constexpr std::string_view extract_member_name(std::string_view name) noexcept {
 #if defined(__GNUC__) && !defined(__clang__)
-    if (auto start = name.rfind("::"); start != std::string_view::npos) {
+    // Isolate the "[with ... = Wrapper<...>{&Class::member}; ...]" value
+    // first so the search is not confused by the alias bindings GCC appends,
+    // then take the identifier after the last "::" up to the closing
+    // ")"/"}" of the brace initializer.
+    auto value = extract_type_name(name);
+    if (auto start = value.rfind("::"); start != std::string_view::npos) {
         start += 2;
-        auto end = name.rfind('}');
+        auto end = value.find_first_of(")}", start);
         if (end == std::string_view::npos) {
-            end = name.size();
-        } else {
-            end--;
+            end = value.size();
         }
         if (end > start) {
-            return name.substr(start, end - start + 1);
+            return value.substr(start, end - start);
         }
     }
-    return name;
+    return value;
 #elif defined(__clang__)
     if (auto start = name.rfind('{'); start != std::string_view::npos) {
         start++;
@@ -168,14 +190,10 @@ constexpr std::string_view raw_name_of() noexcept {
  */
 template <typename T>
 constexpr std::string_view raw_name_of_template() noexcept {
-    std::string_view name = template_traits<T>::full_name;
-#if defined(__GNUC__) || defined(__clang__)
-    return name;
-#elif defined(_MSC_VER)
-    return detail::extract_type_name(name);
-#else
-    static_assert(false, "Unsupported compiler for template name extraction");
-#endif
+    static_assert(is_template_v<T>,
+                  "raw_name_of_template: Type must be a template "
+                  "instantiation");
+    return detail::extract_type_name(ATOM_META_FUNCTION_NAME);
 }
 
 /**

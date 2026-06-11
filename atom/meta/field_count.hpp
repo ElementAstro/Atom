@@ -43,11 +43,10 @@ struct Any {
                  !std::is_constructible_v<T, Empty> && !std::is_same_v<T, Any>)
     constexpr operator T() const noexcept;
 
-    // Optimized: Prevent conversion to fundamental types that might cause
-    // issues
-    template <typename T>
-        requires std::is_fundamental_v<T> && (!std::is_same_v<T, int>)
-    constexpr operator T() const noexcept;
+    // Note: no extra `operator T()` for fundamental types. Such an overload
+    // is ambiguous with `operator T&`/`operator T&&` (e.g. GCC 15 rejects
+    // Any -> double with three viable conversion candidates), which silently
+    // breaks aggregate field counting for fundamentals other than int.
 };
 
 /**

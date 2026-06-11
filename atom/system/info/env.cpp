@@ -303,6 +303,19 @@ auto Env::getEnv(const String& key, const String& default_value) -> String {
 #endif
 }
 
+auto Env::hasEnv(const String& key) -> bool {
+#ifdef _WIN32
+    // A zero return with ERROR_ENVVAR_NOT_FOUND means unset; any other result
+    // (including a found-but-empty variable) means it exists.
+    if (GetEnvironmentVariableA(key.c_str(), nullptr, 0) != 0) {
+        return true;
+    }
+    return GetLastError() != ERROR_ENVVAR_NOT_FOUND;
+#else
+    return ::getenv(key.c_str()) != nullptr;
+#endif
+}
+
 auto Env::Environ() -> HashMap<String, String> {
     spdlog::debug("Getting all environment variables");
     HashMap<String, String> envMap;

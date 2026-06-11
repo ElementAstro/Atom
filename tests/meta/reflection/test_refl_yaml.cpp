@@ -244,13 +244,13 @@ TEST_F(ReflYamlTest, ValidationFailure) {
     YAML::Node node1;
     node1["positive_number"] = -5;
     node1["non_empty_string"] = "hello";
-    EXPECT_THROW(reflectable.from_yaml(node1), std::invalid_argument);
+    EXPECT_THROW(reflectable.from_yaml(node1), atom::error::InvalidArgument);
 
     // Invalid: empty string
     YAML::Node node2;
     node2["positive_number"] = 5;
     node2["non_empty_string"] = "";
-    EXPECT_THROW(reflectable.from_yaml(node2), std::invalid_argument);
+    EXPECT_THROW(reflectable.from_yaml(node2), atom::error::InvalidArgument);
 }
 
 //==============================================================================
@@ -413,7 +413,9 @@ TEST_F(ReflYamlTest, UnicodeStrings) {
 
     YAML::Node node;
     node["id"] = 1;
-    node["name"] = u8"\u4e2d\u6587\u6d4b\u8bd5";
+    // Plain narrow literal: u8"" yields char8_t in C++20+, which yaml-cpp
+    // cannot encode; the execution charset is UTF-8 anyway.
+    node["name"] = "\u4e2d\u6587\u6d4b\u8bd5";
     node["value"] = 0.0;
 
     auto obj = reflectable.from_yaml(node);

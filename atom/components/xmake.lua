@@ -34,7 +34,7 @@ local sources = {
     "core/registry.cpp",
 
     -- Scripting components
-    "scripting/advanced_bindings.cpp",
+    "scripting/bindings.cpp",
     "scripting/script_engine.cpp",
     "scripting/script_sandbox.cpp",
     "scripting/scripting_api.cpp",
@@ -63,7 +63,6 @@ local headers = {
     "script_engine.hpp",
     "script_sandbox.hpp",
     "scripting_api.hpp",
-    "advanced_bindings.hpp",
     "serialization.hpp",
     "var.hpp"
 }

@@ -20,6 +20,12 @@ Description: Environment variable utility functions implementation
 
 #include <spdlog/spdlog.h>
 
+// <windows.h> (pulled in transitively by spdlog) defines STRICT as a macro,
+// which collides with ExpansionOptions::STRICT used below.
+#ifdef STRICT
+#undef STRICT
+#endif
+
 namespace atom::utils {
 
 auto EnvUtils::expandVariables(const String& str, VariableFormat format) -> String {

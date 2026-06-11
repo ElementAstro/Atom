@@ -77,8 +77,15 @@ TEST_F(OverloadTest, RegularMemberFunctions) {
     auto multiplyThreePtr = overload_cast<int, int, int>(&TestClass::multiply);
     EXPECT_EQ((obj.*multiplyThreePtr)(2, 3, 4), 24);
 
-    // Check that we get the correct function pointers
-    EXPECT_NE(multiplyPtr, multiplyThreePtr);
+    // Check that we get the correct function pointers: each overload_cast
+    // resolves to a distinct overload, so the pointer types must differ
+    static_assert(!std::is_same_v<decltype(multiplyPtr),
+                                  decltype(multiplyThreePtr)>,
+                  "overload_cast must select distinct overloads");
+    using TwoArgType = int (TestClass::*)(int, int);
+    using ThreeArgType = int (TestClass::*)(int, int, int);
+    EXPECT_TRUE((std::is_same_v<decltype(multiplyPtr), TwoArgType>));
+    EXPECT_TRUE((std::is_same_v<decltype(multiplyThreePtr), ThreeArgType>));
 }
 
 // Test overload_cast with const member functions
@@ -256,8 +263,8 @@ TEST_F(OverloadTest, CompileTimeUsage) {
     // Verify that overload_cast produces constexpr results
     constexpr auto compileTimePtr =
         overload_cast<int, int>(&OverloadTest::freeAdd);
-    static_assert(compileTimePtr != nullptr,
-                  "Function pointer should not be null");
+    static_assert(compileTimePtr == &OverloadTest::freeAdd,
+                  "overload_cast should yield the original function pointer");
 }
 
 // Test decayCopy function

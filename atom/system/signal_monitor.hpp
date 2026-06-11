@@ -6,10 +6,10 @@
  * "atom/system/signals/signal_monitor.hpp" instead.
  */
 
-#ifndef ATOM_SYSTEM_SIGNAL_MONITOR_HPP
-#define ATOM_SYSTEM_SIGNAL_MONITOR_HPP
+#ifndef ATOM_SYSTEM_SIGNAL_MONITOR_COMPAT_HPP
+#define ATOM_SYSTEM_SIGNAL_MONITOR_COMPAT_HPP
 
 // Forward to the new location
 #include "signals/signal_monitor.hpp"
 
-#endif  // ATOM_SYSTEM_SIGNAL_MONITOR_HPP
+#endif  // ATOM_SYSTEM_SIGNAL_MONITOR_COMPAT_HPP

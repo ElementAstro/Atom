@@ -34,6 +34,7 @@ struct SecurityContext {
     std::chrono::system_clock::time_point created_at;
     std::chrono::system_clock::time_point expires_at;
 
+    SecurityContext() = default;
     SecurityContext(std::string uid, std::string sid)
         : user_id(std::move(uid)),
           session_id(std::move(sid)),
@@ -116,6 +117,7 @@ struct UserAccount {
     std::chrono::system_clock::time_point last_login;
     int failed_login_attempts{0};
 
+    UserAccount() = default;
     UserAccount(std::string uid, std::string uname)
         : user_id(std::move(uid)),
           username(std::move(uname)),
@@ -132,6 +134,7 @@ struct Role {
     std::unordered_map<std::string, PermissionLevel> permissions;
     std::vector<std::string> inherited_roles;
 
+    Role() = default;
     Role(std::string rid, std::string n, std::string desc)
         : role_id(std::move(rid)),
           name(std::move(n)),

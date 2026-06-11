@@ -6,10 +6,10 @@
  * "atom/system/debug/crash.hpp" instead.
  */
 
-#ifndef ATOM_SYSTEM_CRASH_HPP
-#define ATOM_SYSTEM_CRASH_HPP
+#ifndef ATOM_SYSTEM_CRASH_COMPAT_HPP
+#define ATOM_SYSTEM_CRASH_COMPAT_HPP
 
 // Forward to the new location
 #include "debug/crash.hpp"
 
-#endif  // ATOM_SYSTEM_CRASH_HPP
+#endif  // ATOM_SYSTEM_CRASH_COMPAT_HPP

@@ -389,17 +389,17 @@ void ProfileManager::initializeDefaults() {
 void ProfileManager::createDefaultProfiles() {
     // Default editing profile
     ShortcutProfile editingProfile("default_editing", "Default editing shortcuts", "editing");
-    editingProfile.addShortcut(AdvancedShortcut::createKeyboard(Shortcut('C', true, false, false, false))); // Ctrl+C
-    editingProfile.addShortcut(AdvancedShortcut::createKeyboard(Shortcut('V', true, false, false, false))); // Ctrl+V
-    editingProfile.addShortcut(AdvancedShortcut::createKeyboard(Shortcut('X', true, false, false, false))); // Ctrl+X
-    editingProfile.addShortcut(AdvancedShortcut::createKeyboard(Shortcut('Z', true, false, false, false))); // Ctrl+Z
-    editingProfile.addShortcut(AdvancedShortcut::createKeyboard(Shortcut('Y', true, false, false, false))); // Ctrl+Y
+    editingProfile.addShortcut(ShortcutBinding::createKeyboard(Shortcut('C', true, false, false, false))); // Ctrl+C
+    editingProfile.addShortcut(ShortcutBinding::createKeyboard(Shortcut('V', true, false, false, false))); // Ctrl+V
+    editingProfile.addShortcut(ShortcutBinding::createKeyboard(Shortcut('X', true, false, false, false))); // Ctrl+X
+    editingProfile.addShortcut(ShortcutBinding::createKeyboard(Shortcut('Z', true, false, false, false))); // Ctrl+Z
+    editingProfile.addShortcut(ShortcutBinding::createKeyboard(Shortcut('Y', true, false, false, false))); // Ctrl+Y
     createProfile(editingProfile);
 
     // Default navigation profile
     ShortcutProfile navProfile("default_navigation", "Default navigation shortcuts", "navigation");
-    navProfile.addShortcut(AdvancedShortcut::createKeyboard(Shortcut(0x09, false, true, false, false))); // Alt+Tab
-    navProfile.addShortcut(AdvancedShortcut::createKeyboard(Shortcut(0x73, false, true, false, false))); // Alt+F4
+    navProfile.addShortcut(ShortcutBinding::createKeyboard(Shortcut(0x09, false, true, false, false))); // Alt+Tab
+    navProfile.addShortcut(ShortcutBinding::createKeyboard(Shortcut(0x73, false, true, false, false))); // Alt+F4
     createProfile(navProfile);
 
     spdlog::debug("Created default profiles");

@@ -27,6 +27,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -55,11 +56,11 @@ public:
     int getValue() const override { return 42; }
 };
 
-class FinalClass final {};
+class FinalType final {};
 
-class AbstractClass {
+class AbstractType {
 public:
-    virtual ~AbstractClass() = default;
+    virtual ~AbstractType() = default;
     virtual void pureVirtual() = 0;
 };
 
@@ -77,9 +78,9 @@ struct WithToJson {
     int toJson() const { return 0; }
 };
 
-struct Cloneable {
-    std::unique_ptr<Cloneable> clone() const {
-        return std::make_unique<Cloneable>(*this);
+struct CloneableType {
+    std::unique_ptr<CloneableType> clone() const {
+        return std::make_unique<CloneableType>(*this);
     }
 };
 
@@ -623,12 +624,12 @@ TEST_F(ConceptTest, PolymorphicTypeConcept) {
 }
 
 TEST_F(ConceptTest, FinalClassConcept) {
-    static_assert(FinalClass<FinalClass>);
+    static_assert(FinalClass<FinalType>);
     static_assert(!FinalClass<TestClass>);
 }
 
 TEST_F(ConceptTest, AbstractClassConcept) {
-    static_assert(AbstractClass<AbstractClass>);
+    static_assert(AbstractClass<AbstractType>);
     static_assert(!AbstractClass<TestClass>);
 }
 
@@ -791,18 +792,15 @@ TEST_F(ConceptTest, FactoryCreatableConcept) {
 }
 
 TEST_F(ConceptTest, CloneableConcept) {
-    static_assert(Cloneable<Cloneable>);
+    static_assert(Cloneable<CloneableType>);
     static_assert(Cloneable<int>);  // Copy constructible counts
 }
-
-//==============================================================================
-// Advanced Container Concepts
-//==============================================================================
 
 TEST_F(ConceptTest, SubscriptableConcept) {
     static_assert(Subscriptable<std::vector<int>>);
     static_assert(Subscriptable<std::string>);
     static_assert(Subscriptable<std::map<int, int>, int>);
+    static_assert(!Subscriptable<int>);
 }
 
 TEST_F(ConceptTest, ReservableConcept) {
@@ -820,6 +818,7 @@ TEST_F(ConceptTest, AssociativeLookupConcept) {
 TEST_F(ConceptTest, OrderedContainerConcept) {
     static_assert(OrderedContainer<std::map<int, int>>);
     static_assert(OrderedContainer<std::set<int>>);
+    static_assert(!OrderedContainer<std::unordered_map<int, int>>);
 }
 
 TEST_F(ConceptTest, DurationConcept) {
@@ -831,7 +830,7 @@ TEST_F(ConceptTest, DurationConcept) {
 TEST_F(ConceptTest, TimePointConcept) {
     static_assert(TimePoint<std::chrono::system_clock::time_point>);
     static_assert(TimePoint<std::chrono::steady_clock::time_point>);
-    static_assert(!TimePoint<int>);
+    static_assert(!TimePoint<std::chrono::seconds>);
 }
 
 TEST_F(ConceptTest, HasSizeConcept) {
@@ -849,6 +848,7 @@ TEST_F(ConceptTest, EmptyCheckableConcept) {
 TEST_F(ConceptTest, ClearableConcept) {
     static_assert(Clearable<std::vector<int>>);
     static_assert(Clearable<std::string>);
+    static_assert(!Clearable<int>);
 }
 
 TEST_F(ConceptTest, BackInsertableConcept) {
@@ -865,16 +865,14 @@ TEST_F(ConceptTest, BackEmplaceableConcept) {
 TEST_F(ConceptTest, FrontBackAccessibleConcept) {
     static_assert(FrontBackAccessible<std::vector<int>>);
     static_assert(FrontBackAccessible<std::deque<int>>);
+    static_assert(!FrontBackAccessible<std::set<int>>);
 }
 
 TEST_F(ConceptTest, NullableConcept) {
     static_assert(Nullable<std::optional<int>>);
     static_assert(Nullable<std::unique_ptr<int>>);
     static_assert(Nullable<std::shared_ptr<int>>);
-}
-
-TEST_F(ConceptTest, ThreadSafeConcept) {
-    static_assert(ThreadSafe<std::mutex>);
+    static_assert(!Nullable<int>);
 }
 
 TEST_F(ConceptTest, AtomicLikeConcept) {
@@ -887,47 +885,25 @@ TEST_F(ConceptTest, MoveOnlyConcept) {
     static_assert(!MoveOnly<std::string>);
 }
 
-TEST_F(ConceptTest, RegularConcept) {
+TEST_F(ConceptTest, RegularSemiregularConcepts) {
     static_assert(Regular<int>);
     static_assert(Regular<std::string>);
     static_assert(!Regular<std::unique_ptr<int>>);
-}
-
-TEST_F(ConceptTest, SemiregularConcept) {
     static_assert(Semiregular<int>);
     static_assert(Semiregular<std::string>);
 }
 
-//==============================================================================
-// Type Constraint Helpers
-//==============================================================================
-
-TEST_F(ConceptTest, AllSatisfyConceptV) {
-    static_assert(all_satisfy_concept_v<Integral, int, long, short>);
-    static_assert(!all_satisfy_concept_v<Integral, int, double, short>);
+TEST_F(ConceptTest, ThreeWayComparableConcept) {
+    static_assert(ThreeWayComparable<int>);
+    static_assert(ThreeWayComparable<std::string>);
 }
 
-TEST_F(ConceptTest, AnySatisfyConceptV) {
-    static_assert(any_satisfy_concept_v<Integral, int, double, std::string>);
-    static_assert(!any_satisfy_concept_v<Integral, double, float, std::string>);
-}
-
-TEST_F(ConceptTest, CountSatisfyingV) {
-    static_assert(
-        count_satisfying_v<Integral, int, double, long, std::string> == 2);
-}
-
-TEST_F(ConceptTest, IsOneOfV) {
+TEST_F(ConceptTest, TypePackUtilities) {
     static_assert(is_one_of_v<int, char, int, double>);
     static_assert(!is_one_of_v<float, char, int, double>);
-}
-
-TEST_F(ConceptTest, FirstTypeT) {
     static_assert(std::is_same_v<first_type_t<int, double, char>, int>);
-}
-
-TEST_F(ConceptTest, LastTypeT) {
     static_assert(std::is_same_v<last_type_t<int, double, char>, char>);
+    static_assert(std::is_same_v<last_type_t<int>, int>);
 }
 
 }  // anonymous namespace

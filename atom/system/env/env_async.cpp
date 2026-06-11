@@ -112,8 +112,11 @@ EnvAsyncManager& EnvAsyncManager::getInstance() {
 
 EnvAsyncManager::EnvAsyncManager() {
     const auto& config = ENV_CONFIG();
-    size_t numThreads = config.enableAsyncOperations ?
-                       std::min(config.maxAsyncTasks, std::thread::hardware_concurrency()) : 1;
+    size_t numThreads =
+        config.enableAsyncOperations
+            ? std::min(config.maxAsyncTasks,
+                       static_cast<size_t>(std::thread::hardware_concurrency()))
+            : 1;
 
     threadPool_ = std::make_unique<EnvThreadPool>(numThreads);
     spdlog::info("Environment async manager initialized");
@@ -133,10 +136,10 @@ std::future<EnvResult<void>> EnvAsyncManager::setEnvAsync(const String& key, con
             if (success) {
                 return EnvResult<void>(true);
             } else {
-                return EnvResult<void>(false, {}, "Failed to set environment variable");
+                return EnvResult<void>(false, "Failed to set environment variable");
             }
         } catch (const std::exception& e) {
-            return EnvResult<void>(false, {}, String(e.what()));
+            return EnvResult<void>(false, String(e.what()));
         }
     });
 }
@@ -164,7 +167,7 @@ std::future<EnvResult<void>> EnvAsyncManager::unsetEnvAsync(const String& key,
             EnvCore::unsetEnv(key);
             return EnvResult<void>(true);
         } catch (const std::exception& e) {
-            return EnvResult<void>(false, {}, String(e.what()));
+            return EnvResult<void>(false, String(e.what()));
         }
     });
 }

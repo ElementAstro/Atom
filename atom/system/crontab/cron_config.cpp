@@ -49,6 +49,8 @@ const CronSystemMetrics& CronConfigManager::getMetrics() const {
     return metrics_;
 }
 
+CronSystemMetrics& CronConfigManager::getMetrics() { return metrics_; }
+
 void CronConfigManager::resetMetrics() {
     metrics_.reset();
     spdlog::info("Cron system metrics reset");

@@ -62,6 +62,11 @@ using EnvChangeCallback = std::function<void(
 /**
  * @brief Environment variable validation level enumeration
  */
+// <windows.h> defines STRICT as a macro, which collides with the STRICT
+// enumerator below. Drop it locally.
+#ifdef STRICT
+#undef STRICT
+#endif
 enum class ValidationLevel {
     NONE,     // No validation
     BASIC,    // Basic key/value validation
@@ -77,13 +82,13 @@ using EnvValidationCallback = std::function<bool(
 /**
  * @brief Environment variable cache entry
  */
-struct EnvCacheEntry {
+struct EnvCoreCacheEntry {
     String value;
     std::chrono::steady_clock::time_point timestamp;
     bool isValid;
 
-    EnvCacheEntry() : isValid(false) {}
-    EnvCacheEntry(const String& val)
+    EnvCoreCacheEntry() : isValid(false) {}
+    EnvCoreCacheEntry(const String& val)
         : value(val), timestamp(std::chrono::steady_clock::now()), isValid(true) {}
 };
 
@@ -414,7 +419,7 @@ private:
     static size_t sNextValidationId;
 
     // Caching system
-    static HashMap<String, EnvCacheEntry> sCache;
+    static HashMap<String, EnvCoreCacheEntry> sCache;
     static std::mutex sCacheMutex;
     static std::atomic<bool> sCachingEnabled;
     static std::atomic<int> sCacheTtlSeconds;
@@ -432,7 +437,7 @@ private:
 
     static auto getCachedValue(const String& key) -> std::optional<String>;
     static void setCachedValue(const String& key, const String& value);
-    static auto isCacheEntryValid(const EnvCacheEntry& entry) -> bool;
+    static auto isCacheEntryValid(const EnvCoreCacheEntry& entry) -> bool;
 
     template <typename T>
     static T convertFromString(const String& str, const T& defaultValue);

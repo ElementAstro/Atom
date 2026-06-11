@@ -11,8 +11,11 @@
 
 #include "atom/meta/type_caster.hpp"
 
+#include <algorithm>
+#include <atomic>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace atom::meta::test {
@@ -203,7 +206,7 @@ TEST_F(TypeCasterTest, InvalidEnumToString) {
                                          TestEnum::Value1);
 
     EXPECT_THROW(caster_->enumToString(TestEnum::Value3, "TestEnum"),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
 }
 
 TEST_F(TypeCasterTest, InvalidStringToEnum) {
@@ -211,7 +214,7 @@ TEST_F(TypeCasterTest, InvalidStringToEnum) {
                                          TestEnum::Value1);
 
     EXPECT_THROW(caster_->stringToEnum<TestEnum>("InvalidValue", "TestEnum"),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
 }
 
 //==============================================================================
@@ -270,7 +273,7 @@ TEST_F(TypeCasterTest, DynamicCaster) {
         [](const int& i) { return static_cast<double>(i); });
 
     std::any input = 42;
-    auto result = dynCaster.cast<double>(input);
+    [[maybe_unused]] auto result = dynCaster.cast<double>(input);
 
     // Note: This may or may not work depending on internal implementation
     // The test verifies the API works without crashing
@@ -366,9 +369,10 @@ TEST_F(TypeCasterTest, ConversionNotFound) {
 
 TEST_F(TypeCasterTest, SameTypeConversionError) {
     // Registering conversion from type to itself should throw
-    EXPECT_THROW(caster_->registerConversion<int, int>(
-                     [](const std::any& input) -> std::any { return input; }),
-                 std::invalid_argument);
+    // (extra parentheses keep the template-argument comma out of the macro)
+    EXPECT_THROW((caster_->registerConversion<int, int>(
+                     [](const std::any& input) -> std::any { return input; })),
+                 atom::error::InvalidArgument);
 }
 
 }  // namespace atom::meta::test

@@ -35,14 +35,10 @@ auto getMemoryUsage() -> float {
 #elif defined(__APPLE__)
     return macos::getMemoryUsage();
 #else
-    < < < < < < < < HEAD : atom / sysinfo / src / memory /
-                           memory.cpp spdlog::error(
-                               "getMemoryUsage: Unsupported platform. Unable "
-                               "to retrieve memory usage.");
-    == == == == spdlog::error("getMemoryUsage: Unsupported platform");
-    >>>>>>>> test - fixes / systematic -
-                 testing : atom / sysinfo / hardware / memory /
-                           memory.cpp return 0.0f;
+    spdlog::error(
+        "getMemoryUsage: Unsupported platform. Unable to retrieve memory "
+        "usage.");
+    return 0.0f;
 #endif
 }
 
@@ -54,14 +50,10 @@ auto getTotalMemorySize() -> unsigned long long {
 #elif defined(__APPLE__)
     return macos::getTotalMemorySize();
 #else
-    < < < < < < < < HEAD : atom / sysinfo / src / memory /
-                           memory.cpp spdlog::error(
-                               "getTotalMemorySize: Unsupported platform. "
-                               "Unable to retrieve total memory size.");
-    == == == == spdlog::error("getTotalMemorySize: Unsupported platform");
-    >>>>>>>>
-        test - fixes / systematic -
-            testing : atom / sysinfo / hardware / memory / memory.cpp return 0;
+    spdlog::error(
+        "getTotalMemorySize: Unsupported platform. Unable to retrieve total "
+        "memory size.");
+    return 0;
 #endif
 }
 
@@ -73,14 +65,10 @@ auto getAvailableMemorySize() -> unsigned long long {
 #elif defined(__APPLE__)
     return macos::getAvailableMemorySize();
 #else
-    < < < < < < < < HEAD : atom / sysinfo / src / memory /
-                           memory.cpp spdlog::error(
-                               "getAvailableMemorySize: Unsupported platform. "
-                               "Unable to retrieve available memory size.");
-    == == == == spdlog::error("getAvailableMemorySize: Unsupported platform");
-    >>>>>>>>
-        test - fixes / systematic -
-            testing : atom / sysinfo / hardware / memory / memory.cpp return 0;
+    spdlog::error(
+        "getAvailableMemorySize: Unsupported platform. Unable to retrieve "
+        "available memory size.");
+    return 0;
 #endif
 }
 
@@ -92,15 +80,10 @@ auto getPhysicalMemoryInfo() -> MemoryInfo::MemorySlot {
 #elif defined(__APPLE__)
     return macos::getPhysicalMemoryInfo();
 #else
-    < < < < < < < <
-        HEAD : atom / sysinfo / src / memory /
-               memory.cpp spdlog::error(
-                   "getPhysicalMemoryInfo: Unsupported platform. Unable to "
-                   "retrieve physical memory information.");
-    == == == == spdlog::error("getPhysicalMemoryInfo: Unsupported platform");
-    >>>>>>>> test - fixes / systematic -
-                 testing : atom / sysinfo / hardware / memory /
-                           memory.cpp return MemoryInfo::MemorySlot();
+    spdlog::error(
+        "getPhysicalMemoryInfo: Unsupported platform. Unable to retrieve "
+        "physical memory information.");
+    return MemoryInfo::MemorySlot();
 #endif
 }
 
@@ -112,14 +95,10 @@ auto getVirtualMemoryMax() -> unsigned long long {
 #elif defined(__APPLE__)
     return macos::getVirtualMemoryMax();
 #else
-    < < < < < < < < HEAD : atom / sysinfo / src / memory /
-                           memory.cpp spdlog::error(
-                               "getVirtualMemoryMax: Unsupported platform. "
-                               "Unable to retrieve maximum virtual memory.");
-    == == == == spdlog::error("getVirtualMemoryMax: Unsupported platform");
-    >>>>>>>>
-        test - fixes / systematic -
-            testing : atom / sysinfo / hardware / memory / memory.cpp return 0;
+    spdlog::error(
+        "getVirtualMemoryMax: Unsupported platform. Unable to retrieve maximum "
+        "virtual memory.");
+    return 0;
 #endif
 }
 
@@ -131,14 +110,10 @@ auto getVirtualMemoryUsed() -> unsigned long long {
 #elif defined(__APPLE__)
     return macos::getVirtualMemoryUsed();
 #else
-    < < < < < < < < HEAD : atom / sysinfo / src / memory /
-                           memory.cpp spdlog::error(
-                               "getVirtualMemoryUsed: Unsupported platform. "
-                               "Unable to retrieve used virtual memory.");
-    == == == == spdlog::error("getVirtualMemoryUsed: Unsupported platform");
-    >>>>>>>>
-        test - fixes / systematic -
-            testing : atom / sysinfo / hardware / memory / memory.cpp return 0;
+    spdlog::error(
+        "getVirtualMemoryUsed: Unsupported platform. Unable to retrieve used "
+        "virtual memory.");
+    return 0;
 #endif
 }
 
@@ -150,14 +125,10 @@ auto getSwapMemoryTotal() -> unsigned long long {
 #elif defined(__APPLE__)
     return macos::getSwapMemoryTotal();
 #else
-    < < < < < < < < HEAD : atom / sysinfo / src / memory /
-                           memory.cpp spdlog::error(
-                               "getSwapMemoryTotal: Unsupported platform. "
-                               "Unable to retrieve total swap memory.");
-    == == == == spdlog::error("getSwapMemoryTotal: Unsupported platform");
-    >>>>>>>>
-        test - fixes / systematic -
-            testing : atom / sysinfo / hardware / memory / memory.cpp return 0;
+    spdlog::error(
+        "getSwapMemoryTotal: Unsupported platform. Unable to retrieve total "
+        "swap memory.");
+    return 0;
 #endif
 }
 
@@ -169,14 +140,10 @@ auto getSwapMemoryUsed() -> unsigned long long {
 #elif defined(__APPLE__)
     return macos::getSwapMemoryUsed();
 #else
-    < < < < < < < < HEAD : atom / sysinfo / src / memory /
-                           memory.cpp spdlog::error(
-                               "getSwapMemoryUsed: Unsupported platform. "
-                               "Unable to retrieve used swap memory.");
-    == == == == spdlog::error("getSwapMemoryUsed: Unsupported platform");
-    >>>>>>>>
-        test - fixes / systematic -
-            testing : atom / sysinfo / hardware / memory / memory.cpp return 0;
+    spdlog::error(
+        "getSwapMemoryUsed: Unsupported platform. Unable to retrieve used swap "
+        "memory.");
+    return 0;
 #endif
 }
 
@@ -188,14 +155,10 @@ auto getCommittedMemory() -> size_t {
 #elif defined(__APPLE__)
     return macos::getCommittedMemory();
 #else
-    < < < < < < < < HEAD : atom / sysinfo / src / memory /
-                           memory.cpp spdlog::error(
-                               "getCommittedMemory: Unsupported platform. "
-                               "Unable to retrieve committed memory.");
-    == == == == spdlog::error("getCommittedMemory: Unsupported platform");
-    >>>>>>>>
-        test - fixes / systematic -
-            testing : atom / sysinfo / hardware / memory / memory.cpp return 0;
+    spdlog::error(
+        "getCommittedMemory: Unsupported platform. Unable to retrieve "
+        "committed memory.");
+    return 0;
 #endif
 }
 
@@ -207,14 +170,10 @@ auto getUncommittedMemory() -> size_t {
 #elif defined(__APPLE__)
     return macos::getUncommittedMemory();
 #else
-    < < < < < < < < HEAD : atom / sysinfo / src / memory /
-                           memory.cpp spdlog::error(
-                               "getUncommittedMemory: Unsupported platform. "
-                               "Unable to retrieve uncommitted memory.");
-    == == == == spdlog::error("getUncommittedMemory: Unsupported platform");
-    >>>>>>>>
-        test - fixes / systematic -
-            testing : atom / sysinfo / hardware / memory / memory.cpp return 0;
+    spdlog::error(
+        "getUncommittedMemory: Unsupported platform. Unable to retrieve "
+        "uncommitted memory.");
+    return 0;
 #endif
 }
 
@@ -226,15 +185,10 @@ auto getDetailedMemoryStats() -> MemoryInfo {
 #elif defined(__APPLE__)
     return macos::getDetailedMemoryStats();
 #else
-    < < < < < < < <
-        HEAD : atom / sysinfo / src / memory /
-               memory.cpp spdlog::error(
-                   "getDetailedMemoryStats: Unsupported platform. Unable to "
-                   "retrieve detailed memory statistics.");
-    == == == == spdlog::error("getDetailedMemoryStats: Unsupported platform");
-    >>>>>>>> test - fixes / systematic -
-                 testing : atom / sysinfo / hardware / memory /
-                           memory.cpp return MemoryInfo();
+    spdlog::error(
+        "getDetailedMemoryStats: Unsupported platform. Unable to retrieve "
+        "detailed memory statistics.");
+    return MemoryInfo();
 #endif
 }
 
@@ -246,14 +200,10 @@ auto getPeakWorkingSetSize() -> size_t {
 #elif defined(__APPLE__)
     return macos::getPeakWorkingSetSize();
 #else
-    < < < < < < < < HEAD : atom / sysinfo / src / memory /
-                           memory.cpp spdlog::error(
-                               "getPeakWorkingSetSize: Unsupported platform. "
-                               "Unable to retrieve peak working set size.");
-    == == == == spdlog::error("getPeakWorkingSetSize: Unsupported platform");
-    >>>>>>>>
-        test - fixes / systematic -
-            testing : atom / sysinfo / hardware / memory / memory.cpp return 0;
+    spdlog::error(
+        "getPeakWorkingSetSize: Unsupported platform. Unable to retrieve peak "
+        "working set size.");
+    return 0;
 #endif
 }
 
@@ -265,15 +215,10 @@ auto getCurrentWorkingSetSize() -> size_t {
 #elif defined(__APPLE__)
     return macos::getCurrentWorkingSetSize();
 #else
-    < < < < < < < <
-        HEAD : atom / sysinfo / src / memory /
-               memory.cpp spdlog::error(
-                   "getCurrentWorkingSetSize: Unsupported platform. Unable to "
-                   "retrieve current working set size.");
-    == == == == spdlog::error("getCurrentWorkingSetSize: Unsupported platform");
-    >>>>>>>>
-        test - fixes / systematic -
-            testing : atom / sysinfo / hardware / memory / memory.cpp return 0;
+    spdlog::error(
+        "getCurrentWorkingSetSize: Unsupported platform. Unable to retrieve "
+        "current working set size.");
+    return 0;
 #endif
 }
 
@@ -285,14 +230,10 @@ auto getPageFaultCount() -> size_t {
 #elif defined(__APPLE__)
     return macos::getPageFaultCount();
 #else
-    < < < < < < < < HEAD : atom / sysinfo / src / memory /
-                           memory.cpp spdlog::error(
-                               "getPageFaultCount: Unsupported platform. "
-                               "Unable to retrieve page fault count.");
-    == == == == spdlog::error("getPageFaultCount: Unsupported platform");
-    >>>>>>>>
-        test - fixes / systematic -
-            testing : atom / sysinfo / hardware / memory / memory.cpp return 0;
+    spdlog::error(
+        "getPageFaultCount: Unsupported platform. Unable to retrieve page "
+        "fault count.");
+    return 0;
 #endif
 }
 
@@ -304,14 +245,10 @@ auto getMemoryLoadPercentage() -> double {
 #elif defined(__APPLE__)
     return macos::getMemoryLoadPercentage();
 #else
-    < < < < < < < < HEAD : atom / sysinfo / src / memory /
-                           memory.cpp spdlog::error(
-                               "getMemoryLoadPercentage: Unsupported platform. "
-                               "Unable to retrieve memory load percentage.");
-    == == == == spdlog::error("getMemoryLoadPercentage: Unsupported platform");
-    >>>>>>>> test - fixes / systematic -
-                 testing : atom / sysinfo / hardware / memory /
-                           memory.cpp return 0.0;
+    spdlog::error(
+        "getMemoryLoadPercentage: Unsupported platform. Unable to retrieve "
+        "memory load percentage.");
+    return 0.0;
 #endif
 }
 
@@ -323,15 +260,10 @@ auto getMemoryPerformance() -> MemoryPerformance {
 #elif defined(__APPLE__)
     return macos::getMemoryPerformance();
 #else
-    < < < < < < < <
-        HEAD : atom / sysinfo / src / memory /
-               memory.cpp spdlog::error(
-                   "getMemoryPerformance: Unsupported platform. Unable to "
-                   "retrieve memory performance information.");
-    == == == == spdlog::error("getMemoryPerformance: Unsupported platform");
-    >>>>>>>> test - fixes / systematic -
-                 testing : atom / sysinfo / hardware / memory /
-                           memory.cpp return MemoryPerformance();
+    spdlog::error(
+        "getMemoryPerformance: Unsupported platform. Unable to retrieve memory "
+        "performance information.");
+    return MemoryPerformance();
 #endif
 }
 

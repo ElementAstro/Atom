@@ -41,6 +41,7 @@
 #include <version>
 
 #include "atom/error/exception.hpp"
+#include "atom/meta/func_traits.hpp"
 #include "atom/type/expected.hpp"
 
 // C++23 feature detection
@@ -305,30 +306,9 @@ template <typename R, typename F, typename... Args>
     };
 }
 
-/**
- * \brief Composes multiple functions into a single function
- * \tparam F First function type
- * \tparam Gs Additional function types
- * \param f First function
- * \param gs Additional functions
- * \return Function composition g(f(x))
- */
-template <typename F, typename... Gs>
-    requires(sizeof...(Gs) > 0)
-[[nodiscard]] constexpr auto compose(F&& f, Gs&&... gs) {
-    if constexpr (sizeof...(Gs) == 1) {
-        return [f = std::forward<F>(f),
-                g = std::get<0>(std::forward_as_tuple(gs...))](auto&&... args) {
-            return g(f(std::forward<decltype(args)>(args)...));
-        };
-    } else {
-        auto composed_rest = compose(std::forward<Gs>(gs)...);
-        return [f = std::forward<F>(f),
-                composed_rest = std::move(composed_rest)](auto&&... args) {
-            return composed_rest(f(std::forward<decltype(args)>(args)...));
-        };
-    }
-}
+// `compose` (right-to-left) and `pipe` (left-to-right) are provided by
+// func_traits.hpp (included above) and shared across the module so the
+// composition direction is consistent at every arity.
 
 /**
  * \brief Transforms arguments before function invocation
@@ -369,7 +349,7 @@ template <typename Func, typename... Args>
                                               std::decay_t<Args>...>) {
         if constexpr (std::is_void_v<ReturnType>) {
             std::invoke(std::forward<Func>(func), std::forward<Args>(args)...);
-            return Result<ReturnType>{std::in_place};
+            return Result<ReturnType>{};
         } else {
             return Result<ReturnType>{std::invoke(std::forward<Func>(func),
                                                   std::forward<Args>(args)...)};
@@ -380,7 +360,7 @@ template <typename Func, typename... Args>
             if constexpr (std::is_void_v<ReturnType>) {
                 std::invoke(std::forward<Func>(func),
                             std::forward<Args>(args)...);
-                return Result<ReturnType>{std::in_place};
+                return Result<ReturnType>{};
             } else {
                 return Result<ReturnType>{std::invoke(
                     std::forward<Func>(func), std::forward<Args>(args)...)};
@@ -456,6 +436,34 @@ template <typename Func, typename... Args>
 }
 
 /**
+ * \brief Safely calls a function, forwarding any exception to a handler
+ * \tparam Func Function type
+ * \tparam Handler Exception handler type, invocable with std::exception_ptr
+ * \tparam Args Argument types
+ * \param func Function to call
+ * \param handler Handler invoked with the captured exception on failure
+ * \param args Arguments to pass
+ * \return Function result, or a value-initialized result on exception
+ */
+template <typename Func, typename Handler, typename... Args>
+    requires std::invocable<std::decay_t<Func>, std::decay_t<Args>...> &&
+             std::invocable<std::decay_t<Handler>, std::exception_ptr>
+[[nodiscard]] auto safeTryWithHandler(Func&& func, Handler&& handler,
+                                      Args&&... args) {
+    using ReturnType =
+        std::invoke_result_t<std::decay_t<Func>, std::decay_t<Args>...>;
+    try {
+        return std::invoke(std::forward<Func>(func),
+                           std::forward<Args>(args)...);
+    } catch (...) {
+        std::invoke(std::forward<Handler>(handler), std::current_exception());
+        if constexpr (!std::is_void_v<ReturnType>) {
+            return ReturnType{};
+        }
+    }
+}
+
+/**
  * \brief Executes a function asynchronously
  * \tparam Func Function type
  * \tparam Args Argument types
@@ -498,7 +506,8 @@ template <typename Func, typename... Args>
  * \tparam Func Function type
  * \tparam Args Argument types
  * \param func Function to call
- * \param retries Number of retry attempts
+ * \param retries Number of retry attempts after the initial attempt
+ *                (total attempts = retries + 1)
  * \param backoff_ms Milliseconds between retries
  * \param args Function arguments
  * \return Result of successful function call
@@ -511,15 +520,16 @@ template <typename Func, typename... Args>
     std::chrono::milliseconds backoff_ms = std::chrono::milliseconds(0),
     Args&&... args) {
     std::exception_ptr last_exception;
+    int attempts_left = retries + 1;  // Initial attempt + retries
 
-    while (retries-- > 0) {
+    while (attempts_left-- > 0) {
         try {
             return std::invoke(std::forward<Func>(func),
                                std::forward<Args>(args)...);
         } catch (...) {
             last_exception = std::current_exception();
 
-            if (retries > 0 && backoff_ms.count() > 0) {
+            if (attempts_left > 0 && backoff_ms.count() > 0) {
                 std::this_thread::sleep_for(backoff_ms);
                 backoff_ms *= 2;  // Exponential backoff
             }
@@ -632,7 +642,13 @@ struct CacheOptions {
 };
 
 /**
- * \brief Creates a memoized version of a function
+ * \brief Creates a memoized version of a function with cache policy options
+ *
+ * Distinct from the canonical `memoize(func)` in func_traits.hpp (a per-instance
+ * `Memoizer` object): this variant takes a `CacheOptions` policy (TTL, use
+ * count, max size) and returns a closure backed by a static cache. The names
+ * are kept separate so `memoize(f)` is never ambiguous between the two.
+ *
  * \tparam Func Function type
  * \tparam Duration Time duration type for cache TTL
  * \param func Function to memoize
@@ -640,7 +656,8 @@ struct CacheOptions {
  * \return Memoized version of the function
  */
 template <typename Func, typename Duration = std::chrono::seconds>
-[[nodiscard]] auto memoize(Func&& func, CacheOptions<Duration> options = {}) {
+[[nodiscard]] auto memoizeWithOptions(Func&& func,
+                                      CacheOptions<Duration> options = {}) {
     using FuncType = std::decay_t<Func>;
 
     return [func = std::forward<Func>(func), options]<typename... Args>(
@@ -750,6 +767,46 @@ template <typename Func, typename Duration = std::chrono::seconds>
 
         return result;
     };
+}
+
+/**
+ * \brief Calls a function with transparent result caching
+ *
+ * Results are cached per function type and argument values in a static
+ * cache, so repeated calls with the same arguments return the cached value
+ * without re-invoking the function.
+ *
+ * \tparam Func Function type
+ * \tparam Args Argument types
+ * \param func Function to call
+ * \param args Arguments to pass
+ * \return Cached or freshly computed function result
+ */
+template <typename Func, typename... Args>
+    requires std::invocable<std::decay_t<Func>, std::decay_t<Args>...>
+[[nodiscard]] auto cacheCall(Func&& func, Args&&... args)
+    -> std::invoke_result_t<std::decay_t<Func>, std::decay_t<Args>...> {
+    using ReturnType =
+        std::invoke_result_t<std::decay_t<Func>, std::decay_t<Args>...>;
+    static_assert(!std::is_void_v<ReturnType>,
+                  "cacheCall requires a non-void return type");
+    using KeyType = std::tuple<std::decay_t<Args>...>;
+
+    static std::unordered_map<KeyType, ReturnType, TupleHasher> cache;
+    static std::mutex cache_mutex;
+
+    KeyType key{args...};
+    {
+        std::lock_guard lock(cache_mutex);
+        if (auto it = cache.find(key); it != cache.end()) {
+            return it->second;
+        }
+    }
+
+    auto result = std::apply(std::forward<Func>(func), key);
+
+    std::lock_guard lock(cache_mutex);
+    return cache.try_emplace(std::move(key), std::move(result)).first->second;
 }
 
 /**
@@ -1383,45 +1440,8 @@ template <typename Func, typename... Args>
 }
 
 /**
- * @brief Pipeline execution - chain multiple functions
- */
-template <typename... Funcs>
-class Pipeline {
-    std::tuple<Funcs...> funcs_;
-
-public:
-    constexpr explicit Pipeline(Funcs... funcs) : funcs_(std::move(funcs)...) {}
-
-    template <typename Input>
-    constexpr auto operator()(Input&& input) const {
-        return executeImpl(std::forward<Input>(input),
-                           std::make_index_sequence<sizeof...(Funcs)>{});
-    }
-
-private:
-    template <typename Input, std::size_t... Is>
-    constexpr auto executeImpl(Input&& input,
-                               std::index_sequence<Is...>) const {
-        return executeChain(std::forward<Input>(input),
-                            std::get<Is>(funcs_)...);
-    }
-
-    template <typename Input, typename F>
-    static constexpr auto executeChain(Input&& input, F&& func) {
-        return std::invoke(std::forward<F>(func), std::forward<Input>(input));
-    }
-
-    template <typename Input, typename F, typename... Rest>
-    static constexpr auto executeChain(Input&& input, F&& func,
-                                       Rest&&... rest) {
-        return executeChain(
-            std::invoke(std::forward<F>(func), std::forward<Input>(input)),
-            std::forward<Rest>(rest)...);
-    }
-};
-
-/**
- * @brief Create a pipeline from functions
+ * @brief Create a pipeline from functions (uses Pipeline from
+ * func_traits.hpp)
  */
 template <typename... Funcs>
 constexpr auto makePipeline(Funcs&&... funcs)
@@ -1562,10 +1582,8 @@ auto invokeWithTraits(Func&& func, Args&&... args) {
  */
 template <typename Func>
 auto getInvocationInfo() -> FunctionCallInfo {
-    using Traits = FunctionTraits<std::decay_t<Func>>;
     FunctionCallInfo info;
-    info.functionName = typeid(Func).name();
-    // Use traits to populate additional info
+    info.function_name = typeid(Func).name();
     return info;
 }
 
@@ -1697,7 +1715,8 @@ auto invokeWithTimeout(Func&& func, std::chrono::milliseconds timeout,
  * @brief Concept-constrained invocation
  */
 template <typename Func, typename... Args>
-    requires NothrowInvokable<Func, Args...>
+    requires std::invocable<Func, Args...> &&
+             std::is_nothrow_invocable_v<Func, Args...>
 auto safeInvoke(Func&& func, Args&&... args) noexcept {
     return std::invoke(std::forward<Func>(func), std::forward<Args>(args)...);
 }

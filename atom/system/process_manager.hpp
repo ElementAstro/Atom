@@ -6,10 +6,10 @@
  * "atom/system/process/process_manager.hpp" instead.
  */
 
-#ifndef ATOM_SYSTEM_PROCESS_MANAGER_HPP
-#define ATOM_SYSTEM_PROCESS_MANAGER_HPP
+#ifndef ATOM_SYSTEM_PROCESS_MANAGER_COMPAT_HPP
+#define ATOM_SYSTEM_PROCESS_MANAGER_COMPAT_HPP
 
 // Forward to the new location
 #include "process/process_manager.hpp"
 
-#endif  // ATOM_SYSTEM_PROCESS_MANAGER_HPP
+#endif  // ATOM_SYSTEM_PROCESS_MANAGER_COMPAT_HPP

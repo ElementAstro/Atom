@@ -110,6 +110,22 @@ public:
                           ScriptFunction /*function*/) override {}
 
     ScriptLanguage getLanguage() const override { return ScriptLanguage::Auto; }
+
+    const Statistics& getStatistics() const override { return statistics_; }
+    void resetStatistics() override { statistics_ = Statistics{}; }
+    void shutdown() override {}
+
+protected:
+    ScriptValue cppToScript(const std::any& /*value*/) override {
+        return ScriptValue();
+    }
+    std::any scriptToCpp(const ScriptValue& /*value*/,
+                         const std::type_info& /*targetType*/) override {
+        return {};
+    }
+
+private:
+    Statistics statistics_;
 };
 
 // Test fixture for ScriptEngine tests
@@ -180,7 +196,7 @@ TEST_F(ScriptValueTest, ArrayConstruction) {
 
 TEST_F(ScriptValueTest, ObjectConstruction) {
     EXPECT_TRUE(
-        objectValue_.holds<std::unordered_map<std::string, ScriptValue>>());
+        (objectValue_.holds<std::unordered_map<std::string, ScriptValue>>()));
 
     const auto& object =
         objectValue_.get<std::unordered_map<std::string, ScriptValue>>();

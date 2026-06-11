@@ -243,8 +243,8 @@ TEST_F(EnhancedProxyFunctionTest, OutputStreamOperator) {
     std::string output = oss.str();
 
     EXPECT_THAT(output, HasSubstr("Function: greet"));
-    EXPECT_THAT(output, HasSubstr("Return type: string"));
-    EXPECT_THAT(output, HasSubstr("Parameters: string name"));
+    EXPECT_THAT(output, HasSubstr("Return type: std::string"));
+    EXPECT_THAT(output, HasSubstr("Parameters: std::string name"));
 }
 
 // Test copy/move operations

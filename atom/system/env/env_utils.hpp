@@ -35,6 +35,11 @@ using Vector = atom::containers::Vector<T>;
 /**
  * @brief Variable expansion options
  */
+// <windows.h> defines STRICT as a macro, which collides with the STRICT
+// enumerator below. Drop it locally.
+#ifdef STRICT
+#undef STRICT
+#endif
 enum class ExpansionOptions {
     NONE = 0,
     RECURSIVE = 1,          // Allow recursive expansion

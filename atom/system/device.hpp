@@ -6,10 +6,10 @@
  * "atom/system/hardware/device.hpp" instead.
  */
 
-#ifndef ATOM_SYSTEM_DEVICE_HPP
-#define ATOM_SYSTEM_DEVICE_HPP
+#ifndef ATOM_SYSTEM_DEVICE_COMPAT_HPP
+#define ATOM_SYSTEM_DEVICE_COMPAT_HPP
 
 // Forward to the new location
 #include "hardware/device.hpp"
 
-#endif  // ATOM_SYSTEM_DEVICE_HPP
+#endif  // ATOM_SYSTEM_DEVICE_COMPAT_HPP

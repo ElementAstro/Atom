@@ -18,8 +18,10 @@
 #define ATOM_META_PROXY_HPP
 
 #include <any>
+#include <cstdlib>
 #include <functional>
 #include <future>
+#include <memory>
 #include <shared_mutex>
 #include <source_location>
 #include <string_view>
@@ -31,12 +33,78 @@
 #include <iostream>
 #endif
 
+#if defined(__GNUG__)
+#include <cxxabi.h>
+#endif
+
 #include "atom/macro.hpp"
 #include "atom/meta/abi.hpp"
 #include "atom/meta/func_traits.hpp"
 #include "atom/meta/proxy_params.hpp"
 
 namespace atom::meta {
+
+namespace proxy_detail {
+
+/**
+ * @brief Replace every occurrence of `from` with `to` in `text`.
+ */
+inline void replaceAll(std::string& text, std::string_view from,
+                       std::string_view to) {
+    if (from.empty()) {
+        return;
+    }
+    std::size_t pos = 0;
+    while ((pos = text.find(from, pos)) != std::string::npos) {
+        text.replace(pos, from.size(), to);
+        pos += to.size();
+    }
+}
+
+/**
+ * @brief Normalize a demangled type name to a human-friendly spelling.
+ *
+ * Collapses libstdc++'s inline ABI namespace and the expanded
+ * std::basic_string spelling so that e.g. std::string is reported as
+ * "std::string" instead of "std::__cxx11::basic_string<char, ...>".
+ */
+inline std::string normalizeTypeName(std::string name) {
+    replaceAll(name,
+               "std::__cxx11::basic_string<char, std::char_traits<char>, "
+               "std::allocator<char> >",
+               "std::string");
+    replaceAll(name, "std::__cxx11::", "std::");
+    replaceAll(name,
+               "std::basic_string<char, std::char_traits<char>, "
+               "std::allocator<char> >",
+               "std::string");
+    replaceAll(name, "class ", "");
+    replaceAll(name, "struct ", "");
+    return name;
+}
+
+/**
+ * @brief Demangle the name of type T into a readable string.
+ *
+ * Works on GCC/Clang (including MinGW) via abi::__cxa_demangle and falls
+ * back to the raw typeid name elsewhere.
+ */
+template <typename T>
+std::string demangleTypeName() {
+    const char* mangled = typeid(T).name();
+#if defined(__GNUG__)
+    int status = -1;
+    std::unique_ptr<char, void (*)(void*)> demangled(
+        abi::__cxa_demangle(mangled, nullptr, nullptr, &status), std::free);
+    std::string result =
+        (status == 0 && demangled) ? demangled.get() : mangled;
+#else
+    std::string result = mangled;
+#endif
+    return normalizeTypeName(std::move(result));
+}
+
+}  // namespace proxy_detail
 
 /**
  * @brief Optimized function information structure with enhanced memory layout
@@ -212,6 +280,12 @@ auto anyCastRef(std::any& operand) -> T&& {
         return *std::any_cast<DecayedT*>(operand);
     }
 
+    // Support values stored via std::ref / std::cref
+    if (auto* refWrapper =
+            std::any_cast<std::reference_wrapper<DecayedT>>(&operand)) {
+        return static_cast<T&&>(refWrapper->get());
+    }
+
     // Optimized: Try direct cast first
     if (auto* ptr = std::any_cast<DecayedT>(&operand)) {
         return static_cast<T&&>(*ptr);
@@ -232,6 +306,13 @@ auto anyCastRef(const std::any& operand) -> T& {
     std::cout << "type: " << DemangleHelper::demangleType<T>() << "\n";
 #endif
     using DecayedT = std::decay_t<T>;
+
+    // Support values stored via std::ref
+    if (auto* refWrapper =
+            std::any_cast<std::reference_wrapper<DecayedT>>(&operand)) {
+        return refWrapper->get();
+    }
+
     try {
         return *std::any_cast<DecayedT*>(operand);
     } catch (const std::bad_any_cast& e) {
@@ -249,7 +330,7 @@ auto anyCastVal(std::any& operand) -> T {
     }
 
     // Optimized: Try pointer-based cast for better performance
-    if (auto* ptr = std::any_cast<T>(&operand)) {
+    if (auto* ptr = std::any_cast<std::remove_cvref_t<T>>(&operand)) {
         return *ptr;
     }
 
@@ -273,6 +354,16 @@ auto anyCastVal(const std::any& operand) -> T {
 
 template <typename T>
 auto anyCastConstRef(const std::any& operand) -> const T& {
+    // Support values stored via std::cref / std::ref
+    if (auto* constRefWrapper =
+            std::any_cast<std::reference_wrapper<const T>>(&operand)) {
+        return constRefWrapper->get();
+    }
+    if (auto* refWrapper =
+            std::any_cast<std::reference_wrapper<T>>(&operand)) {
+        return refWrapper->get();
+    }
+
     try {
         return std::any_cast<const T&>(operand);
     } catch (const std::bad_any_cast& e) {
@@ -339,50 +430,58 @@ struct CanConvert<
 template <typename T>
 bool tryConvertType(std::any& src) {
     const auto& typeInfo = src.type();
+    using DecayedT = std::decay_t<T>;
 
-    if constexpr (std::is_reference_v<T>) {
+    // Converting in place materializes a new (temporary) value, which is
+    // only safe to bind to by-value or const-reference parameters.
+    if constexpr (std::is_reference_v<T> &&
+                  !std::is_const_v<std::remove_reference_t<T>>) {
         return false;
-    } else if constexpr (std::is_integral_v<std::decay_t<T>>) {
+    } else if constexpr (std::is_integral_v<DecayedT>) {
         if (typeInfo == typeid(int)) {
-            src = static_cast<T>(std::any_cast<int>(src));
+            src = static_cast<DecayedT>(std::any_cast<int>(src));
             return true;
         }
         if (typeInfo == typeid(long)) {
-            src = static_cast<T>(std::any_cast<long>(src));
+            src = static_cast<DecayedT>(std::any_cast<long>(src));
             return true;
         }
         if (typeInfo == typeid(short)) {
-            src = static_cast<T>(std::any_cast<short>(src));
+            src = static_cast<DecayedT>(std::any_cast<short>(src));
             return true;
         }
         if (typeInfo == typeid(double)) {
-            src = static_cast<T>(std::any_cast<double>(src));
+            src = static_cast<DecayedT>(std::any_cast<double>(src));
             return true;
         }
         if (typeInfo == typeid(float)) {
-            src = static_cast<T>(std::any_cast<float>(src));
+            src = static_cast<DecayedT>(std::any_cast<float>(src));
             return true;
         }
-    } else if constexpr (std::is_floating_point_v<std::decay_t<T>>) {
+    } else if constexpr (std::is_floating_point_v<DecayedT>) {
         if (typeInfo == typeid(float)) {
-            src = static_cast<T>(std::any_cast<float>(src));
+            src = static_cast<DecayedT>(std::any_cast<float>(src));
             return true;
         }
         if (typeInfo == typeid(double)) {
-            src = static_cast<T>(std::any_cast<double>(src));
+            src = static_cast<DecayedT>(std::any_cast<double>(src));
             return true;
         }
         if (typeInfo == typeid(int)) {
-            src = static_cast<T>(std::any_cast<int>(src));
+            src = static_cast<DecayedT>(std::any_cast<int>(src));
             return true;
         }
         if (typeInfo == typeid(long)) {
-            src = static_cast<T>(std::any_cast<long>(src));
+            src = static_cast<DecayedT>(std::any_cast<long>(src));
             return true;
         }
-    } else if constexpr (std::is_same_v<std::decay_t<T>, std::string>) {
+    } else if constexpr (std::is_same_v<DecayedT, std::string>) {
         if (typeInfo == typeid(const char*)) {
             src = std::string(std::any_cast<const char*>(src));
+            return true;
+        }
+        if (typeInfo == typeid(char*)) {
+            src = std::string(std::any_cast<char*>(src));
             return true;
         }
         if (typeInfo == typeid(std::string_view)) {
@@ -405,6 +504,11 @@ protected:
     std::decay_t<Func> func_;
     using Traits = FunctionTraits<Func>;
     static constexpr std::size_t ARITY = Traits::arity;
+    // Note: FunctionTraits reports is_member_function for functors (lambdas)
+    // via their operator(), so dispatch must check for an actual
+    // pointer-to-member function before using the (obj.*func_) call path.
+    static constexpr bool IS_MEMBER_FUNCTION_POINTER =
+        std::is_member_function_pointer_v<std::decay_t<Func>>;
     FunctionInfo info_;
     mutable std::shared_mutex mutex_;
 
@@ -441,7 +545,7 @@ public:
             std::string errorMsg = "Argument type mismatch: expected (";
             std::string sep = "";
 
-            ((errorMsg += sep + DemangleHelper::demangleType<
+            ((errorMsg += sep + proxy_detail::demangleTypeName<
                                     typename Traits::template argument_t<Is>>(),
               sep = ", "),
              ...);
@@ -459,10 +563,63 @@ public:
         }
     }
 
+    /**
+     * @brief Validate member-function arguments: args[0] is the object
+     * instance, args[1..] are the member function parameters.
+     * @tparam Is Index sequence over the member function parameters
+     * @param args Arguments to validate (including the object at index 0)
+     */
+    template <std::size_t... Is>
+    void validateMemberArguments(std::vector<std::any>& args,
+                                 std::index_sequence<Is...>) {
+        using ClassType = typename Traits::class_type;
+
+        const auto& objType = args[0].type();
+        if (objType != typeid(std::reference_wrapper<ClassType>) &&
+            objType != typeid(std::reference_wrapper<const ClassType>) &&
+            objType != typeid(ClassType)) {
+            throw ProxyTypeError(
+                std::string(
+                    "Invalid object instance for member function: expected ") +
+                proxy_detail::demangleTypeName<ClassType>() + " but got " +
+                objType.name());
+        }
+
+        const bool typesMatch =
+            (... &&
+             (args[Is + 1].type() ==
+                  typeid(
+                      std::decay_t<typename Traits::template argument_t<Is>>) ||
+              tryConvertType<typename Traits::template argument_t<Is>>(
+                  args[Is + 1])));
+
+        if (!typesMatch) {
+            std::string errorMsg =
+                "Member function argument type mismatch: expected (";
+            std::string sep = "";
+
+            ((errorMsg += sep + proxy_detail::demangleTypeName<
+                                    typename Traits::template argument_t<Is>>(),
+              sep = ", "),
+             ...);
+
+            errorMsg += ") but got (";
+            sep = "";
+
+            for (std::size_t i = 1; i < args.size(); ++i) {
+                errorMsg += sep + args[i].type().name();
+                sep = ", ";
+            }
+
+            errorMsg += ")";
+            throw ProxyTypeError(errorMsg);
+        }
+    }
+
 protected:
     void collectFunctionInfo() {
         info_.setReturnType(
-            DemangleHelper::demangleType<typename Traits::return_type>());
+            proxy_detail::demangleTypeName<typename Traits::return_type>());
         collectArgumentTypes(std::make_index_sequence<ARITY>{});
         info_.setName("anonymous_function");
 
@@ -475,7 +632,7 @@ protected:
 
     template <std::size_t... Is>
     void collectArgumentTypes(std::index_sequence<Is...>) {
-        (info_.addArgumentType(DemangleHelper::demangleType<
+        (info_.addArgumentType(proxy_detail::demangleTypeName<
                                typename Traits::template argument_t<Is>>()),
          ...);
     }
@@ -658,7 +815,7 @@ public:
 
         try {
             auto mutableArgs = args;
-            if constexpr (Traits::is_member_function) {
+            if constexpr (Base::IS_MEMBER_FUNCTION_POINTER) {
                 if (args.size() != ARITY + 1) {
                     throw ProxyArgumentError(
                         "Incorrect number of arguments for member function: "
@@ -666,8 +823,8 @@ public:
                         std::to_string(ARITY + 1) + ", got " +
                         std::to_string(args.size()));
                 }
-                this->validateArguments(mutableArgs,
-                                        std::make_index_sequence<ARITY>());
+                this->validateMemberArguments(
+                    mutableArgs, std::make_index_sequence<ARITY>());
                 return this->callMemberFunction(
                     mutableArgs, std::make_index_sequence<ARITY>());
             } else {
@@ -685,6 +842,8 @@ public:
         } catch (const ProxyTypeError& e) {
             throw ProxyTypeError(std::string("Function call error: ") +
                                  e.what());
+        } catch (const ProxyArgumentError&) {
+            throw;
         } catch (const std::exception& e) {
             throw std::runtime_error(std::string("Function threw exception: ") +
                                      e.what());
@@ -698,7 +857,7 @@ public:
         this->logArgumentTypes();
 
         try {
-            if constexpr (Traits::is_member_function) {
+            if constexpr (Base::IS_MEMBER_FUNCTION_POINTER) {
                 if (params.size() != ARITY + 1) {
                     throw ProxyArgumentError(
                         "Incorrect number of parameters for member function: "
@@ -707,8 +866,8 @@ public:
                         std::to_string(params.size()));
                 }
                 auto args = params.toAnyVector();
-                this->validateArguments(args,
-                                        std::make_index_sequence<ARITY>());
+                this->validateMemberArguments(
+                    args, std::make_index_sequence<ARITY>());
                 return this->callMemberFunction(
                     args, std::make_index_sequence<ARITY>());
             } else {
@@ -723,6 +882,8 @@ public:
         } catch (const ProxyTypeError& e) {
             throw ProxyTypeError(
                 std::string("Function call with params error: ") + e.what());
+        } catch (const ProxyArgumentError&) {
+            throw;
         } catch (const std::exception& e) {
             throw std::runtime_error(
                 std::string("Function with params threw exception: ") +
@@ -739,7 +900,7 @@ public:
  * @tparam Func Function type to wrap
  */
 template <typename Func>
-class AsyncProxyFunction : protected BaseProxyFunction<Func> {
+class AsyncProxyFunction : public BaseProxyFunction<Func> {
     using Base = BaseProxyFunction<Func>;
     using Traits = typename Base::Traits;
     static constexpr std::size_t ARITY = Base::ARITY;
@@ -763,7 +924,7 @@ public:
 
         return std::async(std::launch::async, [this, args = args]() mutable {
             try {
-                if constexpr (Traits::is_member_function) {
+                if constexpr (Base::IS_MEMBER_FUNCTION_POINTER) {
                     if (args.size() != ARITY + 1) {
                         throw ProxyArgumentError(
                             "Incorrect number of arguments for async member "
@@ -771,8 +932,8 @@ public:
                             std::to_string(ARITY + 1) + ", got " +
                             std::to_string(args.size()));
                     }
-                    this->validateArguments(args,
-                                            std::make_index_sequence<ARITY>());
+                    this->validateMemberArguments(
+                        args, std::make_index_sequence<ARITY>());
                     return this->callMemberFunction(
                         args, std::make_index_sequence<ARITY>());
                 } else {
@@ -791,6 +952,8 @@ public:
             } catch (const ProxyTypeError& e) {
                 throw ProxyTypeError(
                     std::string("Async function call error: ") + e.what());
+            } catch (const ProxyArgumentError&) {
+                throw;
             } catch (const std::exception& e) {
                 throw std::runtime_error(
                     std::string("Async function threw exception: ") + e.what());
@@ -808,7 +971,7 @@ public:
         return std::async(
             std::launch::async, [this, params = params]() mutable {
                 try {
-                    if constexpr (Traits::is_member_function) {
+                    if constexpr (Base::IS_MEMBER_FUNCTION_POINTER) {
                         if (params.size() != ARITY + 1) {
                             throw ProxyArgumentError(
                                 "Incorrect number of parameters for async "
@@ -817,7 +980,7 @@ public:
                                 std::to_string(params.size()));
                         }
                         auto args = params.toAnyVector();
-                        this->validateArguments(
+                        this->validateMemberArguments(
                             args, std::make_index_sequence<ARITY>());
                         return this->callMemberFunction(
                             args, std::make_index_sequence<ARITY>());
@@ -835,6 +998,8 @@ public:
                     throw ProxyTypeError(
                         std::string("Async function call with params error: ") +
                         e.what());
+                } catch (const ProxyArgumentError&) {
+                    throw;
                 } catch (const std::exception& e) {
                     throw std::runtime_error(
                         std::string(

@@ -126,24 +126,30 @@ public:
     template <TypeInfoCompatible T>
     static constexpr auto fromType() noexcept -> TypeInfo {
         using BareT = BareType<T>;
+        using NoCvRefT = std::remove_cvref_t<T>;
+        // Pointer-like covers raw pointers, smart pointers and std::span,
+        // including when accessed through (const) references.
+        constexpr bool kPointerLike =
+            requires { typename PointerType<NoCvRefT>::type; };
         Flags flags;
 
         flags.set(IS_CONST_FLAG, std::is_const_v<std::remove_reference_t<T>>);
         flags.set(IS_REFERENCE_FLAG, std::is_reference_v<T>);
         flags.set(IS_POINTER_FLAG, Pointer<T> || Pointer<BareT> ||
-                                       SmartPointer<T> || SmartPointer<BareT>);
+                                       SmartPointer<T> || SmartPointer<BareT> ||
+                                       kPointerLike);
         flags.set(IS_VOID_FLAG, std::is_void_v<T>);
 
-        if constexpr (Pointer<T> || Pointer<BareT> || SmartPointer<T> ||
-                      SmartPointer<BareT>) {
-            flags.set(IS_ARITHMETIC_FLAG, K_IS_ARITHMETIC_POINTER_V<T>);
+        if constexpr (kPointerLike) {
+            flags.set(IS_ARITHMETIC_FLAG,
+                      std::is_arithmetic_v<typename PointerType<NoCvRefT>::type>);
         } else {
             flags.set(IS_ARITHMETIC_FLAG, std::is_arithmetic_v<T>);
         }
 
         flags.set(IS_ARRAY_FLAG, std::is_array_v<T>);
         flags.set(IS_ENUM_FLAG, std::is_enum_v<T>);
-        flags.set(IS_CLASS_FLAG, std::is_class_v<T>);
+        flags.set(IS_CLASS_FLAG, std::is_class_v<NoCvRefT>);
         flags.set(IS_FUNCTION_FLAG, std::is_function_v<T>);
         flags.set(IS_TRIVIAL_FLAG, std::is_trivial_v<T>);
         flags.set(IS_STANDARD_LAYOUT_FLAG, std::is_standard_layout_v<T>);
@@ -178,8 +184,10 @@ public:
      * @return TypeInfo object containing information about T
      */
     template <typename T>
-    static auto fromInstance(const T& instance
+    static auto fromInstance(T&& instance
                              [[maybe_unused]]) noexcept -> TypeInfo {
+        // Forwarding reference keeps const/reference qualifiers of the
+        // argument (e.g. `const Foo&` yields isConst() && isReference()).
         return fromType<T>();
     }
 
@@ -425,6 +433,10 @@ private:
     static constexpr unsigned int IS_ABSTRACT_FLAG = 21;
     static constexpr unsigned int IS_POLYMORPHIC_FLAG = 22;
     static constexpr unsigned int IS_EMPTY_FLAG = 23;
+
+    static_assert(IS_EMPTY_FLAG < K_FLAG_BITSET_SIZE,
+                  "Flag index exceeds the bitset capacity; grow "
+                  "K_FLAG_BITSET_SIZE before adding more flags");
 };
 
 template <typename T>
@@ -462,20 +474,9 @@ struct GetTypeInfo<std::span<T, Extent>> {
     }
 };
 
-template <typename T>
-struct GetTypeInfo<const std::shared_ptr<T>&>
-    : GetTypeInfo<std::shared_ptr<T>> {};
-template <typename T>
-struct GetTypeInfo<std::shared_ptr<T>&> : GetTypeInfo<std::shared_ptr<T>> {};
-template <typename T>
-struct GetTypeInfo<const std::unique_ptr<T>&>
-    : GetTypeInfo<std::unique_ptr<T>> {};
-template <typename T>
-struct GetTypeInfo<std::unique_ptr<T>&> : GetTypeInfo<std::unique_ptr<T>> {};
-template <typename T>
-struct GetTypeInfo<const std::weak_ptr<T>&> : GetTypeInfo<std::weak_ptr<T>> {};
-template <typename T>
-struct GetTypeInfo<std::weak_ptr<T>&> : GetTypeInfo<std::weak_ptr<T>> {};
+// Note: (const) references to smart pointers are intentionally handled by the
+// primary template so that const/reference qualifiers are reflected in the
+// flags while the pointer-like nature is still detected via PointerType.
 
 template <typename T>
 struct GetTypeInfo<const std::reference_wrapper<T>&> {
@@ -789,10 +790,7 @@ public:
     template <typename BaseType = void>
     static std::shared_ptr<BaseType> createInstance(
         std::string_view type_name) {
-        static std::unordered_map<std::string,
-                                  std::function<std::shared_ptr<BaseType>()>>
-            factories;
-
+        auto& factories = getFactories<BaseType>();
         if (auto it = factories.find(std::string(type_name));
             it != factories.end()) {
             return it->second();
@@ -809,19 +807,31 @@ public:
     template <typename T, typename BaseType = void>
     static void registerFactory(std::string_view type_name) {
         if constexpr (std::is_default_constructible_v<T>) {
-            static std::unordered_map<
-                std::string, std::function<std::shared_ptr<BaseType>()>>
-                factories;
-            factories.emplace(type_name, []() -> std::shared_ptr<BaseType> {
-                if constexpr (std::is_convertible_v<T*, BaseType*> ||
-                              std::is_void_v<BaseType>) {
-                    return std::make_shared<T>();
-                } else {
-                    return nullptr;
-                }
-            });
+            getFactories<BaseType>().emplace(
+                std::string(type_name), []() -> std::shared_ptr<BaseType> {
+                    if constexpr (std::is_convertible_v<T*, BaseType*> ||
+                                  std::is_void_v<BaseType>) {
+                        return std::make_shared<T>();
+                    } else {
+                        return nullptr;
+                    }
+                });
             registerType<T>(type_name);
         }
+    }
+
+private:
+    /**
+     * @brief Shared factory map per BaseType so that registerFactory and
+     * createInstance operate on the same storage.
+     */
+    template <typename BaseType>
+    static auto getFactories() -> std::unordered_map<
+        std::string, std::function<std::shared_ptr<BaseType>()>>& {
+        static std::unordered_map<std::string,
+                                  std::function<std::shared_ptr<BaseType>()>>
+            factories;
+        return factories;
     }
 };
 

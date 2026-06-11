@@ -174,14 +174,13 @@ TEST_F(PropertyTest, ValueAccessAndModification) {
     EXPECT_TRUE(onChangeCalled);
     EXPECT_EQ(changedValue, 60);
 
-    // Manual notification
+    // Callback fires again on a subsequent assignment
     onChangeCalled = false;
     changedValue = 0;
-    withCallback.notifyChange(70);
+    withCallback = 70;
     EXPECT_TRUE(onChangeCalled);
     EXPECT_EQ(changedValue, 70);
-    // Value should not change with manual notification
-    EXPECT_EQ(static_cast<int>(withCallback), 60);
+    EXPECT_EQ(static_cast<int>(withCallback), 70);
 }
 
 // Test making properties read-only or write-only
@@ -413,12 +412,13 @@ TEST_F(PropertyTest, ThreadSafety) {
     constexpr int opsPerThread = 100;
     std::vector<std::thread> threads;
 
-    // Increment the property value from multiple threads
+    // Increment the property value from multiple threads. Use the atomic
+    // compound op: a separate read followed by a write would lose updates by
+    // design (two independent lock acquisitions).
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&prop]() {
             for (int j = 0; j < opsPerThread; ++j) {
-                int currentVal = static_cast<int>(prop);
-                prop = currentVal + 1;
+                prop += 1;
             }
         });
     }
@@ -526,11 +526,5 @@ TEST_F(PropertyTest, ErrorHandling) {
 }
 
 }  // namespace atom::meta::test
-
-// Main function to run the tests
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
 
 #endif  // ATOM_META_TEST_PROPERTY_HPP

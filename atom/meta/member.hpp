@@ -38,10 +38,24 @@ template <typename T>
 concept member_pointer = std::is_member_pointer_v<T>;
 
 /**
+ * @brief Traits extracting the class and member types from a member pointer
+ */
+template <typename T>
+struct member_traits;
+
+template <typename M, typename C>
+struct member_traits<M C::*> {
+    using class_type = C;
+    using value_type = M;
+};
+
+/**
  * @brief Gets the offset of a member within a structure
+ * @note Runtime-only: the implementation requires reinterpret_cast, which is
+ *       not permitted in constant evaluation.
  */
 template <typename T, typename M>
-consteval std::size_t member_offset(M T::*member) noexcept {
+inline std::size_t member_offset(M T::*member) noexcept {
     return static_cast<std::size_t>(reinterpret_cast<std::ptrdiff_t>(
         &(static_cast<T const volatile*>(nullptr)->*member)));
 }
@@ -50,8 +64,8 @@ consteval std::size_t member_offset(M T::*member) noexcept {
  * @brief Gets the size of a member within a structure
  */
 template <typename T, typename M>
-consteval std::size_t member_size(M T::*member) noexcept {
-    return sizeof((static_cast<T const volatile*>(nullptr)->*member));
+constexpr std::size_t member_size(M T::* /*member*/) noexcept {
+    return sizeof(M);
 }
 
 /**
@@ -345,16 +359,33 @@ template <typename T>
 concept member_function_pointer = std::is_member_function_pointer_v<T>;
 
 /**
- * @brief Get member info at compile time
+ * @brief Get member info from a member pointer
  */
 template <auto MemberPtr>
+    requires member_pointer<decltype(MemberPtr)>
 struct member_info {
     using class_type = typename member_traits<decltype(MemberPtr)>::class_type;
     using value_type = typename member_traits<decltype(MemberPtr)>::value_type;
-    static constexpr std::size_t offset = member_offset(MemberPtr);
-    static constexpr std::size_t size = member_size(MemberPtr);
     static constexpr bool is_function =
         std::is_member_function_pointer_v<decltype(MemberPtr)>;
+
+    /**
+     * @brief Byte offset of the member within its class (object members only)
+     * @note Runtime-only, see member_offset.
+     */
+    static std::size_t offset() noexcept
+        requires member_object_pointer<decltype(MemberPtr)>
+    {
+        return member_offset(MemberPtr);
+    }
+
+    static constexpr std::size_t size = [] {
+        if constexpr (member_object_pointer<decltype(MemberPtr)>) {
+            return sizeof(value_type);
+        } else {
+            return sizeof(void*);
+        }
+    }();
 };
 
 /**

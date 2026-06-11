@@ -10,6 +10,15 @@
 #include "atom/type/json.hpp"
 #include "spdlog/spdlog.h"
 
+// Windows headers (pulled in transitively by spdlog) define ERROR/DEBUG as
+// macros (wingdi.h), which collide with the EventSeverity scoped enumerators.
+#ifdef ERROR
+#undef ERROR
+#endif
+#ifdef DEBUG
+#undef DEBUG
+#endif
+
 using json = nlohmann::json;
 
 CronMonitor::CronMonitor() {

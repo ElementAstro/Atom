@@ -6,10 +6,10 @@
  * "atom/system/network/network_manager.hpp" instead.
  */
 
-#ifndef ATOM_SYSTEM_NETWORK_MANAGER_HPP
-#define ATOM_SYSTEM_NETWORK_MANAGER_HPP
+#ifndef ATOM_SYSTEM_NETWORK_MANAGER_COMPAT_HPP
+#define ATOM_SYSTEM_NETWORK_MANAGER_COMPAT_HPP
 
 // Forward to the new location
 #include "network/network_manager.hpp"
 
-#endif  // ATOM_SYSTEM_NETWORK_MANAGER_HPP
+#endif  // ATOM_SYSTEM_NETWORK_MANAGER_COMPAT_HPP

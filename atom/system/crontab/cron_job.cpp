@@ -6,6 +6,7 @@
 #include <algorithm>
 
 #include "atom/type/json.hpp"
+#include "cron_validation.hpp"
 
 using json = nlohmann::json;
 
@@ -167,4 +168,19 @@ auto CronJob::getRecentStats(size_t count) const -> std::pair<size_t, size_t> {
 void CronJob::clearHistory() {
     std::lock_guard<std::mutex> lock(history_mutex_);
     execution_history_.clear();
+}
+
+auto CronJob::nextRun(std::chrono::system_clock::time_point from) const
+    -> std::optional<std::chrono::system_clock::time_point> {
+    auto runs = CronValidation::calculateNextExecutions(time_, 1, from);
+    if (runs.empty()) {
+        return std::nullopt;
+    }
+    return runs.front();
+}
+
+auto CronJob::nextRuns(std::size_t count,
+                       std::chrono::system_clock::time_point from) const
+    -> std::vector<std::chrono::system_clock::time_point> {
+    return CronValidation::calculateNextExecutions(time_, count, from);
 }

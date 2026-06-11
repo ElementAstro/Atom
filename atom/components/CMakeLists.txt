@@ -19,7 +19,7 @@ set(SOURCES
     core/component_pool.cpp
     core/registry.cpp
     # Scripting components
-    scripting/advanced_bindings.cpp
+    scripting/bindings.cpp
     scripting/script_engine.cpp
     scripting/script_sandbox.cpp
     scripting/scripting_api.cpp
@@ -34,7 +34,6 @@ set(SOURCES
 # Header files
 set(HEADERS
     # Backwards compatibility headers (in root)
-    advanced_bindings.hpp
     component.hpp
     component_pool.hpp
     dispatch.hpp
@@ -57,7 +56,7 @@ set(HEADERS
     core/types.hpp
     core/module_macro.hpp
     core/package.hpp
-    scripting/advanced_bindings.hpp
+    scripting/bindings.hpp
     scripting/script_engine.hpp
     scripting/script_sandbox.hpp
     scripting/scripting_api.hpp
@@ -180,7 +179,7 @@ install(FILES ${HEADERS} ${OPTIONAL_HEADERS}
 
 # Install headers Install backwards compatibility headers
 install(
-  FILES advanced_bindings.hpp
+  FILES
         component.hpp
         component_pool.hpp
         dispatch.hpp

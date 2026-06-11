@@ -13,7 +13,7 @@ Description: System Information Module - Disk Devices
 **************************************************/
 
 #include "disk_device.hpp"
-<<<<<<<<HEAD : atom / sysinfo / src / disk / components / disk_device.cpp
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -26,10 +26,6 @@ Description: System Information Module - Disk Devices
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
-        == == == ==>>>>>>>> test -
-    fixes / systematic -
-    testing : atom / sysinfo / storage / disk /
-              disk_device.cpp
 
 #ifdef _WIN32
 // clang-format off
@@ -67,7 +63,7 @@ Description: System Information Module - Disk Devices
 
 #include <spdlog/spdlog.h>
 
-              namespace atom::system {
+namespace atom::system {
 
     std::vector<StorageDevice> getStorageDevices(bool includeRemovable) {
         std::vector<StorageDevice> devices;

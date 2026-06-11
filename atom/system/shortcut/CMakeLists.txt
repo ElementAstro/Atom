@@ -24,9 +24,20 @@ else()
     STATUS "spdlog not found - using standard logging in shortcut detector")
 endif()
 
+# Shortcut detector implementation sources
+set(SHORTCUT_SOURCES
+    detector.cpp
+    detector_impl.cpp
+    shortcut.cpp
+    factory.cpp
+    win32_utils.cpp
+    shortcut_binding.cpp
+    config.cpp
+    error_handling.cpp
+    monitoring.cpp)
+
 # Create shared library
-add_library(shortcut_detector SHARED detector.cpp detector_impl.cpp
-                                     shortcut.cpp factory.cpp win32_utils.cpp)
+add_library(shortcut_detector SHARED ${SHORTCUT_SOURCES})
 
 # Set include directories
 target_include_directories(
@@ -45,9 +56,7 @@ endif()
 target_link_libraries(shortcut_detector PRIVATE ${SHORTCUT_LIBS})
 
 # Create static library version
-add_library(
-  shortcut_detector_static STATIC detector.cpp detector_impl.cpp shortcut.cpp
-                                  factory.cpp win32_utils.cpp)
+add_library(shortcut_detector_static STATIC ${SHORTCUT_SOURCES})
 
 target_include_directories(
   shortcut_detector_static

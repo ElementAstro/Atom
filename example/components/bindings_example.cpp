@@ -32,7 +32,7 @@ component system.
 #include <string>
 #include <vector>
 
-#include "atom/components/advanced_bindings.hpp"
+#include "atom/components/scripting/bindings.hpp"
 #include "atom/components/component.hpp"
 #include "atom/components/core/registry.hpp"
 
