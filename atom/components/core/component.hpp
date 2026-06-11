@@ -1144,8 +1144,13 @@ void Component::def(std::string_view name, Callable&& func,
     static_assert(Traits::arity <= 8,
                   "Too many arguments in function (maximum is 8)");
 
-    // Include the template implementation
-#include "../component.template"
+    [&]<std::size_t... I>(std::index_sequence<I...>) {
+        (void)m_CommandDispatcher_->def(
+            name, group, description,
+            std::function<typename Traits::return_type(
+                typename Traits::template argument_t<I>...)>(
+                std::forward<Callable>(func)));
+    }(std::make_index_sequence<Traits::arity>{});
 }
 
 template <typename Ret>
