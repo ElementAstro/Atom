@@ -11,7 +11,7 @@ void CommandDispatcher::checkPrecondition(const Command& cmd,
     // spdlog::trace("Entering function: {}", __func__); // Replaced
     // LOG_SCOPE_FUNCTION
     if (!cmd.precondition.has_value()) {
-        spdlog::info("No precondition for command: {}", name);
+        spdlog::trace("No precondition for command: {}", name);
         return;
     }
     try {
@@ -20,7 +20,7 @@ void CommandDispatcher::checkPrecondition(const Command& cmd,
             THROW_DISPATCH_EXCEPTION("Precondition failed for command '{}'",
                                      name);
         }
-        spdlog::info("Precondition for command '{}' passed.", name);
+        spdlog::trace("Precondition for command '{}' passed.", name);
     } catch (const std::bad_function_call& e) {
         spdlog::error("Bad precondition function invoke for command '{}': {}",
                       name, e.what());
@@ -46,12 +46,12 @@ void CommandDispatcher::checkPostcondition(const Command& cmd,
     // spdlog::trace("Entering function: {}", __func__); // Replaced
     // LOG_SCOPE_FUNCTION
     if (!cmd.postcondition.has_value()) {
-        spdlog::info("No postcondition for command: {}", name);
+        spdlog::trace("No postcondition for command: {}", name);
         return;
     }
     try {
         std::invoke(cmd.postcondition.value());
-        spdlog::info("Postcondition for command '{}' passed.", name);
+        spdlog::trace("Postcondition for command '{}' passed.", name);
     } catch (const std::bad_function_call& e) {
         spdlog::error("Bad postcondition function invoke for command '{}': {}",
                       name, e.what());
@@ -96,11 +96,11 @@ auto CommandDispatcher::executeCommand(
 
     // Execute with or without timeout
     if (hasTimeout) {
-        spdlog::info("Executing command '{}' with timeout {}ms.", name,
+        spdlog::trace("Executing command '{}' with timeout {}ms.", name,
                      timeout.count());
         return executeWithTimeout(cmd, name, args, timeout);
     } else {
-        spdlog::info("Executing command '{}' without timeout.", name);
+        spdlog::trace("Executing command '{}' without timeout.", name);
         return executeWithoutTimeout(cmd, name, args);
     }
 }
@@ -169,12 +169,12 @@ auto CommandDispatcher::executeWithoutTimeout(
     // LOG_SCOPE_FUNCTION Check for nested arguments
     if (!args.empty() && args.size() == 1 &&
         args[0].type() == typeid(std::vector<std::any>)) {
-        spdlog::info("Executing command '{}' with nested arguments.", name);
+        spdlog::trace("Executing command '{}' with nested arguments.", name);
         return executeFunctions(cmd,
                                 std::any_cast<std::vector<std::any>>(args[0]));
     }
 
-    spdlog::info("Executing command '{}' with arguments.", name);
+    spdlog::trace("Executing command '{}' with arguments.", name);
     return executeFunctions(cmd, args);
 }
 
@@ -183,7 +183,7 @@ auto CommandDispatcher::executeFunctions(
     // We already selected the correct overload earlier by signature.
     // Directly invoke the stored proxy function and surface any type errors.
     try {
-        spdlog::info(
+        spdlog::trace(
             "Executing function for command (skipping hash validation)");
         return std::invoke(cmd.func, const_cast<std::vector<std::any>&>(args));
     } catch (const std::bad_any_cast& e) {
@@ -218,7 +218,7 @@ auto CommandDispatcher::computeFunctionHash(const std::vector<std::any>& args)
         combined += type + ";";
     }
     auto hash = std::to_string(hasher(combined));
-    spdlog::info("Computed function hash: {}", hash);
+    spdlog::trace("Computed function hash: {}", hash);
     return hash;
 }
 
@@ -234,7 +234,7 @@ bool CommandDispatcher::has(std::string_view name) const noexcept {
 
         // Direct lookup first for performance
         if (commands_.find(nameStr) != commands_.end()) {
-            spdlog::info("Command '{}' found.", nameStr);
+            spdlog::trace("Command '{}' found.", nameStr);
             return true;
         }
 
@@ -242,14 +242,14 @@ bool CommandDispatcher::has(std::string_view name) const noexcept {
         for (const auto& [cmdName, cmdMap] : commands_) {
             for (const auto& [hash, cmd] : cmdMap) {
                 if (cmd.aliases.find(nameStr) != cmd.aliases.end()) {
-                    spdlog::info("Alias '{}' found for command '{}'.", nameStr,
+                    spdlog::trace("Alias '{}' found for command '{}'.", nameStr,
                                  cmdName);
                     return true;
                 }
             }
         }
 
-        spdlog::info("Command '{}' not found.", nameStr);
+        spdlog::trace("Command '{}' not found.", nameStr);
     } catch (const std::exception& e) {
         // Ensure noexcept guarantee
         spdlog::error("Exception in has(): {}", e.what());
@@ -290,7 +290,7 @@ bool CommandDispatcher::addAlias(std::string_view name,
             groupMap_[aliasStr] = groupIt->second;
         }
 
-        spdlog::info("Alias '{}' added for command '{}'.", aliasStr, nameStr);
+        spdlog::trace("Alias '{}' added for command '{}'.", aliasStr, nameStr);
         return true;
     } else {
         spdlog::warn("Command '{}' not found. Alias '{}' not added.", nameStr,
@@ -317,7 +317,7 @@ bool CommandDispatcher::addGroup(std::string_view name,
     }
 
     groupMap_[nameStr] = groupStr;
-    spdlog::info("Command '{}' added to group '{}'.", nameStr, groupStr);
+    spdlog::trace("Command '{}' added to group '{}'.", nameStr, groupStr);
     return true;
 }
 
@@ -337,7 +337,7 @@ bool CommandDispatcher::setTimeout(std::string_view name,
     }
 
     timeoutMap_[nameStr] = timeout;
-    spdlog::info("Timeout set for command '{}': {} ms.", nameStr,
+    spdlog::trace("Timeout set for command '{}': {} ms.", nameStr,
                  timeout.count());
     return true;
 }
@@ -374,7 +374,7 @@ bool CommandDispatcher::removeCommand(std::string_view name) {
     groupMap_.erase(nameStr);
     timeoutMap_.erase(nameStr);
 
-    spdlog::info("Command '{}' and its aliases removed.", nameStr);
+    spdlog::trace("Command '{}' and its aliases removed.", nameStr);
     return true;
 }
 
@@ -415,7 +415,7 @@ std::vector<std::string> CommandDispatcher::getCommandsInGroup(
         }
     }
 
-    spdlog::info("Found {} commands in group '{}'", result.size(), groupStr);
+    spdlog::trace("Found {} commands in group '{}'", result.size(), groupStr);
     return result;
 }
 
@@ -433,7 +433,7 @@ std::string CommandDispatcher::getCommandDescription(
     if (it != commands_.end() && !it->second.empty()) {
         // Return description of the first overload
         const auto& [hash, cmd] = *it->second.begin();
-        spdlog::info("Description for command '{}': {}", nameStr,
+        spdlog::trace("Description for command '{}': {}", nameStr,
                      cmd.description);
         return cmd.description;
     }
@@ -442,14 +442,14 @@ std::string CommandDispatcher::getCommandDescription(
     for (const auto& [cmdName, cmdMap] : commands_) {
         for (const auto& [hash, cmd] : cmdMap) {
             if (cmd.aliases.find(nameStr) != cmd.aliases.end()) {
-                spdlog::info("Description for alias '{}': {}", nameStr,
+                spdlog::trace("Description for alias '{}': {}", nameStr,
                              cmd.description);
                 return cmd.description;
             }
         }
     }
 
-    spdlog::info("No description found for command '{}'.", nameStr);
+    spdlog::trace("No description found for command '{}'.", nameStr);
     return "";
 }
 
@@ -467,7 +467,7 @@ CommandDispatcher::StringSet CommandDispatcher::getCommandAliases(
     if (it != commands_.end() && !it->second.empty()) {
         // Return aliases of the first overload
         const auto& [hash, cmd] = *it->second.begin();
-        spdlog::info("Found {} aliases for command '{}'", cmd.aliases.size(),
+        spdlog::trace("Found {} aliases for command '{}'", cmd.aliases.size(),
                      nameStr);
         return cmd.aliases;
     }
@@ -480,14 +480,14 @@ CommandDispatcher::StringSet CommandDispatcher::getCommandAliases(
                 auto result = cmd.aliases;
                 result.erase(nameStr);
                 result.insert(cmdName);  // Add the original command name
-                spdlog::info("Found {} aliases for alias '{}'", result.size(),
+                spdlog::trace("Found {} aliases for alias '{}'", result.size(),
                              nameStr);
                 return result;
             }
         }
     }
 
-    spdlog::info("No aliases found for command '{}'.", nameStr);
+    spdlog::trace("No aliases found for command '{}'.", nameStr);
 #if ENABLE_FASTHASH
     return emhash::HashSet<std::string>{};
 #else
@@ -504,7 +504,7 @@ std::any CommandDispatcher::dispatch(std::string_view name,
         THROW_DISPATCH_EXCEPTION("CommandDispatcher is shutting down");
     }
 
-    spdlog::info("Dispatching command '{}'.", name);
+    spdlog::trace("Dispatching command '{}'.", name);
     return dispatchHelper(std::string(name), args);
 }
 
@@ -517,7 +517,7 @@ std::any CommandDispatcher::dispatch(std::string_view name,
         THROW_DISPATCH_EXCEPTION("CommandDispatcher is shutting down");
     }
 
-    spdlog::info("Dispatching command '{}' with span arguments.", name);
+    spdlog::trace("Dispatching command '{}' with span arguments.", name);
     std::vector<std::any> argsVec(args.begin(), args.end());
     return dispatchHelper(std::string(name), argsVec);
 }
@@ -531,7 +531,7 @@ std::any CommandDispatcher::dispatch(std::string_view name,
         THROW_DISPATCH_EXCEPTION("CommandDispatcher is shutting down");
     }
 
-    spdlog::info("Dispatching command '{}' with FunctionParams.", name);
+    spdlog::trace("Dispatching command '{}' with FunctionParams.", name);
     return dispatchHelper(std::string(name), params.toAnyVector());
 }
 
@@ -556,7 +556,7 @@ std::vector<std::string> CommandDispatcher::getAllCommands() const {
         }
     }
 
-    spdlog::info("Found {} unique commands", result.size());
+    spdlog::trace("Found {} unique commands", result.size());
     return result;
 }
 
@@ -591,7 +591,7 @@ CommandDispatcher::getCommandArgAndReturnType(std::string_view name) const {
         result.reserve(commandIterator->second.size());
 
         for (const auto& [hash, cmd] : commandIterator->second) {
-            spdlog::info(
+            spdlog::trace(
                 "Argument and return types for command '{}': args = [{}], "
                 "return = {}",
                 nameStr, atom::utils::toString(cmd.argTypes), cmd.returnType);
@@ -608,7 +608,7 @@ CommandDispatcher::getCommandArgAndReturnType(std::string_view name) const {
             if (cmd.aliases.find(nameStr) != cmd.aliases.end()) {
                 std::vector<CommandArgRet> result;
                 result.reserve(1);
-                spdlog::info(
+                spdlog::trace(
                     "Argument and return types for alias '{}' (command '{}'): "
                     "args = [{}], "
                     "return = {}",
@@ -623,7 +623,7 @@ CommandDispatcher::getCommandArgAndReturnType(std::string_view name) const {
         }
     }
 
-    spdlog::info("No argument and return types found for command '{}'.",
+    spdlog::trace("No argument and return types found for command '{}'.",
                  nameStr);
     return {};
 }

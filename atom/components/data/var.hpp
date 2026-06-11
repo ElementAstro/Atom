@@ -233,7 +233,7 @@ void VariableManager::addVariable(const std::string& name, T initialValue,
                                   const std::string& description,
                                   const std::string& alias,
                                   const std::string& group) {
-    spdlog::info("Adding variable: {}", name);
+    spdlog::trace("Adding variable: {}", name);
 
     std::unique_lock lock(mutex_);
 
@@ -250,7 +250,7 @@ void VariableManager::addVariable(const std::string& name, T initialValue,
     }
 
     if (!alias.empty()) {
-        spdlog::info("Adding alias '{}' for variable '{}'", alias, name);
+        spdlog::trace("Adding alias '{}' for variable '{}'", alias, name);
         if (variables_.contains(alias)) {
             spdlog::warn(
                 "Variable with name '{}' already exists, not adding alias",
@@ -274,7 +274,7 @@ void VariableManager::addVariable(const std::string& name, T C::*memberPointer,
                                   C& instance, const std::string& description,
                                   const std::string& alias,
                                   const std::string& group) {
-    spdlog::info("Adding member variable: {}", name);
+    spdlog::trace("Adding member variable: {}", name);
 
     std::unique_lock lock(mutex_);
 
@@ -295,7 +295,7 @@ void VariableManager::addVariable(const std::string& name, T C::*memberPointer,
     }
 
     if (!alias.empty()) {
-        spdlog::info("Adding alias '{}' for variable '{}'", alias, name);
+        spdlog::trace("Adding alias '{}' for variable '{}'", alias, name);
         if (variables_.contains(alias)) {
             spdlog::warn(
                 "Variable with name '{}' already exists, not adding alias",
@@ -311,7 +311,7 @@ void VariableManager::addVariable(const std::string& name, T C::*memberPointer,
 
 template <Arithmetic T>
 void VariableManager::setRange(const std::string& name, T min, T max) {
-    spdlog::info("Setting range for variable: {} [{}, {}]", name, min, max);
+    spdlog::trace("Setting range for variable: {} [{}, {}]", name, min, max);
 
     std::unique_lock lock(mutex_);
 

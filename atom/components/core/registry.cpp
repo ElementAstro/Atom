@@ -33,7 +33,7 @@ auto Registry::instance() -> Registry& {
 void Registry::registerModule(const std::string& name,
                               Component::InitFunc init_func) {
     std::scoped_lock lock(mutex_);
-    spdlog::info("Registering module: {}", name);
+    spdlog::debug("Registering module: {}", name);
     module_initializers_[name] = std::move(init_func);
 
     if (!componentInfos_.contains(name)) {
@@ -54,7 +54,7 @@ void Registry::addInitializer(const std::string& name,
         return;
     }
 
-    spdlog::info("Adding initializer for component: {}", name);
+    spdlog::debug("Adding initializer for component: {}", name);
 
     initializers_[name] = std::make_shared<Component>(name);
     // Store initializer for deferred execution via
@@ -92,7 +92,7 @@ void Registry::addDependency(const std::string& name,
                             dependency);
     }
 
-    spdlog::info("Adding {} dependency: {} -> {}",
+    spdlog::debug("Adding {} dependency: {} -> {}",
                  isOptional ? "optional" : "required", name, dependency);
 
     if (isOptional) {
@@ -131,7 +131,7 @@ void Registry::initializeAll(bool forceReload) {
 
     for (const auto& name : initializationOrder_) {
         std::unordered_set<std::string> initStack;
-        spdlog::info("Initializing component: {}", name);
+        spdlog::debug("Initializing component: {}", name);
 
         auto startTime = std::chrono::high_resolution_clock::now();
         initializeComponent(name, initStack);
@@ -173,7 +173,7 @@ void Registry::cleanupAll(bool force) {
         }
 
         try {
-            spdlog::info("Cleaning up component: {}", name);
+            spdlog::debug("Cleaning up component: {}", name);
             component->cleanupFunc();
             if (componentInfos_.contains(name)) {
                 componentInfos_[name].isInitialized = false;
@@ -373,7 +373,7 @@ auto Registry::getOrLoadComponent(const std::string& name)
         return initializers_[name];
     }
 
-    spdlog::info("Lazy loading component: {}", name);
+    spdlog::debug("Lazy loading component: {}", name);
 
     if (!module_initializers_.contains(name)) {
         spdlog::error("Cannot lazy load unregistered component: {}", name);
@@ -650,7 +650,7 @@ atom::components::EventCallbackId Registry::subscribeToEvent(
 
     eventSubscriptions_[eventName].push_back(std::move(sub));
 
-    spdlog::info("Subscribed to event '{}' with ID {}", eventName, sub.id);
+    spdlog::trace("Subscribed to event '{}' with ID {}", eventName, sub.id);
     return sub.id;
 }
 
@@ -678,7 +678,7 @@ bool Registry::unsubscribeFromEvent(
     }
 
     subs.erase(subIt);
-    spdlog::info("Unsubscribed from event '{}' with ID {}", eventName,
+    spdlog::trace("Unsubscribed from event '{}' with ID {}", eventName,
                  callbackId);
 
     if (subs.empty()) {
@@ -711,7 +711,7 @@ void Registry::triggerEvent(const atom::components::Event& event) {
         }
     }
 
-    spdlog::info("Triggered event '{}' from source '{}'", event.name,
+    spdlog::trace("Triggered event '{}' from source '{}'", event.name,
                  event.source);
 }
 #endif
@@ -744,7 +744,7 @@ void Registry::initializeComponent(
     }
 
     if (componentInfos_.contains(name) && !componentInfos_[name].isEnabled) {
-        spdlog::info("Skipping disabled component: {}", name);
+        spdlog::debug("Skipping disabled component: {}", name);
         return;
     }
 
@@ -777,7 +777,7 @@ void Registry::initializeComponent(
             initializers_[name] = std::make_shared<Component>(name);
         }
 
-        spdlog::info("Running initializer for component: {}", name);
+        spdlog::debug("Running initializer for component: {}", name);
         try {
             auto startTime = std::chrono::high_resolution_clock::now();
             it->second(*initializers_[name]);
@@ -790,7 +790,7 @@ void Registry::initializeComponent(
             }
 
             // Mark as initialized after successful module initializer execution
-            spdlog::info("Component initialized successfully: {}", name);
+            spdlog::debug("Component initialized successfully: {}", name);
             componentInfos_[name].isInitialized = true;
             componentInfos_[name].lastUsed = std::chrono::system_clock::now();
         } catch (const std::exception& e) {
