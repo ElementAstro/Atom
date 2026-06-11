@@ -82,14 +82,15 @@ void Registry::addDependency(const std::string& name,
 
     if (name == dependency) {
         spdlog::error("Component '{}' cannot depend on itself", name);
-        THROW_RUNTIME_ERROR("Component '{}' cannot depend on itself", name);
+        THROW_RUNTIME_ERROR(
+            fmt::format("Component '{}' cannot depend on itself", name));
     }
 
     if (hasCircularDependency(name, dependency)) {
         spdlog::error("Circular dependency detected: {} -> {}", name,
                       dependency);
-        THROW_RUNTIME_ERROR("Circular dependency detected: {} -> {}", name,
-                            dependency);
+        THROW_RUNTIME_ERROR(fmt::format("Circular dependency detected: {} -> {}",
+                                        name, dependency));
     }
 
     spdlog::debug("Adding {} dependency: {} -> {}",

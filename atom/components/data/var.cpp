@@ -565,10 +565,9 @@ void VariableManager::setStringOptions(const std::string& name,
                 currentValue, primaryName);
             stringOptions_.erase(primaryName);
             THROW_INVALID_ARGUMENT(
-                "Current value '{}' is not valid with the new options for "
-                "variable "
-                "'{}'",
-                currentValue, primaryName);
+                fmt::format("Current value '{}' is not valid with the new "
+                            "options for variable '{}'",
+                            currentValue, primaryName));
         }
     }
 
@@ -578,8 +577,9 @@ void VariableManager::setStringOptions(const std::string& name,
             const auto& currentOpts = stringOptions_[primaryName];
             if (std::find(currentOpts.begin(), currentOpts.end(), newValue) ==
                 currentOpts.end()) {
-                THROW_INVALID_ARGUMENT("Invalid option '{}' for variable '{}'",
-                                       newValue, primaryName);
+                THROW_INVALID_ARGUMENT(
+                    fmt::format("Invalid option '{}' for variable '{}'",
+                                newValue, primaryName));
             }
         });
 

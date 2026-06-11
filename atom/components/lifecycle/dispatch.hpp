@@ -19,6 +19,7 @@
 #include "atom/meta/proxy.hpp"
 #include "atom/meta/type_caster.hpp"
 #include "atom/type/json.hpp"
+#include "fmt/format.h"
 #include "spdlog/spdlog.h"
 
 #include "atom/macro.hpp"
@@ -34,7 +35,7 @@ public:
 
 #define THROW_DISPATCH_EXCEPTION(...)                                       \
     throw DispatchException(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
-                            __VA_ARGS__);
+                            fmt::format(__VA_ARGS__));
 
 class DispatchTimeout : public atom::error::Exception {
 public:
@@ -43,7 +44,7 @@ public:
 
 #define THROW_DISPATCH_TIMEOUT(...)                                       \
     throw DispatchTimeout(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
-                          __VA_ARGS__);
+                          fmt::format(__VA_ARGS__));
 
 // -------------------------------------------------------------------
 // Command Dispatcher
@@ -687,10 +688,10 @@ auto CommandDispatcher::dispatchHelper(const std::string& name,
         // metadata. If argTypes is empty (common when registering without Arg
         // info), skip this check.
         if (!cmd.argTypes.empty() && args.size() > cmd.argTypes.size()) {
-            THROW_INVALID_ARGUMENT(
+            THROW_INVALID_ARGUMENT(fmt::format(
                 "Too many arguments for command {}: expected at most {}, got "
                 "{}",
-                name, cmd.argTypes.size(), args.size());
+                name, cmd.argTypes.size(), args.size()));
         }
     }
 
@@ -717,8 +718,9 @@ auto CommandDispatcher::completeArgs(const Command& cmd, const ArgsType& args)
         if (cmd.argTypes[i].getDefaultValue()) {
             fullArgs.push_back(cmd.argTypes[i].getDefaultValue().value());
         } else {
-            THROW_INVALID_ARGUMENT("Missing required argument '{}' for command",
-                                   cmd.argTypes[i].getName());
+            THROW_INVALID_ARGUMENT(
+                fmt::format("Missing required argument '{}' for command",
+                            cmd.argTypes[i].getName()));
         }
     }
 

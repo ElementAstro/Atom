@@ -29,6 +29,8 @@ Description: Basic Component Definition
 #include "atom/meta/type_info.hpp"
 #include "atom/type/pointer.hpp"
 
+#include <fmt/format.h>
+
 #include <chrono>
 #include <concepts>
 #include <memory>
@@ -42,7 +44,7 @@ public:
 
 #define THROW_OBJECT_EXPIRED(...)                                            \
     throw ObjectExpiredError(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
-                             __VA_ARGS__)
+                             fmt::format(__VA_ARGS__))
 
 /**
  * @brief Component lifecycle state

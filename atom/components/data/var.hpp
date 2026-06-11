@@ -25,6 +25,7 @@ Description: Variable Manager
 #include "emhash/hash_table8.hpp"
 #endif
 
+#include <fmt/format.h>
 #include <spdlog/spdlog.h>
 #include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
@@ -41,7 +42,7 @@ public:
 
 #define THROW_TYPE_ERROR(...)                                               \
     throw VariableTypeError(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
-                            __VA_ARGS__)
+                            fmt::format(__VA_ARGS__))
 
 /**
  * @brief Manages variables with tracking, validation, and serialization
@@ -329,8 +330,8 @@ void VariableManager::setRange(const std::string& name, T min, T max) {
                                              const T& newValue) {
         if (newValue < min || newValue > max) {
             THROW_OUT_OF_RANGE(
-                "Value {} out of range [{}, {}] for variable '{}'", newValue,
-                min, max, name);
+                fmt::format("Value {} out of range [{}, {}] for variable '{}'",
+                            newValue, min, max, name));
         }
     });
 }
@@ -390,8 +391,8 @@ void VariableManager::setValue(const std::string& name, T newValue) {
                         newValue > rangePtr->second) {
                         // Note: Removed spdlog::error call to avoid std::vector
                         // formatting issues
-                        THROW_OUT_OF_RANGE(
-                            "Value out of range for variable '{}'", name);
+                        THROW_OUT_OF_RANGE(fmt::format(
+                            "Value out of range for variable '{}'", name));
                     }
                 }
             } catch (const std::bad_any_cast&) {
@@ -408,8 +409,8 @@ void VariableManager::setValue(const std::string& name, T newValue) {
                     spdlog::error("Invalid option '{}' for variable '{}'",
                                   newValue, name);
                     THROW_INVALID_ARGUMENT(
-                        "Invalid option '{}' for variable '{}'", newValue,
-                        name);
+                        fmt::format("Invalid option '{}' for variable '{}'",
+                                    newValue, name));
                 }
             }
         }
