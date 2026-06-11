@@ -46,7 +46,6 @@ set(HEADERS
     script_sandbox.hpp
     scripting_api.hpp
     serialization.hpp
-    type_conversion.hpp
     types.hpp
     var.hpp
     module_macro.hpp
@@ -66,8 +65,7 @@ set(HEADERS
     lifecycle/iteration.hpp
     lifecycle/lifecycle.hpp
     data/serialization.hpp
-    data/var.hpp
-    data/type_conversion.hpp)
+    data/var.hpp)
 
 # Optional scripting engine support
 option(ATOM_ENABLE_LUA "Enable Lua scripting support" OFF)
@@ -194,7 +192,6 @@ install(
         script_sandbox.hpp
         scripting_api.hpp
         serialization.hpp
-        type_conversion.hpp
         types.hpp
         var.hpp
         module_macro.hpp

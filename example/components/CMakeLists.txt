@@ -33,7 +33,7 @@ set(SCRIPTING_EXAMPLES lua_scripting_example python_scripting_example
                        unified_scripting_example script_sandbox_example)
 
 set(ADVANCED_EXAMPLES serialization_example bindings_example
-                      type_conversion_example performance_optimization_example)
+                      performance_optimization_example)
 
 set(INTEGRATION_EXAMPLES
     game_entity_system_example plugin_architecture_example hot_reload_example

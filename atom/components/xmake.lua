@@ -65,8 +65,7 @@ local headers = {
     "scripting_api.hpp",
     "advanced_bindings.hpp",
     "serialization.hpp",
-    "var.hpp",
-    "type_conversion.hpp"
+    "var.hpp"
 }
 
 -- Optional scripting engine support
