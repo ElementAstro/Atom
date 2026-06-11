@@ -110,6 +110,20 @@ public:
                         std::optional<ComponentInfo> metadata = std::nullopt);
 
     /**
+     * @brief Register an externally created component instance
+     * @param name Component name
+     * @param instance Existing component instance (must not be null)
+     * @param init_func Optional initialization function run by
+     * initializeAll()/initializeComponent
+     * @param cleanup_func Optional cleanup function run during cleanup
+     * @throws RegistryException If the instance is null
+     */
+    void registerComponentInstance(
+        const std::string& name, std::shared_ptr<Component> instance,
+        Component::InitFunc init_func = nullptr,
+        Component::CleanupFunc cleanup_func = nullptr);
+
+    /**
      * @brief Add a component dependency
      * @param name The component that depends on another
      * @param dependency The component being depended on

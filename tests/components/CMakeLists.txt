@@ -103,9 +103,9 @@ set(TEST_SOURCES
     # between tests and implementation ${PROJECT_SOURCE_DIR}/scripting_api.cpp
     # ${PROJECT_SOURCE_DIR}/script_sandbox.cpp
     # ${PROJECT_SOURCE_DIR}/script_engine.cpp
-    # ${PROJECT_SOURCE_DIR}/advanced_bindings.cpp Utility tests - disabled due
-    # to non-existent macros ${PROJECT_SOURCE_DIR}/types_and_macros.cpp
-)
+    # ${PROJECT_SOURCE_DIR}/advanced_bindings.cpp
+    # Utility tests
+    ${PROJECT_SOURCE_DIR}/types_and_macros.cpp)
 
 # Conditionally add engine-specific tests based on build configuration
 if(ATOM_ENABLE_LUA)

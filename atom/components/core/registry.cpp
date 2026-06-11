@@ -76,6 +76,35 @@ void Registry::addInitializer(const std::string& name,
     componentInfos_[name].isInitialized = false;
 }
 
+void Registry::registerComponentInstance(const std::string& name,
+                                         std::shared_ptr<Component> instance,
+                                         Component::InitFunc init_func,
+                                         Component::CleanupFunc cleanup_func) {
+    if (!instance) {
+        THROW_REGISTRY_EXCEPTION("Cannot register null component instance: {}",
+                                 name);
+    }
+
+    std::scoped_lock lock(mutex_);
+    spdlog::debug("Registering component instance: {}", name);
+
+    initializers_[name] = std::move(instance);
+    if (init_func) {
+        module_initializers_[name] = std::move(init_func);
+    }
+    if (cleanup_func) {
+        initializers_[name]->cleanupFunc = std::move(cleanup_func);
+    }
+
+    if (!componentInfos_.contains(name)) {
+        ComponentInfo info;
+        info.name = name;
+        info.loadTime = std::chrono::system_clock::now();
+        componentInfos_[name] = std::move(info);
+    }
+    componentInfos_[name].isInitialized = false;
+}
+
 void Registry::addDependency(const std::string& name,
                              const std::string& dependency, bool isOptional) {
     std::unique_lock lock(mutex_);
