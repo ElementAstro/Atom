@@ -131,75 +131,77 @@ struct alignas(64) ComponentPerformanceStats {
         return *this = other;
     }
 
-#if defined(_MSC_VER)
     void reset() noexcept {
-#else
-    constexpr void reset() noexcept {
-#endif
         commandCallCount.store(0, std::memory_order_relaxed);
-    commandErrorCount.store(0, std::memory_order_relaxed);
-    eventCount.store(0, std::memory_order_relaxed);
-    memoryAllocations.store(0, std::memory_order_relaxed);
-    timing.totalExecutionTimeNs.store(0, std::memory_order_relaxed);
-    timing.maxExecutionTimeNs.store(0, std::memory_order_relaxed);
-    timing.minExecutionTimeNs.store(UINT64_MAX, std::memory_order_relaxed);
-    timing.avgExecutionTimeNs.store(0, std::memory_order_relaxed);
-}
+        commandErrorCount.store(0, std::memory_order_relaxed);
+        eventCount.store(0, std::memory_order_relaxed);
+        memoryAllocations.store(0, std::memory_order_relaxed);
+        timing.totalExecutionTimeNs.store(0, std::memory_order_relaxed);
+        timing.maxExecutionTimeNs.store(0, std::memory_order_relaxed);
+        timing.minExecutionTimeNs.store(UINT64_MAX, std::memory_order_relaxed);
+        timing.avgExecutionTimeNs.store(0, std::memory_order_relaxed);
+    }
 
     void updateExecutionTime(std::chrono::nanoseconds executionTime) noexcept {
-    const auto timeNs = static_cast<uint64_t>(executionTime.count());
+        const auto timeNs = static_cast<uint64_t>(executionTime.count());
 
-    timing.totalExecutionTimeNs.fetch_add(timeNs, std::memory_order_relaxed);
+        timing.totalExecutionTimeNs.fetch_add(timeNs,
+                                              std::memory_order_relaxed);
 
-    // Update max time
-    uint64_t currentMax =
-        timing.maxExecutionTimeNs.load(std::memory_order_relaxed);
-    while (timeNs > currentMax &&
-           !timing.maxExecutionTimeNs.compare_exchange_weak(
-               currentMax, timeNs, std::memory_order_relaxed)) {
-        // Retry if another thread updated max
+        // Update max time
+        uint64_t currentMax =
+            timing.maxExecutionTimeNs.load(std::memory_order_relaxed);
+        while (timeNs > currentMax &&
+               !timing.maxExecutionTimeNs.compare_exchange_weak(
+                   currentMax, timeNs, std::memory_order_relaxed)) {
+            // Retry if another thread updated max
+        }
+
+        // Update min time
+        uint64_t currentMin =
+            timing.minExecutionTimeNs.load(std::memory_order_relaxed);
+        while (timeNs < currentMin &&
+               !timing.minExecutionTimeNs.compare_exchange_weak(
+                   currentMin, timeNs, std::memory_order_relaxed)) {
+            // Retry if another thread updated min
+        }
+
+        // Update average (approximate for performance)
+        const auto count = std::max(
+            uint64_t{1}, commandCallCount.load(std::memory_order_relaxed));
+        const auto total =
+            timing.totalExecutionTimeNs.load(std::memory_order_relaxed);
+        timing.avgExecutionTimeNs.store(total / count,
+                                        std::memory_order_relaxed);
     }
 
-    // Update min time
-    uint64_t currentMin =
-        timing.minExecutionTimeNs.load(std::memory_order_relaxed);
-    while (timeNs < currentMin &&
-           !timing.minExecutionTimeNs.compare_exchange_weak(
-               currentMin, timeNs, std::memory_order_relaxed)) {
-        // Retry if another thread updated min
+    // Legacy compatibility methods
+    [[nodiscard]] std::chrono::microseconds getTotalExecutionTime()
+        const noexcept {
+        return std::chrono::microseconds{
+            timing.totalExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
     }
 
-    // Update average (approximate for performance)
-    const auto count =
-        std::max(uint64_t{1}, commandCallCount.load(std::memory_order_relaxed));
-    const auto total =
-        timing.totalExecutionTimeNs.load(std::memory_order_relaxed);
-    timing.avgExecutionTimeNs.store(total / count, std::memory_order_relaxed);
-}
+    [[nodiscard]] std::chrono::microseconds getMaxExecutionTime()
+        const noexcept {
+        return std::chrono::microseconds{
+            timing.maxExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
+    }
 
-// Legacy compatibility methods
-[[nodiscard]] std::chrono::microseconds getTotalExecutionTime() const noexcept {
-    return std::chrono::microseconds{
-        timing.totalExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
-}
+    [[nodiscard]] std::chrono::microseconds getMinExecutionTime()
+        const noexcept {
+        const auto minNs =
+            timing.minExecutionTimeNs.load(std::memory_order_relaxed);
+        return std::chrono::microseconds{minNs == UINT64_MAX ? 0
+                                                             : minNs / 1000};
+    }
 
-[[nodiscard]] std::chrono::microseconds getMaxExecutionTime() const noexcept {
-    return std::chrono::microseconds{
-        timing.maxExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
-}
-
-[[nodiscard]] std::chrono::microseconds getMinExecutionTime() const noexcept {
-    const auto minNs =
-        timing.minExecutionTimeNs.load(std::memory_order_relaxed);
-    return std::chrono::microseconds{minNs == UINT64_MAX ? 0 : minNs / 1000};
-}
-
-[[nodiscard]] std::chrono::microseconds getAvgExecutionTime() const noexcept {
-    return std::chrono::microseconds{
-        timing.avgExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
-}
-}
-;
+    [[nodiscard]] std::chrono::microseconds getAvgExecutionTime()
+        const noexcept {
+        return std::chrono::microseconds{
+            timing.avgExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
+    }
+};
 
 /**
  * @brief Optimized base class for components with cache-friendly layout
