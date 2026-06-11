@@ -23,8 +23,6 @@
 
 #include "atom/macro.hpp"
 
-using json = nlohmann::json;
-
 // -------------------------------------------------------------------
 // Command Exception
 // -------------------------------------------------------------------
@@ -407,8 +405,8 @@ private:
     std::atomic<bool> isShuttingDown_;  // Flag for safe shutdown
 };
 
-inline void to_json(json& j, const CommandDispatcher::Command& cmd) {
-    j = json{{"returnType", cmd.returnType},
+inline void to_json(nlohmann::json& j, const CommandDispatcher::Command& cmd) {
+    j = nlohmann::json{{"returnType", cmd.returnType},
              {"argTypes", cmd.argTypes},
              {"hash", cmd.hash},
              {"description", cmd.description},
@@ -427,7 +425,8 @@ inline void to_json(json& j, const CommandDispatcher::Command& cmd) {
     }
 }
 
-inline void from_json(const json& j, CommandDispatcher::Command& cmd) {
+inline void from_json(const nlohmann::json& j,
+                      CommandDispatcher::Command& cmd) {
     j.at("returnType").get_to(cmd.returnType);
     j.at("argTypes").get_to(cmd.argTypes);
     j.at("hash").get_to(cmd.hash);
