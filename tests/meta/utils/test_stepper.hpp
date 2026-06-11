@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <chrono>
 #include <numeric>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -91,7 +92,7 @@ protected:
     }
 
     // Helper to verify integer results
-    void verifyIntResults(const std::vector<meta::Result<std::any>>& results,
+    void verifyIntResults(const std::vector<meta::StepResult<std::any>>& results,
                           bool isAdd = true) {
         ASSERT_EQ(results.size(), 3);
 
@@ -108,7 +109,7 @@ protected:
 
     // Helper to verify string results
     void verifyStringResults(
-        const std::vector<meta::Result<std::any>>& results) {
+        const std::vector<meta::StepResult<std::any>>& results) {
         ASSERT_EQ(results.size(), 3);
 
         EXPECT_EQ(std::any_cast<std::string>(results[0].value()),
@@ -189,10 +190,12 @@ TEST_F(FunctionSequenceTest, ErrorHandling) {
     EXPECT_TRUE(results[2].isSuccess());
     EXPECT_EQ(std::any_cast<int>(results[2].value()), 20);
 
-    // Stats should show correct invocation and error counts
+    // Stats should show correct invocation and error counts.
+    // Each test owns a fresh FunctionSequence, so only this test's
+    // 3 invocations (1 of which failed) are counted.
     auto stats = sequence.getStats();
-    EXPECT_EQ(stats.invocationCount, 12);  // 9 from previous + 3 from this test
-    EXPECT_EQ(stats.errorCount, 4);        // 3 from previous + 1 from this test
+    EXPECT_EQ(stats.invocationCount, 3);
+    EXPECT_EQ(stats.errorCount, 1);
 }
 
 // Test execution with timeout
@@ -212,14 +215,13 @@ TEST_F(FunctionSequenceTest, ExecutionTimeout) {
         sequence.executeWithTimeout(args, std::chrono::milliseconds(50));
 
     // First result should succeed
+    ASSERT_EQ(results.size(), 2);
     EXPECT_TRUE(results[0].isSuccess());
     EXPECT_EQ(std::any_cast<int>(results[0].value()), 20);
 
-    // TODO: Uncomment if your implementation properly handles individual
-    // timeouts Second result might time out, but with the future-based
-    // implementation all args are processed with the same future, so we can't
-    // test individual timeouts EXPECT_TRUE(results[1].isError());
-    // EXPECT_TRUE(results[1].error().find("timed out") != std::string::npos);
+    // Second result exceeds the per-argument-set timeout
+    EXPECT_TRUE(results[1].isError());
+    EXPECT_TRUE(results[1].error().find("timed out") != std::string::npos);
 }
 
 // Test execution with retries
@@ -614,9 +616,9 @@ TEST_F(FunctionSequenceTest, FullSequencePipeline) {
         return prefix + std::to_string(value);
     };
 
+    // execute()/run() invoke the LAST registered function, so register each
+    // pipeline stage right before its step.
     sequence.registerFunction(addFunc);
-    sequence.registerFunction(multiplyByFactor);
-    sequence.registerFunction(formatResult);
 
     // Prepare argument sets
     std::vector<std::vector<std::any>> step1Args = {
@@ -630,6 +632,7 @@ TEST_F(FunctionSequenceTest, FullSequencePipeline) {
     EXPECT_EQ(std::any_cast<int>(step1Results[0].value()), 15);
 
     // Prepare step 2 arguments using step 1 result
+    sequence.registerFunction(multiplyByFactor);
     std::vector<std::vector<std::any>> step2Args = {
         {std::any_cast<int>(step1Results[0].value()), 3}  // 15 * 3 = 45
     };
@@ -641,6 +644,7 @@ TEST_F(FunctionSequenceTest, FullSequencePipeline) {
     EXPECT_EQ(std::any_cast<int>(step2Results[0].value()), 45);
 
     // Prepare step 3 arguments using step 2 result
+    sequence.registerFunction(formatResult);
     std::vector<std::vector<std::any>> step3Args = {
         {std::any_cast<int>(step2Results[0].value()),
          std::string("Result: ")}  // "Result: 45"
@@ -747,6 +751,917 @@ TEST_F(FunctionSequenceTest, StatisticsAndDiagnostics) {
     EXPECT_EQ(stats.errorCount, 0);
     EXPECT_EQ(stats.cacheHits, 0);
     EXPECT_EQ(stats.cacheMisses, 0);
+}
+
+// ---------------------------------------------------------------------------
+// StepResult edge cases: throw paths for value() and error()
+// ---------------------------------------------------------------------------
+
+TEST(StepResultTest, ValueThrowsOnError) {
+    auto r = meta::StepResult<int>::makeError("oops");
+    EXPECT_TRUE(r.isError());
+    EXPECT_THROW({ (void)r.value(); }, std::runtime_error);
+}
+
+TEST(StepResultTest, ErrorThrowsOnSuccess) {
+    auto r = meta::StepResult<int>::makeSuccess(42);
+    EXPECT_TRUE(r.isSuccess());
+    EXPECT_THROW({ (void)r.error(); }, std::runtime_error);
+}
+
+TEST(StepResultTest, ValueOrReturnsDefaultWhenError) {
+    auto r = meta::StepResult<int>::makeError("bad");
+    EXPECT_EQ(r.valueOr(99), 99);
+}
+
+TEST(StepResultTest, ValueOrReturnsValueWhenSuccess) {
+    auto r = meta::StepResult<int>::makeSuccess(42);
+    EXPECT_EQ(r.valueOr(99), 42);  // covers the isSuccess() true branch in valueOr
+}
+
+TEST(StepResultTest, DefaultConstructedIsError) {
+    meta::StepResult<int> r;
+    EXPECT_TRUE(r.isError());
+    EXPECT_FALSE(r.isSuccess());
+}
+
+// ---------------------------------------------------------------------------
+// Empty-sequence guard paths
+// ---------------------------------------------------------------------------
+
+TEST(FunctionSequenceEmptyTest, RunReturnsErrorWhenEmpty) {
+    meta::FunctionSequence seq;
+    std::vector<std::vector<std::any>> args = {{1}};
+    auto results = seq.run(args);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_TRUE(results[0].isError());
+}
+
+TEST(FunctionSequenceEmptyTest, RunAllReturnsErrorWhenEmpty) {
+    meta::FunctionSequence seq;
+    std::vector<std::vector<std::any>> args = {{1}};
+    auto results = seq.runAll(args);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_TRUE(results[0][0].isError());
+}
+
+TEST(FunctionSequenceEmptyTest, ExecuteWithTimeoutEmptySeq) {
+    meta::FunctionSequence seq;
+    std::vector<std::vector<std::any>> args = {{1}};
+    auto results =
+        seq.executeWithTimeout(args, std::chrono::milliseconds(100));
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_TRUE(results[0].isError());
+}
+
+TEST(FunctionSequenceEmptyTest, ExecuteWithCachingEmptySeq) {
+    meta::FunctionSequence seq;
+    std::vector<std::vector<std::any>> args = {{1}};
+    auto results = seq.executeWithCaching(args);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_TRUE(results[0].isError());
+}
+
+TEST(FunctionSequenceEmptyTest, ExecuteAllWithCachingEmptySeq) {
+    meta::FunctionSequence seq;
+    std::vector<std::vector<std::any>> args = {{1}};
+    auto results = seq.executeAllWithCaching(args);
+    ASSERT_FALSE(results.empty());
+    EXPECT_TRUE(results[0][0].isError());
+}
+
+TEST(FunctionSequenceEmptyTest, ExecuteParallelEmptySeq) {
+    meta::FunctionSequence seq;
+    std::vector<std::vector<std::any>> args = {{1}};
+    meta::FunctionSequence::ExecutionOptions opts;
+    opts.policy = meta::FunctionSequence::ExecutionPolicy::Parallel;
+    auto results = seq.execute(args, opts);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_TRUE(results[0].isError());
+}
+
+TEST(FunctionSequenceEmptyTest, ExecuteAllParallelEmptySeq) {
+    meta::FunctionSequence seq;
+    std::vector<std::vector<std::any>> args = {{1}};
+    meta::FunctionSequence::ExecutionOptions opts;
+    opts.policy = meta::FunctionSequence::ExecutionPolicy::Parallel;
+    auto results = seq.executeAll(args, opts);
+    ASSERT_FALSE(results.empty());
+    EXPECT_TRUE(results[0][0].isError());
+}
+
+// ---------------------------------------------------------------------------
+// execute() dispatch branches not yet covered
+// ---------------------------------------------------------------------------
+
+// Branch: execute() with timeout option (sequential, non-parallel)
+TEST(FunctionSequenceExecuteTest, ExecuteDispatchTimeout) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) * 2;
+        });
+    std::vector<std::vector<std::any>> args = {{7}};
+    meta::FunctionSequence::ExecutionOptions opts;
+    opts.timeout = std::chrono::milliseconds(500);
+    auto results = seq.execute(args, opts);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_TRUE(results[0].isSuccess());
+    EXPECT_EQ(std::any_cast<int>(results[0].value()), 14);
+}
+
+// Branch: execute() with retryCount option (sequential)
+TEST(FunctionSequenceExecuteTest, ExecuteDispatchRetry) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) + 1;
+        });
+    std::vector<std::vector<std::any>> args = {{5}};
+    meta::FunctionSequence::ExecutionOptions opts;
+    opts.retryCount = 2;
+    auto results = seq.execute(args, opts);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_TRUE(results[0].isSuccess());
+    EXPECT_EQ(std::any_cast<int>(results[0].value()), 6);
+}
+
+// Branch: execute() with notification callback only (no timeout/retry/cache)
+TEST(FunctionSequenceExecuteTest, ExecuteDispatchNotification) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) * 3;
+        });
+    std::vector<std::vector<std::any>> args = {{4}};
+    meta::FunctionSequence::ExecutionOptions opts;
+    std::vector<int> notified;
+    opts.notificationCallback = [&notified](const std::any& v) {
+        notified.push_back(std::any_cast<int>(v));
+    };
+    auto results = seq.execute(args, opts);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_TRUE(results[0].isSuccess());
+    EXPECT_EQ(std::any_cast<int>(results[0].value()), 12);
+    ASSERT_EQ(notified.size(), 1u);
+    EXPECT_EQ(notified[0], 12);
+}
+
+// Branch: execute() plain run (no options set)
+TEST(FunctionSequenceExecuteTest, ExecuteDispatchPlainRun) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) - 1;
+        });
+    std::vector<std::vector<std::any>> args = {{10}};
+    meta::FunctionSequence::ExecutionOptions opts;  // all defaults
+    auto results = seq.execute(args, opts);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_TRUE(results[0].isSuccess());
+    EXPECT_EQ(std::any_cast<int>(results[0].value()), 9);
+}
+
+// ---------------------------------------------------------------------------
+// executeAll() dispatch branches
+// ---------------------------------------------------------------------------
+
+// Branch: executeAll() with ParallelAsync policy
+TEST(FunctionSequenceExecuteAllTest, ExecuteAllDispatchParallelAsync) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) + 10;
+        });
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) * 2;
+        });
+    std::vector<std::vector<std::any>> args = {{5}};
+    meta::FunctionSequence::ExecutionOptions opts;
+    opts.policy = meta::FunctionSequence::ExecutionPolicy::ParallelAsync;
+    auto results = seq.executeAll(args, opts);
+    ASSERT_EQ(results.size(), 1u);
+    ASSERT_EQ(results[0].size(), 2u);
+    EXPECT_TRUE(results[0][0].isSuccess());
+    EXPECT_TRUE(results[0][1].isSuccess());
+}
+
+// Branch: executeAll() with timeout option
+TEST(FunctionSequenceExecuteAllTest, ExecuteAllDispatchTimeout) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) + 1;
+        });
+    std::vector<std::vector<std::any>> args = {{3}};
+    meta::FunctionSequence::ExecutionOptions opts;
+    opts.timeout = std::chrono::milliseconds(500);
+    auto results = seq.executeAll(args, opts);
+    ASSERT_EQ(results.size(), 1u);
+    ASSERT_EQ(results[0].size(), 1u);
+    EXPECT_TRUE(results[0][0].isSuccess());
+    EXPECT_EQ(std::any_cast<int>(results[0][0].value()), 4);
+}
+
+// Branch: executeAll() with retryCount option
+TEST(FunctionSequenceExecuteAllTest, ExecuteAllDispatchRetry) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) * 3;
+        });
+    std::vector<std::vector<std::any>> args = {{2}};
+    meta::FunctionSequence::ExecutionOptions opts;
+    opts.retryCount = 1;
+    auto results = seq.executeAll(args, opts);
+    ASSERT_EQ(results.size(), 1u);
+    ASSERT_EQ(results[0].size(), 1u);
+    EXPECT_TRUE(results[0][0].isSuccess());
+    EXPECT_EQ(std::any_cast<int>(results[0][0].value()), 6);
+}
+
+// Branch: executeAll() with caching option
+TEST(FunctionSequenceExecuteAllTest, ExecuteAllDispatchCaching) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) + 100;
+        });
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) * 10;
+        });
+    std::vector<std::vector<std::any>> args = {{5}, {5}};  // duplicate to hit cache
+    meta::FunctionSequence::ExecutionOptions opts;
+    opts.enableCaching = true;
+    auto results = seq.executeAll(args, opts);
+    ASSERT_EQ(results.size(), 2u);
+    ASSERT_EQ(results[0].size(), 2u);
+    // second batch should be cache hits
+    EXPECT_TRUE(results[1][0].isSuccess());
+    EXPECT_EQ(std::any_cast<int>(results[1][0].value()), 105);
+    EXPECT_TRUE(results[1][1].isSuccess());
+    EXPECT_EQ(std::any_cast<int>(results[1][1].value()), 50);
+    auto stats = seq.getStats();
+    EXPECT_GT(stats.cacheHits, 0u);
+}
+
+// Branch: executeAll() plain runAll
+TEST(FunctionSequenceExecuteAllTest, ExecuteAllDispatchPlain) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) + 7;
+        });
+    std::vector<std::vector<std::any>> args = {{1}};
+    meta::FunctionSequence::ExecutionOptions opts;  // all defaults
+    auto results = seq.executeAll(args, opts);
+    ASSERT_EQ(results.size(), 1u);
+    ASSERT_EQ(results[0].size(), 1u);
+    EXPECT_TRUE(results[0][0].isSuccess());
+    EXPECT_EQ(std::any_cast<int>(results[0][0].value()), 8);
+}
+
+// ---------------------------------------------------------------------------
+// executeAllWithTimeout — not covered at all yet
+// ---------------------------------------------------------------------------
+
+TEST(FunctionSequenceTest2, ExecuteAllWithTimeoutCompletesInTime) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            int ms = std::any_cast<int>(args[0]);
+            std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+            return ms * 2;
+        });
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) + 1;
+        });
+    std::vector<std::vector<std::any>> args = {{10}};
+    auto results =
+        seq.executeAllWithTimeout(args, std::chrono::milliseconds(500));
+    ASSERT_EQ(results.size(), 1u);
+    ASSERT_EQ(results[0].size(), 2u);
+    EXPECT_TRUE(results[0][0].isSuccess());
+    EXPECT_TRUE(results[0][1].isSuccess());
+}
+
+TEST(FunctionSequenceTest2, ExecuteAllWithTimeoutExpires) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            int ms = std::any_cast<int>(args[0]);
+            std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+            return ms;
+        });
+    std::vector<std::vector<std::any>> args = {{300}};
+    auto results =
+        seq.executeAllWithTimeout(args, std::chrono::milliseconds(30));
+    ASSERT_FALSE(results.empty());
+    EXPECT_TRUE(results[0][0].isError());
+    EXPECT_TRUE(results[0][0].error().find("timed out") != std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// executeAllWithRetries — not covered at all yet
+// ---------------------------------------------------------------------------
+
+TEST(FunctionSequenceTest2, ExecuteAllWithRetriesSucceedsOnRetry) {
+    static int callsAll = 0;
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            ++callsAll;
+            int threshold = std::any_cast<int>(args[0]);
+            if (callsAll <= threshold)
+                throw std::runtime_error("not ready");
+            return callsAll;
+        });
+    callsAll = 0;
+    std::vector<std::vector<std::any>> args = {{2}};
+    // function throws until callsAll > 2, so succeeds on 3rd attempt (2 retries)
+    auto results = seq.executeAllWithRetries(args, 3);
+    ASSERT_EQ(results.size(), 1u);
+    ASSERT_EQ(results[0].size(), 1u);
+    EXPECT_TRUE(results[0][0].isSuccess());
+}
+
+TEST(FunctionSequenceTest2, ExecuteAllWithRetriesExhaustRetries) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            // Always returns an error result (no throw; just fails)
+            int v = std::any_cast<int>(args[0]);
+            (void)v;
+            throw std::runtime_error("always fails");
+            return std::any{};
+        });
+    std::vector<std::vector<std::any>> args = {{0}};
+    // With 0 retries the catch fires at attempts==0==retries and returns error
+    auto results = seq.executeAllWithRetries(args, 0);
+    ASSERT_FALSE(results.empty());
+    // Either got an error-wrapped result or the catch-return path
+    bool anyError = false;
+    for (const auto& batch : results)
+        for (const auto& r : batch)
+            if (r.isError()) anyError = true;
+    EXPECT_TRUE(anyError);
+}
+
+// Cover the "not success after retries" loop-exit path in executeAllWithRetries
+TEST(FunctionSequenceTest2, ExecuteAllWithRetriesResultStillFailingAfterLoop) {
+    meta::FunctionSequence seq;
+    // Function that always returns but always produces an "error" result
+    // We do this by making run() internalize the error, not throw.
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            throw std::runtime_error("persistent error");
+            return std::any{};
+        });
+    std::vector<std::vector<std::any>> args = {{0}};
+    // 1 retry: attempts goes 0→catch(attempts==0, retries==1 no return)
+    // then attempts++ → 1, loop condition: attempts<=retries (1<=1) → retry
+    // second time: catch(attempts==1==retries) → returns error
+    auto results = seq.executeAllWithRetries(args, 1);
+    ASSERT_FALSE(results.empty());
+    bool anyError = false;
+    for (const auto& batch : results)
+        for (const auto& r : batch)
+            if (r.isError()) anyError = true;
+    EXPECT_TRUE(anyError);
+}
+
+// ---------------------------------------------------------------------------
+// executeWithCaching exception path
+// ---------------------------------------------------------------------------
+
+TEST(FunctionSequenceTest2, ExecuteWithCachingExceptionPath) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            throw std::runtime_error("cache exception");
+            return std::any{};
+        });
+    std::vector<std::vector<std::any>> args = {{1}};
+    auto results = seq.executeWithCaching(args);
+    ASSERT_FALSE(results.empty());
+    EXPECT_TRUE(results.back().isError());
+    EXPECT_TRUE(results.back().error().find("Exception caught") !=
+                std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// executeAllWithCaching — full coverage including cache hits and exception
+// ---------------------------------------------------------------------------
+
+TEST(FunctionSequenceTest2, ExecuteAllWithCachingHitAndMiss) {
+    meta::FunctionSequence seq;
+    seq.resetStats();
+    seq.clearCache();
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) * 5;
+        });
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) + 100;
+        });
+    // Two identical arg sets → second batch entirely from cache
+    std::vector<std::vector<std::any>> args = {{3}, {3}};
+    auto results = seq.executeAllWithCaching(args);
+    ASSERT_EQ(results.size(), 2u);
+    ASSERT_EQ(results[0].size(), 2u);
+    ASSERT_EQ(results[1].size(), 2u);
+    EXPECT_EQ(std::any_cast<int>(results[0][0].value()), 15);   // 3*5
+    EXPECT_EQ(std::any_cast<int>(results[0][1].value()), 103);  // 3+100
+    EXPECT_EQ(std::any_cast<int>(results[1][0].value()), 15);   // cache hit
+    EXPECT_EQ(std::any_cast<int>(results[1][1].value()), 103);  // cache hit
+    auto stats = seq.getStats();
+    EXPECT_GE(stats.cacheHits, 2u);
+}
+
+TEST(FunctionSequenceTest2, ExecuteAllWithCachingExceptionPath) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            throw std::runtime_error("all-caching exception");
+            return std::any{};
+        });
+    std::vector<std::vector<std::any>> args = {{1}};
+    auto results = seq.executeAllWithCaching(args);
+    ASSERT_FALSE(results.empty());
+    EXPECT_TRUE(results[0][0].isError());
+    EXPECT_TRUE(results[0][0].error().find("Exception caught") !=
+                std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// executeParallel: worker catch (exception in parallel worker),
+// notification callback in parallel worker (both cache-hit and non-cache paths)
+// ---------------------------------------------------------------------------
+
+TEST(FunctionSequenceTest2, ExecuteParallelWorkerCatchBranch) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            throw std::runtime_error("parallel worker exception");
+            return std::any{};
+        });
+    std::vector<std::vector<std::any>> args = {{1}, {2}};
+    meta::FunctionSequence::ExecutionOptions opts;
+    opts.policy = meta::FunctionSequence::ExecutionPolicy::Parallel;
+    auto results = seq.execute(args, opts);
+    ASSERT_EQ(results.size(), 2u);
+    for (const auto& r : results) {
+        EXPECT_TRUE(r.isError());
+        EXPECT_TRUE(r.error().find("parallel execution") != std::string::npos);
+    }
+}
+
+TEST(FunctionSequenceTest2, ExecuteParallelWithCachingAndNotification) {
+    meta::FunctionSequence seq;
+    seq.clearCache();
+    seq.resetStats();
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) + 50;
+        });
+    // Two identical sets → second gets served from cache inside worker
+    std::vector<std::vector<std::any>> args = {{7}, {7}};
+    meta::FunctionSequence::ExecutionOptions opts;
+    opts.policy = meta::FunctionSequence::ExecutionPolicy::Parallel;
+    opts.enableCaching = true;
+    std::vector<int> notified;
+    opts.notificationCallback = [&notified](const std::any& v) {
+        notified.push_back(std::any_cast<int>(v));
+    };
+    auto results = seq.execute(args, opts);
+    ASSERT_EQ(results.size(), 2u);
+    for (const auto& r : results) {
+        EXPECT_TRUE(r.isSuccess());
+        EXPECT_EQ(std::any_cast<int>(r.value()), 57);
+    }
+    // At least one notification from the cache-hit path
+    EXPECT_GE(notified.size(), 1u);
+    auto stats = seq.getStats();
+    EXPECT_GE(stats.cacheHits, 1u);
+}
+
+// ---------------------------------------------------------------------------
+// executeAllParallel worker catch branch
+// ---------------------------------------------------------------------------
+
+TEST(FunctionSequenceTest2, ExecuteAllParallelWorkerCatchBranch) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            throw std::runtime_error("all-parallel worker exception");
+            return std::any{};
+        });
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) + 1;
+        });
+    std::vector<std::vector<std::any>> args = {{1}, {2}};
+    meta::FunctionSequence::ExecutionOptions opts;
+    opts.policy = meta::FunctionSequence::ExecutionPolicy::Parallel;
+    auto results = seq.executeAll(args, opts);
+    ASSERT_EQ(results.size(), 2u);
+    // First function always throws
+    for (const auto& batchRow : results) {
+        EXPECT_TRUE(batchRow[0].isError());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// executeParallelAsync (direct call, not via execute)
+// ---------------------------------------------------------------------------
+
+TEST(FunctionSequenceTest2, ExecuteParallelAsyncDirect) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) * 4;
+        });
+    std::vector<std::vector<std::any>> args = {{3}, {5}};
+    meta::FunctionSequence::ExecutionOptions opts;
+    auto future = seq.executeParallelAsync(std::span(args), opts);
+    auto results = future.get();
+    ASSERT_EQ(results.size(), 2u);
+    EXPECT_TRUE(results[0].isSuccess());
+    EXPECT_TRUE(results[1].isSuccess());
+    // Values are 12 and 20
+    std::set<int> values{std::any_cast<int>(results[0].value()),
+                         std::any_cast<int>(results[1].value())};
+    EXPECT_TRUE(values.count(12));
+    EXPECT_TRUE(values.count(20));
+}
+
+// ---------------------------------------------------------------------------
+// executeAllParallelAsync (direct call)
+// ---------------------------------------------------------------------------
+
+TEST(FunctionSequenceTest2, ExecuteAllParallelAsyncDirect) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) + 2;
+        });
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) * 2;
+        });
+    std::vector<std::vector<std::any>> args = {{4}};
+    meta::FunctionSequence::ExecutionOptions opts;
+    auto future = seq.executeAllParallelAsync(std::span(args), opts);
+    auto results = future.get();
+    ASSERT_EQ(results.size(), 1u);
+    ASSERT_EQ(results[0].size(), 2u);
+    EXPECT_TRUE(results[0][0].isSuccess());
+    EXPECT_TRUE(results[0][1].isSuccess());
+    EXPECT_EQ(std::any_cast<int>(results[0][0].value()), 6);   // 4+2
+    EXPECT_EQ(std::any_cast<int>(results[0][1].value()), 8);   // 4*2
+}
+
+// ---------------------------------------------------------------------------
+// getAverageExecutionTime zero-invocation branch
+// ---------------------------------------------------------------------------
+
+TEST(FunctionSequenceTest2, AverageExecTimeZeroWhenNoInvocations) {
+    meta::FunctionSequence seq;
+    seq.resetStats();
+    EXPECT_EQ(seq.getAverageExecutionTime(), 0.0);
+}
+
+// ---------------------------------------------------------------------------
+// pruneCache / setMaxCacheSize eviction path
+// ---------------------------------------------------------------------------
+
+TEST(FunctionSequenceTest2, PruneCacheEvictor) {
+    meta::FunctionSequence seq;
+    seq.clearCache();
+    // Register a function that uses int args so cache keys vary
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]);
+        });
+    // Fill cache with 5 distinct entries
+    for (int i = 0; i < 5; ++i) {
+        std::vector<std::vector<std::any>> args = {{i}};
+        (void)seq.executeWithCaching(args);
+    }
+    EXPECT_EQ(seq.cacheSize(), 5u);
+
+    // Now shrink max size to 2 → pruneCache should fire and evict 3 entries
+    seq.setMaxCacheSize(2);
+    EXPECT_LE(seq.cacheSize(), 2u);
+}
+
+// ---------------------------------------------------------------------------
+// hashArgument branches: unsigned int, long long, size_t, double, float,
+// bool, std::string, std::string_view  (exercised via executeWithCaching)
+// ---------------------------------------------------------------------------
+
+TEST(FunctionSequenceTest2, HashArgumentUnsignedInt) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any { return 1; });
+    unsigned int v = 42u;
+    std::vector<std::vector<std::any>> args = {{v}};
+    auto r1 = seq.executeWithCaching(args);
+    auto r2 = seq.executeWithCaching(args);  // cache hit
+    EXPECT_TRUE(r1[0].isSuccess());
+    EXPECT_TRUE(r2[0].isSuccess());
+    EXPECT_GE(seq.getStats().cacheHits, 1u);
+}
+
+TEST(FunctionSequenceTest2, HashArgumentLongLong) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any { return 2; });
+    long long v = 999LL;
+    std::vector<std::vector<std::any>> args = {{v}};
+    auto r1 = seq.executeWithCaching(args);
+    auto r2 = seq.executeWithCaching(args);
+    EXPECT_TRUE(r1[0].isSuccess());
+    EXPECT_GE(seq.getStats().cacheHits, 1u);
+}
+
+TEST(FunctionSequenceTest2, HashArgumentSizeT) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any { return 3; });
+    std::size_t v = 77u;
+    std::vector<std::vector<std::any>> args = {{v}};
+    auto r1 = seq.executeWithCaching(args);
+    auto r2 = seq.executeWithCaching(args);
+    EXPECT_TRUE(r1[0].isSuccess());
+    EXPECT_GE(seq.getStats().cacheHits, 1u);
+}
+
+TEST(FunctionSequenceTest2, HashArgumentDouble) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any { return 4; });
+    double v = 3.14;
+    std::vector<std::vector<std::any>> args = {{v}};
+    auto r1 = seq.executeWithCaching(args);
+    auto r2 = seq.executeWithCaching(args);
+    EXPECT_TRUE(r1[0].isSuccess());
+    EXPECT_GE(seq.getStats().cacheHits, 1u);
+}
+
+TEST(FunctionSequenceTest2, HashArgumentFloat) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any { return 5; });
+    float v = 2.71f;
+    std::vector<std::vector<std::any>> args = {{v}};
+    auto r1 = seq.executeWithCaching(args);
+    auto r2 = seq.executeWithCaching(args);
+    EXPECT_TRUE(r1[0].isSuccess());
+    EXPECT_GE(seq.getStats().cacheHits, 1u);
+}
+
+TEST(FunctionSequenceTest2, HashArgumentBool) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any { return 6; });
+    bool v = true;
+    std::vector<std::vector<std::any>> args = {{v}};
+    auto r1 = seq.executeWithCaching(args);
+    auto r2 = seq.executeWithCaching(args);
+    EXPECT_TRUE(r1[0].isSuccess());
+    EXPECT_GE(seq.getStats().cacheHits, 1u);
+}
+
+TEST(FunctionSequenceTest2, HashArgumentString) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any { return 7; });
+    std::string v = "hello";
+    std::vector<std::vector<std::any>> args = {{v}};
+    auto r1 = seq.executeWithCaching(args);
+    auto r2 = seq.executeWithCaching(args);
+    EXPECT_TRUE(r1[0].isSuccess());
+    EXPECT_GE(seq.getStats().cacheHits, 1u);
+}
+
+TEST(FunctionSequenceTest2, HashArgumentStringView) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any { return 8; });
+    std::string_view v = "world";
+    std::vector<std::vector<std::any>> args = {{v}};
+    auto r1 = seq.executeWithCaching(args);
+    auto r2 = seq.executeWithCaching(args);
+    EXPECT_TRUE(r1[0].isSuccess());
+    EXPECT_GE(seq.getStats().cacheHits, 1u);
+}
+
+// ---------------------------------------------------------------------------
+// generateCacheKey with functionIndex (executeAllWithCaching path)
+// covered implicitly but ensure the "func<N>_" prefix path is hit
+// ---------------------------------------------------------------------------
+
+TEST(FunctionSequenceTest2, GenerateCacheKeyWithFunctionIndex) {
+    meta::FunctionSequence seq;
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]);
+        });
+    seq.registerFunction(
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) + 1;
+        });
+    // Same args, two functions: cache keys differ (include func index)
+    std::vector<std::vector<std::any>> args = {{5}, {5}};  // duplicate
+    auto results = seq.executeAllWithCaching(args);
+    ASSERT_EQ(results.size(), 2u);
+    // Second round should come from cache
+    auto stats = seq.getStats();
+    EXPECT_GE(stats.cacheHits, 2u);
+}
+
+// ---------------------------------------------------------------------------
+// StepperBuilder, buildStepper, addNamedStep, withCacheSize
+// ---------------------------------------------------------------------------
+
+TEST(StepperBuilderTest, BuilderAddStepAndBuild) {
+    auto stepper =
+        meta::buildStepper()
+            .addStep([](std::vector<std::any> args) -> std::any {
+                return std::any_cast<int>(args[0]) * 2;
+            })
+            .build();
+    ASSERT_NE(stepper, nullptr);
+    EXPECT_EQ(stepper->functionCount(), 1u);
+    std::vector<std::vector<std::any>> args = {{6}};
+    auto results = stepper->run(args);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_TRUE(results[0].isSuccess());
+    EXPECT_EQ(std::any_cast<int>(results[0].value()), 12);
+}
+
+TEST(StepperBuilderTest, BuilderAddNamedStep) {
+    auto stepper =
+        meta::buildStepper()
+            .addNamedStep("double",
+                          [](std::vector<std::any> args) -> std::any {
+                              return std::any_cast<int>(args[0]) * 2;
+                          })
+            .withCacheSize(50)
+            .build();
+    ASSERT_NE(stepper, nullptr);
+    EXPECT_EQ(stepper->functionCount(), 1u);
+    std::vector<std::vector<std::any>> args = {{7}};
+    auto results = stepper->run(args);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_TRUE(results[0].isSuccess());
+    EXPECT_EQ(std::any_cast<int>(results[0].value()), 14);
+}
+
+// ---------------------------------------------------------------------------
+// RetryStep / makeRetryStep
+// ---------------------------------------------------------------------------
+
+TEST(RetryStepTest, SucceedsOnFirstAttempt) {
+    auto step = meta::makeRetryStep(
+        [](std::vector<std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) + 1;
+        },
+        3, std::chrono::milliseconds{0});
+    auto result = step({std::any{5}});
+    EXPECT_EQ(std::any_cast<int>(result), 6);
+}
+
+TEST(RetryStepTest, RetriesAndEventuallyFails) {
+    // Always throws — should exhaust retries and return empty any{}
+    int calls = 0;
+    auto step = meta::makeRetryStep(
+        [&calls](std::vector<std::any>) -> std::any {
+            ++calls;
+            throw std::runtime_error("always fail");
+            return std::any{};
+        },
+        2, std::chrono::milliseconds{0});
+    auto result = step({});
+    EXPECT_EQ(calls, 2);       // max_retries_ = 2
+    EXPECT_FALSE(result.has_value());
+}
+
+TEST(RetryStepTest, RetriesUntilSuccess) {
+    int calls = 0;
+    auto step = meta::makeRetryStep(
+        [&calls](std::vector<std::any>) -> std::any {
+            ++calls;
+            if (calls < 3)
+                throw std::runtime_error("not yet");
+            return calls;
+        },
+        5, std::chrono::milliseconds{0});
+    auto result = step({});
+    EXPECT_EQ(std::any_cast<int>(result), 3);
+    EXPECT_EQ(calls, 3);
+}
+
+// ---------------------------------------------------------------------------
+// ConditionalStep / makeConditionalStep
+// ---------------------------------------------------------------------------
+
+TEST(ConditionalStepTest, ExecutesWhenConditionTrue) {
+    auto step = meta::makeConditionalStep(
+        [](std::vector<std::any> args) -> bool {
+            return std::any_cast<int>(args[0]) > 0;
+        },
+        [](std::vector<std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) * 10;
+        });
+    auto result = step({std::any{5}});
+    EXPECT_EQ(std::any_cast<int>(result), 50);
+}
+
+TEST(ConditionalStepTest, SkipsWhenConditionFalse) {
+    auto step = meta::makeConditionalStep(
+        [](std::vector<std::any> args) -> bool {
+            return std::any_cast<int>(args[0]) > 0;
+        },
+        [](std::vector<std::any>) -> std::any { return 999; });
+    auto result = step({std::any{-1}});
+    EXPECT_FALSE(result.has_value());  // returns empty any
+}
+
+// ---------------------------------------------------------------------------
+// ParallelStepper
+// ---------------------------------------------------------------------------
+
+TEST(ParallelStepperTest, ExecuteAllReturnsResults) {
+    meta::ParallelStepper ps;
+    ps.addStep([](std::vector<std::any> args) -> std::any {
+        return std::any_cast<int>(args[0]) + 1;
+    });
+    ps.addStep([](std::vector<std::any> args) -> std::any {
+        return std::any_cast<int>(args[0]) * 2;
+    });
+    EXPECT_EQ(ps.stepCount(), 2u);
+    auto results = ps.executeAll({std::any{5}});
+    ASSERT_EQ(results.size(), 2u);
+    EXPECT_EQ(std::any_cast<int>(results[0]), 6);
+    EXPECT_EQ(std::any_cast<int>(results[1]), 10);
+}
+
+// ---------------------------------------------------------------------------
+// StepObserver
+// ---------------------------------------------------------------------------
+
+TEST(StepObserverTest, NotifiesAllCallbacks) {
+    meta::StepObserver obs;
+    std::vector<std::size_t> beforeSteps, afterSteps, errorSteps;
+
+    obs.onBefore([&](std::size_t step, const std::vector<std::any>&) {
+        beforeSteps.push_back(step);
+    });
+    obs.onAfter([&](std::size_t step, const std::any&) {
+        afterSteps.push_back(step);
+    });
+    obs.onError([&](std::size_t step, const std::exception&) {
+        errorSteps.push_back(step);
+    });
+
+    obs.notifyBefore(0, {});
+    obs.notifyBefore(1, {});
+    obs.notifyAfter(0, std::any{42});
+    obs.notifyError(1, std::runtime_error("oops"));
+
+    EXPECT_EQ(beforeSteps.size(), 2u);
+    EXPECT_EQ(beforeSteps[0], 0u);
+    EXPECT_EQ(beforeSteps[1], 1u);
+    EXPECT_EQ(afterSteps.size(), 1u);
+    EXPECT_EQ(afterSteps[0], 0u);
+    EXPECT_EQ(errorSteps.size(), 1u);
+    EXPECT_EQ(errorSteps[0], 1u);
+}
+
+// ---------------------------------------------------------------------------
+// registerFunctions (span overload)
+// ---------------------------------------------------------------------------
+
+TEST(FunctionSequenceTest2, RegisterFunctionsSpan) {
+    meta::FunctionSequence seq;
+    std::vector<meta::FunctionSequence::FunctionType> funcs = {
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) + 1;
+        },
+        [](std::span<const std::any> args) -> std::any {
+            return std::any_cast<int>(args[0]) + 2;
+        }};
+    auto ids = seq.registerFunctions(std::span(funcs));
+    ASSERT_EQ(ids.size(), 2u);
+    EXPECT_EQ(ids[0], 0u);
+    EXPECT_EQ(ids[1], 1u);
+    EXPECT_EQ(seq.functionCount(), 2u);
 }
 
 }  // namespace atom::test
