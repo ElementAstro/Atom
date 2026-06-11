@@ -1,12 +1,14 @@
 #ifndef ATOM_COMPONENTS_PACKAGE_HPP
 #define ATOM_COMPONENTS_PACKAGE_HPP
 
-#include <absl/strings/match.h>
+#include <algorithm>
 #include <array>
+#include <cctype>
 #include <iostream>
 #include <ranges>
 #include <span>
 #include <string_view>
+#include <utility>
 
 // Constants
 constexpr size_t ALIGNMENT = 64;
@@ -149,7 +151,7 @@ constexpr auto ParseObject(std::string_view objectString)
 
         std::string_view line = Trim(objectString.substr(
             currentPosition, nextCommaPosition - currentPosition));
-        if (!line.empty() && absl::StrContains(line, ':')) {
+        if (!line.empty() && line.find(':') != std::string_view::npos) {
             auto [kv, error] = ParseKeyValue(line);
             if (!error.empty()) {
                 return {result, error};
@@ -178,7 +180,7 @@ constexpr auto ParseJson(std::string_view json)
 
         std::string_view line = Trim(
             json.substr(currentPosition, nextLinePosition - currentPosition));
-        if (!line.empty() && absl::StrContains(line, ':')) {
+        if (!line.empty() && line.find(':') != std::string_view::npos) {
             auto [kv, error] = ParseKeyValue(line);
             if (!error.empty()) {
                 return {result, error};
