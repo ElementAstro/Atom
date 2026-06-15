@@ -150,7 +150,7 @@ protected:
 
 TEST(ScriptLanguageTest, EnumValues) {
     EXPECT_EQ(static_cast<uint8_t>(ScriptLanguage::Lua), 0);
-    EXPECT_EQ(static_cast<uint8_t>(ScriptLanguage::ChaiScript), 1);
+    EXPECT_EQ(static_cast<uint8_t>(ScriptLanguage::Python), 1);
     EXPECT_EQ(static_cast<uint8_t>(ScriptLanguage::Auto), 2);
 }
 
@@ -305,7 +305,7 @@ TEST_F(ComponentScriptingAPITest, DetectLanguage) {
     // Should return some language or Auto
     EXPECT_TRUE(autoLang == ScriptLanguage::Auto ||
                 autoLang == ScriptLanguage::Lua ||
-                autoLang == ScriptLanguage::ChaiScript);
+                autoLang == ScriptLanguage::Python);
 }
 
 TEST_F(ComponentScriptingAPITest, RegisterComponentAPI) {

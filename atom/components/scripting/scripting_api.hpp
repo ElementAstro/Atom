@@ -10,7 +10,7 @@ Date: 2024-12-11
 
 Description: Unified Scripting API Architecture
 Provides a consistent interface for component scripting across
-multiple scripting engines (Lua, ChaiScript) with automatic
+multiple scripting engines (Lua, Python) with automatic
 type conversion and error handling.
 
 **************************************************/
@@ -44,7 +44,7 @@ namespace atom::components::scripting {
  */
 enum class ScriptLanguage : uint8_t {
     Lua,
-    ChaiScript,
+    Python,
     Auto  // Auto-detect based on file extension or content
 };
 
