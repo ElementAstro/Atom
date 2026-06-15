@@ -13,45 +13,45 @@
 namespace atom::components {
 
 // JsonSerializer implementation
-SerializationResult JsonSerializer::serialize(
+SerializationOutcome JsonSerializer::serialize(
     const Component& component, const SerializationOptions& options) {
     const auto startTime = std::chrono::high_resolution_clock::now();
-    SerializationResult result;
 
     try {
         nlohmann::json json = componentToJson(component, options);
         std::string jsonString = json.dump(options.prettyPrint ? 4 : -1);
 
+        SerializationResult result;
         result.data.assign(jsonString.begin(), jsonString.end());
         result.originalSize = result.data.size();
         result.compressedSize = result.data.size();  // No compression for now
-        result.success = true;
+        result.serializationTime =
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::high_resolution_clock::now() - startTime);
+        return result;
 
     } catch (const std::exception& e) {
-        result.success = false;
-        result.errorMessage =
-            "JSON serialization failed: " + std::string(e.what());
+        return atom::type::make_unexpected(SerializationError{
+            SerializationErrorCode::SerializeFailed,
+            "JSON serialization failed: " + std::string(e.what())});
     }
-
-    const auto endTime = std::chrono::high_resolution_clock::now();
-    result.serializationTime =
-        std::chrono::duration_cast<std::chrono::microseconds>(endTime -
-                                                              startTime);
-
-    return result;
 }
 
-DeserializationResult JsonSerializer::deserialize(
+DeserializationOutcome JsonSerializer::deserialize(
     const std::vector<uint8_t>& data, const SerializationOptions& options) {
     const auto startTime = std::chrono::high_resolution_clock::now();
-    DeserializationResult result;
 
     try {
         std::string jsonString(data.begin(), data.end());
         nlohmann::json json = nlohmann::json::parse(jsonString);
 
+        DeserializationResult result;
         result.component = jsonToComponent(json, options);
-        result.success = result.component != nullptr;
+        if (!result.component) {
+            return atom::type::make_unexpected(
+                SerializationError{SerializationErrorCode::DeserializeFailed,
+                                   "JSON deserialization produced no component"});
+        }
 
         if (json.contains("metadata") && json["metadata"].contains("version")) {
             result.version = json["metadata"]["version"].get<uint32_t>();
@@ -63,18 +63,16 @@ DeserializationResult JsonSerializer::deserialize(
             result.timestamp = std::chrono::system_clock::now();
         }
 
+        result.deserializationTime =
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::high_resolution_clock::now() - startTime);
+        return result;
+
     } catch (const std::exception& e) {
-        result.success = false;
-        result.errorMessage =
-            "JSON deserialization failed: " + std::string(e.what());
+        return atom::type::make_unexpected(SerializationError{
+            SerializationErrorCode::DeserializeFailed,
+            "JSON deserialization failed: " + std::string(e.what())});
     }
-
-    const auto endTime = std::chrono::high_resolution_clock::now();
-    result.deserializationTime =
-        std::chrono::duration_cast<std::chrono::microseconds>(endTime -
-                                                              startTime);
-
-    return result;
 }
 
 nlohmann::json JsonSerializer::componentToJson(
@@ -140,10 +138,9 @@ std::shared_ptr<Component> JsonSerializer::jsonToComponent(
 }
 
 // BinarySerializer implementation
-SerializationResult BinarySerializer::serialize(
+SerializationOutcome BinarySerializer::serialize(
     const Component& component, const SerializationOptions& options) {
     const auto startTime = std::chrono::high_resolution_clock::now();
-    SerializationResult result;
 
     try {
         std::vector<uint8_t> buffer;
@@ -182,29 +179,25 @@ SerializationResult BinarySerializer::serialize(
         header.checksum = calculateChecksum(buffer);
         writeHeader(buffer, header);  // Update header with checksum
 
+        SerializationResult result;
         result.data = std::move(buffer);
         result.originalSize = result.data.size();
         result.compressedSize = result.data.size();
-        result.success = true;
+        result.serializationTime =
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::high_resolution_clock::now() - startTime);
+        return result;
 
     } catch (const std::exception& e) {
-        result.success = false;
-        result.errorMessage =
-            "Binary serialization failed: " + std::string(e.what());
+        return atom::type::make_unexpected(SerializationError{
+            SerializationErrorCode::SerializeFailed,
+            "Binary serialization failed: " + std::string(e.what())});
     }
-
-    const auto endTime = std::chrono::high_resolution_clock::now();
-    result.serializationTime =
-        std::chrono::duration_cast<std::chrono::microseconds>(endTime -
-                                                              startTime);
-
-    return result;
 }
 
-DeserializationResult BinarySerializer::deserialize(
+DeserializationOutcome BinarySerializer::deserialize(
     const std::vector<uint8_t>& data, const SerializationOptions& /*options*/) {
     const auto startTime = std::chrono::high_resolution_clock::now();
-    DeserializationResult result;
 
     try {
         if (data.size() < sizeof(BinaryHeader)) {
@@ -248,24 +241,21 @@ DeserializationResult BinarySerializer::deserialize(
         auto component = std::make_shared<Component>(name);
         component->setState(state);
 
+        DeserializationResult result;
         result.component = component;
         result.version = header.version;
         result.timestamp = std::chrono::system_clock::time_point{
             std::chrono::milliseconds{header.timestamp}};
-        result.success = true;
+        result.deserializationTime =
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::high_resolution_clock::now() - startTime);
+        return result;
 
     } catch (const std::exception& e) {
-        result.success = false;
-        result.errorMessage =
-            "Binary deserialization failed: " + std::string(e.what());
+        return atom::type::make_unexpected(SerializationError{
+            SerializationErrorCode::InvalidData,
+            "Binary deserialization failed: " + std::string(e.what())});
     }
-
-    const auto endTime = std::chrono::high_resolution_clock::now();
-    result.deserializationTime =
-        std::chrono::duration_cast<std::chrono::microseconds>(endTime -
-                                                              startTime);
-
-    return result;
 }
 
 void BinarySerializer::writeHeader(std::vector<uint8_t>& buffer,
@@ -327,55 +317,49 @@ bool SerializationManager::hasSerializer(SerializationFormat format) const {
     return false;
 }
 
-SerializationResult SerializationManager::serialize(
+SerializationOutcome SerializationManager::serialize(
     const Component& component, const SerializationOptions& options) {
     statistics_.totalSerializations++;
+    statistics_.formatUsage[options.format]++;
 
     ISerializer* serializer = getSerializer(options.format);
     if (!serializer) {
-        SerializationResult result;
-        result.success = false;
-        result.errorMessage =
-            "No serializer available for the specified format";
-        return result;
+        return atom::type::make_unexpected(SerializationError{
+            SerializationErrorCode::NoSerializer,
+            "No serializer available for the specified format"});
     }
 
-    SerializationResult result = serializer->serialize(component, options);
+    SerializationOutcome outcome = serializer->serialize(component, options);
 
-    if (result.success) {
+    if (outcome.has_value()) {
         statistics_.successfulSerializations++;
-        statistics_.totalBytesWritten += result.data.size();
+        statistics_.totalBytesWritten += outcome->data.size();
+        statistics_.totalSerializationTime += outcome->serializationTime;
     }
 
-    statistics_.totalSerializationTime += result.serializationTime;
-    statistics_.formatUsage[options.format]++;
-
-    return result;
+    return outcome;
 }
 
-DeserializationResult SerializationManager::deserialize(
+DeserializationOutcome SerializationManager::deserialize(
     const std::vector<uint8_t>& data, const SerializationOptions& options) {
     statistics_.totalDeserializations++;
 
     ISerializer* serializer = getSerializer(options.format);
     if (!serializer) {
-        DeserializationResult result;
-        result.success = false;
-        result.errorMessage =
-            "No serializer available for the specified format";
-        return result;
+        return atom::type::make_unexpected(SerializationError{
+            SerializationErrorCode::NoSerializer,
+            "No serializer available for the specified format"});
     }
 
-    DeserializationResult result = serializer->deserialize(data, options);
+    DeserializationOutcome outcome = serializer->deserialize(data, options);
 
-    if (result.success) {
+    if (outcome.has_value()) {
         statistics_.successfulDeserializations++;
         statistics_.totalBytesRead += data.size();
+        statistics_.totalDeserializationTime += outcome->deserializationTime;
     }
 
-    statistics_.totalDeserializationTime += result.deserializationTime;
-
-    return result;
+    return outcome;
 }
 
 ISerializer* SerializationManager::getSerializer(SerializationFormat format) {
@@ -390,8 +374,8 @@ ISerializer* SerializationManager::getSerializer(SerializationFormat format) {
 bool SerializationManager::serializeToFile(
     const Component& component, const std::string& filename,
     const SerializationOptions& options) {
-    SerializationResult result = serialize(component, options);
-    if (!result.success) {
+    SerializationOutcome outcome = serialize(component, options);
+    if (!outcome.has_value()) {
         return false;
     }
 
@@ -400,19 +384,18 @@ bool SerializationManager::serializeToFile(
         return false;
     }
 
-    file.write(reinterpret_cast<const char*>(result.data.data()),
-               result.data.size());
+    file.write(reinterpret_cast<const char*>(outcome->data.data()),
+               outcome->data.size());
     return file.good();
 }
 
-DeserializationResult SerializationManager::deserializeFromFile(
+DeserializationOutcome SerializationManager::deserializeFromFile(
     const std::string& filename, const SerializationOptions& options) {
     std::ifstream file(filename, std::ios::binary);
     if (!file) {
-        DeserializationResult result;
-        result.success = false;
-        result.errorMessage = "Failed to open file: " + filename;
-        return result;
+        return atom::type::make_unexpected(SerializationError{
+            SerializationErrorCode::FileError,
+            "Failed to open file: " + filename});
     }
 
     std::vector<uint8_t> data((std::istreambuf_iterator<char>(file)),

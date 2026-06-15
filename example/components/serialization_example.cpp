@@ -157,22 +157,24 @@ void demonstrateBasicSerialization() {
     jsonOptions.version = 1;
 
     auto jsonResult = serializer.serialize(*component, jsonOptions);
-    if (jsonResult.success) {
+    if (jsonResult.has_value()) {
         std::cout << "JSON serialization successful!" << std::endl;
-        std::cout << "Original size: " << jsonResult.originalSize << " bytes"
+        std::cout << "Original size: " << jsonResult->originalSize << " bytes"
                   << std::endl;
-        std::cout << "Serialized size: " << jsonResult.data.size() << " bytes"
+        std::cout << "Serialized size: " << jsonResult->data.size() << " bytes"
                   << std::endl;
         std::cout << "Serialization time: "
-                  << jsonResult.serializationTime.count() << " μs" << std::endl;
+                  << jsonResult->serializationTime.count() << " μs"
+                  << std::endl;
 
         // Convert to string for display
-        std::string jsonString(jsonResult.data.begin(), jsonResult.data.end());
+        std::string jsonString(jsonResult->data.begin(),
+                               jsonResult->data.end());
         std::cout << "JSON data (first 200 chars): "
                   << jsonString.substr(0, 200) << "..." << std::endl;
     } else {
-        std::cout << "JSON serialization failed: " << jsonResult.errorMessage
-                  << std::endl;
+        std::cout << "JSON serialization failed: "
+                  << jsonResult.error_value().message << std::endl;
     }
 
     std::cout << "\n3. Testing binary serialization..." << std::endl;
@@ -184,22 +186,22 @@ void demonstrateBasicSerialization() {
     binaryOptions.version = 1;
 
     auto binaryResult = serializer.serialize(*component, binaryOptions);
-    if (binaryResult.success) {
+    if (binaryResult.has_value()) {
         std::cout << "Binary serialization successful!" << std::endl;
-        std::cout << "Original size: " << binaryResult.originalSize << " bytes"
+        std::cout << "Original size: " << binaryResult->originalSize << " bytes"
                   << std::endl;
-        std::cout << "Compressed size: " << binaryResult.compressedSize
+        std::cout << "Compressed size: " << binaryResult->compressedSize
                   << " bytes" << std::endl;
         std::cout << "Compression ratio: "
-                  << (100.0 * binaryResult.compressedSize /
-                      binaryResult.originalSize)
+                  << (100.0 * binaryResult->compressedSize /
+                      binaryResult->originalSize)
                   << "%" << std::endl;
         std::cout << "Serialization time: "
-                  << binaryResult.serializationTime.count() << " μs"
+                  << binaryResult->serializationTime.count() << " μs"
                   << std::endl;
     } else {
         std::cout << "Binary serialization failed: "
-                  << binaryResult.errorMessage << std::endl;
+                  << binaryResult.error_value().message << std::endl;
     }
 }
 
@@ -286,45 +288,45 @@ void demonstrateDeserialization() {
     std::cout << "\n--- JSON Deserialization ---" << std::endl;
     auto jsonResult =
         serializer.deserializeFromFile("serialization_output/player_data.json");
-    if (jsonResult.success && jsonResult.component) {
+    if (jsonResult.has_value() && jsonResult->component) {
         std::cout << "JSON deserialization successful!" << std::endl;
-        std::cout << "Version: " << jsonResult.version << std::endl;
+        std::cout << "Version: " << jsonResult->version << std::endl;
         std::cout << "Deserialization time: "
-                  << jsonResult.deserializationTime.count() << " μs"
+                  << jsonResult->deserializationTime.count() << " μs"
                   << std::endl;
 
         // Test the deserialized component
-        auto info = jsonResult.component->runCommand("getPlayerInfo", {});
+        auto info = jsonResult->component->runCommand("getPlayerInfo", {});
         std::cout << "Deserialized component info: "
                   << std::any_cast<std::string>(info) << std::endl;
 
         // Note: addComponent method not available in current Registry API
         // Component is already created and can be used directly
-    } else {
-        std::cout << "JSON deserialization failed: " << jsonResult.errorMessage
-                  << std::endl;
+    } else if (!jsonResult.has_value()) {
+        std::cout << "JSON deserialization failed: "
+                  << jsonResult.error_value().message << std::endl;
     }
 
     // Test binary deserialization
     std::cout << "\n--- Binary Deserialization ---" << std::endl;
     auto binaryResult =
         serializer.deserializeFromFile("serialization_output/player_data.bin");
-    if (binaryResult.success && binaryResult.component) {
+    if (binaryResult.has_value() && binaryResult->component) {
         std::cout << "Binary deserialization successful!" << std::endl;
-        std::cout << "Version: " << binaryResult.version << std::endl;
+        std::cout << "Version: " << binaryResult->version << std::endl;
         std::cout << "Deserialization time: "
-                  << binaryResult.deserializationTime.count() << " μs"
+                  << binaryResult->deserializationTime.count() << " μs"
                   << std::endl;
 
-        auto info = binaryResult.component->runCommand("getPlayerInfo", {});
+        auto info = binaryResult->component->runCommand("getPlayerInfo", {});
         std::cout << "Deserialized component info: "
                   << std::any_cast<std::string>(info) << std::endl;
 
         // Note: addComponent method not available in current Registry API
         // Component is already created and can be used directly
-    } else {
+    } else if (!binaryResult.has_value()) {
         std::cout << "Binary deserialization failed: "
-                  << binaryResult.errorMessage << std::endl;
+                  << binaryResult.error_value().message << std::endl;
     }
 }
 
@@ -370,15 +372,15 @@ void demonstrateVersioning() {
     std::cout << "\n--- Loading Version 1 ---" << std::endl;
     auto v1Result = serializer.deserializeFromFile(
         "serialization_output/player_data_v1.json");
-    if (v1Result.success) {
-        std::cout << "Loaded version: " << v1Result.version << std::endl;
+    if (v1Result.has_value()) {
+        std::cout << "Loaded version: " << v1Result->version << std::endl;
     }
 
     std::cout << "\n--- Loading Version 2 ---" << std::endl;
     auto v2Result = serializer.deserializeFromFile(
         "serialization_output/player_data_v2.json");
-    if (v2Result.success) {
-        std::cout << "Loaded version: " << v2Result.version << std::endl;
+    if (v2Result.has_value()) {
+        std::cout << "Loaded version: " << v2Result->version << std::endl;
     }
 }
 
@@ -405,23 +407,24 @@ void demonstrateCustomSerialization() {
         customOptions.customOptions["format_name"] = std::string("CUSTOM");
 
         auto customResult = serializer.serialize(*component, customOptions);
-        if (customResult.success) {
+        if (customResult.has_value()) {
             std::cout << "Custom serialization successful!" << std::endl;
-            std::string customString(customResult.data.begin(),
-                                     customResult.data.end());
+            std::string customString(customResult->data.begin(),
+                                     customResult->data.end());
             std::cout << "Custom data: " << customString << std::endl;
 
             // Test custom deserialization
             auto deserializedResult =
-                serializer.deserialize(customResult.data, customOptions);
-            if (deserializedResult.success && deserializedResult.component) {
+                serializer.deserialize(customResult->data, customOptions);
+            if (deserializedResult.has_value() &&
+                deserializedResult->component) {
                 std::cout << "Custom deserialization successful!" << std::endl;
                 std::cout << "Deserialized component: "
-                          << deserializedResult.component->getName()
+                          << deserializedResult->component->getName()
                           << std::endl;
 
                 auto customLoaded =
-                    deserializedResult.component->getVariable<std::string>(
+                    deserializedResult->component->getVariable<std::string>(
                         "custom_loaded");
                 if (customLoaded) {
                     std::cout << "Custom loaded flag: " << customLoaded->get()
@@ -430,7 +433,7 @@ void demonstrateCustomSerialization() {
             }
         } else {
             std::cout << "Custom serialization failed: "
-                      << customResult.errorMessage << std::endl;
+                      << customResult.error_value().message << std::endl;
         }
     }
 }
@@ -496,10 +499,10 @@ void demonstratePerformanceAnalysis() {
 
         for (const auto& comp : components) {
             auto result = serializer.serialize(*comp, options);
-            if (result.success) {
+            if (result.has_value()) {
                 successCount++;
-                totalSize += result.originalSize;
-                totalCompressedSize += result.data.size();
+                totalSize += result->originalSize;
+                totalCompressedSize += result->data.size();
             }
         }
 
