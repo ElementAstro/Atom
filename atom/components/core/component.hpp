@@ -1078,8 +1078,7 @@ private:
     std::unordered_map<std::string_view, atom::meta::TypeInfo> m_classes_;
 
 #if ENABLE_EVENT_SYSTEM
-    // Event system data - separate cache line
-    alignas(64) struct EventHandler {
+    struct EventHandler {
         atom::components::EventCallbackId id;
         atom::components::EventCallback callback;
         bool once;
@@ -1089,7 +1088,10 @@ private:
             : id(i), callback(std::move(cb)), once(o) {}
     };
 
-    std::unordered_map<std::string, std::vector<EventHandler>> m_EventHandlers_;
+    // Event system data - aligned to start on a separate cache line
+    alignas(64)
+        std::unordered_map<std::string, std::vector<EventHandler>>
+            m_EventHandlers_;
     mutable std::shared_mutex m_EventMutex_;
     std::atomic<atom::components::EventCallbackId> m_NextEventId_{1};
 #endif
