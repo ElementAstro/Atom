@@ -544,6 +544,29 @@ public:
     }
 
     /**
+     * @brief Gets the unwrapped error value directly.
+     *
+     * Convenience accessor returning the underlying E, avoiding the
+     * `.error().error()` double access otherwise required to reach it.
+     *
+     * @return const E& Const reference to the stored error value
+     * @throws std::logic_error if the expected contains a value
+     */
+    [[nodiscard]] constexpr const E& error_value() const& {
+        return error().error();
+    }
+
+    /**
+     * @brief Gets the unwrapped error value directly (move version).
+     *
+     * @return E&& Rvalue reference to the stored error value
+     * @throws std::logic_error if the expected contains a value
+     */
+    [[nodiscard]] constexpr E&& error_value() && {
+        return std::move(*this).error().error();
+    }
+
+    /**
      * @brief Conversion to bool operator.
      *
      * @return true if the expected contains a value, false if it contains an
@@ -942,6 +965,29 @@ public:
                 "Attempted to access error, but it contains a value.");
         }
         return std::get<1>(std::move(value_));
+    }
+
+    /**
+     * @brief Gets the unwrapped error value directly.
+     *
+     * Convenience accessor returning the underlying E, avoiding the
+     * `.error().error()` double access otherwise required to reach it.
+     *
+     * @return const E& Const reference to the stored error value
+     * @throws std::logic_error if the expected represents success
+     */
+    [[nodiscard]] constexpr const E& error_value() const& {
+        return error().error();
+    }
+
+    /**
+     * @brief Gets the unwrapped error value directly (move version).
+     *
+     * @return E&& Rvalue reference to the stored error value
+     * @throws std::logic_error if the expected represents success
+     */
+    [[nodiscard]] constexpr E&& error_value() && {
+        return std::move(*this).error().error();
     }
 
     /**
