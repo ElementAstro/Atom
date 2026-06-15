@@ -21,7 +21,9 @@ Description: Variable Manager
 
 #include <shared_mutex>
 
-#if ENABLE_FASTHASH
+#if ATOM_USE_BOOST_CONTAINERS
+#include "atom/containers/boost_containers.hpp"
+#elif ENABLE_FASTHASH
 #include "emhash/hash_table8.hpp"
 #endif
 
@@ -205,15 +207,13 @@ private:
     } ATOM_ALIGNAS(128);
     mutable std::shared_mutex mutex_;
 
-#if USE_BOOST_CONTAINERS
-    atom::components::containers::flat_map<std::string, VariableInfo>
-        variables_;
-    atom::components::containers::flat_map<std::string, std::any> ranges_;
-    atom::components::containers::flat_map<std::string,
-                                           std::vector<std::string>>
+#if ATOM_USE_BOOST_CONTAINERS
+    atom::containers::flat_map<std::string, VariableInfo> variables_;
+    atom::containers::flat_map<std::string, std::any> ranges_;
+    atom::containers::flat_map<std::string, std::vector<std::string>>
         stringOptions_;
-    atom::components::containers::flat_map<
-        std::string, atom::components::containers::flat_set<std::string>>
+    atom::containers::flat_map<std::string,
+                               atom::containers::flat_set<std::string>>
         groups_;
 #elif ENABLE_FASTHASH
     emhash8::HashMap<std::string, VariableInfo> variables_;

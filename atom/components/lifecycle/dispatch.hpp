@@ -6,7 +6,9 @@
 #include <span>
 #include <string_view>
 
-#if ENABLE_FASTHASH
+#if ATOM_USE_BOOST_CONTAINERS
+#include "atom/containers/boost_containers.hpp"
+#elif ENABLE_FASTHASH
 #include "emhash/hash_set8.hpp"
 #include "emhash/hash_table8.hpp"
 #else
@@ -212,7 +214,7 @@ public:
         std::string_view name) const;
 
 #if ATOM_USE_BOOST_CONTAINERS
-    using StringSet = atom::container::string_hash_set;
+    using StringSet = atom::containers::fast_unordered_set<std::string>;
 #elif ENABLE_FASTHASH
     using StringSet = emhash::HashSet<std::string>;
 #else
@@ -378,11 +380,13 @@ private:
 
     // 使用高性能数据结构来存储命令和相关信息
 #if ATOM_USE_BOOST_CONTAINERS
-    using CommandMap = atom::container::unordered_map<
+    using CommandMap = atom::containers::fast_unordered_map<
         std::string, std::unordered_map<std::string, Command>>;
-    using GroupMap = atom::container::unordered_map<std::string, std::string>;
+    using GroupMap =
+        atom::containers::fast_unordered_map<std::string, std::string>;
     using TimeoutMap =
-        atom::container::unordered_map<std::string, std::chrono::milliseconds>;
+        atom::containers::fast_unordered_map<std::string,
+                                             std::chrono::milliseconds>;
 
     CommandMap commands_;
     GroupMap groupMap_;
