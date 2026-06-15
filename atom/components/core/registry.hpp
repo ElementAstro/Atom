@@ -25,11 +25,21 @@ Description: Component Registry for Managing Component Lifecycle
 #include <vector>
 
 #include <stdexcept>
+
+#if ENABLE_HOT_RELOAD
+#include <filesystem>
+#include <future>
+#endif
+
 #include "../lifecycle/lifecycle.hpp"
 #include "component.hpp"
 #include "component_pool.hpp"
 
 class Component;
+
+namespace atom::meta {
+class DynamicLibrary;
+}  // namespace atom::meta
 
 /**
  * @brief Registry for managing component lifecycle.
@@ -408,6 +418,10 @@ private:
 #if ENABLE_HOT_RELOAD
     std::unordered_map<std::string, std::filesystem::file_time_type>
         componentFileTimestamps_;
+    // Loaded dynamic libraries keyed by module name. Holding the handle keeps
+    // the shared object mapped for the lifetime of the component it provides.
+    std::unordered_map<std::string, std::shared_ptr<atom::meta::DynamicLibrary>>
+        loadedLibraries_;
     std::atomic<bool> watchingForChanges_{false};
     std::future<void> fileWatcherFuture_;
 #endif

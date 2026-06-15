@@ -18,6 +18,7 @@ Description: Registry Pattern Implementation
 #include <chrono>
 
 #include "atom/error/exception.hpp"
+#include "atom/meta/ffi.hpp"
 #include "atom/utils/to_string.hpp"
 #include "fmt/format.h"
 #include "spdlog/spdlog.h"
@@ -519,12 +520,57 @@ bool Registry::loadComponentFromFile(const std::string& path [[maybe_unused]]) {
         return false;
     }
 
-    std::string name = fs::path(path).stem().string();
+    const std::string name = fs::path(path).stem().string();
     spdlog::info("Loading component from file: {} (name: {})", path, name);
 
-    componentFileTimestamps_[name] = fs::last_write_time(path);
+    // Load the shared object. ATOM_MODULE exports C entry points named
+    // "<name>_initialize_registry" / "<name>_getVersion".
+    std::shared_ptr<atom::meta::DynamicLibrary> library;
+    try {
+        atom::meta::DynamicLibrary::Options options;
+        options.strategy = atom::meta::DynamicLibrary::LoadStrategy::Immediate;
+        library = std::make_shared<atom::meta::DynamicLibrary>(path, options);
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to load component library {}: {}", path, e.what());
+        return false;
+    }
 
-    spdlog::warn("Dynamic library loading not implemented yet");
+    auto initFn = library->getFunction<void()>(name + "_initialize_registry");
+    if (!initFn.has_value()) {
+        spdlog::error(
+            "Component library {} does not export '{}_initialize_registry'",
+            path, name);
+        return false;
+    }
+
+    // The plugin registers its component into this same Registry singleton.
+    // Call it before taking mutex_ to avoid re-entrant locking.
+    try {
+        initFn.value()();
+    } catch (const std::exception& e) {
+        spdlog::error("Initialization of component {} failed: {}", name,
+                      e.what());
+        return false;
+    }
+
+    {
+        std::unique_lock lock(mutex_);
+        loadedLibraries_[name] = library;
+        componentFileTimestamps_[name] = fs::last_write_time(path);
+
+        ComponentInfo& info = componentInfos_[name];
+        info.name = name;
+        info.isHotReload = true;
+        if (auto versionFn =
+                library->getFunction<const char*()>(name + "_getVersion");
+            versionFn.has_value()) {
+            if (const char* version = versionFn.value()(); version != nullptr) {
+                info.version = version;
+            }
+        }
+    }
+
+    spdlog::info("Loaded component '{}' from {}", name, path);
     return true;
 #else
     spdlog::error("Hot reload not enabled, cannot load component from file");

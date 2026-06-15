@@ -80,6 +80,12 @@ option("python")
     set_description("Enable Python scripting support")
 option_end()
 
+option("hot_reload")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable runtime loading of components from shared libraries")
+option_end()
+
 -- Main shared library target
 target("atom-component")
     -- Set target kind to shared library
@@ -111,6 +117,10 @@ target("atom-component")
         add_defines("ATOM_ENABLE_PYTHON=1")
     end
 
+    if has_config("hot_reload") then
+        add_defines("ENABLE_HOT_RELOAD=1")
+    end
+
     -- Add include directories
     add_includedirs(".", {public = true})
 
@@ -122,7 +132,7 @@ target("atom-component")
 
     -- Add system libraries
     if is_plat("linux") then
-        add_syslinks("pthread")
+        add_syslinks("pthread", "dl")
     end
 
     -- Enable position independent code (automatic for shared libraries)
@@ -186,12 +196,16 @@ target("atom-component-object")
         add_defines("ATOM_ENABLE_PYTHON=1")
     end
 
+    if has_config("hot_reload") then
+        add_defines("ENABLE_HOT_RELOAD=1")
+    end
+
     -- Configuration
     add_includedirs(".")
     add_packages("spdlog", "fmt")
     add_deps("atom-error", "atom-utils")
     if is_plat("linux") then
-        add_syslinks("pthread")
+        add_syslinks("pthread", "dl")
     end
 
     -- Enable position independent code

@@ -73,6 +73,11 @@ option(ATOM_ENABLE_PYTHON "Enable Python scripting support" OFF)
 # Component event system (emitEvent/on/once/off + registry-level pub/sub)
 option(ATOM_COMPONENTS_ENABLE_EVENTS "Enable component event system" ON)
 
+# Hot reload: load components from shared libraries at runtime
+# (Registry::loadComponentFromFile / watchComponentChanges).
+option(ATOM_COMPONENTS_ENABLE_HOT_RELOAD
+       "Enable runtime loading of components from shared libraries" OFF)
+
 # Conditional source files
 set(OPTIONAL_SOURCES)
 set(OPTIONAL_HEADERS)
@@ -133,7 +138,7 @@ endif()
 find_package(spdlog QUIET)
 
 set(LIBS atom-error $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>
-         ${CMAKE_THREAD_LIBS_INIT})
+         ${CMAKE_THREAD_LIBS_INIT} ${CMAKE_DL_LIBS})
 
 if(spdlog_FOUND)
   list(APPEND LIBS spdlog::spdlog)
@@ -155,6 +160,10 @@ target_compile_features(atom-component PUBLIC cxx_std_20)
 
 if(ATOM_COMPONENTS_ENABLE_EVENTS)
   target_compile_definitions(atom-component PUBLIC ENABLE_EVENT_SYSTEM=1)
+endif()
+
+if(ATOM_COMPONENTS_ENABLE_HOT_RELOAD)
+  target_compile_definitions(atom-component PUBLIC ENABLE_HOT_RELOAD=1)
 endif()
 
 # Install library target
