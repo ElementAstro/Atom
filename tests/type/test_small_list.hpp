@@ -235,7 +235,5 @@ TEST_F(SmallListTest, ExceptionSafety) {
     EXPECT_EQ(throwingList.size(), 1);  // List should remain unchanged
 }
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+// NOTE: main() is provided by the gtest_main library / the aggregating
+// test_header_only.cpp translation unit. This header must not define its own.

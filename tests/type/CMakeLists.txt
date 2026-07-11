@@ -86,9 +86,16 @@ target_compile_features(atom_type_tests PRIVATE cxx_std_20)
 
 # Add compiler flags
 if(MSVC)
-  target_compile_options(atom_type_tests PRIVATE /W4)
+  target_compile_options(atom_type_tests PRIVATE /W4 /bigobj)
 else()
   target_compile_options(atom_type_tests PRIVATE -Wall -Wextra -Wpedantic)
+  # test_header_only.cpp aggregates every header-only test into one translation
+  # unit. With all of them wired in it exceeds the COFF 2^16 section limit on
+  # MinGW, which surfaces as spurious "undefined reference to .refptr.*" link
+  # errors. The big-object format lifts that limit.
+  if(WIN32)
+    target_compile_options(atom_type_tests PRIVATE -Wa,-mbig-obj)
+  endif()
 endif()
 
 # =============================================================================

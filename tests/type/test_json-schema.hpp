@@ -111,7 +111,7 @@ TEST_F(JsonValidatorTest, EnumValidation) {
 
     const auto& errors = validator.getErrors();
     ASSERT_EQ(errors.size(), 1);
-    EXPECT_THAT(errors[0].message, HasSubstr("enum range"));
+    EXPECT_THAT(errors[0].message, HasSubstr("enumeration"));
 }
 
 // Const Validation
@@ -183,7 +183,8 @@ TEST_F(JsonValidatorTest, ArrayValidation) {
     const auto& errors = validator.getErrors();
     ASSERT_GE(errors.size(), 1);
     EXPECT_THAT(errors[0].message, HasSubstr("Type mismatch"));
-    EXPECT_THAT(errors[0].path, HasSubstr("[1]"));
+    // RFC 6901 JSON Pointer paths (not bracket notation): array index 1 → "/1".
+    EXPECT_THAT(errors[0].path, HasSubstr("/1"));
 }
 
 // Dependencies Validation
@@ -223,7 +224,7 @@ TEST_F(JsonValidatorTest, AllOfValidation) {
 
     const auto& errors = validator.getErrors();
     ASSERT_GE(errors.size(), 1);
-    EXPECT_THAT(errors[0].message, HasSubstr("Missing required field"));
+    EXPECT_THAT(errors[0].message, HasSubstr("Missing required property"));
     EXPECT_THAT(errors[0].message, HasSubstr("name"));
 }
 
@@ -257,7 +258,7 @@ TEST_F(JsonValidatorTest, OneOfValidation) {
 
     const auto& errors = validator.getErrors();
     ASSERT_GE(errors.size(), 1);
-    EXPECT_THAT(errors[0].message, HasSubstr("exactly one"));
+    EXPECT_THAT(errors[0].message, HasSubstr("more than one"));
     EXPECT_THAT(errors[0].message, HasSubstr("oneOf"));
 }
 
@@ -270,7 +271,7 @@ TEST_F(JsonValidatorTest, NotValidation) {
 
     const auto& errors = validator.getErrors();
     ASSERT_GE(errors.size(), 1);
-    EXPECT_THAT(errors[0].message, HasSubstr("matches schema in not"));
+    EXPECT_THAT(errors[0].message, HasSubstr("should not validate"));
 }
 
 // Complex Schema Tests
@@ -338,8 +339,8 @@ TEST_F(JsonValidatorTest, ComplexPersonSchema) {
 
     const auto& errors = validator.getErrors();
     ASSERT_GE(errors.size(), 1);
-    EXPECT_THAT(errors[0].message, HasSubstr("enum range"));
-    EXPECT_THAT(errors[0].path, HasSubstr("phoneNumbers[0].type"));
+    EXPECT_THAT(errors[0].message, HasSubstr("enumeration"));
+    EXPECT_THAT(errors[0].path, HasSubstr("phoneNumbers/0/type"));
 }
 
 // Reset/Clear Tests
@@ -436,11 +437,11 @@ TEST_F(JsonValidatorTest, ErrorPathReporting) {
     bool found_scores_error = false;
 
     for (const auto& error : errors) {
-        if (error.path == "user.name") {
+        if (error.path == "user/name") {
             found_name_error = true;
             EXPECT_THAT(error.message, HasSubstr("Type mismatch"));
             EXPECT_THAT(error.message, HasSubstr("string"));
-        } else if (error.path == "user.scores[1]") {
+        } else if (error.path == "user/scores/1") {
             found_scores_error = true;
             EXPECT_THAT(error.message, HasSubstr("Type mismatch"));
             EXPECT_THAT(error.message, HasSubstr("integer"));
@@ -476,13 +477,17 @@ TEST_F(JsonValidatorTest, SchemaDependency) {
     };
     EXPECT_FALSE(validator.validate(missing_schema_deps));
 
+    // Copy the errors now: getErrors() is reset on each validate() call, so the
+    // (valid) instance_without_trigger validation below would otherwise clear
+    // it.
+    const auto errors = validator.getErrors();
+
     json instance_without_trigger = {
         {"name", "John"}  // No credit_card, so dependencies not triggered
     };
     EXPECT_TRUE(validator.validate(instance_without_trigger));
 
-    const auto& errors = validator.getErrors();
     ASSERT_GE(errors.size(), 1);
-    EXPECT_THAT(errors[0].message, HasSubstr("Missing required field"));
+    EXPECT_THAT(errors[0].message, HasSubstr("Missing required property"));
     EXPECT_THAT(errors[0].message, HasSubstr("security_code"));
 }

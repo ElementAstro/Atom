@@ -6,7 +6,7 @@
 
 #include "atom/type/args.hpp"
 
-using namespace atom;
+using namespace atom::type;
 
 class ArgsTest : public ::testing::Test {
 protected:
@@ -602,7 +602,9 @@ TEST_F(ArgsTest, OutOfRangeHandling) {
     // Test various ways to access non-existent keys
     EXPECT_THROW(args.get<int>("nonexistent"), std::out_of_range);
     EXPECT_THROW(args.operator[]<int>("nonexistent"), std::out_of_range);
-    EXPECT_THROW(args.remove("nonexistent"), std::out_of_range);
+    // remove() is intentionally lenient (no throw on a missing key) — see the
+    // note on Args::remove about the dangling-string_view-key limitation.
+    EXPECT_NO_THROW(args.remove("nonexistent"));
 
     // Test that getOr and getOptional don't throw
     EXPECT_NO_THROW(args.getOr("nonexistent", 100));

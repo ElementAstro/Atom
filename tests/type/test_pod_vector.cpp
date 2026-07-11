@@ -3,6 +3,7 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <format>
 
 #include <vector>
 
@@ -525,6 +526,49 @@ TEST(PodVectorBoostTest, BoostFunctionality) {
         PodVectorException);
 }
 #endif
+
+// Comparison operators (operator== / operator<=>) and std::format support.
+TEST(PodVectorComparisonTest, EqualityAndOrdering) {
+    IntVector a;
+    a.pushBack(1);
+    a.pushBack(2);
+    a.pushBack(3);
+
+    IntVector same;
+    same.pushBack(1);
+    same.pushBack(2);
+    same.pushBack(3);
+
+    IntVector greater;
+    greater.pushBack(1);
+    greater.pushBack(2);
+    greater.pushBack(4);
+
+    IntVector shorter;
+    shorter.pushBack(1);
+    shorter.pushBack(2);
+
+    EXPECT_TRUE(a == same);
+    EXPECT_FALSE(a == greater);
+    EXPECT_TRUE(a != greater);
+
+    EXPECT_TRUE(a < greater);
+    EXPECT_TRUE(greater > a);
+    EXPECT_TRUE(a <= same);
+    EXPECT_TRUE(a >= same);
+    EXPECT_TRUE(shorter < a);  // prefix is ordered before the longer vector
+}
+
+TEST(PodVectorFormatTest, StdFormat) {
+    IntVector v;
+    v.pushBack(1);
+    v.pushBack(2);
+    v.pushBack(3);
+    EXPECT_EQ(std::format("{}", v), "[1, 2, 3]");
+
+    IntVector empty;
+    EXPECT_EQ(std::format("{}", empty), "[]");
+}
 
 }  // namespace atom::type::test
 

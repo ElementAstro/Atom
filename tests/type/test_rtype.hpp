@@ -41,9 +41,16 @@ struct TypeWithValidation {
     std::string email;
 };
 
-class RTypeTest : public ::testing::Test {
-protected:
-    Reflectable<SimpleType> simpleTypeReflection = Reflectable<SimpleType>(
+// A Reflectable carries its field types as template parameters, so it is built
+// from its fields via class template argument deduction (the deduction guide in
+// rtype.hpp), not by writing Reflectable<T>. These factories produce the
+// deduced types; the fixture members borrow them through decltype. They live at
+// namespace scope (in a named namespace, for aggregator ODR safety) because an
+// `auto`-returning member function cannot be used in decltype within its own
+// class — its body is only parsed after the class is complete.
+namespace rtype_test {
+inline auto makeSimpleReflection() {
+    return Reflectable(
         make_field<SimpleType>("id", "The unique identifier", &SimpleType::id),
         make_field<SimpleType>("name", "The display name", &SimpleType::name),
         make_field<SimpleType>("value", "A numeric value", &SimpleType::value),
@@ -52,25 +59,39 @@ protected:
         make_field<SimpleType>("tags", "Associated tags", &SimpleType::tags),
         make_field<SimpleType>("numbers", "Associated numbers",
                                &SimpleType::numbers));
+}
 
-    Reflectable<TypeWithValidation> validationTypeReflection =
-        Reflectable<TypeWithValidation>(
-            make_field<TypeWithValidation>(
-                "age", "User age", &TypeWithValidation::age, true, 0,
-                [](const int& age) { return age >= 0 && age <= 120; }),
-            make_field<TypeWithValidation>(
-                "email", "User email", &TypeWithValidation::email, true, "",
-                [](const std::string& email) {
-                    return email.find('@') != std::string::npos &&
-                           email.find('.') != std::string::npos;
-                }));
+inline auto makeValidationReflection() {
+    return Reflectable(
+        make_field<TypeWithValidation>(
+            "age", "User age", &TypeWithValidation::age, true, 0,
+            [](const int& age) { return age >= 0 && age <= 120; }),
+        make_field<TypeWithValidation>(
+            "email", "User email", &TypeWithValidation::email, true,
+            std::string(""), [](const std::string& email) {
+                return email.find('@') != std::string::npos &&
+                       email.find('.') != std::string::npos;
+            }));
+}
 
-    Reflectable<NestedType> nestedTypeReflection = Reflectable<NestedType>(
+inline auto makeNestedReflection() {
+    return Reflectable(
         make_field<NestedType>("id", "The nested type ID", &NestedType::id),
         make_field<NestedType>("description", "A description",
                                &NestedType::description),
         make_field<NestedType>("inner", "The inner simple type",
-                               &NestedType::inner, simpleTypeReflection));
+                               &NestedType::inner, makeSimpleReflection()));
+}
+}  // namespace rtype_test
+
+class RTypeTest : public ::testing::Test {
+protected:
+    decltype(rtype_test::makeSimpleReflection()) simpleTypeReflection =
+        rtype_test::makeSimpleReflection();
+    decltype(rtype_test::makeValidationReflection()) validationTypeReflection =
+        rtype_test::makeValidationReflection();
+    decltype(rtype_test::makeNestedReflection()) nestedTypeReflection =
+        rtype_test::makeNestedReflection();
 
     void SetUp() override {
         // No need to reinitialize in SetUp, already initialized in declaration
@@ -166,21 +187,21 @@ TEST_F(RTypeTest, SimpleTypeToJson) {
 
     JsonObject json = simpleTypeReflection.to_json(obj);
 
-    EXPECT_EQ(json["id"].asNumber(), 42);
-    EXPECT_EQ(json["name"].asString(), "Test Item");
-    EXPECT_DOUBLE_EQ(json["value"].asNumber(), 3.14);
-    EXPECT_TRUE(json["active"].asBool());
+    EXPECT_EQ(json["id"].as_number(), 42);
+    EXPECT_EQ(json["name"].as_string(), "Test Item");
+    EXPECT_DOUBLE_EQ(json["value"].as_number(), 3.14);
+    EXPECT_TRUE(json["active"].as_bool());
 
-    auto tags = json["tags"].asArray();
+    auto tags = json["tags"].as_array();
     ASSERT_EQ(tags.size(), 2);
-    EXPECT_EQ(tags[0].asString(), "tag1");
-    EXPECT_EQ(tags[1].asString(), "tag2");
+    EXPECT_EQ(tags[0].as_string(), "tag1");
+    EXPECT_EQ(tags[1].as_string(), "tag2");
 
-    auto numbers = json["numbers"].asArray();
+    auto numbers = json["numbers"].as_array();
     ASSERT_EQ(numbers.size(), 3);
-    EXPECT_EQ(numbers[0].asNumber(), 1);
-    EXPECT_EQ(numbers[1].asNumber(), 2);
-    EXPECT_EQ(numbers[2].asNumber(), 3);
+    EXPECT_EQ(numbers[0].as_number(), 1);
+    EXPECT_EQ(numbers[1].as_number(), 2);
+    EXPECT_EQ(numbers[2].as_number(), 3);
 }
 
 TEST_F(RTypeTest, SimpleTypeFromYaml) {
@@ -212,21 +233,21 @@ TEST_F(RTypeTest, SimpleTypeToYaml) {
 
     YamlObject yaml = simpleTypeReflection.to_yaml(obj);
 
-    EXPECT_EQ(yaml["id"].asNumber(), 42);
-    EXPECT_EQ(yaml["name"].asString(), "Test Item");
-    EXPECT_DOUBLE_EQ(yaml["value"].asNumber(), 3.14);
-    EXPECT_TRUE(yaml["active"].asBool());
+    EXPECT_EQ(yaml["id"].as_number(), 42);
+    EXPECT_EQ(yaml["name"].as_string(), "Test Item");
+    EXPECT_DOUBLE_EQ(yaml["value"].as_number(), 3.14);
+    EXPECT_TRUE(yaml["active"].as_bool());
 
-    auto tags = yaml["tags"].asArray();
+    auto tags = yaml["tags"].as_array();
     ASSERT_EQ(tags.size(), 2);
-    EXPECT_EQ(tags[0].asString(), "tag1");
-    EXPECT_EQ(tags[1].asString(), "tag2");
+    EXPECT_EQ(tags[0].as_string(), "tag1");
+    EXPECT_EQ(tags[1].as_string(), "tag2");
 
-    auto numbers = yaml["numbers"].asArray();
+    auto numbers = yaml["numbers"].as_array();
     ASSERT_EQ(numbers.size(), 3);
-    EXPECT_EQ(numbers[0].asNumber(), 1);
-    EXPECT_EQ(numbers[1].asNumber(), 2);
-    EXPECT_EQ(numbers[2].asNumber(), 3);
+    EXPECT_EQ(numbers[0].as_number(), 1);
+    EXPECT_EQ(numbers[1].as_number(), 2);
+    EXPECT_EQ(numbers[2].as_number(), 3);
 }
 
 // Nested Type Tests
@@ -266,26 +287,26 @@ TEST_F(RTypeTest, NestedTypeToJson) {
 
     JsonObject json = nestedTypeReflection.to_json(obj);
 
-    EXPECT_EQ(json["id"].asNumber(), 100);
-    EXPECT_EQ(json["description"].asString(), "A nested type");
+    EXPECT_EQ(json["id"].as_number(), 100);
+    EXPECT_EQ(json["description"].as_string(), "A nested type");
 
     // Verify nested object
-    JsonObject innerJson = json["inner"].asObject();
-    EXPECT_EQ(innerJson["id"].asNumber(), 42);
-    EXPECT_EQ(innerJson["name"].asString(), "Test Item");
-    EXPECT_DOUBLE_EQ(innerJson["value"].asNumber(), 3.14);
-    EXPECT_TRUE(innerJson["active"].asBool());
+    JsonObject innerJson = json["inner"].as_object();
+    EXPECT_EQ(innerJson["id"].as_number(), 42);
+    EXPECT_EQ(innerJson["name"].as_string(), "Test Item");
+    EXPECT_DOUBLE_EQ(innerJson["value"].as_number(), 3.14);
+    EXPECT_TRUE(innerJson["active"].as_bool());
 
-    auto tags = innerJson["tags"].asArray();
+    auto tags = innerJson["tags"].as_array();
     ASSERT_EQ(tags.size(), 2);
-    EXPECT_EQ(tags[0].asString(), "tag1");
-    EXPECT_EQ(tags[1].asString(), "tag2");
+    EXPECT_EQ(tags[0].as_string(), "tag1");
+    EXPECT_EQ(tags[1].as_string(), "tag2");
 
-    auto numbers = innerJson["numbers"].asArray();
+    auto numbers = innerJson["numbers"].as_array();
     ASSERT_EQ(numbers.size(), 3);
-    EXPECT_EQ(numbers[0].asNumber(), 1);
-    EXPECT_EQ(numbers[1].asNumber(), 2);
-    EXPECT_EQ(numbers[2].asNumber(), 3);
+    EXPECT_EQ(numbers[0].as_number(), 1);
+    EXPECT_EQ(numbers[1].as_number(), 2);
+    EXPECT_EQ(numbers[2].as_number(), 3);
 }
 
 TEST_F(RTypeTest, NestedTypeFromYaml) {
@@ -324,26 +345,26 @@ TEST_F(RTypeTest, NestedTypeToYaml) {
 
     YamlObject yaml = nestedTypeReflection.to_yaml(obj);
 
-    EXPECT_EQ(yaml["id"].asNumber(), 100);
-    EXPECT_EQ(yaml["description"].asString(), "A nested type");
+    EXPECT_EQ(yaml["id"].as_number(), 100);
+    EXPECT_EQ(yaml["description"].as_string(), "A nested type");
 
     // Verify nested object
-    YamlObject innerYaml = yaml["inner"].asObject();
-    EXPECT_EQ(innerYaml["id"].asNumber(), 42);
-    EXPECT_EQ(innerYaml["name"].asString(), "Test Item");
-    EXPECT_DOUBLE_EQ(innerYaml["value"].asNumber(), 3.14);
-    EXPECT_TRUE(innerYaml["active"].asBool());
+    YamlObject innerYaml = yaml["inner"].as_object();
+    EXPECT_EQ(innerYaml["id"].as_number(), 42);
+    EXPECT_EQ(innerYaml["name"].as_string(), "Test Item");
+    EXPECT_DOUBLE_EQ(innerYaml["value"].as_number(), 3.14);
+    EXPECT_TRUE(innerYaml["active"].as_bool());
 
-    auto tags = innerYaml["tags"].asArray();
+    auto tags = innerYaml["tags"].as_array();
     ASSERT_EQ(tags.size(), 2);
-    EXPECT_EQ(tags[0].asString(), "tag1");
-    EXPECT_EQ(tags[1].asString(), "tag2");
+    EXPECT_EQ(tags[0].as_string(), "tag1");
+    EXPECT_EQ(tags[1].as_string(), "tag2");
 
-    auto numbers = innerYaml["numbers"].asArray();
+    auto numbers = innerYaml["numbers"].as_array();
     ASSERT_EQ(numbers.size(), 3);
-    EXPECT_EQ(numbers[0].asNumber(), 1);
-    EXPECT_EQ(numbers[1].asNumber(), 2);
-    EXPECT_EQ(numbers[2].asNumber(), 3);
+    EXPECT_EQ(numbers[0].as_number(), 1);
+    EXPECT_EQ(numbers[1].as_number(), 2);
+    EXPECT_EQ(numbers[2].as_number(), 3);
 }
 
 // Required Field and Default Value Tests
@@ -352,11 +373,12 @@ TEST_F(RTypeTest, RequiredFieldsMissing) {
     json["value"] = JsonValue(3.14);
 
     // Missing required "id" and "name" fields
-    EXPECT_THROW(simpleTypeReflection.from_json(json), std::invalid_argument);
+    EXPECT_THROW(simpleTypeReflection.from_json(json),
+                 atom::error::InvalidArgument);
 }
 
 TEST_F(RTypeTest, OptionalFieldsWithDefaultValues) {
-    auto optionalReflection = Reflectable<SimpleType>(
+    auto optionalReflection = Reflectable(
         make_field<SimpleType>("id", "The ID", &SimpleType::id, true),
         make_field<SimpleType>("name", "The name", &SimpleType::name, true),
         make_field<SimpleType>("value", "The value", &SimpleType::value, false,
@@ -394,7 +416,7 @@ TEST_F(RTypeTest, ValidationFailsAge) {
     json["email"] = JsonValue("test@example.com");
 
     EXPECT_THROW(validationTypeReflection.from_json(json),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
 }
 
 TEST_F(RTypeTest, ValidationFailsEmail) {
@@ -403,7 +425,7 @@ TEST_F(RTypeTest, ValidationFailsEmail) {
     json["email"] = JsonValue("invalid-email");
 
     EXPECT_THROW(validationTypeReflection.from_json(json),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
 }
 
 // Map Container Tests
@@ -413,7 +435,7 @@ struct TypeWithMap {
 };
 
 TEST_F(RTypeTest, MapContainerYaml) {
-    auto mapReflection = Reflectable<TypeWithMap>(
+    auto mapReflection = Reflectable(
         make_field<TypeWithMap>("counts", "Count values", &TypeWithMap::counts),
         make_field<TypeWithMap>("mappings", "String mappings",
                                 &TypeWithMap::mappings));
@@ -465,18 +487,19 @@ TEST_F(RTypeTest, UnsupportedType) {
         void* pointer;
     };
 
-    auto unsupportedReflection =
-        Reflectable<UnsupportedType>(make_field<UnsupportedType>(
-            "pointer", "A pointer", &UnsupportedType::pointer));
+    auto unsupportedReflection = Reflectable(make_field<UnsupportedType>(
+        "pointer", "A pointer", &UnsupportedType::pointer));
 
     UnsupportedType obj;
 
-    EXPECT_THROW(unsupportedReflection.to_json(obj), std::invalid_argument);
+    EXPECT_THROW(unsupportedReflection.to_json(obj),
+                 atom::error::InvalidArgument);
 
     JsonObject json;
     json["pointer"] = JsonValue("not convertible to pointer");
 
-    EXPECT_THROW(unsupportedReflection.from_json(json), std::invalid_argument);
+    EXPECT_THROW(unsupportedReflection.from_json(json),
+                 atom::error::InvalidArgument);
 }
 
 // Roundtrip Test (serialize then deserialize)

@@ -7,6 +7,8 @@
 
 #include "atom/type/trackable.hpp"
 
+using namespace atom::type;
+
 class TrackableTest : public ::testing::Test {
 protected:
     Trackable<int> intTrackable{42};

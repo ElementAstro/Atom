@@ -34,12 +34,12 @@ protected:
 // Test constructors and basic accessors
 TEST_F(CStreamTest, ConstructorsAndAccessors) {
     // Test lvalue reference constructor
-    cstream<std::vector<int>> stream1(vec);
+    CStream<std::vector<int>> stream1(vec);
     EXPECT_EQ(stream1.size(), 5);
 
     // Test rvalue constructor
     std::vector<int> temp_vec = {6, 7, 8};
-    cstream<std::vector<int>> stream2(std::move(temp_vec));
+    CStream<std::vector<int>> stream2(std::move(temp_vec));
     EXPECT_EQ(stream2.size(), 3);
 
     // Test getRef
@@ -53,14 +53,14 @@ TEST_F(CStreamTest, ConstructorsAndAccessors) {
 
     // Test getMove
     std::vector<int> move_vec = {9, 10, 11};
-    cstream<std::vector<int>> stream3(move_vec);
+    CStream<std::vector<int>> stream3(move_vec);
     auto moved = stream3.getMove();
     EXPECT_TRUE(stream3.get().empty());  // Container should be moved out
     EXPECT_EQ(moved, std::vector<int>({9, 10, 11}));
 
     // Test conversion operator
     std::vector<int> another_vec = {12, 13, 14};
-    cstream<std::vector<int>> stream4(another_vec);
+    CStream<std::vector<int>> stream4(another_vec);
     std::vector<int> explicit_move = static_cast<std::vector<int>&&>(stream4);
     EXPECT_TRUE(stream4.get().empty());  // Container should be moved out
     EXPECT_EQ(explicit_move, std::vector<int>({12, 13, 14}));
@@ -70,7 +70,7 @@ TEST_F(CStreamTest, ConstructorsAndAccessors) {
 TEST_F(CStreamTest, Sorting) {
     // Test default sort
     std::vector<int> unsorted = {5, 3, 1, 4, 2};
-    cstream<std::vector<int>> stream(unsorted);
+    CStream<std::vector<int>> stream(unsorted);
     stream.sorted();
 
     std::vector<int> expected = {1, 2, 3, 4, 5};
@@ -78,7 +78,7 @@ TEST_F(CStreamTest, Sorting) {
 
     // Test custom sort
     std::vector<int> custom_unsorted = {1, 2, 3, 4, 5};
-    cstream<std::vector<int>> custom_stream(custom_unsorted);
+    CStream<std::vector<int>> custom_stream(custom_unsorted);
     custom_stream.sorted(std::greater<int>());
 
     std::vector<int> custom_expected = {5, 4, 3, 2, 1};
@@ -86,7 +86,7 @@ TEST_F(CStreamTest, Sorting) {
 
     // Test string sort
     std::vector<std::string> str_unsorted = {"banana", "apple", "cherry"};
-    cstream<std::vector<std::string>> str_stream(str_unsorted);
+    CStream<std::vector<std::string>> str_stream(str_unsorted);
     str_stream.sorted();
 
     std::vector<std::string> str_expected = {"apple", "banana", "cherry"};
@@ -96,7 +96,7 @@ TEST_F(CStreamTest, Sorting) {
 // Test transformation operations
 TEST_F(CStreamTest, Transform) {
     // Transform integers to strings
-    cstream<std::vector<int>> stream(vec);
+    CStream<std::vector<int>> stream(vec);
     auto transformed = stream.transform<std::vector<std::string>>(
         [](int i) { return "num" + std::to_string(i); });
 
@@ -123,7 +123,7 @@ TEST_F(CStreamTest, Transform) {
 TEST_F(CStreamTest, RemoveAndErase) {
     // Test remove with predicate
     std::vector<int> nums = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    cstream<std::vector<int>> stream(nums);
+    CStream<std::vector<int>> stream(nums);
     stream.remove([](int i) { return i % 2 == 0; });  // Remove even numbers
 
     std::vector<int> expected = {1, 3, 5, 7, 9};
@@ -134,7 +134,7 @@ TEST_F(CStreamTest, RemoveAndErase) {
     std::vector<int> values = {1, 2, 3, 4, 5};
     std::map<int, std::string> map_data = {
         {1, "one"}, {2, "two"}, {3, "three"}};
-    cstream<std::map<int, std::string>> map_stream(map_data);
+    CStream<std::map<int, std::string>> map_stream(map_data);
     map_stream.erase(2);  // Remove entry with key 2
 
     std::map<int, std::string> map_expected = {{1, "one"}, {3, "three"}};
@@ -145,7 +145,7 @@ TEST_F(CStreamTest, RemoveAndErase) {
 TEST_F(CStreamTest, Filter) {
     // Test filter (modifies the stream)
     std::vector<int> nums = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    cstream<std::vector<int>> stream(nums);
+    CStream<std::vector<int>> stream(nums);
     stream.filter([](int i) { return i % 2 == 0; });  // Keep even numbers
 
     std::vector<int> expected = {2, 4, 6, 8, 10};
@@ -153,7 +153,7 @@ TEST_F(CStreamTest, Filter) {
 
     // Test cpFilter (creates a copy)
     std::vector<int> more_nums = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    cstream<std::vector<int>> cp_stream(more_nums);
+    CStream<std::vector<int>> cp_stream(more_nums);
     auto filtered =
         cp_stream.cpFilter([](int i) { return i > 5; });  // Keep numbers > 5
 
@@ -165,7 +165,7 @@ TEST_F(CStreamTest, Filter) {
 // Test accumulation operations
 TEST_F(CStreamTest, Accumulate) {
     // Test default accumulate (sum)
-    cstream<std::vector<int>> stream(vec);
+    CStream<std::vector<int>> stream(vec);
     int sum = stream.accumulate();
     EXPECT_EQ(sum, 15);  // 1+2+3+4+5 = 15
 
@@ -179,7 +179,7 @@ TEST_F(CStreamTest, Accumulate) {
     EXPECT_EQ(sum_squared, 55);  // 1²+2²+3²+4²+5² = 55
 
     // Test accumulate with strings
-    cstream<std::vector<std::string>> str_stream(str_vec);
+    CStream<std::vector<std::string>> str_stream(str_vec);
     std::string concat = str_stream.accumulate(
         std::string(), [](const std::string& acc, const std::string& val) {
             return acc.empty() ? val : acc + "," + val;
@@ -191,7 +191,7 @@ TEST_F(CStreamTest, Accumulate) {
 TEST_F(CStreamTest, IterationAndPredicates) {
     // Test forEach
     std::vector<int> data = {1, 2, 3, 4, 5};
-    cstream<std::vector<int>> stream(data);
+    CStream<std::vector<int>> stream(data);
     int sum = 0;
     stream.forEach([&sum](int val) { sum += val; });
     EXPECT_EQ(sum, 15);
@@ -218,7 +218,7 @@ TEST_F(CStreamTest, IterationAndPredicates) {
 // Test copy, size, count operations
 TEST_F(CStreamTest, CopyAndCount) {
     // Test copy
-    cstream<std::vector<int>> stream(vec);
+    CStream<std::vector<int>> stream(vec);
     auto copied = stream.copy();
 
     // Modify original to prove copy is separate
@@ -233,7 +233,7 @@ TEST_F(CStreamTest, CopyAndCount) {
 
     // Test count with value
     std::vector<int> with_dupes = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4};
-    cstream<std::vector<int>> dupe_stream(with_dupes);
+    CStream<std::vector<int>> dupe_stream(with_dupes);
     int count_3 = dupe_stream.count(3);
     EXPECT_EQ(count_3, 3);
 }
@@ -241,7 +241,7 @@ TEST_F(CStreamTest, CopyAndCount) {
 // Test contains, min, max, mean operations
 TEST_F(CStreamTest, AggregationOperations) {
     // Test contains
-    cstream<std::vector<int>> stream(vec);
+    CStream<std::vector<int>> stream(vec);
     EXPECT_TRUE(stream.contains(3));
     EXPECT_FALSE(stream.contains(10));
 
@@ -259,7 +259,7 @@ TEST_F(CStreamTest, AggregationOperations) {
 
     // Edge case - single element
     std::vector<int> single = {42};
-    cstream<std::vector<int>> single_stream(single);
+    CStream<std::vector<int>> single_stream(single);
     EXPECT_EQ(single_stream.min(), 42);
     EXPECT_EQ(single_stream.max(), 42);
     EXPECT_DOUBLE_EQ(single_stream.mean(), 42.0);
@@ -268,7 +268,7 @@ TEST_F(CStreamTest, AggregationOperations) {
 // Test first operations
 TEST_F(CStreamTest, FirstOperations) {
     // Test first
-    cstream<std::vector<int>> stream(vec);
+    CStream<std::vector<int>> stream(vec);
     auto first_val = stream.first();
     EXPECT_TRUE(first_val.has_value());
     EXPECT_EQ(*first_val, 1);
@@ -284,14 +284,14 @@ TEST_F(CStreamTest, FirstOperations) {
 
     // Test first on empty container
     std::vector<int> empty;
-    cstream<std::vector<int>> empty_stream(empty);
+    CStream<std::vector<int>> empty_stream(empty);
     EXPECT_FALSE(empty_stream.first().has_value());
 }
 
 // Test map, flatMap operations
 TEST_F(CStreamTest, MapOperations) {
     // Test map
-    cstream<std::vector<int>> stream(vec);
+    CStream<std::vector<int>> stream(vec);
     auto mapped = stream.map([](int val) { return val * val; });
 
     std::vector<int> expected = {1, 4, 9, 16, 25};
@@ -299,7 +299,7 @@ TEST_F(CStreamTest, MapOperations) {
 
     // Test flatMap
     std::vector<int> data = {1, 2, 3};
-    cstream<std::vector<int>> flat_stream(data);
+    CStream<std::vector<int>> flat_stream(data);
     auto flat_mapped = flat_stream.flatMap([](int val) {
         return std::vector<int>(
             val, val);  // Create a vector with 'val' copies of 'val'
@@ -313,14 +313,14 @@ TEST_F(CStreamTest, MapOperations) {
 TEST_F(CStreamTest, DistinctAndReverse) {
     // Test distinct
     std::vector<int> with_dupes = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5};
-    cstream<std::vector<int>> dupe_stream(with_dupes);
+    CStream<std::vector<int>> dupe_stream(with_dupes);
     dupe_stream.distinct();
 
     std::vector<int> expected = {1, 2, 3, 4, 5};
     EXPECT_EQ(dupe_stream.get(), expected);
 
     // Test reverse
-    cstream<std::vector<int>> rev_stream(vec);
+    CStream<std::vector<int>> rev_stream(vec);
     rev_stream.reverse();
 
     std::vector<int> rev_expected = {5, 4, 3, 2, 1};
@@ -442,7 +442,7 @@ TEST_F(CStreamTest, ChainedOperations) {
 TEST_F(CStreamTest, EdgeCases) {
     // Empty container
     std::vector<int> empty;
-    cstream<std::vector<int>> empty_stream(empty);
+    CStream<std::vector<int>> empty_stream(empty);
 
     EXPECT_EQ(empty_stream.size(), 0);
     EXPECT_FALSE(empty_stream.first().has_value());
@@ -452,7 +452,7 @@ TEST_F(CStreamTest, EdgeCases) {
 
     // Single element container
     std::vector<int> single = {42};
-    cstream<std::vector<int>> single_stream(single);
+    CStream<std::vector<int>> single_stream(single);
 
     EXPECT_EQ(single_stream.size(), 1);
     EXPECT_EQ(*single_stream.first(), 42);

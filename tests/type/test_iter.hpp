@@ -7,6 +7,8 @@
 
 #include "atom/type/iter.hpp"
 
+using namespace atom::type;
+
 class IteratorTest : public ::testing::Test {
 protected:
     std::vector<int> intVector{1, 2, 3, 4, 5};

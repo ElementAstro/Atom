@@ -8,7 +8,7 @@
 
 #include "atom/type/argsview.hpp"
 
-using namespace atom;
+using namespace atom::type;
 
 // Test fixture for ArgsView tests
 class ArgsViewTest : public ::testing::Test {

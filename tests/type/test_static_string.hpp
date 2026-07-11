@@ -10,6 +10,8 @@
 
 #include "atom/type/static_string.hpp"
 
+using namespace atom::type;
+
 class StaticStringTest : public ::testing::Test {
 protected:
     // Common test setup
@@ -101,14 +103,15 @@ TEST_F(StaticStringTest, ConstructionExceptions) {
     EXPECT_THROW(StaticString<10>(static_cast<const char*>(nullptr)),
                  std::invalid_argument);
 
-    // String too large
+    // String too large (extra parens avoid the most-vexing-parse: without
+    // them `StaticString<10>(long_string);` declares a variable, not a temp).
     const char* long_string =
         "This string is definitely too long for a StaticString<10>";
-    EXPECT_THROW(StaticString<10>(long_string), std::runtime_error);
+    EXPECT_THROW((StaticString<10>(long_string)), std::runtime_error);
 
     // String view too large
     std::string_view long_sv = long_string;
-    EXPECT_THROW(StaticString<10>(long_sv), std::runtime_error);
+    EXPECT_THROW((StaticString<10>(long_sv)), std::runtime_error);
 }
 
 TEST_F(StaticStringTest, StaticAssertCompileTimeCheck) {
@@ -242,13 +245,15 @@ TEST_F(StaticStringTest, Resize) {
     str.resize(3);
     verifyStringEquals(str, "Hel");
 
-    // Resize larger with default char
+    // Resize larger with default char (embedded NULs — build the expected
+    // std::string with an explicit length so it is not truncated at the
+    // first '\0' the way a bare C-string literal would be).
     str.resize(5);
-    verifyStringEquals(str, "Hel\0\0");
+    verifyStringEquals(str, std::string("Hel\0\0", 5));
 
     // Resize larger with custom char
     str.resize(7, 'x');
-    verifyStringEquals(str, "Hel\0\0xx");
+    verifyStringEquals(str, std::string("Hel\0\0xx", 7));
 
     // Resize overflow
     EXPECT_THROW(str.resize(11), std::runtime_error);
@@ -324,8 +329,9 @@ TEST_F(StaticStringTest, Replace) {
     str.replace(0, 7, "Hi");
     verifyStringEquals(str, "Hi Moon");
 
-    // Replace with longer string
-    str.replace(3, 4, " beautiful World");
+    // Replace with longer string (pos 3 follows the "Hi " prefix which
+    // already carries the separating space, so the replacement must not).
+    str.replace(3, 4, "beautiful World");
     verifyStringEquals(str, "Hi beautiful World");
 
     // Replace out of range
@@ -336,7 +342,8 @@ TEST_F(StaticStringTest, Replace) {
 }
 
 TEST_F(StaticStringTest, Insert) {
-    StaticString<20> str("Hello World");
+    // <30>: "Oh, Hello beautiful World" (25 chars) must fit.
+    StaticString<30> str("Hello World");
 
     // Insert in middle
     str.insert(5, " beautiful");
@@ -354,7 +361,8 @@ TEST_F(StaticStringTest, Insert) {
 }
 
 TEST_F(StaticStringTest, Erase) {
-    StaticString<20> str("Hello beautiful World");
+    // <30>: "Hello beautiful World" is 21 chars, so <20> would overflow.
+    StaticString<30> str("Hello beautiful World");
 
     // Erase middle
     str.erase(6, 10);
@@ -421,11 +429,12 @@ TEST_F(StaticStringTest, ConcatenationOperator) {
     // Check types
     EXPECT_EQ(typeid(result), typeid(StaticString<15>));
 
-    // Concatenation overflow
+    // Concatenation overflow: operator+ returns StaticString<N1+N2>, whose
+    // capacity always accommodates the result, so it can never overflow.
+    // Fixed-capacity operator+= is the path that can throw.
     StaticString<5> small1("12345");
     StaticString<5> small2("67890");
-    // This should throw at runtime:
-    EXPECT_THROW(small1 + small2 + small2, std::runtime_error);
+    EXPECT_THROW(small1 += small2, std::runtime_error);
 }
 
 // Conversion Tests
@@ -632,8 +641,10 @@ TEST_F(StaticStringTest, ParallelOperations) {
     }
 }
 
-// Constexpr feature test - these must be at namespace scope, not in a function
-namespace {
+// Constexpr feature test - these must be at namespace scope, not in a function.
+// Named namespace (not anonymous) so it does not collide with other test files
+// when this header is compiled through the test_header_only.cpp aggregator.
+namespace static_string_test {
 // Test that StaticString can be used in constexpr contexts
 constexpr StaticString<5> constexpr_str = "Hello";
 static_assert(constexpr_str.size() == 5, "Constexpr size check failed");
@@ -647,15 +658,15 @@ constexpr StaticString<10> get_static_string() {
 
 constexpr auto str = get_static_string();
 static_assert(str.size() == 5, "Constexpr function return size check failed");
-}  // namespace
+}  // namespace static_string_test
 
 // Runtime validation of constexpr features
 TEST_F(StaticStringTest, ConstexprUsage) {
     // Verify the constexpr values at runtime
-    verifyStringEquals(constexpr_str, "Hello");
-    verifyStringEquals(str, "Hello");
+    verifyStringEquals(static_string_test::constexpr_str, "Hello");
+    verifyStringEquals(static_string_test::str, "Hello");
 
     // Additional runtime checks can go here
-    EXPECT_EQ(constexpr_str.size(), 5);
-    EXPECT_EQ(str.size(), 5);
+    EXPECT_EQ(static_string_test::constexpr_str.size(), 5);
+    EXPECT_EQ(static_string_test::str.size(), 5);
 }

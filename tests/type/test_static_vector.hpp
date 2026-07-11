@@ -6,6 +6,7 @@
 #include <thread>
 #include <vector>
 
+#include "atom/error/exception.hpp"
 #include "atom/type/static_vector.hpp"
 
 using namespace atom::type;
@@ -164,8 +165,8 @@ TEST_F(StaticVectorTest, At) {
     EXPECT_EQ(vec.at(1), 100);
 
     // Out of bounds
-    EXPECT_THROW(vec.at(3), std::out_of_range);
-    EXPECT_THROW(constVec.at(3), std::out_of_range);
+    EXPECT_THROW(vec.at(3), atom::error::OutOfRange);
+    EXPECT_THROW(constVec.at(3), atom::error::OutOfRange);
 }
 
 TEST_F(StaticVectorTest, Front) {
@@ -182,10 +183,10 @@ TEST_F(StaticVectorTest, Front) {
 
     // Empty vector
     StaticVector<int, SmallCapacity> emptyVec;
-    EXPECT_THROW(emptyVec.front(), std::underflow_error);
+    EXPECT_THROW(emptyVec.front(), atom::error::UnderflowException);
 
     const auto& constEmptyVec = emptyVec;
-    EXPECT_THROW(constEmptyVec.front(), std::underflow_error);
+    EXPECT_THROW(constEmptyVec.front(), atom::error::UnderflowException);
 }
 
 TEST_F(StaticVectorTest, Back) {
@@ -202,10 +203,10 @@ TEST_F(StaticVectorTest, Back) {
 
     // Empty vector
     StaticVector<int, SmallCapacity> emptyVec;
-    EXPECT_THROW(emptyVec.back(), std::underflow_error);
+    EXPECT_THROW(emptyVec.back(), atom::error::UnderflowException);
 
     const auto& constEmptyVec = emptyVec;
-    EXPECT_THROW(constEmptyVec.back(), std::underflow_error);
+    EXPECT_THROW(constEmptyVec.back(), atom::error::UnderflowException);
 }
 
 TEST_F(StaticVectorTest, Data) {
@@ -275,7 +276,8 @@ TEST_F(StaticVectorTest, Reserve) {
     EXPECT_EQ(vec.capacity(), SmallCapacity);
 
     // Reserve beyond capacity should throw
-    EXPECT_THROW(vec.reserve(SmallCapacity + 1), std::overflow_error);
+    EXPECT_THROW(vec.reserve(SmallCapacity + 1),
+                 atom::error::OverflowException);
 }
 
 TEST_F(StaticVectorTest, ShrinkToFit) {
@@ -316,7 +318,7 @@ TEST_F(StaticVectorTest, PushBack) {
     vec.pushBack(40);
     vec.pushBack(50);
     EXPECT_EQ(vec.size(), 5);
-    EXPECT_THROW(vec.pushBack(60), std::overflow_error);
+    EXPECT_THROW(vec.pushBack(60), atom::error::OverflowException);
 
     // Test pushing by rvalue
     int val = 25;
@@ -344,7 +346,7 @@ TEST_F(StaticVectorTest, EmplaceBack) {
     vec.emplaceBack("2");
     vec.emplaceBack("3");
     EXPECT_EQ(vec.size(), 5);
-    EXPECT_THROW(vec.emplaceBack("overflow"), std::overflow_error);
+    EXPECT_THROW(vec.emplaceBack("overflow"), atom::error::OverflowException);
 }
 
 TEST_F(StaticVectorTest, PopBack) {
@@ -362,7 +364,7 @@ TEST_F(StaticVectorTest, PopBack) {
     EXPECT_EQ(vec.size(), 0);
 
     // Pop from empty vector
-    EXPECT_THROW(vec.popBack(), std::underflow_error);
+    EXPECT_THROW(vec.popBack(), atom::error::UnderflowException);
 }
 
 TEST_F(StaticVectorTest, Insert) {
@@ -389,7 +391,7 @@ TEST_F(StaticVectorTest, Insert) {
     EXPECT_EQ(vec[4], 40);
 
     // Insert should fail when full
-    EXPECT_THROW(vec.insert(vec.begin(), 0), std::overflow_error);
+    EXPECT_THROW(vec.insert(vec.begin(), 0), atom::error::OverflowException);
 
     // Test insert with rvalue
     StaticVector<int, SmallCapacity> vec2{1, 3};
@@ -417,7 +419,8 @@ TEST_F(StaticVectorTest, InsertN) {
     EXPECT_EQ(vec.size(), 4);
 
     // Insert should fail when capacity would be exceeded
-    EXPECT_THROW(vec.insert(vec.begin(), 2, 50), std::overflow_error);
+    EXPECT_THROW(vec.insert(vec.begin(), 2, 50),
+                 atom::error::OverflowException);
 }
 
 TEST_F(StaticVectorTest, InsertRange) {
@@ -442,7 +445,7 @@ TEST_F(StaticVectorTest, InsertRange) {
     // Insert should fail when capacity would be exceeded
     std::vector<int> largeVec{1, 2, 3, 4, 5};
     EXPECT_THROW(vec.insert(vec.begin(), largeVec.begin(), largeVec.end()),
-                 std::overflow_error);
+                 atom::error::OverflowException);
 }
 
 TEST_F(StaticVectorTest, InsertInitializerList) {
@@ -458,7 +461,8 @@ TEST_F(StaticVectorTest, InsertInitializerList) {
     EXPECT_EQ(vec[3], 40);
 
     // Insert should fail when capacity would be exceeded
-    EXPECT_THROW(vec.insert(vec.begin(), {1, 2, 3, 4, 5}), std::overflow_error);
+    EXPECT_THROW(vec.insert(vec.begin(), {1, 2, 3, 4, 5}),
+                 atom::error::OverflowException);
 }
 
 TEST_F(StaticVectorTest, Emplace) {
@@ -485,7 +489,8 @@ TEST_F(StaticVectorTest, Emplace) {
     EXPECT_EQ(vec[4], "!");
 
     // Emplace should fail when full
-    EXPECT_THROW(vec.emplace(vec.begin(), "overflow"), std::overflow_error);
+    EXPECT_THROW(vec.emplace(vec.begin(), "overflow"),
+                 atom::error::OverflowException);
 }
 
 TEST_F(StaticVectorTest, Erase) {
@@ -514,8 +519,8 @@ TEST_F(StaticVectorTest, Erase) {
     EXPECT_EQ(vec[1], 40);
 
     // Erase out of bounds
-    EXPECT_THROW(vec.erase(vec.end()), std::out_of_range);
-    EXPECT_THROW(vec.erase(vec.begin() - 1), std::out_of_range);
+    EXPECT_THROW(vec.erase(vec.end()), atom::error::OutOfRange);
+    EXPECT_THROW(vec.erase(vec.begin() - 1), atom::error::OutOfRange);
 }
 
 TEST_F(StaticVectorTest, EraseRange) {
@@ -540,10 +545,12 @@ TEST_F(StaticVectorTest, EraseRange) {
 
     // Erase invalid range
     vec = {10, 20, 30};
-    EXPECT_THROW(vec.erase(vec.begin() + 2, vec.begin()), std::out_of_range);
+    EXPECT_THROW(vec.erase(vec.begin() + 2, vec.begin()),
+                 atom::error::OutOfRange);
     EXPECT_THROW(vec.erase(vec.begin() - 1, vec.begin() + 1),
-                 std::out_of_range);
-    EXPECT_THROW(vec.erase(vec.begin(), vec.end() + 1), std::out_of_range);
+                 atom::error::OutOfRange);
+    EXPECT_THROW(vec.erase(vec.begin(), vec.end() + 1),
+                 atom::error::OutOfRange);
 }
 
 TEST_F(StaticVectorTest, Resize) {
@@ -573,7 +580,7 @@ TEST_F(StaticVectorTest, Resize) {
     EXPECT_TRUE(vec.empty());
 
     // Resize beyond capacity
-    EXPECT_THROW(vec.resize(SmallCapacity + 1), std::overflow_error);
+    EXPECT_THROW(vec.resize(SmallCapacity + 1), atom::error::OverflowException);
 }
 
 TEST_F(StaticVectorTest, ResizeWithValue) {
@@ -595,7 +602,8 @@ TEST_F(StaticVectorTest, ResizeWithValue) {
     EXPECT_EQ(vec[1], 2);
 
     // Resize beyond capacity
-    EXPECT_THROW(vec.resize(SmallCapacity + 1, 42), std::overflow_error);
+    EXPECT_THROW(vec.resize(SmallCapacity + 1, 42),
+                 atom::error::OverflowException);
 }
 
 TEST_F(StaticVectorTest, Swap) {
@@ -750,8 +758,9 @@ TEST_F(StaticVectorTest, AssignFunction) {
 
     // Assign beyond capacity
     std::vector<int> tooLargeVec(SmallCapacity + 1, 1);
-    EXPECT_THROW(vec.assign(tooLargeVec), std::length_error);
-    EXPECT_THROW(vec.assign(SmallCapacity + 1, 1), std::length_error);
+    EXPECT_THROW(vec.assign(tooLargeVec), atom::error::LengthException);
+    EXPECT_THROW(vec.assign(SmallCapacity + 1, 1),
+                 atom::error::LengthException);
 }
 
 // Error handling tests
@@ -760,15 +769,16 @@ TEST_F(StaticVectorTest, CapacityErrors) {
 
     vec.pushBack(1);
     vec.pushBack(2);
-    EXPECT_THROW(vec.pushBack(3), std::overflow_error);
+    EXPECT_THROW(vec.pushBack(3), atom::error::OverflowException);
 
     vec.clear();
     vec.pushBack(1);
 
-    EXPECT_THROW(vec.insert(vec.begin(), 2, 10), std::overflow_error);
+    EXPECT_THROW(vec.insert(vec.begin(), 2, 10),
+                 atom::error::OverflowException);
 
     std::vector<int> threeInts{1, 2, 3};
-    EXPECT_THROW(vec.assign(threeInts), std::length_error);
+    EXPECT_THROW(vec.assign(threeInts), atom::error::LengthException);
 }
 
 // Special member function tests
@@ -863,8 +873,8 @@ TEST_F(StaticVectorTest, MakeStaticVector) {
 
     // Too large
     std::vector<int> largeVec(SmallCapacity + 1, 1);
-    EXPECT_THROW(makeStaticVector<int, SmallCapacity>(largeVec),
-                 std::length_error);
+    EXPECT_THROW((makeStaticVector<int, SmallCapacity>(largeVec)),
+                 atom::error::LengthException);
 }
 
 // Smart pointer wrapper tests
@@ -934,7 +944,5 @@ TEST_F(StaticVectorTest, ThreadSafety) {
     EXPECT_EQ(sum, 124750 * numThreads);
 }
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+// NOTE: main() is provided by the gtest_main library / the aggregating
+// test_header_only.cpp translation unit. This header must not define its own.
