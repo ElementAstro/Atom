@@ -210,7 +210,7 @@ struct PointerEntry {
  * @brief Enhanced GlobalSharedPtrManager with improved functionality and
  * performance
  */
-class GlobalSharedPtrManager : public NonCopyable {
+class GlobalSharedPtrManager : public atom::type::NonCopyable {
 public:
     using Clock = std::chrono::system_clock;
     using TimePoint = Clock::time_point;

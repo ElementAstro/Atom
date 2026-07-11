@@ -58,7 +58,7 @@ concept SwitchCallable = std::invocable<F, Args...>;
  * @tparam Args The types of additional arguments to pass to the functions
  */
 template <bool ThreadSafe = false, typename... Args>
-class StringSwitch : public NonCopyable {
+class StringSwitch : public atom::type::NonCopyable {
 public:
     /**
      * @brief Type alias for custom return types

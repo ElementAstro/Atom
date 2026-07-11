@@ -2,7 +2,9 @@
 #define ATOM_TYPE_POD_VECTOR_HPP
 
 #include <algorithm>
+#include <compare>
 #include <cstring>
+#include <format>
 #include <initializer_list>
 #include <memory>
 #include <type_traits>
@@ -514,7 +516,7 @@ public:
      * @return Reference to the element
      * @throws std::out_of_range if index is out of bounds
      */
-    constexpr auto operator[](int index) -> T& {
+    [[nodiscard]] constexpr auto operator[](int index) -> T& {
         if (index < 0 || index >= size_) {
             throw std::out_of_range("PodVector index out of range");
         }
@@ -527,7 +529,7 @@ public:
      * @return Const reference to the element
      * @throws std::out_of_range if index is out of bounds
      */
-    constexpr auto operator[](int index) const -> const T& {
+    [[nodiscard]] constexpr auto operator[](int index) const -> const T& {
         if (index < 0 || index >= size_) {
             throw std::out_of_range("PodVector index out of range");
         }
@@ -569,7 +571,7 @@ public:
      * @return Reference to the last element
      * @throws std::runtime_error if vector is empty
      */
-    constexpr auto back() -> T& {
+    [[nodiscard]] constexpr auto back() -> T& {
         if (size_ == 0) {
             throw std::runtime_error("PodVector is empty");
         }
@@ -581,7 +583,7 @@ public:
      * @return Const reference to the last element
      * @throws std::runtime_error if vector is empty
      */
-    constexpr auto back() const -> const T& {
+    [[nodiscard]] constexpr auto back() const -> const T& {
         if (size_ == 0) {
             throw std::runtime_error("PodVector is empty");
         }
@@ -606,13 +608,15 @@ public:
      * @brief Returns pointer to the underlying data
      * @return Pointer to the data array
      */
-    constexpr auto data() noexcept -> T* { return data_; }
+    [[nodiscard]] constexpr auto data() noexcept -> T* { return data_; }
 
     /**
      * @brief Returns const pointer to the underlying data
      * @return Const pointer to the data array
      */
-    constexpr auto data() const noexcept -> const T* { return data_; }
+    [[nodiscard]] constexpr auto data() const noexcept -> const T* {
+        return data_;
+    }
 
     /**
      * @brief Clears the vector content
@@ -723,6 +727,51 @@ public:
     }
 };
 
+// Equality and three-way comparison (C++20). !=, <, <=, >, >= are synthesized.
+template <PodType T, int Growth>
+[[nodiscard]] constexpr auto operator==(const PodVector<T, Growth>& lhs,
+                                        const PodVector<T, Growth>& rhs)
+    -> bool {
+    return lhs.size() == rhs.size() &&
+           std::equal(lhs.begin(), lhs.end(), rhs.begin());
+}
+
+template <PodType T, int Growth>
+[[nodiscard]] constexpr auto operator<=>(const PodVector<T, Growth>& lhs,
+                                         const PodVector<T, Growth>& rhs) {
+    return std::lexicographical_compare_three_way(lhs.begin(), lhs.end(),
+                                                  rhs.begin(), rhs.end());
+}
+
 }  // namespace atom::type
+
+/**
+ * @brief std::format support for PodVector, rendered as "[a, b, c]".
+ */
+template <atom::type::PodType T, int Growth, typename CharT>
+    requires std::formattable<T, CharT>
+struct std::formatter<atom::type::PodVector<T, Growth>, CharT> {
+    constexpr auto parse(std::basic_format_parse_context<CharT>& ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const atom::type::PodVector<T, Growth>& vec,
+                FormatContext& ctx) const {
+        auto out = ctx.out();
+        *out++ = CharT{'['};
+        bool first = true;
+        for (const auto& elem : vec) {
+            if (!first) {
+                *out++ = CharT{','};
+                *out++ = CharT{' '};
+            }
+            first = false;
+            out = std::format_to(out, "{}", elem);
+        }
+        *out++ = CharT{']'};
+        return out;
+    }
+};
 
 #endif  // ATOM_TYPE_POD_VECTOR_HPP

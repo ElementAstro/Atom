@@ -13,8 +13,8 @@ using modern C++.
 
 **************************************************/
 
-#ifndef ATOM_EXPERIMENT_SSTRING_HPP
-#define ATOM_EXPERIMENT_SSTRING_HPP
+#ifndef ATOM_TYPE_STATIC_STRING_HPP
+#define ATOM_TYPE_STATIC_STRING_HPP
 
 #include <immintrin.h>
 #include <algorithm>
@@ -26,6 +26,8 @@ using modern C++.
 #include <stdexcept>
 #include <string_view>
 #include <utility>
+
+namespace atom::type {
 
 namespace detail {
 
@@ -528,7 +530,11 @@ public:
      */
     [[nodiscard]] constexpr auto find(
         std::string_view str, size_type pos = 0) const noexcept -> size_type {
-        if (pos >= size_ || str.empty() || str.size() > size_ - pos) {
+        // An empty needle matches at pos (mirrors std::string::find).
+        if (str.empty()) {
+            return pos <= size_ ? pos : npos;
+        }
+        if (pos >= size_ || str.size() > size_ - pos) {
             return npos;
         }
 
@@ -653,13 +659,12 @@ public:
         StaticString<N + M> result;
         const size_type total_size = this->size() + other.size();
 
-        if (total_size > N + M) {
-            throw std::runtime_error("StaticString overflow on concatenation");
-        }
-
+        // Size the result FIRST: resize() fills [old_size, count) with '\0', so
+        // doing it after the copies would wipe them. After resize, overwrite
+        // the zero-filled region with the actual characters.
+        result.resize(total_size);
         std::copy_n(this->data(), this->size(), result.data());
         std::copy_n(other.data(), other.size(), result.data() + this->size());
-        result.resize(total_size);
         return result;
     }
 
@@ -715,4 +720,6 @@ std::ostream& operator<<(std::ostream& os, const StaticString<N>& str) {
 template <typename T, std::size_t N>
 StaticString(const T (&)[N]) -> StaticString<N - 1>;
 
-#endif  // ATOM_EXPERIMENT_SSTRING_HPP
+}  // namespace atom::type
+
+#endif  // ATOM_TYPE_STATIC_STRING_HPP

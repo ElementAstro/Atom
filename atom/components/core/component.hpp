@@ -32,6 +32,8 @@ Description: Basic Component Definition
 
 #include <fmt/format.h>
 
+using atom::type::PointerSentinel;
+
 #include <chrono>
 #include <concepts>
 #include <memory>

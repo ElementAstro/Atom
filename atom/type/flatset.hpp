@@ -2,8 +2,9 @@
 #define ATOM_TYPE_FLAT_SET_HPP
 
 #include <algorithm>
+#include <compare>
 #include <concepts>
-#include <execution>
+#include <format>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
@@ -12,6 +13,10 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+#ifdef ATOM_USE_PARALLEL_ALGORITHMS
+#include <execution>
+#endif
 
 namespace atom::type {
 
@@ -65,27 +70,27 @@ private:
     }
 
     auto lower_bound_impl(const T& value) const -> const_iterator {
-        return size() > PARALLEL_THRESHOLD
-                   ? std::lower_bound(std::execution::par_unseq, data_.begin(),
-                                      data_.end(), value, comp_)
-                   : std::lower_bound(data_.begin(), data_.end(), value, comp_);
+        // std::lower_bound has no parallel execution-policy overload; it is
+        // already O(log n) binary search.
+        return std::lower_bound(data_.begin(), data_.end(), value, comp_);
     }
 
     auto upper_bound_impl(const T& value) const -> const_iterator {
-        return size() > PARALLEL_THRESHOLD
-                   ? std::upper_bound(std::execution::par_unseq, data_.begin(),
-                                      data_.end(), value, comp_)
-                   : std::upper_bound(data_.begin(), data_.end(), value, comp_);
+        // std::upper_bound has no parallel execution-policy overload.
+        return std::upper_bound(data_.begin(), data_.end(), value, comp_);
     }
 
     void sort_and_unique() {
         if (data_.empty())
             return;
 
+#ifdef ATOM_USE_PARALLEL_ALGORITHMS
         if (data_.size() > PARALLEL_THRESHOLD) {
             std::sort(std::execution::par_unseq, data_.begin(), data_.end(),
                       comp_);
-        } else {
+        } else
+#endif
+        {
             std::sort(data_.begin(), data_.end(), comp_);
         }
 
@@ -264,8 +269,11 @@ public:
             return {pos, false};
         }
 
+        // ensure_capacity() may reallocate and invalidate `pos`. Capture the
+        // offset first and rebuild the iterator afterwards.
+        auto index = std::distance(data_.cbegin(), pos);
         ensure_capacity(size() + 1);
-        return {data_.insert(pos, value), true};
+        return {data_.insert(data_.begin() + index, value), true};
     }
 
     /**
@@ -283,8 +291,11 @@ public:
             return {pos, false};
         }
 
+        // ensure_capacity() may reallocate and invalidate `pos`. Capture the
+        // offset first and rebuild the iterator afterwards.
+        auto index = std::distance(data_.cbegin(), pos);
         ensure_capacity(size() + 1);
-        return {data_.insert(pos, std::move(value)), true};
+        return {data_.insert(data_.begin() + index, std::move(value)), true};
     }
 
     /**
@@ -487,10 +498,8 @@ public:
      * @return A pair of iterators to the range of elements.
      */
     std::pair<iterator, iterator> equal_range(const T& value) const {
-        return size() > PARALLEL_THRESHOLD
-                   ? std::equal_range(std::execution::par_unseq, data_.begin(),
-                                      data_.end(), value, comp_)
-                   : std::equal_range(data_.begin(), data_.end(), value, comp_);
+        // std::equal_range has no parallel execution-policy overload.
+        return std::equal_range(data_.begin(), data_.end(), value, comp_);
     }
 
     /**
@@ -548,7 +557,7 @@ template <typename T, typename Compare>
 bool operator==(const FlatSet<T, Compare>& lhs,
                 const FlatSet<T, Compare>& rhs) {
     return lhs.size() == rhs.size() &&
-           std::ranges::equal(lhs.begin(), lhs.end(), rhs.begin());
+           std::equal(lhs.begin(), lhs.end(), rhs.begin());
 }
 
 /**
@@ -571,5 +580,34 @@ void swap(FlatSet<T, Compare>& lhs,
 }
 
 }  // namespace atom::type
+
+/**
+ * @brief std::format support for FlatSet, rendered as "{a, b, c}".
+ */
+template <typename T, typename Compare, typename CharT>
+    requires std::formattable<T, CharT>
+struct std::formatter<atom::type::FlatSet<T, Compare>, CharT> {
+    constexpr auto parse(std::basic_format_parse_context<CharT>& ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const atom::type::FlatSet<T, Compare>& set,
+                FormatContext& ctx) const {
+        auto out = ctx.out();
+        *out++ = CharT{'{'};
+        bool first = true;
+        for (const auto& elem : set) {
+            if (!first) {
+                *out++ = CharT{','};
+                *out++ = CharT{' '};
+            }
+            first = false;
+            out = std::format_to(out, "{}", elem);
+        }
+        *out++ = CharT{'}'};
+        return out;
+    }
+};
 
 #endif  // ATOM_TYPE_FLAT_SET_HPP

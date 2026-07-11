@@ -16,12 +16,12 @@ Description: Optimized deque and circular buffer implementations
 
 #include <algorithm>
 #include <cassert>
+#include <format>
 #include <memory>
 #include <stdexcept>
 #include <vector>
 
-namespace atom {
-namespace containers {
+namespace atom::type {
 
 /**
  * @brief Optimized circular buffer with configurable growth policy
@@ -33,7 +33,7 @@ namespace containers {
  * @tparam Allocator Allocator type
  */
 template <typename T, typename Allocator = std::allocator<T>>
-class circular_buffer {
+class CircularBuffer {
 public:
     using value_type = T;
     using allocator_type = Allocator;
@@ -62,8 +62,8 @@ public:
      * @param auto_resize Whether to automatically resize when full
      * @param alloc Allocator instance
      */
-    explicit circular_buffer(size_type capacity = 16, bool auto_resize = false,
-                             const allocator_type& alloc = allocator_type())
+    explicit CircularBuffer(size_type capacity = 16, bool auto_resize = false,
+                            const allocator_type& alloc = allocator_type())
         : alloc_(alloc),
           buffer_(std::allocator_traits<Allocator>::allocate(alloc_, capacity)),
           capacity_(capacity),
@@ -77,7 +77,7 @@ public:
     /**
      * @brief Destructor
      */
-    ~circular_buffer() {
+    ~CircularBuffer() {
         clear();
         std::allocator_traits<Allocator>::deallocate(alloc_, buffer_,
                                                      capacity_);
@@ -86,7 +86,7 @@ public:
     /**
      * @brief Copy constructor
      */
-    circular_buffer(const circular_buffer& other)
+    CircularBuffer(const CircularBuffer& other)
         : alloc_(std::allocator_traits<Allocator>::
                      select_on_container_copy_construction(other.alloc_)),
           buffer_(std::allocator_traits<Allocator>::allocate(alloc_,
@@ -104,7 +104,7 @@ public:
     /**
      * @brief Move constructor
      */
-    circular_buffer(circular_buffer&& other) noexcept
+    CircularBuffer(CircularBuffer&& other) noexcept
         : alloc_(std::move(other.alloc_)),
           buffer_(other.buffer_),
           capacity_(other.capacity_),
@@ -122,9 +122,9 @@ public:
     /**
      * @brief Copy assignment
      */
-    circular_buffer& operator=(const circular_buffer& other) {
+    CircularBuffer& operator=(const CircularBuffer& other) {
         if (this != &other) {
-            circular_buffer temp(other);
+            CircularBuffer temp(other);
             swap(temp);
         }
         return *this;
@@ -133,7 +133,7 @@ public:
     /**
      * @brief Move assignment
      */
-    circular_buffer& operator=(circular_buffer&& other) noexcept {
+    CircularBuffer& operator=(CircularBuffer&& other) noexcept {
         if (this != &other) {
             clear();
             std::allocator_traits<Allocator>::deallocate(alloc_, buffer_,
@@ -246,7 +246,7 @@ public:
     void pop_front() {
         if (empty()) {
             throw std::runtime_error(
-                "pop_front() called on empty circular_buffer");
+                "pop_front() called on empty CircularBuffer");
         }
 
         std::allocator_traits<Allocator>::destroy(alloc_, &buffer_[head_]);
@@ -260,7 +260,7 @@ public:
     void pop_back() {
         if (empty()) {
             throw std::runtime_error(
-                "pop_back() called on empty circular_buffer");
+                "pop_back() called on empty CircularBuffer");
         }
 
         tail_ = (tail_ + capacity_ - 1) % capacity_;
@@ -273,7 +273,7 @@ public:
      */
     reference front() {
         if (empty()) {
-            throw std::runtime_error("front() called on empty circular_buffer");
+            throw std::runtime_error("front() called on empty CircularBuffer");
         }
         return buffer_[head_];
     }
@@ -281,9 +281,9 @@ public:
     /**
      * @brief Access front element (const)
      */
-    const_reference front() const {
+    [[nodiscard]] const_reference front() const {
         if (empty()) {
-            throw std::runtime_error("front() called on empty circular_buffer");
+            throw std::runtime_error("front() called on empty CircularBuffer");
         }
         return buffer_[head_];
     }
@@ -293,7 +293,7 @@ public:
      */
     reference back() {
         if (empty()) {
-            throw std::runtime_error("back() called on empty circular_buffer");
+            throw std::runtime_error("back() called on empty CircularBuffer");
         }
         return buffer_[(tail_ + capacity_ - 1) % capacity_];
     }
@@ -301,9 +301,9 @@ public:
     /**
      * @brief Access back element (const)
      */
-    const_reference back() const {
+    [[nodiscard]] const_reference back() const {
         if (empty()) {
-            throw std::runtime_error("back() called on empty circular_buffer");
+            throw std::runtime_error("back() called on empty CircularBuffer");
         }
         return buffer_[(tail_ + capacity_ - 1) % capacity_];
     }
@@ -323,7 +323,7 @@ public:
      *
      * @param index Index from front (0-based)
      */
-    const_reference operator[](size_type index) const {
+    [[nodiscard]] const_reference operator[](size_type index) const {
         assert(index < size_);
         return buffer_[(head_ + index) % capacity_];
     }
@@ -335,7 +335,7 @@ public:
      */
     reference at(size_type index) {
         if (index >= size_) {
-            throw std::out_of_range("circular_buffer::at");
+            throw std::out_of_range("CircularBuffer::at");
         }
         return buffer_[(head_ + index) % capacity_];
     }
@@ -345,9 +345,9 @@ public:
      *
      * @param index Index from front (0-based)
      */
-    const_reference at(size_type index) const {
+    [[nodiscard]] const_reference at(size_type index) const {
         if (index >= size_) {
-            throw std::out_of_range("circular_buffer::at");
+            throw std::out_of_range("CircularBuffer::at");
         }
         return buffer_[(head_ + index) % capacity_];
     }
@@ -355,22 +355,22 @@ public:
     /**
      * @brief Get current size
      */
-    size_type size() const noexcept { return size_; }
+    [[nodiscard]] size_type size() const noexcept { return size_; }
 
     /**
      * @brief Get capacity
      */
-    size_type capacity() const noexcept { return capacity_; }
+    [[nodiscard]] size_type capacity() const noexcept { return capacity_; }
 
     /**
      * @brief Check if buffer is empty
      */
-    bool empty() const noexcept { return size_ == 0; }
+    [[nodiscard]] bool empty() const noexcept { return size_ == 0; }
 
     /**
      * @brief Check if buffer is full
      */
-    bool full() const noexcept { return size_ == capacity_; }
+    [[nodiscard]] bool full() const noexcept { return size_ == capacity_; }
 
     /**
      * @brief Clear all elements
@@ -395,7 +395,7 @@ public:
     /**
      * @brief Swap with another circular buffer
      */
-    void swap(circular_buffer& other) noexcept {
+    void swap(CircularBuffer& other) noexcept {
         using std::swap;
         swap(alloc_, other.alloc_);
         swap(buffer_, other.buffer_);
@@ -442,7 +442,7 @@ private:
  */
 template <typename T, std::size_t ChunkSize = 512,
           typename Allocator = std::allocator<T>>
-class chunked_deque {
+class ChunkedDeque {
 public:
     using value_type = T;
     using allocator_type = Allocator;
@@ -488,7 +488,7 @@ public:
     /**
      * @brief Constructor
      */
-    explicit chunked_deque(const allocator_type& alloc = allocator_type())
+    explicit ChunkedDeque(const allocator_type& alloc = allocator_type())
         : alloc_(alloc),
           chunk_alloc_(alloc),
           first_chunk_(0),
@@ -504,7 +504,7 @@ public:
     /**
      * @brief Destructor
      */
-    ~chunked_deque() {
+    ~ChunkedDeque() {
         clear();
         for (auto chunk : chunks_) {
             std::allocator_traits<chunk_allocator>::deallocate(chunk_alloc_,
@@ -575,8 +575,7 @@ public:
      */
     void pop_back() {
         if (empty()) {
-            throw std::runtime_error(
-                "pop_back() called on empty chunked_deque");
+            throw std::runtime_error("pop_back() called on empty ChunkedDeque");
         }
 
         --last_element_;
@@ -595,7 +594,7 @@ public:
     void pop_front() {
         if (empty()) {
             throw std::runtime_error(
-                "pop_front() called on empty chunked_deque");
+                "pop_front() called on empty ChunkedDeque");
         }
 
         std::allocator_traits<Allocator>::destroy(
@@ -619,7 +618,7 @@ public:
     /**
      * @brief Access element by index (const)
      */
-    const_reference operator[](size_type index) const {
+    [[nodiscard]] const_reference operator[](size_type index) const {
         auto [chunk_idx, element_idx] = get_position(index);
         return *chunks_[chunk_idx]->get_element(element_idx);
     }
@@ -629,7 +628,7 @@ public:
      */
     reference front() {
         if (empty()) {
-            throw std::runtime_error("front() called on empty chunked_deque");
+            throw std::runtime_error("front() called on empty ChunkedDeque");
         }
         return *chunks_[first_chunk_]->get_element(first_element_);
     }
@@ -637,9 +636,9 @@ public:
     /**
      * @brief Access front element (const)
      */
-    const_reference front() const {
+    [[nodiscard]] const_reference front() const {
         if (empty()) {
-            throw std::runtime_error("front() called on empty chunked_deque");
+            throw std::runtime_error("front() called on empty ChunkedDeque");
         }
         return *chunks_[first_chunk_]->get_element(first_element_);
     }
@@ -649,7 +648,7 @@ public:
      */
     reference back() {
         if (empty()) {
-            throw std::runtime_error("back() called on empty chunked_deque");
+            throw std::runtime_error("back() called on empty ChunkedDeque");
         }
         return *chunks_[last_chunk_]->get_element(last_element_ - 1);
     }
@@ -657,9 +656,9 @@ public:
     /**
      * @brief Access back element (const)
      */
-    const_reference back() const {
+    [[nodiscard]] const_reference back() const {
         if (empty()) {
-            throw std::runtime_error("back() called on empty chunked_deque");
+            throw std::runtime_error("back() called on empty ChunkedDeque");
         }
         return *chunks_[last_chunk_]->get_element(last_element_ - 1);
     }
@@ -667,12 +666,12 @@ public:
     /**
      * @brief Get current size
      */
-    size_type size() const noexcept { return size_; }
+    [[nodiscard]] size_type size() const noexcept { return size_; }
 
     /**
      * @brief Check if deque is empty
      */
-    bool empty() const noexcept { return size_ == 0; }
+    [[nodiscard]] bool empty() const noexcept { return size_ == 0; }
 
     /**
      * @brief Clear all elements
@@ -728,13 +727,33 @@ private:
 
 // Convenience aliases
 template <typename T>
-using CircularBuffer = circular_buffer<T>;
+using AutoResizeCircularBuffer = CircularBuffer<T>;
 
-template <typename T>
-using AutoResizeCircularBuffer = circular_buffer<T>;
+}  // namespace atom::type
 
-template <typename T>
-using ChunkedDeque = chunked_deque<T>;
+/**
+ * @brief std::format support for CircularBuffer, rendered as "[a, b, c]".
+ */
+template <typename T, typename Allocator, typename CharT>
+    requires std::formattable<T, CharT>
+struct std::formatter<atom::type::CircularBuffer<T, Allocator>, CharT> {
+    constexpr auto parse(std::basic_format_parse_context<CharT>& ctx) {
+        return ctx.begin();
+    }
 
-}  // namespace containers
-}  // namespace atom
+    template <typename FormatContext>
+    auto format(const atom::type::CircularBuffer<T, Allocator>& buf,
+                FormatContext& ctx) const {
+        auto out = ctx.out();
+        *out++ = CharT{'['};
+        for (std::size_t i = 0; i < buf.size(); ++i) {
+            if (i != 0) {
+                *out++ = CharT{','};
+                *out++ = CharT{' '};
+            }
+            out = std::format_to(out, "{}", buf[i]);
+        }
+        *out++ = CharT{']'};
+        return out;
+    }
+};

@@ -1,10 +1,11 @@
-#ifndef ATOM_TYPE_CONTAINERS_STREAMS_HPP
-#define ATOM_TYPE_CONTAINERS_STREAMS_HPP
+#ifndef ATOM_TYPE_CSTREAM_HPP
+#define ATOM_TYPE_CSTREAM_HPP
 
 #include <algorithm>
 #include <functional>
 #include <numeric>
 #include <optional>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -54,25 +55,25 @@ struct identity {
  * @tparam C The type of the container.
  */
 template <typename C>
-class cstream {
+class CStream {
 public:
     using value_type = typename C::value_type;
     using iterator = typename C::iterator;
     using const_iterator = typename C::const_iterator;
 
     /**
-     * @brief Constructs a cstream from a container reference.
+     * @brief Constructs a CStream from a container reference.
      *
      * @param c The container reference.
      */
-    explicit cstream(C& c) : container_ref_{c} {}
+    explicit CStream(C& c) : container_ref_{c} {}
 
     /**
-     * @brief Constructs a cstream from an rvalue container.
+     * @brief Constructs a CStream from an rvalue container.
      *
      * @param c The rvalue container.
      */
-    explicit cstream(C&& c) : moved_{std::move(c)}, container_ref_{moved_} {}
+    explicit CStream(C&& c) : moved_{std::move(c)}, container_ref_{moved_} {}
 
     /**
      * @brief Gets the reference to the container.
@@ -107,10 +108,10 @@ public:
      *
      * @tparam BinaryFunction The type of the comparison function.
      * @param op The comparison function.
-     * @return cstream<C>& The sorted stream.
+     * @return CStream<C>& The sorted stream.
      */
     template <typename BinaryFunction = std::less<value_type>>
-    auto sorted(const BinaryFunction& op = {}) -> cstream<C>& {
+    auto sorted(const BinaryFunction& op = {}) -> CStream<C>& {
         std::sort(container_ref_.begin(), container_ref_.end(), op);
         return *this;
     }
@@ -121,10 +122,10 @@ public:
      * @tparam T The type of the destination container.
      * @tparam UnaryFunction The type of the transformation function.
      * @param transform_f The transformation function.
-     * @return cstream<T> The transformed stream.
+     * @return CStream<T> The transformed stream.
      */
     template <typename T, typename UnaryFunction>
-    auto transform(UnaryFunction transform_f) const -> cstream<T> {
+    auto transform(UnaryFunction transform_f) const -> CStream<T> {
         T dest;
         // Only call reserve() if the container supports it (e.g., vector,
         // string)
@@ -133,7 +134,7 @@ public:
         }
         std::transform(container_ref_.begin(), container_ref_.end(),
                        std::back_inserter(dest), transform_f);
-        return cstream<T>(std::move(dest));
+        return CStream<T>(std::move(dest));
     }
 
     /**
@@ -141,10 +142,10 @@ public:
      *
      * @tparam UnaryFunction The type of the predicate function.
      * @param remove_f The predicate function.
-     * @return cstream<C>& The stream with elements removed.
+     * @return CStream<C>& The stream with elements removed.
      */
     template <typename UnaryFunction>
-    auto remove(UnaryFunction remove_f) -> cstream<C>& {
+    auto remove(UnaryFunction remove_f) -> CStream<C>& {
         auto new_end = std::remove_if(container_ref_.begin(),
                                       container_ref_.end(), remove_f);
         container_ref_.erase(new_end, container_ref_.end());
@@ -156,10 +157,10 @@ public:
      *
      * @tparam ValueType The type of the value.
      * @param v The value to erase.
-     * @return cstream<C>& The stream with the value erased.
+     * @return CStream<C>& The stream with the value erased.
      */
     template <typename ValueType>
-    auto erase(const ValueType& v) -> cstream<C>& {
+    auto erase(const ValueType& v) -> CStream<C>& {
         // For associative containers (map, set), use different approach
         if constexpr (requires { container_ref_.erase(v); }) {
             // For associative containers, erase by key/value directly
@@ -178,10 +179,10 @@ public:
      *
      * @tparam UnaryFunction The type of the predicate function.
      * @param filter The predicate function.
-     * @return cstream<C>& The filtered stream.
+     * @return CStream<C>& The filtered stream.
      */
     template <typename UnaryFunction>
-    auto filter(UnaryFunction filter_func) -> cstream<C>& {
+    auto filter(UnaryFunction filter_func) -> CStream<C>& {
         return remove(
             [&filter_func](const value_type& v) { return !filter_func(v); });
     }
@@ -192,15 +193,15 @@ public:
      *
      * @tparam UnaryFunction The type of the predicate function.
      * @param filter The predicate function.
-     * @return cstream<C> The filtered stream.
+     * @return CStream<C> The filtered stream.
      */
     template <typename UnaryFunction>
-    auto cpFilter(UnaryFunction filter_func) const -> cstream<C> {
+    auto cpFilter(UnaryFunction filter_func) const -> CStream<C> {
         C c;
         c.reserve(container_ref_.size());
         std::copy_if(container_ref_.begin(), container_ref_.end(),
                      std::back_inserter(c), filter_func);
-        return cstream<C>(std::move(c));
+        return CStream<C>(std::move(c));
     }
 
     /**
@@ -223,10 +224,10 @@ public:
      *
      * @tparam UnaryFunction The type of the function.
      * @param f The function to apply.
-     * @return cstream<C>& The stream.
+     * @return CStream<C>& The stream.
      */
     template <typename UnaryFunction>
-    auto forEach(UnaryFunction f) -> cstream<C>& {
+    auto forEach(UnaryFunction f) -> CStream<C>& {
         std::for_each(container_ref_.begin(), container_ref_.end(), f);
         return *this;
     }
@@ -271,9 +272,9 @@ public:
     /**
      * @brief Creates a copy of the container.
      *
-     * @return cstream<C> The copied stream.
+     * @return CStream<C> The copied stream.
      */
-    auto copy() const -> cstream<C> { return cstream<C>{C(container_ref_)}; }
+    auto copy() const -> CStream<C> { return CStream<C>{C(container_ref_)}; }
 
     /**
      * @brief Gets the size of the container.
@@ -323,6 +324,9 @@ public:
      * @return value_type The minimum element.
      */
     auto min() const -> value_type {
+        if (container_ref_.empty()) {
+            throw std::runtime_error("CStream::min on an empty container");
+        }
         return *std::min_element(container_ref_.begin(), container_ref_.end());
     }
 
@@ -332,6 +336,9 @@ public:
      * @return value_type The maximum element.
      */
     auto max() const -> value_type {
+        if (container_ref_.empty()) {
+            throw std::runtime_error("CStream::max on an empty container");
+        }
         return *std::max_element(container_ref_.begin(), container_ref_.end());
     }
 
@@ -341,6 +348,9 @@ public:
      * @return double The mean value.
      */
     [[nodiscard]] auto mean() const -> double {
+        if (container_ref_.empty()) {
+            throw std::runtime_error("CStream::mean on an empty container");
+        }
         return static_cast<double>(accumulate()) / static_cast<double>(size());
     }
 
@@ -379,15 +389,15 @@ public:
      *
      * @tparam UnaryFunction The type of the mapping function.
      * @param f The mapping function.
-     * @return cstream<C> The mapped stream.
+     * @return CStream<C> The mapped stream.
      */
     template <typename UnaryFunction>
-    auto map(UnaryFunction f) const -> cstream<C> {
+    auto map(UnaryFunction f) const -> CStream<C> {
         C c;
         c.reserve(container_ref_.size());
         std::transform(container_ref_.begin(), container_ref_.end(),
                        std::back_inserter(c), f);
-        return cstream<C>(std::move(c));
+        return CStream<C>(std::move(c));
     }
 
     /**
@@ -395,24 +405,24 @@ public:
      *
      * @tparam UnaryFunction The type of the flat mapping function.
      * @param f The flat mapping function.
-     * @return cstream<C> The flat mapped stream.
+     * @return CStream<C> The flat mapped stream.
      */
     template <typename UnaryFunction>
-    auto flatMap(UnaryFunction f) const -> cstream<C> {
+    auto flatMap(UnaryFunction f) const -> CStream<C> {
         C c;
         for (const auto& item : container_ref_) {
             auto subContainer = f(item);
             c.insert(c.end(), subContainer.begin(), subContainer.end());
         }
-        return cstream<C>(std::move(c));
+        return CStream<C>(std::move(c));
     }
 
     /**
      * @brief Removes duplicate elements from the container.
      *
-     * @return cstream<C>& The stream with duplicates removed.
+     * @return CStream<C>& The stream with duplicates removed.
      */
-    auto distinct() -> cstream<C>& {
+    auto distinct() -> CStream<C>& {
         std::sort(container_ref_.begin(), container_ref_.end());
         auto last = std::unique(container_ref_.begin(), container_ref_.end());
         container_ref_.erase(last, container_ref_.end());
@@ -422,9 +432,9 @@ public:
     /**
      * @brief Reverses the elements of the container.
      *
-     * @return cstream<C>& The stream with elements reversed.
+     * @return CStream<C>& The stream with elements reversed.
      */
-    auto reverse() -> cstream<C>& {
+    auto reverse() -> CStream<C>& {
         std::reverse(container_ref_.begin(), container_ref_.end());
         return *this;
     }
@@ -484,56 +494,56 @@ struct Pair {
 };
 
 /**
- * @brief Creates a cstream from a container reference.
+ * @brief Creates a CStream from a container reference.
  *
  * @tparam T The type of the container.
  * @param t The container reference.
- * @return cstream<T> The created stream.
+ * @return CStream<T> The created stream.
  */
 template <typename T>
-auto makeStream(T& t) -> cstream<T> {
-    return cstream<T>{t};
+auto makeStream(T& t) -> CStream<T> {
+    return CStream<T>{t};
 }
 
 /**
- * @brief Creates a cstream from a container rvalue.
+ * @brief Creates a CStream from a container rvalue.
  *
  * @tparam T The type of the container.
  * @param t The container rvalue.
- * @return cstream<T> The created stream.
+ * @return CStream<T> The created stream.
  */
 template <typename T>
-auto makeStream(T&& t) -> cstream<T> {
-    return cstream<T>{std::forward<T>(t)};
+auto makeStream(T&& t) -> CStream<T> {
+    return CStream<T>{std::forward<T>(t)};
 }
 
 /**
- * @brief Creates a cstream from a container copy.
+ * @brief Creates a CStream from a container copy.
  *
  * @tparam T The type of the container.
  * @param t The container copy.
- * @return cstream<T> The created stream.
+ * @return CStream<T> The created stream.
  */
 template <typename T>
-auto makeStreamCopy(const T& t) -> cstream<T> {
-    return cstream<T>{T{t}};
+auto makeStreamCopy(const T& t) -> CStream<T> {
+    return CStream<T>{T{t}};
 }
 
 /**
- * @brief Creates a cstream from a container.
+ * @brief Creates a CStream from a container.
  *
  * @tparam N The element type.
  * @tparam T The pointer type.
  * @param t The container pointer.
  * @param size The size of the container.
- * @return cstream<std::vector<N>> The created stream.
+ * @return CStream<std::vector<N>> The created stream.
  */
 template <typename N, typename T = N>
-auto cpstream(const T* t, std::size_t size) -> cstream<std::vector<N>> {
+auto cpstream(const T* t, std::size_t size) -> CStream<std::vector<N>> {
     std::vector<N> data(t, t + size);
     return makeStream(std::move(data));
 }
 
 }  // namespace atom::type
 
-#endif  // ATOM_TYPE_CONTAINERS_STREAMS_HPP
+#endif  // ATOM_TYPE_CSTREAM_HPP

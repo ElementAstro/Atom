@@ -23,17 +23,87 @@
 #include <emmintrin.h>  // For SSE2 intrinsics
 #endif
 
-#include "atom/search/lru.hpp"
+#include <list>  // For the embedded LRU cache
+#include "atom/error/exception.hpp"
 
 namespace atom::type {
 
 /**
- * @brief Exception class for concurrent_map operations
+ * @brief Domain-specific exception for ConcurrentMap operations.
+ *
+ * Derives from atom::error::Exception so it integrates with the framework's
+ * error hierarchy (catchable as atom::error::Exception) while keeping a simple
+ * single-message constructor for the throw sites.
  */
-class concurrent_map_error : public std::runtime_error {
+class ConcurrentMapError : public atom::error::Exception {
 public:
-    explicit concurrent_map_error(const std::string& message)
-        : std::runtime_error(message) {}
+    explicit ConcurrentMapError(const std::string& message)
+        : atom::error::Exception(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
+                                 message) {}
+};
+
+/**
+ * @brief Small self-contained thread-safe key→value LRU cache.
+ *
+ * Replaces the former dependency on atom::search::ThreadSafeLRUCache, which
+ * pulled in spdlog and created an inverted module dependency (atom::type →
+ * atom::search). Implements just the surface ConcurrentMap needs: put/get/
+ * erase/clear, evicting the least-recently-used entry when full.
+ */
+template <typename Key, typename Value>
+class KeyValueLRUCache {
+public:
+    explicit KeyValueLRUCache(std::size_t capacity)
+        : capacity_(capacity == 0 ? 1 : capacity) {}
+
+    void put(const Key& key, const Value& value) {
+        std::unique_lock lock(mutex_);
+        auto it = map_.find(key);
+        if (it != map_.end()) {
+            it->second->second = value;
+            order_.splice(order_.begin(), order_, it->second);
+            return;
+        }
+        if (order_.size() >= capacity_) {
+            const auto& victim = order_.back().first;
+            map_.erase(victim);
+            order_.pop_back();
+        }
+        order_.emplace_front(key, value);
+        map_[key] = order_.begin();
+    }
+
+    [[nodiscard]] std::optional<Value> get(const Key& key) {
+        std::unique_lock lock(mutex_);
+        auto it = map_.find(key);
+        if (it == map_.end()) {
+            return std::nullopt;
+        }
+        order_.splice(order_.begin(), order_, it->second);
+        return it->second->second;
+    }
+
+    void erase(const Key& key) {
+        std::unique_lock lock(mutex_);
+        auto it = map_.find(key);
+        if (it != map_.end()) {
+            order_.erase(it->second);
+            map_.erase(it);
+        }
+    }
+
+    void clear() {
+        std::unique_lock lock(mutex_);
+        order_.clear();
+        map_.clear();
+    }
+
+private:
+    using ListType = std::list<std::pair<Key, Value>>;
+    std::size_t capacity_;
+    ListType order_;  ///< Front = most-recently-used.
+    std::unordered_map<Key, typename ListType::iterator> map_;
+    mutable std::shared_mutex mutex_;
 };
 
 /**
@@ -49,7 +119,7 @@ public:
  */
 template <typename Key, typename T,
           typename MapType = std::unordered_map<Key, T>>
-class concurrent_map {
+class ConcurrentMap {
 public:
     // Type aliases for better readability
     using key_type = Key;
@@ -71,7 +141,7 @@ private:
 
     std::atomic<bool> stop_pool{false};  ///< Flag to stop the thread pool.
 
-    std::unique_ptr<atom::search::ThreadSafeLRUCache<Key, T>>
+    std::unique_ptr<KeyValueLRUCache<Key, T>>
         lru_cache;  ///< Optional LRU cache.
 
     static constexpr size_t DEFAULT_BATCH_SIZE =
@@ -145,7 +215,7 @@ public:
         pool_cv;  ///< Condition variable for task queue synchronization.
 
     /**
-     * @brief Constructs a concurrent_map with a specified number of threads and
+     * @brief Constructs a ConcurrentMap with a specified number of threads and
      * cache size.
      *
      * @param num_threads The number of threads in the thread pool. Defaults to
@@ -153,7 +223,7 @@ public:
      * @param cache_size The size of the LRU cache. Defaults to 0 (no cache).
      * @throws std::invalid_argument if num_threads is 0.
      */
-    explicit concurrent_map(
+    explicit ConcurrentMap(
         size_t num_threads = std::thread::hardware_concurrency(),
         size_t cache_size = 0) {
         if (num_threads == 0) {
@@ -163,9 +233,7 @@ public:
 
         // Initialize the LRU cache if needed
         if (cache_size > 0) {
-            lru_cache =
-                std::make_unique<atom::search::ThreadSafeLRUCache<Key, T>>(
-                    cache_size);
+            lru_cache = std::make_unique<KeyValueLRUCache<Key, T>>(cache_size);
         }
 
         // Start the thread pool
@@ -173,7 +241,7 @@ public:
             thread_pool.reserve(num_threads);
             for (size_t i = 0; i < num_threads; ++i) {
                 thread_pool.push_back(std::make_unique<std::thread>(
-                    &concurrent_map::thread_pool_worker, this));
+                    &ConcurrentMap::thread_pool_worker, this));
             }
         } catch (const std::exception& e) {
             // Clean up any created threads
@@ -184,7 +252,7 @@ public:
                     t->join();
                 }
             }
-            throw concurrent_map_error(
+            throw ConcurrentMapError(
                 std::string("Failed to create thread pool: ") + e.what());
         }
     }
@@ -192,9 +260,9 @@ public:
     /**
      * @brief Move constructor
      *
-     * @param other The concurrent_map to move from
+     * @param other The ConcurrentMap to move from
      */
-    concurrent_map(concurrent_map&& other) noexcept {
+    ConcurrentMap(ConcurrentMap&& other) noexcept {
         std::unique_lock lock1(mtx, std::defer_lock);
         std::unique_lock lock2(other.mtx, std::defer_lock);
         std::lock(lock1, lock2);
@@ -215,17 +283,17 @@ public:
     /**
      * @brief Deleted copy constructor
      */
-    concurrent_map(const concurrent_map&) = delete;
+    ConcurrentMap(const ConcurrentMap&) = delete;
 
     /**
      * @brief Deleted copy assignment operator
      */
-    concurrent_map& operator=(const concurrent_map&) = delete;
+    ConcurrentMap& operator=(const ConcurrentMap&) = delete;
 
     /**
      * @brief Move assignment operator
      */
-    concurrent_map& operator=(concurrent_map&& other) noexcept {
+    ConcurrentMap& operator=(ConcurrentMap&& other) noexcept {
         if (this != &other) {
             // Stop current thread pool
             {
@@ -261,11 +329,11 @@ public:
     }
 
     /**
-     * @brief Destructor for concurrent_map.
+     * @brief Destructor for ConcurrentMap.
      *
      * Stops the thread pool and joins all threads.
      */
-    ~concurrent_map() {
+    ~ConcurrentMap() {
         try {
             // Stop the thread pool and join all threads
             {
@@ -281,7 +349,7 @@ public:
             }
         } catch (...) {
             // Destructors should never throw
-            // std::cerr << "Exception caught in concurrent_map destructor"
+            // std::cerr << "Exception caught in ConcurrentMap destructor"
             //          << std::endl;
         }
     }
@@ -293,7 +361,7 @@ public:
      *
      * @param key The key to insert or update.
      * @param value The value to insert or update.
-     * @throws concurrent_map_error if an error occurs during insertion.
+     * @throws ConcurrentMapError if an error occurs during insertion.
      */
     void insert(const Key& key, const T& value) {
         try {
@@ -304,8 +372,8 @@ public:
                 lru_cache->put(key, value);
             }
         } catch (const std::exception& e) {
-            throw concurrent_map_error(
-                std::string("Insert operation failed: ") + e.what());
+            throw ConcurrentMapError(std::string("Insert operation failed: ") +
+                                     e.what());
         }
     }
 
@@ -316,7 +384,7 @@ public:
      *
      * @param key The key to insert or update.
      * @param value The value to insert or update (to be moved).
-     * @throws concurrent_map_error if an error occurs during insertion.
+     * @throws ConcurrentMapError if an error occurs during insertion.
      */
     void insert(const Key& key, T&& value) {
         try {
@@ -328,8 +396,8 @@ public:
                 lru_cache->put(key, data[key]);
             }
         } catch (const std::exception& e) {
-            throw concurrent_map_error(
-                std::string("Insert operation failed: ") + e.what());
+            throw ConcurrentMapError(std::string("Insert operation failed: ") +
+                                     e.what());
         }
     }
 
@@ -380,7 +448,7 @@ public:
      * @param key The key to insert.
      * @param value The value to insert.
      * @return true if the element was inserted, false if it already existed.
-     * @throws concurrent_map_error if an error occurs during insertion.
+     * @throws ConcurrentMapError if an error occurs during insertion.
      */
     bool find_or_insert(const Key& key, const T& value) {
         try {
@@ -393,20 +461,20 @@ public:
 
             return inserted;
         } catch (const std::exception& e) {
-            throw concurrent_map_error(
+            throw ConcurrentMapError(
                 std::string("Find or insert operation failed: ") + e.what());
         }
     }
 
     /**
-     * @brief Merges another concurrent_map into this one.
+     * @brief Merges another ConcurrentMap into this one.
      *
      * This operation is thread-safe.
      *
-     * @param other The other concurrent_map to merge.
-     * @throws concurrent_map_error if an error occurs during merging.
+     * @param other The other ConcurrentMap to merge.
+     * @throws ConcurrentMapError if an error occurs during merging.
      */
-    void merge(const concurrent_map<Key, T, MapType>& other) {
+    void merge(const ConcurrentMap<Key, T, MapType>& other) {
         try {
             std::unique_lock lock(mtx);
             std::shared_lock other_lock(other.mtx);
@@ -423,8 +491,8 @@ public:
                 }
             }
         } catch (const std::exception& e) {
-            throw concurrent_map_error(std::string("Merge operation failed: ") +
-                                       e.what());
+            throw ConcurrentMapError(std::string("Merge operation failed: ") +
+                                     e.what());
         }
     }
 
@@ -437,7 +505,7 @@ public:
      * @param f Function to execute
      * @param args Arguments to pass to the function
      * @return std::future with the result of the function
-     * @throws concurrent_map_error if the thread pool is stopped or an error
+     * @throws ConcurrentMapError if the thread pool is stopped or an error
      * occurs.
      */
     template <typename F, typename... Args>
@@ -446,7 +514,7 @@ public:
 
         try {
             if (stop_pool) {
-                throw concurrent_map_error("Thread pool is stopped");
+                throw ConcurrentMapError("Thread pool is stopped");
             }
 
             // Create a packaged task with the function and its arguments
@@ -459,7 +527,7 @@ public:
             {
                 std::unique_lock lock(pool_mutex);
                 if (stop_pool) {
-                    throw concurrent_map_error("Thread pool is stopped");
+                    throw ConcurrentMapError("Thread pool is stopped");
                 }
 
                 // Wrap the packaged task in a void function
@@ -469,8 +537,8 @@ public:
             pool_cv.notify_one();
             return result;
         } catch (const std::exception& e) {
-            throw concurrent_map_error(std::string("Failed to submit task: ") +
-                                       e.what());
+            throw ConcurrentMapError(std::string("Failed to submit task: ") +
+                                     e.what());
         }
     }
 
@@ -483,7 +551,7 @@ public:
      * @param keys The keys to find.
      * @return A vector of optionals containing the values if found,
      * std::nullopt otherwise.
-     * @throws concurrent_map_error if an error occurs during the operation.
+     * @throws ConcurrentMapError if an error occurs during the operation.
      */
     [[nodiscard]] std::vector<result_type> batch_find(
         const std::vector<Key>& keys) {
@@ -526,7 +594,7 @@ public:
 
             return results;
         } catch (const std::exception& e) {
-            throw concurrent_map_error(
+            throw ConcurrentMapError(
                 std::string("Batch find operation failed: ") + e.what());
         }
     }
@@ -538,7 +606,7 @@ public:
      * This operation is thread-safe.
      *
      * @param updates The key-value pairs to update.
-     * @throws concurrent_map_error if an error occurs during the batch update.
+     * @throws ConcurrentMapError if an error occurs during the batch update.
      */
     void batch_update(const std::vector<std::pair<Key, T>>& updates) {
         if (updates.empty()) {
@@ -612,7 +680,7 @@ public:
                 }
             }
         } catch (const std::exception& e) {
-            throw concurrent_map_error(
+            throw ConcurrentMapError(
                 std::string("Batch update operation failed: ") + e.what());
         }
     }
@@ -624,7 +692,7 @@ public:
      *
      * @param keys The keys to erase.
      * @return Number of elements actually erased.
-     * @throws concurrent_map_error if an error occurs during the batch erase.
+     * @throws ConcurrentMapError if an error occurs during the batch erase.
      */
     size_t batch_erase(const std::vector<Key>& keys) {
         if (keys.empty()) {
@@ -651,7 +719,7 @@ public:
 
             return erased_count;
         } catch (const std::exception& e) {
-            throw concurrent_map_error(
+            throw ConcurrentMapError(
                 std::string("Batch erase operation failed: ") + e.what());
         }
     }
@@ -664,7 +732,7 @@ public:
      * @param start The start key of the range.
      * @param end The end key of the range.
      * @return A vector of key-value pairs within the specified range.
-     * @throws concurrent_map_error if an error occurs during the range query.
+     * @throws ConcurrentMapError if an error occurs during the range query.
      */
     [[nodiscard]] std::vector<std::pair<Key, T>> range_query(const Key& start,
                                                              const Key& end) {
@@ -696,7 +764,7 @@ public:
 
             return result;
         } catch (const std::exception& e) {
-            throw concurrent_map_error(
+            throw ConcurrentMapError(
                 std::string("Range query operation failed: ") + e.what());
         }
     }
@@ -707,14 +775,14 @@ public:
      * This operation is thread-safe for reading.
      *
      * @return A copy of the data to prevent race conditions.
-     * @throws concurrent_map_error if an error occurs during the operation.
+     * @throws ConcurrentMapError if an error occurs during the operation.
      */
     [[nodiscard]] MapType get_data() const {
         try {
             std::shared_lock lock(mtx);
             return data;  // Return a copy to prevent race conditions
         } catch (const std::exception& e) {
-            throw concurrent_map_error(
+            throw ConcurrentMapError(
                 std::string("Get data operation failed: ") + e.what());
         }
     }
@@ -762,8 +830,8 @@ public:
                 lru_cache->clear();
             }
         } catch (const std::exception& e) {
-            throw concurrent_map_error(std::string("Clear operation failed: ") +
-                                       e.what());
+            throw ConcurrentMapError(std::string("Clear operation failed: ") +
+                                     e.what());
         }
     }
 
@@ -774,7 +842,7 @@ public:
      *
      * @param new_size The new size of the thread pool.
      * @throws std::invalid_argument if new_size is 0.
-     * @throws concurrent_map_error if an error occurs while adjusting the
+     * @throws ConcurrentMapError if an error occurs while adjusting the
      * thread pool.
      */
     void adjust_thread_pool_size(size_t new_size) {
@@ -784,50 +852,40 @@ public:
         }
 
         try {
-            std::unique_lock lock(pool_mutex);
+            if (new_size == thread_pool.size()) {
+                return;
+            }
 
-            if (new_size > thread_pool.size()) {
-                // Add more threads
-                const size_t threads_to_add = new_size - thread_pool.size();
-                thread_pool.reserve(new_size);
-
-                for (size_t i = 0; i < threads_to_add; ++i) {
-                    thread_pool.push_back(std::make_unique<std::thread>(
-                        &concurrent_map::thread_pool_worker, this));
-                }
-            } else if (new_size < thread_pool.size()) {
-                // Remove threads
-                const size_t current_size = thread_pool.size();
-                const size_t threads_to_remove = current_size - new_size;
-
-                // Set stop flag for threads we want to remove
+            // Stop every worker, join (WITHOUT holding pool_mutex — a worker
+            // needs that mutex to observe stop_pool and leave its wait, so
+            // joining while holding it would deadlock), then start `new_size`
+            // fresh workers. Queued tasks are preserved: a worker only returns
+            // once stop_pool is set AND the queue is empty, so it drains the
+            // backlog first. The previous implementation joined threads while
+            // holding pool_mutex and hung.
+            {
+                std::unique_lock lock(pool_mutex);
                 stop_pool = true;
-                pool_cv.notify_all();
-
-                // Join the threads that will be removed
-                for (size_t i = current_size - threads_to_remove;
-                     i < current_size; ++i) {
-                    if (thread_pool[i] && thread_pool[i]->joinable()) {
-                        thread_pool[i]->join();
-                    }
-                }
-
-                // Resize the thread pool
-                thread_pool.resize(new_size);
-
-                // Reset the stop flag
-                stop_pool = false;
-
-                // Start new threads to replace the joined ones
-                for (size_t i = 0; i < new_size; ++i) {
-                    if (!thread_pool[i] || !thread_pool[i]->joinable()) {
-                        thread_pool[i] = std::make_unique<std::thread>(
-                            &concurrent_map::thread_pool_worker, this);
-                    }
+            }
+            pool_cv.notify_all();
+            for (auto& t : thread_pool) {
+                if (t && t->joinable()) {
+                    t->join();
                 }
             }
+            thread_pool.clear();
+
+            {
+                std::unique_lock lock(pool_mutex);
+                stop_pool = false;
+            }
+            thread_pool.reserve(new_size);
+            for (size_t i = 0; i < new_size; ++i) {
+                thread_pool.push_back(std::make_unique<std::thread>(
+                    &ConcurrentMap::thread_pool_worker, this));
+            }
         } catch (const std::exception& e) {
-            throw concurrent_map_error(
+            throw ConcurrentMapError(
                 std::string("Failed to adjust thread pool size: ") + e.what());
         }
     }
@@ -836,7 +894,7 @@ public:
      * @brief Sets the cache size.
      *
      * @param cache_size The new cache size. 0 to disable caching.
-     * @throws concurrent_map_error if an error occurs while adjusting the
+     * @throws ConcurrentMapError if an error occurs while adjusting the
      * cache.
      */
     void set_cache_size(size_t cache_size) {
@@ -846,8 +904,8 @@ public:
                 if (lru_cache) {
                     // If cache already exists, create a new one with the
                     // desired size and copy over existing entries
-                    auto new_cache = std::make_unique<
-                        atom::search::ThreadSafeLRUCache<Key, T>>(cache_size);
+                    auto new_cache =
+                        std::make_unique<KeyValueLRUCache<Key, T>>(cache_size);
 
                     // Copy the most recent entries from the old cache if
                     // possible This is a simplification - in a real
@@ -863,8 +921,8 @@ public:
                     lru_cache = std::move(new_cache);
                 } else {
                     // Create a new cache
-                    lru_cache = std::make_unique<
-                        atom::search::ThreadSafeLRUCache<Key, T>>(cache_size);
+                    lru_cache =
+                        std::make_unique<KeyValueLRUCache<Key, T>>(cache_size);
 
                     // Populate with existing entries (up to cache size)
                     size_t count = 0;
@@ -879,8 +937,8 @@ public:
                 lru_cache.reset();
             }
         } catch (const std::exception& e) {
-            throw concurrent_map_error(
-                std::string("Failed to set cache size: ") + e.what());
+            throw ConcurrentMapError(std::string("Failed to set cache size: ") +
+                                     e.what());
         }
     }
 

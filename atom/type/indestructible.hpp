@@ -20,6 +20,8 @@
 #include <boost/type_traits.hpp>
 #endif
 
+namespace atom::type {
+
 /**
  * @brief A class template for creating an object that cannot be destructed
  * automatically
@@ -108,7 +110,7 @@ public:
      * @param args The arguments to construct the object with
      */
     template <typename... Args>
-        requires is_constructible_v<Args&&...>
+        requires std::is_constructible_v<T, Args&&...>
     explicit constexpr Indestructible(std::in_place_t, Args&&... args)
         : object(std::forward<Args>(args)...) {}
 
@@ -259,7 +261,7 @@ public:
      * @param args The arguments to construct the object with
      */
     template <typename... Args>
-        requires is_constructible_v<Args&&...>
+        requires std::is_constructible_v<T, Args&&...>
     void reset(Args&&... args) {
         destroy();
         std::construct_at(&object, std::forward<Args>(args)...);
@@ -275,7 +277,7 @@ public:
      * @param args The arguments to construct the object with
      */
     template <typename... Args>
-        requires is_constructible_v<Args&&...>
+        requires std::is_constructible_v<T, Args&&...>
     void emplace(Args&&... args) {
         reset(std::forward<Args>(args)...);
     }
@@ -386,5 +388,7 @@ template <typename T, typename... Args>
     -> Indestructible<T> {
     return Indestructible<T>(std::in_place, std::forward<Args>(args)...);
 }
+
+}  // namespace atom::type
 
 #endif  // ATOM_TYPE_INDESTRUCTIBLE_HPP

@@ -6,8 +6,8 @@
  * \copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-#ifndef ATOM_EXPERIMENTAL_ITERATOR_HPP
-#define ATOM_EXPERIMENTAL_ITERATOR_HPP
+#ifndef ATOM_TYPE_ITER_HPP
+#define ATOM_TYPE_ITER_HPP
 
 #include <algorithm>
 #include <iterator>
@@ -19,6 +19,8 @@
 #if ENABLE_DEBUG
 #include <iostream>
 #endif
+
+namespace atom::type {
 
 /*!
  * \brief An iterator that returns pointers to the elements of another iterator
@@ -104,30 +106,15 @@ void processContainer(ContainerT& container) {
     if (container.size() <= 2)
         return;
 
-    auto beginIter = std::next(container.begin());
-    auto endIter = std::prev(container.end());
-
-    std::vector<std::optional<typename ContainerT::value_type*>> ptrs;
-    ptrs.reserve(std::distance(beginIter, endIter));
-
-    auto ptrPair = makePointerRange(beginIter, endIter);
-    for (auto iter = ptrPair.first; iter != ptrPair.second; ++iter) {
-        ptrs.push_back(*iter);
-    }
-
-    for (auto& ptrOpt : ptrs) {
-        if (ptrOpt) {
-            auto ptr = *ptrOpt;
-#if ENABLE_DEBUG
-            std::cout << "pointer addr: " << static_cast<const void*>(&ptr)
-                      << '\n';
-            std::cout << "point to: " << static_cast<const void*>(ptr) << '\n';
-            std::cout << "value: " << *ptr << '\n';
-#endif
-            container.erase(
-                std::find(container.begin(), container.end(), *ptr));
-        }
-    }
+    // Keep only the first and last elements by erasing the open range
+    // (first, last) in a single call. A single range-erase is correct for
+    // every standard sequence container; the earlier per-element approach
+    // cached raw pointers to elements and erased in a loop, but each erase
+    // invalidated those pointers, so later iterations dereferenced dangling
+    // pointers (garbage comparisons for ints, a crash for std::string).
+    auto first = container.begin();
+    auto last = std::prev(container.end());
+    container.erase(std::next(first), last);
 }
 
 /*!
@@ -536,7 +523,12 @@ public:
      * \return True if the iterators are equal, false otherwise
      */
     constexpr auto operator==(const ZipIterator& other) const noexcept -> bool {
-        return iterators_ == other.iterators_;
+        // Termination is governed by the FIRST sequence: a ZipIterator is at
+        // "end" when its primary iterator is. Comparing the whole tuple would
+        // never compare equal for unequal-length ranges (the components reach
+        // their ends at different steps), causing an infinite loop. Callers
+        // therefore build the end iterator from the primary range's end.
+        return std::get<0>(iterators_) == std::get<0>(other.iterators_);
     }
 };
 
@@ -552,4 +544,6 @@ constexpr auto makeZipIterator(Iterators... its) noexcept
     return ZipIterator<Iterators...>(std::move(its)...);
 }
 
-#endif  // ATOM_EXPERIMENTAL_ITERATOR_HPP
+}  // namespace atom::type
+
+#endif  // ATOM_TYPE_ITER_HPP

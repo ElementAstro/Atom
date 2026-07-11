@@ -64,7 +64,7 @@ enum class LogLevel {
  * client connections and user authentication through various methods including
  * public key and password authentication.
  */
-class SshServer : public NonCopyable {
+class SshServer : public atom::type::NonCopyable {
 public:
     /**
      * @brief Constructor for SshServer.

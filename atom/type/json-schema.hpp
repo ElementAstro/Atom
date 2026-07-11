@@ -783,7 +783,7 @@ private:
                                 std::string_view instance_path,
                                 std::string_view schema_path) {
         if (auto it = schema.find("minProperties");
-            it != schema.end() && it->is_number_unsigned()) {
+            it != schema.end() && it->is_number_integer()) {
             const auto min_props = it->get<std::size_t>();
             if (instance.size() < min_props) {
                 std::string error_path =
@@ -795,7 +795,7 @@ private:
         }
 
         if (auto it = schema.find("maxProperties");
-            it != schema.end() && it->is_number_unsigned()) {
+            it != schema.end() && it->is_number_integer()) {
             const auto max_props = it->get<std::size_t>();
             if (instance.size() > max_props) {
                 std::string error_path =
@@ -994,12 +994,12 @@ private:
         std::size_t max_contains = std::numeric_limits<std::size_t>::max();
 
         if (auto it = schema.find("minContains");
-            it != schema.end() && it->is_number_unsigned()) {
+            it != schema.end() && it->is_number_integer()) {
             min_contains = it->get<std::size_t>();
         }
 
         if (auto it = schema.find("maxContains");
-            it != schema.end() && it->is_number_unsigned()) {
+            it != schema.end() && it->is_number_integer()) {
             max_contains = it->get<std::size_t>();
         }
 
@@ -1044,7 +1044,7 @@ private:
                                   std::string_view instance_path,
                                   std::string_view schema_path) {
         if (auto it = schema.find("minItems");
-            it != schema.end() && it->is_number_unsigned()) {
+            it != schema.end() && it->is_number_integer()) {
             const auto min_items = it->get<std::size_t>();
             if (instance.size() < min_items) {
                 std::string error_path = std::string(schema_path) + "/minItems";
@@ -1055,7 +1055,7 @@ private:
         }
 
         if (auto it = schema.find("maxItems");
-            it != schema.end() && it->is_number_unsigned()) {
+            it != schema.end() && it->is_number_integer()) {
             const auto max_items = it->get<std::size_t>();
             if (instance.size() > max_items) {
                 std::string error_path = std::string(schema_path) + "/maxItems";
@@ -1089,7 +1089,7 @@ private:
         const std::string& str = instance.get_ref<const std::string&>();
 
         if (auto it = schema.find("minLength");
-            it != schema.end() && it->is_number_unsigned()) {
+            it != schema.end() && it->is_number_integer()) {
             const auto min_length = it->get<std::size_t>();
             if (str.length() < min_length) {
                 std::string error_path =
@@ -1101,7 +1101,7 @@ private:
         }
 
         if (auto it = schema.find("maxLength");
-            it != schema.end() && it->is_number_unsigned()) {
+            it != schema.end() && it->is_number_integer()) {
             const auto max_length = it->get<std::size_t>();
             if (str.length() > max_length) {
                 std::string error_path =

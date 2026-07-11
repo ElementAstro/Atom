@@ -36,6 +36,8 @@ Description: A super enhanced string class.
 #include <boost/regex.hpp>
 #endif
 
+namespace atom::type {
+
 /**
  * @brief Custom exception class for String operations
  */
@@ -1117,14 +1119,21 @@ inline auto operator>>(std::istream& is, String& str) -> std::istream& {
     return is;
 }
 
+/**
+ * @brief Swap function for ADL.
+ */
+inline void swap(String& lhs, String& rhs) noexcept { lhs.swap(rhs); }
+
+}  // namespace atom::type
+
 #ifdef ATOM_USE_BOOST
 /**
  * @brief Specialization of std::hash for String class using Boost.
  */
 namespace std {
 template <>
-struct hash<String> {
-    size_t operator()(const String& str) const noexcept {
+struct hash<atom::type::String> {
+    size_t operator()(const atom::type::String& str) const noexcept {
         return boost::hash_value(str.data());
     }
 };
@@ -1135,17 +1144,12 @@ struct hash<String> {
  */
 namespace std {
 template <>
-struct hash<String> {
-    size_t operator()(const String& str) const noexcept {
+struct hash<atom::type::String> {
+    size_t operator()(const atom::type::String& str) const noexcept {
         return std::hash<std::string>()(str.data());
     }
 };
 }  // namespace std
 #endif
-
-/**
- * @brief Global swap function for ADL.
- */
-inline void swap(String& lhs, String& rhs) noexcept { lhs.swap(rhs); }
 
 #endif  // ATOM_TYPE_STRING_HPP

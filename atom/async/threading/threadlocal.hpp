@@ -76,7 +76,7 @@ private:
  * @tparam T The type of the value to be stored in thread-local storage
  */
 template <EnhancedThreadLocalStorable T>
-class EnhancedThreadLocal : public NonCopyable {
+class EnhancedThreadLocal : public atom::type::NonCopyable {
 public:
     // Type definitions, adding support for multiple initialization functions
     using InitializerFn = std::function<T()>;

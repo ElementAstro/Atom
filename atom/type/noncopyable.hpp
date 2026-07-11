@@ -19,6 +19,8 @@ Description: A simple implementation of noncopyable.
 #include <boost/core/noncopyable.hpp>
 #endif
 
+namespace atom::type {
+
 /**
  * @brief A class that prevents copying and moving.
  *
@@ -47,5 +49,7 @@ public:
     auto operator=(NonCopyable&&) noexcept -> NonCopyable& = default;
 #endif
 };
+
+}  // namespace atom::type
 
 #endif  // ATOM_TYPE_NONCOPYABLE_HPP

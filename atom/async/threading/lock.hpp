@@ -292,7 +292,7 @@ struct alignas(ATOM_CACHE_LINE_SIZE) CacheAligned {
 /**
  * @brief Simple spinlock implementation using atomic_flag with C++20 features
  */
-class Spinlock : public NonCopyable {
+class Spinlock : public atom::type::NonCopyable {
     alignas(ATOM_CACHE_LINE_SIZE) std::atomic_flag flag_ = ATOMIC_FLAG_INIT;
 
 // For deadlock detection (optional in debug builds)
@@ -403,7 +403,7 @@ public:
  * @brief Ticket spinlock implementation using atomic operations
  * Provides fair locking in first-come, first-served order
  */
-class TicketSpinlock : public NonCopyable {
+class TicketSpinlock : public atom::type::NonCopyable {
     alignas(ATOM_CACHE_LINE_SIZE) std::atomic<uint64_t> ticket_{0};
     alignas(ATOM_CACHE_LINE_SIZE) std::atomic<uint64_t> serving_{0};
 
@@ -542,7 +542,7 @@ public:
  * @brief Unfair spinlock implementation using atomic_flag
  * May cause starvation but has lower overhead than fair locks
  */
-class UnfairSpinlock : public NonCopyable {
+class UnfairSpinlock : public atom::type::NonCopyable {
     alignas(ATOM_CACHE_LINE_SIZE) std::atomic_flag flag_ = ATOMIC_FLAG_INIT;
 
 public:
@@ -575,7 +575,7 @@ public:
  * @tparam Mutex The lock type satisfying the Lock concept
  */
 template <Lock Mutex>
-class ScopedLock : public NonCopyable {
+class ScopedLock : public atom::type::NonCopyable {
     Mutex &mutex_;
     bool locked_{true};
 
@@ -627,7 +627,7 @@ using ScopedTicketLock = TicketSpinlock::LockGuard;
  * @brief Adaptive mutex that spins for short waits and blocks for longer waits
  * to reduce CPU usage
  */
-class AdaptiveSpinlock : public NonCopyable {
+class AdaptiveSpinlock : public atom::type::NonCopyable {
     alignas(ATOM_CACHE_LINE_SIZE) std::atomic_flag flag_ = ATOMIC_FLAG_INIT;
     static constexpr int SPIN_COUNT = 1000;
 
@@ -668,7 +668,7 @@ public:
  * @brief Windows platform-specific spinlock implementation
  * Uses Windows critical sections with spin count optimization
  */
-class WindowsSpinlock : public NonCopyable {
+class WindowsSpinlock : public atom::type::NonCopyable {
     CRITICAL_SECTION cs_;
 
 public:
@@ -691,7 +691,7 @@ public:
 /**
  * @brief Windows platform-specific shared mutex based on SRW locks
  */
-class WindowsSharedMutex : public NonCopyable {
+class WindowsSharedMutex : public atom::type::NonCopyable {
     SRWLOCK srwlock_ = SRWLOCK_INIT;
 
 public:
@@ -720,7 +720,7 @@ public:
  * @brief macOS platform-specific spinlock implementation
  * Uses optimized OSSpinLock (before 10.12) or os_unfair_lock (10.12+)
  */
-class DarwinSpinlock : public NonCopyable {
+class DarwinSpinlock : public atom::type::NonCopyable {
 #if __MAC_OS_X_VERSION_MIN_REQUIRED < 101200
     OSSpinLock spinlock_ = OS_SPINLOCK_INIT;
 #else
@@ -761,7 +761,7 @@ public:
  * @brief Linux platform-specific spinlock implementation
  * Uses futex system call for optimized long waits
  */
-class LinuxFutexLock : public NonCopyable {
+class LinuxFutexLock : public atom::type::NonCopyable {
     // 0=unlocked, 1=locked, 2=contended (waiters exist)
     alignas(ATOM_CACHE_LINE_SIZE) std::atomic<int> state_{0};
 
@@ -851,7 +851,7 @@ public:
  * @brief Spinlock implementation using C++20 atomic wait/notify
  * More efficient than plain spinlocks if supported by hardware
  */
-class AtomicWaitLock : public NonCopyable {
+class AtomicWaitLock : public atom::type::NonCopyable {
     alignas(ATOM_CACHE_LINE_SIZE) std::atomic<bool> locked_{false};
 
 public:
@@ -903,7 +903,7 @@ public:
  * along with exponential backoff to reduce contention in high-throughput
  * scenarios.
  */
-class BoostSpinlock : public NonCopyable {
+class BoostSpinlock : public atom::type::NonCopyable {
     alignas(ATOM_CACHE_LINE_SIZE) boost::atomic<bool> flag_{false};
 
 // For deadlock detection (optional in debug builds)
@@ -960,7 +960,7 @@ public:
  * Provides exclusive and shared locking capabilities using the Boost
  * implementation, which might offer better performance on some platforms.
  */
-class BoostSharedMutex : public NonCopyable {
+class BoostSharedMutex : public atom::type::NonCopyable {
     boost::shared_mutex mutex_;
 
 public:
@@ -1010,7 +1010,7 @@ public:
  * Allows the same thread to acquire the mutex multiple times without
  * deadlocking.
  */
-class BoostRecursiveMutex : public NonCopyable {
+class BoostRecursiveMutex : public atom::type::NonCopyable {
     boost::recursive_mutex mutex_;
 
 public:

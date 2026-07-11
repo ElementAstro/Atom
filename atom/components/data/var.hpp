@@ -34,6 +34,8 @@ Description: Variable Manager
 #include "atom/meta/concept.hpp"
 #include "atom/type/trackable.hpp"
 
+using atom::type::Trackable;
+
 /**
  * @brief Exception for variable type errors
  */

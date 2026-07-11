@@ -93,7 +93,7 @@ concept PoolableFunction = std::is_invocable_v<std::decay_t<F>>;
  * This class provides a convenient interface for managing a C++20 jthread,
  * allowing for starting, stopping, and joining threads easily.
  */
-class Thread : public NonCopyable {
+class Thread : public atom::type::NonCopyable {
 public:
     /**
      * @brief Default constructor.

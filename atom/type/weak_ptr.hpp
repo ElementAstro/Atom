@@ -386,6 +386,14 @@ public:
 #endif
 
     /**
+     * @brief Creates a shared pointer to the managed object.
+     * @return A shared pointer to the object, or nullptr if it has expired.
+     */
+    [[nodiscard]] auto createShared() const -> std::shared_ptr<T> {
+        return lock();
+    }
+
+    /**
      * @brief Executes a function with a locked shared pointer.
      *
      * This method safely executes a function with the managed object if it's
@@ -398,7 +406,9 @@ public:
      * std::nullopt if the object has expired. Returns true/false for void
      * functions.
      */
-    template <typename Func, typename R = std::invoke_result_t<Func, T&>>
+    template <typename Func, typename U = T,
+              typename R = std::invoke_result_t<Func, U&>>
+        requires(!std::is_void_v<U>)
     [[nodiscard]] auto withLock(Func&& func) const
         -> std::conditional_t<std::is_void_v<R>, bool, std::optional<R>> {
         if (auto shared = lock()) {
@@ -417,6 +427,30 @@ public:
     }
 
     /**
+     * @brief withLock overload for EnhancedWeakPtr<void>: the callable takes no
+     * arguments (there is no managed object to pass).
+     */
+    template <typename Func, typename U = T,
+              typename R = std::invoke_result_t<Func>>
+        requires std::is_void_v<U>
+    [[nodiscard]] auto withLock(Func&& func) const
+        -> std::conditional_t<std::is_void_v<R>, bool, std::optional<R>> {
+        if (auto shared = lock()) {
+            if constexpr (std::is_void_v<R>) {
+                std::forward<Func>(func)();
+                return true;
+            } else {
+                return std::forward<Func>(func)();
+            }
+        }
+        if constexpr (std::is_void_v<R>) {
+            return false;
+        } else {
+            return std::nullopt;
+        }
+    }
+
+    /**
      * @brief Maps the managed object to a new value using a mapping function.
      *
      * @tparam MapFunc The type of the mapping function.
@@ -424,8 +458,9 @@ public:
      * @return An optional containing the mapped value, or std::nullopt if the
      * object has expired.
      */
-    template <typename MapFunc,
-              typename MapResult = std::invoke_result_t<MapFunc, const T&>>
+    template <typename MapFunc, typename U = T,
+              typename MapResult = std::invoke_result_t<MapFunc, const U&>>
+        requires(!std::is_void_v<U>)
     [[nodiscard]] auto map(MapFunc&& mapFunc) const
         -> std::optional<MapResult> {
         return withLock([&mapFunc](const T& obj) -> MapResult {
@@ -539,14 +574,32 @@ public:
      * @param failure The function to execute on failure.
      * @return The result of either the success or failure function.
      */
-    template <typename SuccessFunc, typename FailureFunc,
-              typename SuccessResult = std::invoke_result_t<SuccessFunc, T&>,
+    template <typename SuccessFunc, typename FailureFunc, typename U = T,
+              typename SuccessResult = std::invoke_result_t<SuccessFunc, U&>,
               typename FailureResult = std::invoke_result_t<FailureFunc>>
+        requires(!std::is_void_v<U>)
     [[nodiscard]] auto tryLockOrElse(SuccessFunc&& success,
                                      FailureFunc&& failure) const
         -> std::common_type_t<SuccessResult, FailureResult> {
         if (auto shared = lock()) {
             return std::forward<SuccessFunc>(success)(*shared);
+        }
+        return std::forward<FailureFunc>(failure)();
+    }
+
+    /**
+     * @brief tryLockOrElse overload for EnhancedWeakPtr<void>: the success
+     * callable takes no arguments.
+     */
+    template <typename SuccessFunc, typename FailureFunc, typename U = T,
+              typename SuccessResult = std::invoke_result_t<SuccessFunc>,
+              typename FailureResult = std::invoke_result_t<FailureFunc>>
+        requires std::is_void_v<U>
+    [[nodiscard]] auto tryLockOrElse(SuccessFunc&& success,
+                                     FailureFunc&& failure) const
+        -> std::common_type_t<SuccessResult, FailureResult> {
+        if (auto shared = lock()) {
+            return std::forward<SuccessFunc>(success)();
         }
         return std::forward<FailureFunc>(failure)();
     }
@@ -589,6 +642,24 @@ public:
         }
 
         return nullptr;
+    }
+
+    /**
+     * @brief Convenience wrapper around tryLockWithRetry: retries locking at a
+     * fixed interval up to a maximum number of attempts.
+     *
+     * @param interval The retry interval.
+     * @param maxAttempts The maximum number of attempts (default 3).
+     * @return A shared pointer to the managed object, or nullptr on failure.
+     */
+    template <typename Rep, typename Period>
+    [[nodiscard]] auto tryLockPeriodic(
+        std::chrono::duration<Rep, Period> interval,
+        size_t maxAttempts = 3) const -> std::shared_ptr<T> {
+        return tryLockWithRetry(RetryPolicy(
+            maxAttempts,
+            std::chrono::duration_cast<RetryPolicy::Duration>(interval),
+            std::chrono::hours(24)));
     }
 
     /**
@@ -643,9 +714,14 @@ public:
     template <typename Predicate>
     [[nodiscard]] auto waitUntil(Predicate pred) const -> bool {
         std::unique_lock lock(mutex_);
-        return cv_.wait(lock, [this, &pred]() {
-            return this->ptr_.expired() || pred();
-        }) && !this->ptr_.expired();
+        // Poll with a timeout rather than a plain wait(): the predicate may be
+        // driven by external state with no corresponding notify() on cv_, so a
+        // notification-only wait would block forever. wait_for re-checks the
+        // predicate periodically and still wakes immediately on notifyAll().
+        while (!this->ptr_.expired() && !pred()) {
+            cv_.wait_for(lock, std::chrono::milliseconds(10));
+        }
+        return !this->ptr_.expired();
     }
 
     /**
@@ -676,6 +752,18 @@ public:
             return EnhancedWeakPtr<U>(std::static_pointer_cast<U>(sharedPtr));
         }
         return EnhancedWeakPtr<U>();
+    }
+
+    /**
+     * @brief Alias for staticCast: casts the weak pointer to a different type
+     * via std::static_pointer_cast.
+     *
+     * @tparam U The type to cast to.
+     * @return An EnhancedWeakPtr of the new type.
+     */
+    template <typename U>
+    [[nodiscard]] auto cast() const -> EnhancedWeakPtr<U> {
+        return staticCast<U>();
     }
 
     /**
@@ -723,7 +811,7 @@ public:
  */
 template <typename T>
 [[nodiscard]] auto createWeakPtrGroup(
-    std::span<const std::shared_ptr<T>> sharedPtrs)
+    const std::vector<std::shared_ptr<T>>& sharedPtrs)
     -> std::vector<EnhancedWeakPtr<T>> {
     std::vector<EnhancedWeakPtr<T>> weakPtrs;
     weakPtrs.reserve(sharedPtrs.size());
@@ -746,12 +834,12 @@ template <typename T>
  * @return The number of successfully processed objects.
  */
 template <typename T, typename Func>
-[[nodiscard]] auto batchOperation(std::span<const EnhancedWeakPtr<T>> weakPtrs,
-                                  Func&& func,
-                                  size_t parallelThreshold = 100) -> size_t {
+[[nodiscard]] auto batchOperation(
+    const std::vector<EnhancedWeakPtr<T>>& weakPtrs, Func&& func,
+    size_t parallelThreshold = 100) -> size_t {
     size_t successCount = 0;
 
-#ifdef __cpp_lib_parallel_algorithm
+#ifdef ATOM_USE_PARALLEL_ALGORITHMS
     if (parallelThreshold > 0 && weakPtrs.size() >= parallelThreshold) {
         std::atomic<size_t> atomicCount{0};
 
@@ -789,8 +877,8 @@ template <typename T, typename Func>
  * @return A vector of EnhancedWeakPtr that satisfy the predicate.
  */
 template <typename T, typename Predicate>
-[[nodiscard]] auto filterWeakPtrs(std::span<const EnhancedWeakPtr<T>> weakPtrs,
-                                  Predicate&& predicate)
+[[nodiscard]] auto filterWeakPtrs(
+    const std::vector<EnhancedWeakPtr<T>>& weakPtrs, Predicate&& predicate)
     -> std::vector<EnhancedWeakPtr<T>> {
     std::vector<EnhancedWeakPtr<T>> result;
     result.reserve(weakPtrs.size());

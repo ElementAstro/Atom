@@ -46,10 +46,30 @@ public:
     explicit JsonValue(const std::string& value);
 
     /**
+     * @brief Constructs a JsonValue of type String from a C-string.
+     *
+     * Without this overload `JsonValue("literal")` would bind to
+     * JsonValue(bool) — the array-to-pointer-to-bool path is a standard
+     * conversion and so beats the user-defined conversion to std::string —
+     * silently storing a string literal as a boolean. Stored as a string.
+     * @param value The null-terminated string to initialize.
+     */
+    explicit JsonValue(const char* value);
+
+    /**
      * @brief Constructs a JsonValue of type Number.
      * @param value The numeric value to initialize.
      */
     explicit JsonValue(double value);
+
+    /**
+     * @brief Constructs a JsonValue of type Number from an integer.
+     *
+     * Without this overload `JsonValue(someInt)` is ambiguous because an int
+     * converts equally well to both `double` and `bool`. Stored as a number.
+     * @param value The integer value to initialize.
+     */
+    explicit JsonValue(int value);
 
     /**
      * @brief Constructs a JsonValue of type Bool.
@@ -80,41 +100,41 @@ public:
      * @return The string value.
      * @throws std::bad_variant_access if the value is not a string.
      */
-    [[nodiscard]] auto asString() const -> const std::string&;
+    [[nodiscard]] auto as_string() const -> const std::string&;
 
     /**
      * @brief Gets the numeric value.
      * @return The numeric value.
      * @throws std::bad_variant_access if the value is not a number.
      */
-    [[nodiscard]] auto asNumber() const -> double;
+    [[nodiscard]] auto as_number() const -> double;
 
     /**
      * @brief Gets the boolean value.
      * @return The boolean value.
      * @throws std::bad_variant_access if the value is not a boolean.
      */
-    [[nodiscard]] auto asBool() const -> bool;
+    [[nodiscard]] auto as_bool() const -> bool;
 
     /**
      * @brief Gets the object value.
      * @return The object value.
      * @throws std::bad_variant_access if the value is not an object.
      */
-    [[nodiscard]] auto asObject() const -> const JsonObject&;
+    [[nodiscard]] auto as_object() const -> const JsonObject&;
 
     /**
      * @brief Gets the array value.
      * @return The array value.
      * @throws std::bad_variant_access if the value is not an array.
      */
-    [[nodiscard]] auto asArray() const -> const JsonArray&;
+    [[nodiscard]] auto as_array() const -> const JsonArray&;
 
     /**
      * @brief Converts the JSON value to a string representation.
      * @return The string representation of the JSON value.
      */
-    [[nodiscard]] auto toString() const -> std::string;
+    [[nodiscard]] auto to_string() const -> std::string;
 
     /**
      * @brief Accesses the value associated with the given key in a JSON object.

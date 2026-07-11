@@ -17,8 +17,11 @@ Description: A Small Vector Implementation with optional Boost support
 
 #include <algorithm>
 #include <array>
+#include <cassert>
+#include <compare>
 #include <cstddef>
 #include <cstring>
+#include <format>
 #include <initializer_list>
 #include <limits>
 #include <memory>
@@ -58,6 +61,8 @@ constexpr std::size_t ATOM_CACHELINE_SIZE = 64;  // Common cache line size
 #else
 #define ATOM_PARALLEL_COPY(src, dest, size) std::copy(src, src + size, dest)
 #endif
+
+namespace atom::type {
 
 /**
  * @brief A small vector implementation with small buffer optimization
@@ -155,7 +160,10 @@ public:
         initializeFromEmpty();
         assign(std::make_move_iterator(other.begin()),
                std::make_move_iterator(other.end()));
+        // Leave the source empty AND back on inline storage (mirrors the
+        // same-capacity moveFrom); clear() alone keeps it on the heap.
         other.clear();
+        other.shrinkToFit();
     }
 
     template <std::size_t M>
@@ -176,6 +184,7 @@ public:
             assign(std::make_move_iterator(other.begin()),
                    std::make_move_iterator(other.end()));
             other.clear();
+            other.shrinkToFit();
         }
         return *this;
     }
@@ -295,16 +304,16 @@ public:
     // Assign methods
     void assign(size_type count, const T& value) {
         try {
+            // Drop existing elements first, then grow storage if needed.
+            // NOTE: must not delegate to the (count, value) constructor here —
+            // that constructor calls assign(), which would recurse infinitely
+            // whenever count > capacity().
+            clear();
             if (count > capacity()) {
-                // Need to reallocate
-                SmallVector tmp(count, value, alloc_);
-                swap(tmp);
-            } else {
-                // Can reuse existing storage
-                clear();
-                constructElements(begin(), count, value);
-                size_ = count;
+                reserve(count);
             }
+            constructElements(begin(), count, value);
+            size_ = count;
         } catch (...) {
             // Keep vector in a valid state
             clear();
@@ -318,16 +327,14 @@ public:
         try {
             const size_type count = std::distance(first, last);
 
+            // See note in assign(count, value): must not delegate to the range
+            // constructor here, which would recurse infinitely.
+            clear();
             if (count > capacity()) {
-                // Need to reallocate
-                SmallVector tmp(first, last, alloc_);
-                swap(tmp);
-            } else {
-                // Can reuse existing storage
-                clear();
-                constructRange(begin(), first, last);
-                size_ = count;
+                reserve(count);
             }
+            constructRange(begin(), first, last);
+            size_ = count;
         } catch (...) {
             // Keep vector in a valid state
             clear();
@@ -340,61 +347,67 @@ public:
     }
 
     // Element access
-    auto at(size_type pos) -> reference {
+    [[nodiscard]] auto at(size_type pos) -> reference {
         if (pos >= size()) {
             throw std::out_of_range("SmallVector::at: index out of range");
         }
         return (*this)[pos];
     }
 
-    auto at(size_type pos) const -> const_reference {
+    [[nodiscard]] auto at(size_type pos) const -> const_reference {
         if (pos >= size()) {
             throw std::out_of_range("SmallVector::at: index out of range");
         }
         return (*this)[pos];
     }
 
-    auto operator[](size_type pos) -> reference {
+    [[nodiscard]] auto operator[](size_type pos) -> reference {
         assert(pos < size() && "Index out of bounds");
         return *(begin() + pos);
     }
 
-    auto operator[](size_type pos) const -> const_reference {
+    [[nodiscard]] auto operator[](size_type pos) const -> const_reference {
         assert(pos < size() && "Index out of bounds");
         return *(begin() + pos);
     }
 
-    auto front() -> reference {
+    [[nodiscard]] auto front() -> reference {
         assert(!empty() && "Cannot call front() on empty vector");
         return *begin();
     }
 
-    auto front() const -> const_reference {
+    [[nodiscard]] auto front() const -> const_reference {
         assert(!empty() && "Cannot call front() on empty vector");
         return *begin();
     }
 
-    auto back() -> reference {
+    [[nodiscard]] auto back() -> reference {
         assert(!empty() && "Cannot call back() on empty vector");
         return *(end() - 1);
     }
 
-    auto back() const -> const_reference {
+    [[nodiscard]] auto back() const -> const_reference {
         assert(!empty() && "Cannot call back() on empty vector");
         return *(end() - 1);
     }
 
-    auto data() noexcept -> T* { return begin(); }
-    auto data() const noexcept -> const T* { return begin(); }
+    [[nodiscard]] auto data() noexcept -> T* { return begin(); }
+    [[nodiscard]] auto data() const noexcept -> const T* { return begin(); }
 
     // Iterators
-    auto begin() noexcept -> iterator { return data_; }
-    auto begin() const noexcept -> const_iterator { return data_; }
-    auto cbegin() const noexcept -> const_iterator { return begin(); }
+    [[nodiscard]] auto begin() noexcept -> iterator { return data_; }
+    [[nodiscard]] auto begin() const noexcept -> const_iterator {
+        return data_;
+    }
+    [[nodiscard]] auto cbegin() const noexcept -> const_iterator {
+        return begin();
+    }
 
-    auto end() noexcept -> iterator { return begin() + size(); }
-    auto end() const noexcept -> const_iterator { return begin() + size(); }
-    auto cend() const noexcept -> const_iterator { return end(); }
+    [[nodiscard]] auto end() noexcept -> iterator { return begin() + size(); }
+    [[nodiscard]] auto end() const noexcept -> const_iterator {
+        return begin() + size();
+    }
+    [[nodiscard]] auto cend() const noexcept -> const_iterator { return end(); }
 
     auto rbegin() noexcept -> reverse_iterator {
         return reverse_iterator(end());
@@ -965,6 +978,10 @@ private:
                 }
                 ++size_;
             }
+
+            // Leave the moved-from source empty (valid state). Without this the
+            // source keeps its size and elements after a move.
+            other.clear();
         } else {
             // Source is using dynamic storage, take ownership
             data_ = other.data_;
@@ -1065,43 +1082,20 @@ private:
     [[no_unique_address]] allocator_type alloc_{};
 };
 
-// Global relational operators
+// Equality and three-way comparison (C++20). operator!=, <, <=, >, >= are
+// synthesized by the compiler from these two.
 template <typename T, std::size_t N, typename Alloc>
-auto operator==(const SmallVector<T, N, Alloc>& lhs,
-                const SmallVector<T, N, Alloc>& rhs) -> bool {
+[[nodiscard]] auto operator==(const SmallVector<T, N, Alloc>& lhs,
+                              const SmallVector<T, N, Alloc>& rhs) -> bool {
     return lhs.size() == rhs.size() &&
            std::equal(lhs.begin(), lhs.end(), rhs.begin());
 }
 
 template <typename T, std::size_t N, typename Alloc>
-auto operator!=(const SmallVector<T, N, Alloc>& lhs,
-                const SmallVector<T, N, Alloc>& rhs) -> bool {
-    return !(lhs == rhs);
-}
-
-template <typename T, std::size_t N, typename Alloc>
-auto operator<(const SmallVector<T, N, Alloc>& lhs,
-               const SmallVector<T, N, Alloc>& rhs) -> bool {
-    return std::lexicographical_compare(lhs.begin(), lhs.end(), rhs.begin(),
-                                        rhs.end());
-}
-
-template <typename T, std::size_t N, typename Alloc>
-auto operator<=(const SmallVector<T, N, Alloc>& lhs,
-                const SmallVector<T, N, Alloc>& rhs) -> bool {
-    return !(rhs < lhs);
-}
-
-template <typename T, std::size_t N, typename Alloc>
-auto operator>(const SmallVector<T, N, Alloc>& lhs,
-               const SmallVector<T, N, Alloc>& rhs) -> bool {
-    return rhs < lhs;
-}
-
-template <typename T, std::size_t N, typename Alloc>
-auto operator>=(const SmallVector<T, N, Alloc>& lhs,
-                const SmallVector<T, N, Alloc>& rhs) -> bool {
-    return !(lhs < rhs);
+[[nodiscard]] auto operator<=>(const SmallVector<T, N, Alloc>& lhs,
+                               const SmallVector<T, N, Alloc>& rhs) {
+    return std::lexicographical_compare_three_way(lhs.begin(), lhs.end(),
+                                                  rhs.begin(), rhs.end());
 }
 
 // Global swap
@@ -1110,5 +1104,38 @@ void swap(SmallVector<T, N, Alloc>& lhs,
           SmallVector<T, N, Alloc>& rhs) noexcept(noexcept(lhs.swap(rhs))) {
     lhs.swap(rhs);
 }
+
+}  // namespace atom::type
+
+/**
+ * @brief std::format support for SmallVector, rendered as "[a, b, c]".
+ *
+ * Requires the element type to be formattable.
+ */
+template <typename T, std::size_t N, typename Alloc, typename CharT>
+    requires std::formattable<T, CharT>
+struct std::formatter<atom::type::SmallVector<T, N, Alloc>, CharT> {
+    constexpr auto parse(std::basic_format_parse_context<CharT>& ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const atom::type::SmallVector<T, N, Alloc>& vec,
+                FormatContext& ctx) const {
+        auto out = ctx.out();
+        *out++ = CharT{'['};
+        bool first = true;
+        for (const auto& elem : vec) {
+            if (!first) {
+                *out++ = CharT{','};
+                *out++ = CharT{' '};
+            }
+            first = false;
+            out = std::format_to(out, "{}", elem);
+        }
+        *out++ = CharT{']'};
+        return out;
+    }
+};
 
 #endif  // ATOM_TYPE_SMALL_VECTOR_HPP
