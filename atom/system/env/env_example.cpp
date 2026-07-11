@@ -12,7 +12,7 @@ Description: Example usage of optimized environment components
 
 **************************************************/
 
-#include "env_advanced.hpp"
+#include "env_manager.hpp"
 #include <iostream>
 #include <spdlog/spdlog.h>
 
@@ -180,25 +180,25 @@ void demonstrateAdvancedFeatures() {
     std::cout << "\n=== Advanced Features ===\n";
 
     // Create and apply profile
-    auto profile = EnvAdvanced::createProfileFromCurrent("demo_profile", "Demonstration profile");
+    auto profile = EnvManager::createProfileFromCurrent("demo_profile", "Demonstration profile");
     std::cout << "Created profile with " << profile.variables.size() << " variables\n";
 
     // Save profile
-    EnvAdvanced::saveProfile(profile, "demo_profile.json");
+    EnvManager::saveProfile(profile, "demo_profile.json");
     std::cout << "Saved profile to demo_profile.json\n";
 
     // Perform health check
-    auto healthCheck = EnvAdvanced::performHealthCheck();
+    auto healthCheck = EnvManager::performHealthCheck();
     std::cout << "Health check status: " << healthCheck["health_status"] << "\n";
     std::cout << "Total variables: " << healthCheck["total_variables"] << "\n";
 
     // Optimize environment
-    auto optimization = EnvAdvanced::optimizeEnvironment();
+    auto optimization = EnvManager::optimizeEnvironment();
     std::cout << "Optimization completed: " << optimization["optimization_status"] << "\n";
     std::cout << "PATH entries cleaned: " << optimization["path_entries_removed"] << "\n";
 
     // Get comprehensive statistics
-    auto stats = EnvAdvanced::getEnvironmentStatistics();
+    auto stats = EnvManager::getEnvironmentStatistics();
     std::cout << "Environment statistics:\n";
     std::cout << "  Core cache hits: " << stats["core_cache_hits"] << "\n";
     std::cout << "  Path cache hits: " << stats["path_cache_hits"] << "\n";
@@ -210,14 +210,14 @@ void demonstrateEncryption() {
 
     // Set up encryption provider
     auto encProvider = std::make_shared<SimpleEncryptionProvider>("my_secret_key");
-    EnvAdvanced::setEncryptionProvider(encProvider);
+    EnvManager::setEncryptionProvider(encProvider);
 
     // Set encrypted variable
-    bool success = EnvAdvanced::setEncryptedVar("SECRET_TOKEN", "super_secret_value");
+    bool success = EnvManager::setEncryptedVar("SECRET_TOKEN", "super_secret_value");
     std::cout << "Set encrypted variable: " << (success ? "success" : "failed") << "\n";
 
     // Get encrypted variable
-    String decrypted = EnvAdvanced::getEncryptedVar("SECRET_TOKEN", "default");
+    String decrypted = EnvManager::getEncryptedVar("SECRET_TOKEN", "default");
     std::cout << "Decrypted value: " << decrypted << "\n";
 
     // Show raw encrypted value

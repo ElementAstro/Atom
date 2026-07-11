@@ -18,11 +18,23 @@
 #ifndef ATOM_META_REFL_HPP
 #define ATOM_META_REFL_HPP
 
+#include <any>
 #include <array>
 #include <concepts>
+#include <functional>
+#include <mutex>
+#include <optional>
+#include <set>
+#include <shared_mutex>
+#include <span>
+#include <sstream>
+#include <string>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <typeinfo>
+#include <unordered_map>
+#include <vector>
 #include <version>
 
 // C++23 feature detection
@@ -126,9 +138,11 @@ constexpr auto Acc(const L&, F&&, R result, std::index_sequence<>) -> R {
     return result;
 }
 
+// Note: deduced return type — the accumulator type may change at each step
+// (e.g. ElemList<> growing in VirtualBases()), so it must not be pinned to R.
 template <class L, class F, class R, std::size_t N0, std::size_t... Ns>
 constexpr auto Acc(const L& list, F&& func, R result,
-                   std::index_sequence<N0, Ns...>) -> R {
+                   std::index_sequence<N0, Ns...>) {
     return Acc(list, std::forward<F>(func),
                func(std::move(result), list.template Get<N0>()),
                std::index_sequence<Ns...>{});
@@ -325,7 +339,7 @@ struct FTraits<T*> : FTraitsB<true, std::is_function_v<T>> {};  // static member
 template <class Name, class T, class AList>
 struct Field : FTraits<T>, NamedValue<Name, T> {
     AList attrs;
-    constexpr Field(Name, T val, AList attr_list = {})
+    constexpr Field(Name, T val, AList attr_list = AList{})
         : NamedValue<Name, T>{val}, attrs{attr_list} {}
 };
 

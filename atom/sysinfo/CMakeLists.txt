@@ -54,7 +54,7 @@ set(NETWORK_SOURCES # WiFi module sources (integrated to fix duplicate targets)
     network/wifi/wifi.cpp network/wifi/common.cpp network/wifi/windows.cpp
     network/wifi/linux.cpp network/wifi/macos.cpp)
 
-set(STORAGE_HEADERS
+set(STORAGE_DETAIL_HEADERS
     storage/disk/disk_device.hpp storage/disk/disk_info.hpp
     storage/disk/disk_monitor.hpp storage/disk/disk_security.hpp
     storage/disk/disk_types.hpp storage/disk/disk_util.hpp)
@@ -116,6 +116,7 @@ add_library(
   ${UTILS_SOURCES}
   ${HARDWARE_HEADERS}
   ${CPU_HEADERS}
+  ${STORAGE_DETAIL_HEADERS}
   ${STORAGE_HEADERS}
   ${NETWORK_HEADERS}
   ${INFO_HEADERS}

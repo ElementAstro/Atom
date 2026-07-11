@@ -31,6 +31,8 @@ Description: Trackable Object (Optimized with C++20 features)
 #include "atom/error/exception.hpp"
 #include "atom/meta/abi.hpp"
 
+namespace atom::type {
+
 /**
  * @brief A class template for creating trackable objects that notify observers
  * when their value changes.
@@ -312,5 +314,7 @@ private:
         return *this;
     }
 };
+
+}  // namespace atom::type
 
 #endif  // ATOM_TYPE_TRACKABLE_HPP

@@ -18,35 +18,41 @@
 #include <shared_mutex>
 #include <span>
 #include <string>
+#include <string_view>
 #include <thread>
+#include <typeinfo>
 #include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
 
-#include "atom/algorithm/core/rust_numeric.hpp"
-
 namespace atom::meta {
 
 /**
- * @brief Result wrapper with success/error state
+ * @brief Result wrapper with success/error state for sequence steps
+ *
+ * Distinct from `atom::meta::Result` (the `type::expected`-based monadic result
+ * in invoke.hpp): this is the value-semantics, string-diagnostic result used by
+ * `FunctionSequence`. Kept under a separate name so the canonical `Result`
+ * denotes exactly one type module-wide.
+ *
  * @tparam T Type of the success value
  */
 template <typename T>
-class Result {
+class StepResult {
 public:
     /**
      * @brief Default constructor. Initializes to an error state.
      */
-    Result() : data_(std::string("Result not initialized")) {}
+    StepResult() : data_(std::string("StepResult not initialized")) {}
 
     /**
      * @brief Create a success result
      * @param value Success value
      * @return Result with success state
      */
-    static Result<T> makeSuccess(T value) {
-        return Result<T>(std::move(value));
+    static StepResult<T> makeSuccess(T value) {
+        return StepResult<T>(std::move(value));
     }
 
     /**
@@ -54,8 +60,8 @@ public:
      * @param error Error message
      * @return Result with error state
      */
-    static Result<T> makeError(std::string error) {
-        return Result<T>(std::move(error));
+    static StepResult<T> makeError(std::string error) {
+        return StepResult<T>(std::move(error));
     }
 
     /**
@@ -114,8 +120,8 @@ public:
 private:
     std::variant<T, std::string> data_;
 
-    explicit Result(T value) : data_(std::move(value)) {}
-    explicit Result(std::string error) : data_(std::move(error)) {}
+    explicit StepResult(T value) : data_(std::move(value)) {}
+    explicit StepResult(std::string error) : data_(std::move(error)) {}
 };
 
 /**
@@ -218,13 +224,13 @@ public:
      * @param argsBatch Vector of argument sets
      * @return Vector of results
      */
-    [[nodiscard]] std::vector<Result<std::any>> run(
+    [[nodiscard]] std::vector<StepResult<std::any>> run(
         std::span<const std::vector<std::any>> argsBatch) const {
-        std::vector<Result<std::any>> results;
+        std::vector<StepResult<std::any>> results;
         std::shared_lock lock(mutex_);
 
         if (functions_.empty()) {
-            return {Result<std::any>::makeError(
+            return {StepResult<std::any>::makeError(
                 "No functions registered in the sequence")};
         }
 
@@ -242,10 +248,11 @@ public:
                 stats_.invocationCount++;
 
                 results.push_back(
-                    Result<std::any>::makeSuccess(std::move(result)));
+                    StepResult<std::any>::makeSuccess(std::move(result)));
             } catch (const std::exception& e) {
+                stats_.invocationCount++;
                 stats_.errorCount++;
-                results.push_back(Result<std::any>::makeError(
+                results.push_back(StepResult<std::any>::makeError(
                     std::string("Exception caught: ") + e.what()));
             }
         }
@@ -259,19 +266,19 @@ public:
      * @param argsBatch Vector of argument sets
      * @return Vector of result vectors
      */
-    [[nodiscard]] std::vector<std::vector<Result<std::any>>> runAll(
+    [[nodiscard]] std::vector<std::vector<StepResult<std::any>>> runAll(
         std::span<const std::vector<std::any>> argsBatch) const {
-        std::vector<std::vector<Result<std::any>>> resultsBatch;
+        std::vector<std::vector<StepResult<std::any>>> resultsBatch;
         std::shared_lock lock(mutex_);
 
         if (functions_.empty()) {
-            return {std::vector<Result<std::any>>{Result<std::any>::makeError(
+            return {std::vector<StepResult<std::any>>{StepResult<std::any>::makeError(
                 "No functions registered in the sequence")}};
         }
 
         resultsBatch.reserve(argsBatch.size());
         for (const auto& args : argsBatch) {
-            std::vector<Result<std::any>> results;
+            std::vector<StepResult<std::any>> results;
             results.reserve(functions_.size());
 
             for (const auto& func : functions_) {
@@ -286,10 +293,11 @@ public:
                     stats_.invocationCount++;
 
                     results.push_back(
-                        Result<std::any>::makeSuccess(std::move(result)));
+                        StepResult<std::any>::makeSuccess(std::move(result)));
                 } catch (const std::exception& e) {
+                    stats_.invocationCount++;
                     stats_.errorCount++;
-                    results.push_back(Result<std::any>::makeError(
+                    results.push_back(StepResult<std::any>::makeError(
                         std::string("Exception caught: ") + e.what()));
                 }
             }
@@ -306,7 +314,7 @@ public:
      * @param options Execution options
      * @return Vector of results
      */
-    [[nodiscard]] std::vector<Result<std::any>> execute(
+    [[nodiscard]] std::vector<StepResult<std::any>> execute(
         std::span<const std::vector<std::any>> argsBatch,
         const ExecutionOptions& options) const {
         if (options.policy == ExecutionPolicy::Parallel) {
@@ -335,11 +343,11 @@ public:
      * @param options Execution options
      * @return Vector of result vectors
      */
-    [[nodiscard]] std::vector<std::vector<Result<std::any>>> executeAll(
+    [[nodiscard]] std::vector<std::vector<StepResult<std::any>>> executeAll(
         std::span<const std::vector<std::any>> argsBatch,
         const ExecutionOptions& options) const {
         // Initialize result container
-        std::vector<std::vector<Result<std::any>>> resultsBatch;
+        std::vector<std::vector<StepResult<std::any>>> resultsBatch;
 
         // Apply execution policy
         if (options.policy == ExecutionPolicy::Parallel) {
@@ -366,7 +374,7 @@ public:
      * @param argsBatch Vector of argument sets
      * @return Future with results
      */
-    [[nodiscard]] std::future<std::vector<Result<std::any>>> runAsync(
+    [[nodiscard]] std::future<std::vector<StepResult<std::any>>> runAsync(
         std::vector<std::vector<std::any>> argsBatch) const {
         return std::async(std::launch::async,
                           [this, argsBatch = std::move(argsBatch)]() mutable {
@@ -379,7 +387,7 @@ public:
      * @param argsBatch Vector of argument sets
      * @return Future with results
      */
-    [[nodiscard]] std::future<std::vector<std::vector<Result<std::any>>>>
+    [[nodiscard]] std::future<std::vector<std::vector<StepResult<std::any>>>>
     runAllAsync(std::vector<std::vector<std::any>> argsBatch) const {
         return std::async(std::launch::async,
                           [this, argsBatch = std::move(argsBatch)]() mutable {
@@ -388,31 +396,64 @@ public:
     }
 
     /**
-     * @brief Run with timeout
+     * @brief Run with a per-argument-set timeout
+     *
+     * Each argument set is executed asynchronously and given the full
+     * timeout budget; argument sets that do not finish in time yield a
+     * timeout error result without affecting the other entries.
+     *
      * @param argsBatch Vector of argument sets
-     * @param timeout Timeout duration
+     * @param timeout Timeout duration applied to each argument set
      * @return Vector of results
      */
-    [[nodiscard]] std::vector<Result<std::any>> executeWithTimeout(
+    [[nodiscard]] std::vector<StepResult<std::any>> executeWithTimeout(
         std::span<const std::vector<std::any>> argsBatch,
         std::chrono::milliseconds timeout) const {
-        std::vector<std::vector<std::any>> argsCopy(argsBatch.begin(),
-                                                    argsBatch.end());
-        auto future = runAsync(std::move(argsCopy));
+        std::shared_lock lock(mutex_);
 
-        if (future.wait_for(timeout) == std::future_status::timeout) {
-            stats_.errorCount++;
-            return {
-                Result<std::any>::makeError("Function execution timed out")};
+        if (functions_.empty()) {
+            return {StepResult<std::any>::makeError(
+                "No functions registered in the sequence")};
         }
 
-        try {
-            return future.get();
-        } catch (const std::exception& e) {
-            stats_.errorCount++;
-            return {Result<std::any>::makeError(
-                std::string("Exception during async execution: ") + e.what())};
+        const auto& func = functions_.back();
+
+        // Launch all argument sets concurrently; futures are joined before
+        // this function returns (std::async future destructors block), so
+        // the references captured below remain valid.
+        std::vector<std::future<std::any>> futures;
+        futures.reserve(argsBatch.size());
+        for (const auto& args : argsBatch) {
+            futures.push_back(std::async(
+                std::launch::async, [&func, &args]() { return func(args); }));
         }
+
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        std::vector<StepResult<std::any>> results;
+        results.reserve(futures.size());
+
+        for (auto& future : futures) {
+            if (future.wait_until(deadline) == std::future_status::timeout) {
+                stats_.errorCount++;
+                results.push_back(StepResult<std::any>::makeError(
+                    "Function execution timed out"));
+                continue;
+            }
+
+            try {
+                auto value = future.get();
+                stats_.invocationCount++;
+                results.push_back(
+                    StepResult<std::any>::makeSuccess(std::move(value)));
+            } catch (const std::exception& e) {
+                stats_.invocationCount++;
+                stats_.errorCount++;
+                results.push_back(StepResult<std::any>::makeError(
+                    std::string("Exception caught: ") + e.what()));
+            }
+        }
+
+        return results;
     }
 
     /**
@@ -421,7 +462,7 @@ public:
      * @param timeout Timeout duration
      * @return Vector of result vectors
      */
-    [[nodiscard]] std::vector<std::vector<Result<std::any>>>
+    [[nodiscard]] std::vector<std::vector<StepResult<std::any>>>
     executeAllWithTimeout(std::span<const std::vector<std::any>> argsBatch,
                           std::chrono::milliseconds timeout) const {
         std::vector<std::vector<std::any>> argsCopy(argsBatch.begin(),
@@ -431,14 +472,14 @@ public:
         if (future.wait_for(timeout) == std::future_status::timeout) {
             stats_.errorCount++;
             return {
-                {Result<std::any>::makeError("Function execution timed out")}};
+                {StepResult<std::any>::makeError("Function execution timed out")}};
         }
 
         try {
             return future.get();
         } catch (const std::exception& e) {
             stats_.errorCount++;
-            return {{Result<std::any>::makeError(
+            return {{StepResult<std::any>::makeError(
                 std::string("Exception during async execution: ") + e.what())}};
         }
     }
@@ -449,10 +490,10 @@ public:
      * @param retries Number of retry attempts
      * @return Vector of results
      */
-    [[nodiscard]] std::vector<Result<std::any>> executeWithRetries(
+    [[nodiscard]] std::vector<StepResult<std::any>> executeWithRetries(
         std::span<const std::vector<std::any>> argsBatch,
         size_t retries) const {
-        std::vector<Result<std::any>> results;
+        std::vector<StepResult<std::any>> results;
         size_t attempts = 0;
         bool success = false;
 
@@ -467,7 +508,7 @@ public:
             } catch (const std::exception& e) {
                 stats_.errorCount++;
                 if (attempts == retries) {
-                    return {Result<std::any>::makeError(
+                    return {StepResult<std::any>::makeError(
                         std::string("Failed after all retry attempts: ") +
                         e.what())};
                 }
@@ -480,6 +521,16 @@ public:
             }
         } while (attempts <= retries);
 
+        if (!success) {
+            // Mark results that are still failing after exhausting retries
+            for (auto& result : results) {
+                if (result.isError()) {
+                    result = StepResult<std::any>::makeError(
+                        "Failed after all retry attempts: " + result.error());
+                }
+            }
+        }
+
         return results;
     }
 
@@ -489,10 +540,10 @@ public:
      * @param retries Number of retry attempts
      * @return Vector of result vectors
      */
-    [[nodiscard]] std::vector<std::vector<Result<std::any>>>
+    [[nodiscard]] std::vector<std::vector<StepResult<std::any>>>
     executeAllWithRetries(std::span<const std::vector<std::any>> argsBatch,
                           size_t retries) const {
-        std::vector<std::vector<Result<std::any>>> resultsBatch;
+        std::vector<std::vector<StepResult<std::any>>> resultsBatch;
         size_t attempts = 0;
         bool success = false;
 
@@ -517,7 +568,7 @@ public:
             } catch (const std::exception& e) {
                 stats_.errorCount++;
                 if (attempts == retries) {
-                    return {{Result<std::any>::makeError(
+                    return {{StepResult<std::any>::makeError(
                         std::string("Failed after all retry attempts: ") +
                         e.what())}};
                 }
@@ -539,13 +590,13 @@ public:
      * @param argsBatch Vector of argument sets
      * @return Vector of results
      */
-    [[nodiscard]] std::vector<Result<std::any>> executeWithCaching(
+    [[nodiscard]] std::vector<StepResult<std::any>> executeWithCaching(
         std::span<const std::vector<std::any>> argsBatch) const {
-        std::vector<Result<std::any>> results;
+        std::vector<StepResult<std::any>> results;
         std::shared_lock lock(mutex_);
 
         if (functions_.empty()) {
-            return {Result<std::any>::makeError(
+            return {StepResult<std::any>::makeError(
                 "No functions registered in the sequence")};
         }
 
@@ -560,7 +611,7 @@ public:
                     if (auto it = cache_.find(key); it != cache_.end()) {
                         stats_.cacheHits++;
                         results.push_back(
-                            Result<std::any>::makeSuccess(it->second));
+                            StepResult<std::any>::makeSuccess(it->second));
                         continue;
                     }
                 }
@@ -581,11 +632,11 @@ public:
                 }
 
                 results.push_back(
-                    Result<std::any>::makeSuccess(std::move(result)));
+                    StepResult<std::any>::makeSuccess(std::move(result)));
             }
         } catch (const std::exception& e) {
             stats_.errorCount++;
-            results.push_back(Result<std::any>::makeError(
+            results.push_back(StepResult<std::any>::makeError(
                 std::string("Exception caught: ") + e.what()));
         }
 
@@ -597,14 +648,14 @@ public:
      * @param argsBatch Vector of argument sets
      * @return Vector of result vectors
      */
-    [[nodiscard]] std::vector<std::vector<Result<std::any>>>
+    [[nodiscard]] std::vector<std::vector<StepResult<std::any>>>
     executeAllWithCaching(
         std::span<const std::vector<std::any>> argsBatch) const {
-        std::vector<std::vector<Result<std::any>>> resultsBatch;
+        std::vector<std::vector<StepResult<std::any>>> resultsBatch;
         std::shared_lock lock(mutex_);
 
         if (functions_.empty()) {
-            return {{Result<std::any>::makeError(
+            return {{StepResult<std::any>::makeError(
                 "No functions registered in the sequence")}};
         }
 
@@ -612,7 +663,7 @@ public:
             resultsBatch.reserve(argsBatch.size());
 
             for (const auto& args : argsBatch) {
-                std::vector<Result<std::any>> results;
+                std::vector<StepResult<std::any>> results;
                 results.reserve(functions_.size());
 
                 for (size_t i = 0; i < functions_.size(); i++) {
@@ -625,7 +676,7 @@ public:
                         if (auto it = cache_.find(key); it != cache_.end()) {
                             stats_.cacheHits++;
                             results.push_back(
-                                Result<std::any>::makeSuccess(it->second));
+                                StepResult<std::any>::makeSuccess(it->second));
                             continue;
                         }
                     }
@@ -646,14 +697,14 @@ public:
                     }
 
                     results.push_back(
-                        Result<std::any>::makeSuccess(std::move(result)));
+                        StepResult<std::any>::makeSuccess(std::move(result)));
                 }
 
                 resultsBatch.emplace_back(std::move(results));
             }
         } catch (const std::exception& e) {
             stats_.errorCount++;
-            return {{Result<std::any>::makeError(
+            return {{StepResult<std::any>::makeError(
                 std::string("Exception caught: ") + e.what())}};
         }
 
@@ -666,7 +717,7 @@ public:
      * @param callback Callback function for notifications
      * @return Vector of results
      */
-    [[nodiscard]] std::vector<Result<std::any>> executeWithNotification(
+    [[nodiscard]] std::vector<StepResult<std::any>> executeWithNotification(
         std::span<const std::vector<std::any>> argsBatch,
         const std::function<void(const std::any&)>& callback) const {
         auto results = run(argsBatch);
@@ -686,20 +737,28 @@ public:
      * @param options Execution options
      * @return Vector of results
      */
-    [[nodiscard]] std::vector<Result<std::any>> executeParallel(
+    [[nodiscard]] std::vector<StepResult<std::any>> executeParallel(
         std::span<const std::vector<std::any>> argsBatch,
         const ExecutionOptions& options) const {
-        std::vector<Result<std::any>> results(argsBatch.size());
+        std::vector<StepResult<std::any>> results(argsBatch.size());
         std::shared_lock lock(mutex_);
 
         if (functions_.empty()) {
-            return {Result<std::any>::makeError(
+            return {StepResult<std::any>::makeError(
                 "No functions registered in the sequence")};
         }
 
         auto& func = functions_.back();
         std::atomic<size_t> counter{0};
         std::atomic<size_t> errorCount{0};
+
+        // Stats are accumulated into thread-local atomics and folded into the
+        // non-atomic `stats_` once, after all workers have joined. Writing
+        // `stats_` directly from workers is a data race (it is a plain struct).
+        std::atomic<size_t> invocationCount{0};
+        std::atomic<size_t> cacheHits{0};
+        std::atomic<size_t> cacheMisses{0};
+        std::atomic<long long> totalExecNs{0};
 
         std::vector<std::jthread> threads;
         const size_t numThreads =
@@ -714,17 +773,53 @@ public:
                     break;
 
                 try {
+                    std::string cacheKey;
+                    if (options.enableCaching) {
+                        cacheKey = generateCacheKey(argsBatch[index]);
+                        bool hit = false;
+                        std::any cached;
+                        {
+                            std::unique_lock cacheLock(cacheMutex_);
+                            if (auto it = cache_.find(cacheKey);
+                                it != cache_.end()) {
+                                cacheHits.fetch_add(1,
+                                                    std::memory_order_relaxed);
+                                hit = true;
+                                cached = it->second;
+                            } else {
+                                cacheMisses.fetch_add(1,
+                                                      std::memory_order_relaxed);
+                            }
+                        }
+                        if (hit) {
+                            results[index] =
+                                StepResult<std::any>::makeSuccess(std::move(cached));
+                            if (options.notificationCallback) {
+                                options.notificationCallback(
+                                    results[index].value());
+                            }
+                            continue;
+                        }
+                    }
+
                     auto startTime = std::chrono::high_resolution_clock::now();
                     auto result = func(argsBatch[index]);
                     auto endTime = std::chrono::high_resolution_clock::now();
 
-                    stats_.totalExecutionTime +=
+                    if (options.enableCaching) {
+                        std::unique_lock cacheLock(cacheMutex_);
+                        cache_[cacheKey] = result;
+                    }
+
+                    totalExecNs.fetch_add(
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            endTime - startTime);
-                    stats_.invocationCount++;
+                            endTime - startTime)
+                            .count(),
+                        std::memory_order_relaxed);
+                    invocationCount.fetch_add(1, std::memory_order_relaxed);
 
                     results[index] =
-                        Result<std::any>::makeSuccess(std::move(result));
+                        StepResult<std::any>::makeSuccess(std::move(result));
 
                     if (options.notificationCallback &&
                         results[index].isSuccess()) {
@@ -732,7 +827,7 @@ public:
                     }
                 } catch (const std::exception& e) {
                     errorCount.fetch_add(1, std::memory_order_relaxed);
-                    results[index] = Result<std::any>::makeError(
+                    results[index] = StepResult<std::any>::makeError(
                         std::string("Exception in parallel execution: ") +
                         e.what());
                 }
@@ -743,6 +838,17 @@ public:
             threads.emplace_back(worker);
         }
 
+        // Join before returning: `return results` moves the vector the
+        // workers are still writing into otherwise.
+        threads.clear();
+
+        // All workers have joined: fold the per-thread counters into `stats_`
+        // from this single thread.
+        stats_.cacheHits += cacheHits.load(std::memory_order_relaxed);
+        stats_.cacheMisses += cacheMisses.load(std::memory_order_relaxed);
+        stats_.invocationCount += invocationCount.load(std::memory_order_relaxed);
+        stats_.totalExecutionTime +=
+            std::chrono::nanoseconds{totalExecNs.load(std::memory_order_relaxed)};
         stats_.errorCount += errorCount.load(std::memory_order_relaxed);
         return results;
     }
@@ -753,15 +859,15 @@ public:
      * @param options Execution options
      * @return Vector of result vectors
      */
-    [[nodiscard]] std::vector<std::vector<Result<std::any>>> executeAllParallel(
+    [[nodiscard]] std::vector<std::vector<StepResult<std::any>>> executeAllParallel(
         std::span<const std::vector<std::any>> argsBatch,
         [[maybe_unused]] const ExecutionOptions& options) const {
-        std::vector<std::vector<Result<std::any>>> resultsBatch(
+        std::vector<std::vector<StepResult<std::any>>> resultsBatch(
             argsBatch.size());
         std::shared_lock lock(mutex_);
 
         if (functions_.empty()) {
-            return {{Result<std::any>::makeError(
+            return {{StepResult<std::any>::makeError(
                 "No functions registered in the sequence")}};
         }
 
@@ -770,12 +876,17 @@ public:
             results.reserve(functions_.size());
             for (size_t i = 0; i < functions_.size(); ++i) {
                 results.emplace_back(
-                    Result<std::any>::makeError("Placeholder"));
+                    StepResult<std::any>::makeError("Placeholder"));
             }
         }
 
         std::atomic<size_t> counter{0};
         std::atomic<size_t> errorCount{0};
+
+        // Per-thread counters folded into `stats_` after join (see
+        // executeParallel): workers must not write the non-atomic `stats_`.
+        std::atomic<size_t> invocationCount{0};
+        std::atomic<long long> totalExecNs{0};
 
         // Use std::jthread for automatic joining
         std::vector<std::jthread> threads;
@@ -800,18 +911,19 @@ public:
                     auto result = functions_[funcIndex](argsBatch[batchIndex]);
                     auto endTime = std::chrono::high_resolution_clock::now();
 
-                    // Update stats (thread-safe)
-                    stats_.totalExecutionTime +=
+                    totalExecNs.fetch_add(
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
-                            endTime - startTime);
-                    stats_.invocationCount++;
+                            endTime - startTime)
+                            .count(),
+                        std::memory_order_relaxed);
+                    invocationCount.fetch_add(1, std::memory_order_relaxed);
 
                     resultsBatch[batchIndex][funcIndex] =
-                        Result<std::any>::makeSuccess(std::move(result));
+                        StepResult<std::any>::makeSuccess(std::move(result));
                 } catch (const std::exception& e) {
                     errorCount.fetch_add(1, std::memory_order_relaxed);
                     resultsBatch[batchIndex][funcIndex] =
-                        Result<std::any>::makeError(
+                        StepResult<std::any>::makeError(
                             std::string("Exception in parallel execution: ") +
                             e.what());
                 }
@@ -830,7 +942,10 @@ public:
         // Threads will auto-join due to std::jthread
         threads.clear();
 
-        // Update stats with error count
+        // All workers have joined: fold the per-thread counters into `stats_`.
+        stats_.invocationCount += invocationCount.load(std::memory_order_relaxed);
+        stats_.totalExecutionTime +=
+            std::chrono::nanoseconds{totalExecNs.load(std::memory_order_relaxed)};
         stats_.errorCount += errorCount.load(std::memory_order_relaxed);
 
         return resultsBatch;
@@ -842,7 +957,7 @@ public:
      * @param options Execution options
      * @return Future with results
      */
-    [[nodiscard]] std::future<std::vector<Result<std::any>>>
+    [[nodiscard]] std::future<std::vector<StepResult<std::any>>>
     executeParallelAsync(std::span<const std::vector<std::any>> argsBatch,
                          const ExecutionOptions& options) const {
         std::vector<std::vector<std::any>> argsCopy(argsBatch.begin(),
@@ -860,7 +975,7 @@ public:
      * @param options Execution options
      * @return Future with results
      */
-    [[nodiscard]] std::future<std::vector<std::vector<Result<std::any>>>>
+    [[nodiscard]] std::future<std::vector<std::vector<StepResult<std::any>>>>
     executeAllParallelAsync(std::span<const std::vector<std::any>> argsBatch,
                             const ExecutionOptions& options) const {
         std::vector<std::vector<std::any>> argsCopy(argsBatch.begin(),
@@ -950,10 +1065,47 @@ private:
         }
 
         for (const auto& arg : args) {
-            key += std::to_string(algorithm::computeHash(arg)) + "_";
+            key += std::to_string(hashArgument(arg)) + "_";
         }
 
         return key;
+    }
+
+    /**
+     * @brief Hash a type-erased argument for cache key generation
+     *
+     * Combines the contained type's hash code with a value hash for the
+     * common argument types using an FNV-1a style mix. Arguments of other
+     * types fall back to a type-only hash.
+     */
+    [[nodiscard]] static std::size_t hashArgument(const std::any& arg) {
+        std::size_t hash = arg.type().hash_code();
+        auto combine = [&hash](std::size_t value) {
+            constexpr std::size_t kFnvPrime = 0x100000001b3ULL;
+            hash = (hash ^ value) * kFnvPrime;
+        };
+
+        if (const auto* i = std::any_cast<int>(&arg)) {
+            combine(std::hash<int>{}(*i));
+        } else if (const auto* u = std::any_cast<unsigned int>(&arg)) {
+            combine(std::hash<unsigned int>{}(*u));
+        } else if (const auto* l = std::any_cast<long long>(&arg)) {
+            combine(std::hash<long long>{}(*l));
+        } else if (const auto* sz = std::any_cast<std::size_t>(&arg)) {
+            combine(std::hash<std::size_t>{}(*sz));
+        } else if (const auto* d = std::any_cast<double>(&arg)) {
+            combine(std::hash<double>{}(*d));
+        } else if (const auto* f = std::any_cast<float>(&arg)) {
+            combine(std::hash<float>{}(*f));
+        } else if (const auto* b = std::any_cast<bool>(&arg)) {
+            combine(std::hash<bool>{}(*b));
+        } else if (const auto* s = std::any_cast<std::string>(&arg)) {
+            combine(std::hash<std::string>{}(*s));
+        } else if (const auto* sv = std::any_cast<std::string_view>(&arg)) {
+            combine(std::hash<std::string_view>{}(*sv));
+        }
+
+        return hash;
     }
 
     void pruneCache() {
@@ -995,37 +1147,40 @@ concept ResultType = requires(T t) {
  * @brief Fluent stepper builder
  */
 class StepperBuilder {
-    FunctionSequence stepper_;
+    std::shared_ptr<FunctionSequence> stepper_ =
+        std::make_shared<FunctionSequence>();
 
 public:
     StepperBuilder() = default;
 
     template <typename F>
     StepperBuilder& addStep(F&& func) {
-        stepper_.addFunction(
+        (void)stepper_->registerFunction(
             [f = std::forward<F>(func)](
-                std::vector<std::any> args) -> std::any { return f(args); });
+                std::span<const std::any> args) -> std::any {
+                return f(std::vector<std::any>(args.begin(), args.end()));
+            });
         return *this;
     }
 
     template <typename F>
     StepperBuilder& addNamedStep(std::string name, F&& func) {
         // Add with metadata
-        stepper_.addFunction(
+        (void)stepper_->registerFunction(
             [f = std::forward<F>(func), n = std::move(name)](
-                std::vector<std::any> args) -> std::any { return f(args); });
+                std::span<const std::any> args) -> std::any {
+                return f(std::vector<std::any>(args.begin(), args.end()));
+            });
         return *this;
     }
 
     StepperBuilder& withCacheSize(std::size_t size) {
-        stepper_.setMaxCacheSize(size);
+        stepper_->setMaxCacheSize(size);
         return *this;
     }
 
-    FunctionSequence build() { return std::move(stepper_); }
-
-    std::shared_ptr<FunctionSequence> buildShared() {
-        return std::make_shared<FunctionSequence>(std::move(stepper_));
+    [[nodiscard]] std::shared_ptr<FunctionSequence> build() {
+        return std::move(stepper_);
     }
 };
 
@@ -1104,7 +1259,11 @@ auto makeConditionalStep(Condition&& cond, F&& func) {
  * @brief Parallel step execution
  */
 class ParallelStepper {
-    std::vector<Stepper::FunctionType> steps_;
+public:
+    using StepType = std::function<std::any(std::vector<std::any>)>;
+
+private:
+    std::vector<StepType> steps_;
 
 public:
     template <typename F>

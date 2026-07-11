@@ -2,6 +2,8 @@
 
 #include "atom/type/uint.hpp"
 
+using namespace atom::type;
+
 int main() {
     try {
         // 使用自定义字面量创建不同类型的无符号整数

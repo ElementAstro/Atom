@@ -6,10 +6,10 @@
  * "atom/system/process/command.hpp" instead.
  */
 
-#ifndef ATOM_SYSTEM_COMMAND_HPP
-#define ATOM_SYSTEM_COMMAND_HPP
+#ifndef ATOM_SYSTEM_COMMAND_COMPAT_HPP
+#define ATOM_SYSTEM_COMMAND_COMPAT_HPP
 
 // Forward to the new location
 #include "process/command.hpp"
 
-#endif  // ATOM_SYSTEM_COMMAND_HPP
+#endif  // ATOM_SYSTEM_COMMAND_COMPAT_HPP

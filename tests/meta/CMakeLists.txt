@@ -15,6 +15,7 @@ project(
 # =============================================================================
 find_package(GTest QUIET)
 find_package(Threads REQUIRED)
+find_package(yaml-cpp QUIET)
 
 if(NOT GTEST_FOUND)
   include(FetchContent)
@@ -52,46 +53,6 @@ endif()
 # =============================================================================
 # Find all test source files
 file(GLOB_RECURSE TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
-
-# Exclude problematic test files on MinGW (template metaprogramming tests with
-# macro issues)
-if(MINGW OR MSYS)
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/core/test_any\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/core/test_anymeta\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/core/test_conversion\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/core/test_constructor\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/core/test_container_traits\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/core/test_template_traits\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/core/test_type_info\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/functional/test_invoke\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/functional/test_signature\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/functional/test_overload\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/interop/test_abi\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/interop/test_type_caster\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/proxy/test_vany\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/proxy/test_facade_any\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/proxy/test_facade_proxy\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/proxy/test_proxy\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/proxy/test_proxy_params\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX
-       ".*/reflection/test_field_count\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/utils/test_concept\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/utils/test_decorate\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/utils/test_enum\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/utils/test_god\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/utils/test_global_ptr\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/reflection/test_raw_name\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/reflection/test_member\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/reflection/test_refl\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/proxy/test_facade\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/utils/test_property\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/utils/test_stepper\\.cpp$")
-  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/core/test_func_traits\\.cpp$")
-  message(
-    STATUS
-      "MinGW/MSYS2 detected: Excluding some meta tests with template macro issues"
-  )
-endif()
 
 # =============================================================================
 # Create Test Executables
@@ -138,6 +99,8 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
               gtest_main
               gmock
               gmock_main
+              # Optional serialization backends
+              $<TARGET_NAME_IF_EXISTS:yaml-cpp::yaml-cpp>
               # System libraries
               Threads::Threads)
     # Skip gtest discovery for FFI tests due to runtime dependency issues The

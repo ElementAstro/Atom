@@ -16,6 +16,7 @@ Description: A robust implementation of optional. Using modern C++ features.
 #define ATOM_TYPE_OPTIONAL_HPP
 
 #include <compare>
+#include <format>
 #include <functional>
 #include <mutex>
 #include <optional>
@@ -24,18 +25,24 @@ Description: A robust implementation of optional. Using modern C++ features.
 #include <type_traits>
 #include <utility>
 
+#include "atom/error/exception.hpp"
+
 namespace atom::type {
 
-class OptionalAccessError : public std::runtime_error {
+// Domain exceptions integrate with the atom::error hierarchy (catchable as
+// atom::error::Exception) while keeping a single-message constructor.
+class OptionalAccessError : public atom::error::Exception {
 public:
     explicit OptionalAccessError(const std::string& message)
-        : std::runtime_error(message) {}
+        : atom::error::Exception(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
+                                 message) {}
 };
 
-class OptionalOperationError : public std::runtime_error {
+class OptionalOperationError : public atom::error::Exception {
 public:
     explicit OptionalOperationError(const std::string& message)
-        : std::runtime_error(message) {}
+        : atom::error::Exception(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
+                                 message) {}
 };
 
 template <typename T>
@@ -258,7 +265,7 @@ public:
      * @return A reference to the contained value.
      * @throw OptionalAccessError if the `Optional` object is empty.
      */
-    T& operator*() & {
+    [[nodiscard]] T& operator*() & {
         std::shared_lock lock(mutex_);
         check_value();
         return *storage_;
@@ -272,7 +279,7 @@ public:
      * @return A const reference to the contained value.
      * @throw OptionalAccessError if the `Optional` object is empty.
      */
-    const T& operator*() const& {
+    [[nodiscard]] const T& operator*() const& {
         std::shared_lock lock(mutex_);
         check_value();
         return *storage_;
@@ -300,7 +307,7 @@ public:
      * @return A pointer to the contained value.
      * @throw OptionalAccessError if the `Optional` object is empty.
      */
-    T* operator->() {
+    [[nodiscard]] T* operator->() {
         std::shared_lock lock(mutex_);
         check_value();
         return &(*storage_);
@@ -314,7 +321,7 @@ public:
      * @return A const pointer to the contained value.
      * @throw OptionalAccessError if the `Optional` object is empty.
      */
-    const T* operator->() const {
+    [[nodiscard]] const T* operator->() const {
         std::shared_lock lock(mutex_);
         check_value();
         return &(*storage_);
@@ -326,7 +333,7 @@ public:
      * @return A reference to the contained value.
      * @throw OptionalAccessError if the `Optional` object is empty.
      */
-    T& value() & {
+    [[nodiscard]] T& value() & {
         std::shared_lock lock(mutex_);
         check_value();
         return *storage_;
@@ -338,7 +345,7 @@ public:
      * @return A const reference to the contained value.
      * @throw OptionalAccessError if the `Optional` object is empty.
      */
-    const T& value() const& {
+    [[nodiscard]] const T& value() const& {
         std::shared_lock lock(mutex_);
         check_value();
         return *storage_;
@@ -389,9 +396,14 @@ public:
     template <typename U>
     T value_or(U&& default_value) && {
         std::unique_lock lock(mutex_);
-        return storage_.has_value()
-                   ? std::move(*storage_)
-                   : static_cast<T>(std::forward<U>(default_value));
+        if (storage_.has_value()) {
+            // Move the value out and leave this Optional empty (it is an
+            // rvalue, so it is being consumed).
+            T result = std::move(*storage_);
+            storage_.reset();
+            return result;
+        }
+        return static_cast<T>(std::forward<U>(default_value));
     }
 
     /**
@@ -631,5 +643,24 @@ constexpr auto make_optional(Args&&... args) {
 }
 
 }  // namespace atom::type
+
+/**
+ * @brief std::format support for Optional: the contained value, or "nullopt".
+ */
+template <typename T, typename CharT>
+    requires std::formattable<T, CharT>
+struct std::formatter<atom::type::Optional<T>, CharT> {
+    constexpr auto parse(std::basic_format_parse_context<CharT>& ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const atom::type::Optional<T>& opt, FormatContext& ctx) const {
+        if (opt.has_value()) {
+            return std::format_to(ctx.out(), "{}", *opt);
+        }
+        return std::format_to(ctx.out(), "nullopt");
+    }
+};
 
 #endif  // ATOM_TYPE_OPTIONAL_HPP

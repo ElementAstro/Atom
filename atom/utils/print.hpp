@@ -6,10 +6,10 @@
  * "atom/utils/debug/print.hpp" instead.
  */
 
-#ifndef ATOM_UTILS_PRINT_HPP
-#define ATOM_UTILS_PRINT_HPP
+#ifndef ATOM_UTILS_PRINT_COMPAT_HPP
+#define ATOM_UTILS_PRINT_COMPAT_HPP
 
 // Forward to the new location
 #include "debug/print.hpp"
 
-#endif  // ATOM_UTILS_PRINT_HPP
+#endif  // ATOM_UTILS_PRINT_COMPAT_HPP

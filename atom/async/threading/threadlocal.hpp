@@ -76,7 +76,7 @@ private:
  * @tparam T The type of the value to be stored in thread-local storage
  */
 template <EnhancedThreadLocalStorable T>
-class EnhancedThreadLocal : public NonCopyable {
+class EnhancedThreadLocal : public atom::type::NonCopyable {
 public:
     // Type definitions, adding support for multiple initialization functions
     using InitializerFn = std::function<T()>;
@@ -200,8 +200,8 @@ public:
     EnhancedThreadLocal(EnhancedThreadLocal&&) noexcept = default;
 
     // Move assignment operator
-    auto operator=(EnhancedThreadLocal&&) noexcept
-        -> EnhancedThreadLocal& = default;
+    auto operator=(EnhancedThreadLocal&&) noexcept -> EnhancedThreadLocal& =
+                                                          default;
 
     /**
      * @brief Destructor, responsible for cleaning up all thread values
@@ -356,7 +356,7 @@ public:
      */
     template <typename Factory>
         requires std::invocable<Factory> &&
-                 std::convertible_to<std::invoke_result_t<Factory>, T>
+                     std::convertible_to<std::invoke_result_t<Factory>, T>
     auto getOrCreate(Factory&& factory) -> T& {
         auto tid = std::this_thread::get_id();
         std::unique_lock lock(mutex_);

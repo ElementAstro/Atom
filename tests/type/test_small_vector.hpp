@@ -8,6 +8,8 @@
 
 #include "atom/type/small_vector.hpp"
 
+using namespace atom::type;
+
 // Custom type to test complex object behavior
 class TestObject {
 public:

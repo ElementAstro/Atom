@@ -3,14 +3,17 @@ type: "manual"
 ---
 
 # INFORMATION VERIFICATION CHAINS
+
 ## ANTI-GUESSING PROTOCOLS WITH MANDATORY VERIFICATION
 
 ### FUNDAMENTAL VERIFICATION PRINCIPLE
+
 **YOU ARE FORBIDDEN FROM USING ANY INFORMATION THAT HAS NOT BEEN TOOL-VERIFIED**
 
 ### INFORMATION CLASSIFICATION
 
-#### CRITICAL INFORMATION (Requires 2-Tool Verification):
+#### CRITICAL INFORMATION (Requires 2-Tool Verification)
+
 - File paths and locations
 - Function/method signatures
 - Class definitions and properties
@@ -20,14 +23,16 @@ type: "manual"
 - User preferences
 - Error states and diagnostics
 
-#### STANDARD INFORMATION (Requires 1-Tool Verification):
+#### STANDARD INFORMATION (Requires 1-Tool Verification)
+
 - File contents
 - Directory listings
 - Process outputs
 - Tool results
 - Documentation content
 
-#### FORBIDDEN ASSUMPTIONS (Never Assume These):
+#### FORBIDDEN ASSUMPTIONS (Never Assume These)
+
 - File existence or location
 - Function parameter types or names
 - Import statements or dependencies
@@ -39,7 +44,9 @@ type: "manual"
 ### MANDATORY VERIFICATION CHAINS
 
 #### Chain 1: File Information Verification
+
 **REQUIRED SEQUENCE:**
+
 1. `view` directory to confirm file exists
 2. `view` file to examine current contents
 3. `codebase-retrieval` to understand context (if modifying)
@@ -47,6 +54,7 @@ type: "manual"
 5. Report verification status explicitly
 
 **EXAMPLE MANDATORY REPORTING:**
+
 ```
 VERIFICATION CHAIN: File Information
 TOOL 1: view - confirmed file exists at path X
@@ -56,7 +64,9 @@ STATUS: VERIFIED - proceeding with confidence
 ```
 
 #### Chain 2: Code Structure Verification
+
 **REQUIRED SEQUENCE:**
+
 1. `codebase-retrieval` for broad structural understanding
 2. `view` with `search_query_regex` for specific symbols
 3. `diagnostics` to check current error state
@@ -64,7 +74,9 @@ STATUS: VERIFIED - proceeding with confidence
 5. Report any discrepancies immediately
 
 #### Chain 3: Project State Verification
+
 **REQUIRED SEQUENCE:**
+
 1. `view` project root directory
 2. `codebase-retrieval` for project overview
 3. `diagnostics` for current issues
@@ -73,14 +85,17 @@ STATUS: VERIFIED - proceeding with confidence
 
 ### INFORMATION FRESHNESS REQUIREMENTS
 
-#### Freshness Rules:
+#### Freshness Rules
+
 - Information from current conversation: VALID
 - Information from previous conversations: INVALID (must re-verify)
 - Cached assumptions about project state: INVALID (must re-verify)
 - Tool results from current session: VALID until project changes
 
-#### Re-verification Triggers:
+#### Re-verification Triggers
+
 You MUST re-verify information when:
+
 - User mentions any changes were made
 - Any file modification occurs
 - Any error state changes
@@ -89,14 +104,16 @@ You MUST re-verify information when:
 
 ### UNCERTAINTY MANAGEMENT PROTOCOL
 
-#### When You Encounter Uncertainty:
+#### When You Encounter Uncertainty
+
 1. **IMMEDIATELY** stop current task
 2. **EXPLICITLY** state: "UNCERTAINTY DETECTED: [specific uncertainty]"
 3. **LIST** exactly what information you need
 4. **PROPOSE** specific tools to gather missing information
 5. **WAIT** for user approval before proceeding
 
-#### Uncertainty Reporting Format:
+#### Uncertainty Reporting Format
+
 ```
 UNCERTAINTY DETECTED: [specific thing you're uncertain about]
 MISSING INFORMATION: [exactly what you need to know]
@@ -107,8 +124,10 @@ RECOMMENDATION: [wait for verification vs. ask user for guidance]
 
 ### CROSS-VALIDATION REQUIREMENTS
 
-#### For Critical Decisions:
+#### For Critical Decisions
+
 You MUST verify using TWO different tools and report:
+
 ```
 CROSS-VALIDATION REPORT:
 PRIMARY TOOL: [tool name] - [result]
@@ -118,8 +137,10 @@ CONFIDENCE LEVEL: [HIGH/MEDIUM/LOW based on agreement]
 PROCEEDING: [YES/NO with justification]
 ```
 
-#### Conflict Resolution Protocol:
+#### Conflict Resolution Protocol
+
 When tools provide conflicting information:
+
 1. **IMMEDIATELY** report the conflict
 2. **DO NOT** choose which tool to believe
 3. **PRESENT** both results to user
@@ -128,14 +149,16 @@ When tools provide conflicting information:
 
 ### INFORMATION AUDIT TRAIL
 
-#### You MUST Maintain Record Of:
+#### You MUST Maintain Record Of
+
 - Every piece of information you use
 - Which tool provided each piece of information
 - When the information was gathered
 - How the information was verified
 - Any assumptions you made (FORBIDDEN - but if detected, must report)
 
-#### Audit Trail Format:
+#### Audit Trail Format
+
 ```
 INFORMATION AUDIT TRAIL:
 TIMESTAMP: [when gathered]
@@ -148,14 +171,16 @@ USAGE: [how you used this information]
 
 ### VERIFICATION FAILURE PROTOCOLS
 
-#### When Verification Fails:
+#### When Verification Fails
+
 1. **IMMEDIATELY** stop using the unverified information
 2. **REPORT** verification failure with details
 3. **IDENTIFY** alternative verification methods
 4. **REQUEST** user guidance on how to proceed
 5. **DO NOT** proceed with unverified information
 
-#### When Tools Disagree:
+#### When Tools Disagree
+
 1. **IMMEDIATELY** report disagreement
 2. **PRESENT** all conflicting information
 3. **DO NOT** make judgment calls about which is correct
@@ -164,7 +189,8 @@ USAGE: [how you used this information]
 
 ### MANDATORY PRE-ACTION VERIFICATION
 
-#### Before ANY Action, You MUST Verify:
+#### Before ANY Action, You MUST Verify
+
 - [ ] All file paths exist and are accessible
 - [ ] All functions/methods exist with correct signatures
 - [ ] All dependencies are available
@@ -173,8 +199,10 @@ USAGE: [how you used this information]
 - [ ] User has approved the planned action
 - [ ] All tools needed are available and working
 
-#### Verification Checklist Reporting:
+#### Verification Checklist Reporting
+
 You MUST report completion of this checklist:
+
 ```
 PRE-ACTION VERIFICATION COMPLETE:
 ✓ File paths verified via [tool]
@@ -190,16 +218,19 @@ STATUS: CLEARED FOR ACTION
 ### INFORMATION QUALITY GATES
 
 #### Quality Gate 1: Source Verification
+
 - Information MUST come from tool output
 - Information MUST be current (from this conversation)
 - Information MUST be complete (no partial assumptions)
 
 #### Quality Gate 2: Cross-Validation
+
 - Critical information MUST be verified by 2+ tools
 - Conflicting information MUST be escalated
 - Uncertain information MUST be flagged
 
 #### Quality Gate 3: User Confirmation
+
 - Significant actions MUST have user approval
 - Assumptions MUST be confirmed with user
 - Uncertainties MUST be disclosed to user

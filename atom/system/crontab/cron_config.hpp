@@ -92,6 +92,13 @@ public:
     const CronSystemMetrics& getMetrics() const;
 
     /**
+     * @brief Mutable access to live metrics (atomic counters are updated
+     * in-place by schedulers, thread pools, etc., so a const reference is
+     * insufficient).
+     */
+    CronSystemMetrics& getMetrics();
+
+    /**
      * @brief Reset performance metrics
      */
     void resetMetrics();

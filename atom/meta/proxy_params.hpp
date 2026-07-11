@@ -15,6 +15,7 @@
 #include <iterator>
 #include <optional>
 #include <ranges>
+#include <stdexcept>
 #include <string_view>
 #include <type_traits>
 #include <typeindex>
@@ -27,14 +28,34 @@ using json = nlohmann::json;
 
 namespace atom::meta {
 
-class ProxyTypeError : public std::runtime_error {
+/**
+ * @brief Error thrown when an argument has an incompatible type.
+ *
+ * Derives from std::bad_any_cast so callers that expect the standard
+ * casting failure (e.g. generic std::any based invokers) can catch it.
+ */
+class ProxyTypeError : public std::bad_any_cast {
 public:
-    using std::runtime_error::runtime_error;
+    explicit ProxyTypeError(std::string message)
+        : message_(std::move(message)) {}
+
+    [[nodiscard]] const char* what() const noexcept override {
+        return message_.c_str();
+    }
+
+private:
+    std::string message_;
 };
 
-class ProxyArgumentError : public std::runtime_error {
+/**
+ * @brief Error thrown when the number of arguments is wrong.
+ *
+ * Derives from std::out_of_range so callers that expect a standard range
+ * error for argument-count mismatches can catch it.
+ */
+class ProxyArgumentError : public std::out_of_range {
 public:
-    using std::runtime_error::runtime_error;
+    using std::out_of_range::out_of_range;
 };
 
 template <typename T>
@@ -57,6 +78,15 @@ public:
     template <ArgumentCompatible T>
     Arg(std::string name, T&& value)
         : name_(std::move(name)), default_value_(std::forward<T>(value)) {}
+
+    /**
+     * @brief Construct from a string literal / C string.
+     *
+     * Stores the value as std::string so the parameter type is the
+     * value type users expect instead of a dangling-prone const char*.
+     */
+    Arg(std::string name, const char* value)
+        : name_(std::move(name)), default_value_(std::string(value)) {}
 
     Arg(Arg&& other) noexcept = default;
     Arg& operator=(Arg&& other) noexcept = default;
@@ -342,7 +372,7 @@ public:
      */
     [[nodiscard]] const Arg& operator[](std::size_t t_i) const {
         if (t_i >= params_.size()) {
-            THROW_OUT_OF_RANGE("Index out of range: " + std::to_string(t_i) +
+            throw std::out_of_range("Index out of range: " + std::to_string(t_i) +
                                " >= " + std::to_string(params_.size()));
         }
         return params_[t_i];
@@ -350,7 +380,7 @@ public:
 
     [[nodiscard]] Arg& operator[](std::size_t t_i) {
         if (t_i >= params_.size()) {
-            THROW_OUT_OF_RANGE("Index out of range: " + std::to_string(t_i) +
+            throw std::out_of_range("Index out of range: " + std::to_string(t_i) +
                                " >= " + std::to_string(params_.size()));
         }
         return params_[t_i];
@@ -368,14 +398,14 @@ public:
      */
     [[nodiscard]] const Arg& front() const {
         if (params_.empty()) {
-            THROW_OUT_OF_RANGE("Cannot access front() of empty FunctionParams");
+            throw std::out_of_range("Cannot access front() of empty FunctionParams");
         }
         return params_.front();
     }
 
     [[nodiscard]] Arg& front() {
         if (params_.empty()) {
-            THROW_OUT_OF_RANGE("Cannot access front() of empty FunctionParams");
+            throw std::out_of_range("Cannot access front() of empty FunctionParams");
         }
         return params_.front();
     }
@@ -387,14 +417,14 @@ public:
      */
     [[nodiscard]] const Arg& back() const {
         if (params_.empty()) {
-            THROW_OUT_OF_RANGE("Cannot access back() of empty FunctionParams");
+            throw std::out_of_range("Cannot access back() of empty FunctionParams");
         }
         return params_.back();
     }
 
     [[nodiscard]] Arg& back() {
         if (params_.empty()) {
-            THROW_OUT_OF_RANGE("Cannot access back() of empty FunctionParams");
+            throw std::out_of_range("Cannot access back() of empty FunctionParams");
         }
         return params_.back();
     }
@@ -483,7 +513,7 @@ public:
     [[nodiscard]] FunctionParams slice(std::size_t start,
                                        std::size_t end) const {
         if (start > end || end > params_.size()) {
-            THROW_OUT_OF_RANGE("Invalid slice range: [" +
+            throw std::out_of_range("Invalid slice range: [" +
                                std::to_string(start) + ", " +
                                std::to_string(end) + "] for size " +
                                std::to_string(params_.size()));
@@ -515,7 +545,7 @@ public:
      */
     void set(std::size_t index, const Arg& arg) {
         if (index >= params_.size()) {
-            THROW_OUT_OF_RANGE("Index out of range: " + std::to_string(index) +
+            throw std::out_of_range("Index out of range: " + std::to_string(index) +
                                " >= " + std::to_string(params_.size()));
         }
         params_[index] = arg;
@@ -523,7 +553,7 @@ public:
 
     void set(std::size_t index, Arg&& arg) {
         if (index >= params_.size()) {
-            THROW_OUT_OF_RANGE("Index out of range: " + std::to_string(index) +
+            throw std::out_of_range("Index out of range: " + std::to_string(index) +
                                " >= " + std::to_string(params_.size()));
         }
         params_[index] = std::move(arg);

@@ -23,6 +23,7 @@ set(HEADERS
     concurrent_set.hpp
     concurrent_vector.hpp
     cstream.hpp
+    deque.hpp
     expected.hpp
     flatmap.hpp
     flatset.hpp

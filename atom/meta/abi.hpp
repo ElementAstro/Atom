@@ -32,17 +32,18 @@
 #define ATOM_ABI_HAS_EXPECTED 0
 #endif
 
-#ifdef _WIN32
 #ifdef _MSC_VER
 #ifndef ATOM_DISABLE_DBGHELP
 #include <dbghelp.h>
 #pragma comment(lib, "dbghelp.lib")
 #endif
 #include <windows.h>
-#endif
 #else
+// GCC/Clang (including MinGW on Windows) provide the Itanium ABI demangler
 #include <cxxabi.h>
+#ifndef _WIN32
 #include <dlfcn.h>
+#endif
 #endif
 
 #if defined(ENABLE_DEBUG) || defined(ATOM_META_ENABLE_VISUALIZATION)
@@ -505,16 +506,11 @@ private:
         }
 #else
         int status = -1;
-#ifndef _WIN32
+        // Use the cache key (guaranteed null-terminated) rather than the raw
+        // string_view data, which may not be null-terminated.
         std::unique_ptr<char, void (*)(void*)> demangledName(
-            abi::__cxa_demangle(mangled_name.data(), nullptr, nullptr, &status),
+            abi::__cxa_demangle(cacheKey.c_str(), nullptr, nullptr, &status),
             std::free);
-#else
-        // On Windows, demangling is not available with MinGW
-        std::unique_ptr<char, void (*)(void*)> demangledName(nullptr,
-                                                             std::free);
-        status = -1;  // Indicate failure
-#endif
 
         if (status == 0 && demangledName) {
             demangled = String(demangledName.get());

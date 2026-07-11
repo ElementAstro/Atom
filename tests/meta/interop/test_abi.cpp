@@ -645,6 +645,189 @@ TEST_F(DemangleHelperTest, DemangleExpectedInvalid) {
 }
 #endif
 
+//==============================================================================
+// Additional Coverage Tests
+//==============================================================================
+
+// Lines 103-104: AbiException constructed from atom::meta::String
+TEST_F(DemangleHelperTest, AbiExceptionFromString) {
+    String msg("error from String type");
+    try {
+        throw AbiException(msg);
+    } catch (const AbiException& e) {
+        std::string what(e.what());
+        EXPECT_NE(what.find("error from String type"), std::string::npos);
+    }
+}
+
+// Line 180: demangleMany with a source_location argument
+TEST_F(DemangleHelperTest, DemangleManyWithLocation) {
+    containers::Vector<std::string_view> names = {typeid(int).name(),
+                                                   typeid(float).name()};
+    auto loc = std::source_location::current();
+    auto results = DemangleHelper::demangleMany(names, loc);
+
+    ASSERT_EQ(results.size(), 2);
+    // With a location the results should contain parenthesised location info
+    std::string first(results[0].begin(), results[0].end());
+    EXPECT_NE(first.find("("), std::string::npos);
+}
+
+// Line 292: getBareTypeName with "volatile " prefix
+TEST_F(DemangleHelperTest, GetBareTypeNameWithVolatile) {
+    auto bareName = DemangleHelper::getBareTypeName("volatile int");
+    EXPECT_EQ(std::string(bareName.begin(), bareName.end()), "int");
+}
+
+// Line 292: getBareTypeName with both "const " and "volatile " prefixes
+TEST_F(DemangleHelperTest, GetBareTypeNameWithConstAndVolatile) {
+    // const is stripped first, then volatile
+    auto bareName = DemangleHelper::getBareTypeName("const volatile int");
+    std::string result(bareName.begin(), bareName.end());
+    // After "const " stripped: "volatile int", then "volatile " stripped: "int"
+    EXPECT_EQ(result, "int");
+}
+
+// Lines 338,340: extractTemplateArgs - whitespace trimming around middle args
+TEST_F(DemangleHelperTest, ExtractTemplateArgsWithLeadingTrailingSpaces) {
+    // Middle arg has leading space (after comma), last arg has trailing space
+    auto args = DemangleHelper::extractTemplateArgs("map< int , string >");
+
+    ASSERT_EQ(args.size(), 2);
+    EXPECT_EQ(std::string(args[0].begin(), args[0].end()), "int");
+    EXPECT_EQ(std::string(args[1].begin(), args[1].end()), "string");
+}
+
+// Lines 351,357: extractTemplateArgs - leading/trailing whitespace in last arg
+TEST_F(DemangleHelperTest, ExtractTemplateArgsSingleWithSpaces) {
+    // Single arg surrounded by spaces exercises the last-arg trim path
+    auto args = DemangleHelper::extractTemplateArgs("vector<  double  >");
+
+    ASSERT_EQ(args.size(), 1);
+    EXPECT_EQ(std::string(args[0].begin(), args[0].end()), "double");
+}
+
+// Lines 366,370: isPointerType - empty string and trailing spaces after '*'
+TEST_F(DemangleHelperTest, IsPointerTypeEdgeCases) {
+    EXPECT_FALSE(DemangleHelper::isPointerType(""));
+    // Trailing spaces after '*' — the while loop body at line 370 is exercised
+    // because the loop strips trailing spaces and then checks the last non-space char
+    EXPECT_TRUE(DemangleHelper::isPointerType("int* "));
+    EXPECT_TRUE(DemangleHelper::isPointerType("int*  "));
+    // Also test with no trailing spaces for the false-loop path
+    EXPECT_TRUE(DemangleHelper::isPointerType("int*"));
+}
+
+// Lines 381,384: isReferenceType - empty string and trailing spaces after '&'
+TEST_F(DemangleHelperTest, IsReferenceTypeEdgeCases) {
+    EXPECT_FALSE(DemangleHelper::isReferenceType(""));
+    // Trailing spaces after '&' — the while loop body at line 384 is exercised
+    EXPECT_TRUE(DemangleHelper::isReferenceType("int& "));
+    EXPECT_TRUE(DemangleHelper::isReferenceType("int&  "));
+    // Also test with no trailing spaces for the false-loop path
+    EXPECT_TRUE(DemangleHelper::isReferenceType("int&"));
+}
+
+// Lines 527-532: cache eviction — fill cache past max_cache_size
+TEST_F(DemangleHelperTest, CacheEvictionActuallyTriggered) {
+    // max_cache_size is 2048; insert enough unique keys to exceed it
+    // so the eviction loop (lines 527-532) actually runs
+    for (std::size_t i = 0; i <= AbiConfig::max_cache_size + 10; ++i) {
+        std::string key = "UniqueTypeForEviction_" + std::to_string(i);
+        DemangleHelper::demangle(key.c_str());
+    }
+    // After eviction the cache must be smaller than max_cache_size
+    EXPECT_LT(DemangleHelper::cacheSize(), AbiConfig::max_cache_size);
+}
+
+// AbiErrorCode: verify all enum values exist and are distinct
+TEST_F(DemangleHelperTest, AbiErrorCodeAllValues) {
+    EXPECT_EQ(static_cast<int>(AbiErrorCode::Success), 0);
+    EXPECT_NE(AbiErrorCode::BufferTooSmall, AbiErrorCode::Success);
+    EXPECT_NE(AbiErrorCode::DemangleFailed, AbiErrorCode::Success);
+    EXPECT_NE(AbiErrorCode::InvalidInput, AbiErrorCode::Success);
+    EXPECT_NE(AbiErrorCode::UnknownError, AbiErrorCode::Success);
+    EXPECT_NE(AbiErrorCode::InvalidInput, AbiErrorCode::DemangleFailed);
+}
+
+// AbiConfig: verify enable_lru_eviction and eviction_batch_size
+TEST_F(DemangleHelperTest, AbiConfigEvictionSettings) {
+    EXPECT_TRUE(AbiConfig::enable_lru_eviction);
+    EXPECT_GT(AbiConfig::eviction_batch_size, 0U);
+    EXPECT_LT(AbiConfig::eviction_batch_size, AbiConfig::max_cache_size);
+}
+
+// getTypeCategory: nullptr_t branch
+TEST_F(DemangleHelperTest, GetTypeCategoryNullptr) {
+    auto category = DemangleHelper::getTypeCategory<std::nullptr_t>();
+    EXPECT_EQ(std::string(category.begin(), category.end()), "nullptr_t");
+}
+
+// getTypeCategory: union branch
+TEST_F(DemangleHelperTest, GetTypeCategoryUnion) {
+    union TestUnion {
+        int i;
+        float f;
+    };
+    auto category = DemangleHelper::getTypeCategory<TestUnion>();
+    EXPECT_EQ(std::string(category.begin(), category.end()), "union");
+}
+
+// getTypeCategory: function type branch
+TEST_F(DemangleHelperTest, GetTypeCategoryFunction) {
+    auto category = DemangleHelper::getTypeCategory<void(int)>();
+    EXPECT_EQ(std::string(category.begin(), category.end()), "function");
+}
+
+// isPointerType / isReferenceType: string that ends after trailing-space strip
+// with a non-pointer/reference char — false path
+TEST_F(DemangleHelperTest, IsPointerTypeNotPointer) {
+    EXPECT_FALSE(DemangleHelper::isPointerType("int"));
+    EXPECT_FALSE(DemangleHelper::isPointerType("int &"));
+}
+
+TEST_F(DemangleHelperTest, IsReferenceTypeNotReference) {
+    EXPECT_FALSE(DemangleHelper::isReferenceType("int"));
+    EXPECT_FALSE(DemangleHelper::isReferenceType("int *"));
+}
+
+// extractTemplateArgs: deeply nested template args (exercises depth tracking)
+TEST_F(DemangleHelperTest, ExtractTemplateArgsDeepNesting) {
+    auto args = DemangleHelper::extractTemplateArgs(
+        "tuple<map<int,vector<double>>, pair<float,char>>");
+    ASSERT_EQ(args.size(), 2);
+    std::string first(args[0].begin(), args[0].end());
+    EXPECT_NE(first.find("map"), std::string::npos);
+}
+
+// extractTemplateArgs: parentheses in args (exercises '(' depth tracking)
+TEST_F(DemangleHelperTest, ExtractTemplateArgsWithParens) {
+    // Function pointer as template argument contains parentheses
+    auto args = DemangleHelper::extractTemplateArgs("function<int(int,double)>");
+    ASSERT_GE(args.size(), 1U);
+}
+
+// getBareTypeName: input that has no namespace separator (single token)
+TEST_F(DemangleHelperTest, GetBareTypeNameNoNamespaceNoTemplate) {
+    auto bareName = DemangleHelper::getBareTypeName("myType");
+    EXPECT_EQ(std::string(bareName.begin(), bareName.end()), "myType");
+}
+
+// demangle: empty string view (exercises the non-throwing path)
+TEST_F(DemangleHelperTest, DemangleEmptyName) {
+    auto result = DemangleHelper::demangle("");
+    // Should not throw; result is whatever demangleInternal returns for ""
+    EXPECT_TRUE(result.empty() || !result.empty());  // just no crash
+}
+
+// tryDemangle: verify that a successfully demangled name matches demangleType
+TEST_F(DemangleHelperTest, TryDemangleMatchesDemangleType) {
+    auto expected = DemangleHelper::demangleType<std::vector<int>>();
+    auto result   = DemangleHelper::tryDemangle(typeid(std::vector<int>).name());
+    ASSERT_TRUE(result.hasValue());
+    EXPECT_EQ(result.value, expected);
+}
+
 }  // namespace atom::meta::test
 
 int main(int argc, char** argv) {

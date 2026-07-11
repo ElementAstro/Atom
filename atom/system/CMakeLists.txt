@@ -32,10 +32,26 @@ set(SOURCES
     # Core files
     core/priority.cpp
     # Process management
-    process/command.cpp
     process/pidwatcher.cpp
     process/process_manager.cpp
     process/process.cpp
+    # Command execution - modular implementation (replaces the flat
+    # process/command.cpp; process/command.hpp now forwards to command/).
+    command/executor.cpp
+    command/async_executor.cpp
+    command/process_manager.cpp
+    command/history.cpp
+    command/utils.cpp
+    command/validation.cpp
+    command/config.cpp
+    command/cache.cpp
+    command/security.cpp
+    command/statistics.cpp
+    command/rate_limiter.cpp
+    command/resource_monitor.cpp
+    command/thread_pool.cpp
+    # Crontab facade (depends on the command subsystem above)
+    crontab/cron_system.cpp
     # Hardware
     hardware/device.cpp
     hardware/gpio.cpp
@@ -47,6 +63,20 @@ set(SOURCES
     info/software.cpp
     info/stat.cpp
     info/user.cpp
+    # Environment - modular components layered behind the info/env.cpp Env
+    # facade (caching, async, encryption, config, scoped, persistence).
+    # env_example.cpp is a standalone demo (has main()) and is excluded.
+    env/env_core.cpp
+    env/env_config.cpp
+    env/env_cache.cpp
+    env/env_async.cpp
+    env/env_manager.cpp
+    env/env_file_io.cpp
+    env/env_path.cpp
+    env/env_persistent.cpp
+    env/env_scoped.cpp
+    env/env_system.cpp
+    env/env_utils.cpp
     # Registry
     registry/lregistry.cpp
     registry/wregistry.cpp
@@ -61,19 +91,40 @@ set(SOURCES
     debug/crash_quotes.cpp
     debug/crash.cpp
     debug/nodebugger.cpp
-    # Scheduling
-    scheduling/crontab.cpp)
+    # Scheduling (crontab) - modular implementation. cron_system.cpp (the facade
+    # tying crontab to the command subsystem) is intentionally omitted until the
+    # command subsystem is adopted into the build.
+    crontab/cron_job.cpp
+    crontab/cron_config.cpp
+    crontab/cron_cache.cpp
+    crontab/cron_validation.cpp
+    crontab/cron_storage.cpp
+    crontab/cron_thread_pool.cpp
+    crontab/cron_security.cpp
+    crontab/cron_monitor.cpp
+    crontab/cron_scheduler.cpp
+    crontab/cron_manager.cpp
+    crontab/cron_manager_batch.cpp
+    crontab/cron_manager_query.cpp
+    # Clipboard (cross-platform core; platform backend appended below)
+    clipboard/clipboard.cpp
+    clipboard/clipboard_text.cpp
+    clipboard/clipboard_data.cpp
+    clipboard/clipboard_image.cpp
+    clipboard/clipboard_query.cpp
+    clipboard/clipboard_monitor.cpp
+    clipboard/clipboard_cache.cpp
+    clipboard/clipboard_async.cpp)
 
 # Platform-specific sources
 if(WIN32)
-  list(APPEND SOURCES clipboard/clipboard.cpp
-       clipboard/platform/clipboard_windows.cpp hardware/voltage_windows.cpp)
+  list(APPEND SOURCES clipboard/platform/clipboard_windows.cpp
+       hardware/voltage_windows.cpp)
 elseif(UNIX AND NOT APPLE)
-  list(APPEND SOURCES clipboard/clipboard.cpp
-       clipboard/platform/clipboard_linux.cpp hardware/voltage_linux.cpp)
+  list(APPEND SOURCES clipboard/platform/clipboard_linux.cpp
+       hardware/voltage_linux.cpp)
 elseif(APPLE)
-  list(APPEND SOURCES clipboard/clipboard.cpp
-       clipboard/platform/clipboard_macos.cpp)
+  list(APPEND SOURCES clipboard/platform/clipboard_macos.cpp)
 endif()
 
 set(HEADERS
@@ -120,6 +171,23 @@ set(HEADERS
     process/process.hpp
     process/process_info.hpp
     process/process_manager.hpp
+    # Command execution (modular)
+    command/command.hpp
+    command/types.hpp
+    command/executor.hpp
+    command/async_executor.hpp
+    command/process_manager.hpp
+    command/history.hpp
+    command/utils.hpp
+    command/validation.hpp
+    command/config.hpp
+    command/cache.hpp
+    command/security.hpp
+    command/statistics.hpp
+    command/rate_limiter.hpp
+    command/resource_monitor.hpp
+    command/thread_pool.hpp
+    crontab/cron_system.hpp
     hardware/device.hpp
     hardware/gpio.hpp
     hardware/voltage.hpp
@@ -130,6 +198,18 @@ set(HEADERS
     info/software.hpp
     info/stat.hpp
     info/user.hpp
+    # Environment modular components
+    env/env_core.hpp
+    env/env_config.hpp
+    env/env_cache.hpp
+    env/env_async.hpp
+    env/env_manager.hpp
+    env/env_file_io.hpp
+    env/env_path.hpp
+    env/env_persistent.hpp
+    env/env_scoped.hpp
+    env/env_system.hpp
+    env/env_utils.hpp
     registry/lregistry.hpp
     registry/wregistry.hpp
     network/network_manager.hpp
@@ -137,13 +217,37 @@ set(HEADERS
     storage/storage.hpp
     clipboard/clipboard.hpp
     clipboard/clipboard_error.hpp
+    clipboard/clipboard_types.hpp
+    clipboard/clipboard_result.hpp
+    clipboard/clipboard_config.hpp
+    clipboard/clipboard_utils.hpp
+    clipboard/clipboard_impl.hpp
     signals/signal.hpp
     signals/signal_monitor.hpp
     signals/signal_utils.hpp
     debug/crash.hpp
     debug/crash_quotes.hpp
     debug/nodebugger.hpp
-    scheduling/crontab.hpp)
+    scheduling/crontab.hpp
+    # Crontab (modular implementation)
+    crontab/cron_job.hpp
+    crontab/cron_types.hpp
+    crontab/cron_config.hpp
+    crontab/cron_cache.hpp
+    crontab/cron_validation.hpp
+    crontab/cron_storage.hpp
+    crontab/cron_thread_pool.hpp
+    crontab/cron_security.hpp
+    crontab/cron_security_types.hpp
+    crontab/cron_monitor.hpp
+    crontab/cron_monitor_types.hpp
+    crontab/cron_metrics_types.hpp
+    crontab/cron_event_types.hpp
+    crontab/cron_scheduler.hpp
+    crontab/cron_manager.hpp
+    crontab/cron_manager_batch.hpp
+    crontab/cron_manager_query.hpp
+    crontab/cron_manager_types.hpp)
 
 find_package(spdlog QUIET)
 set(LIBS ${CMAKE_THREAD_LIBS_INIT} atom-sysinfo atom-meta atom-utils
@@ -172,7 +276,12 @@ if(WIN32)
             version
             advapi32
             hid
-            setupapi)
+            setupapi
+            user32
+            ole32
+            oleaut32
+            psapi
+            dbghelp)
 endif()
 
 # Add shortcut subdirectory

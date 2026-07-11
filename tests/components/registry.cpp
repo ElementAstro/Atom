@@ -2,6 +2,9 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdio>
+#include <fstream>
+
 #include "atom/components/core/component.hpp"
 #include "atom/error/exception.hpp"
 
@@ -21,14 +24,17 @@ TEST(RegistryTest, AddAndGetComponent) {
     EXPECT_EQ(component->getName(), "Component1");
 }
 
-/*
+// Note: Registry::instance() is a singleton shared across tests, and
+// addInitializer() skips names that are already registered. Each test below
+// therefore uses a unique component name to stay independent.
+
 TEST(RegistryTest, InitializeAndCleanupComponent) {
     auto& registry = Registry::instance();
-    registry.cleanupAll();
-    auto testComponent = std::make_shared<TestComponent>("Component1");
+    auto testComponent = std::make_shared<TestComponent>("InitCleanupComp");
 
     registry.addInitializer(
-        "Component1", [testComponent]() { testComponent->initialized = true; },
+        "InitCleanupComp",
+        [testComponent](Component&) { testComponent->initialized = true; },
         [testComponent]() { testComponent->cleaned_up = true; });
 
     registry.initializeAll();
@@ -37,26 +43,23 @@ TEST(RegistryTest, InitializeAndCleanupComponent) {
     registry.cleanupAll();
     EXPECT_TRUE(testComponent->cleaned_up);
 }
-*/
 
-/*
 TEST(RegistryTest, ReinitializeComponent) {
     auto& registry = Registry::instance();
-    auto testComponent = std::make_shared<TestComponent>("Component1");
+    auto testComponent = std::make_shared<TestComponent>("ReinitComp");
 
     registry.addInitializer(
-        "Component1", [testComponent]() { testComponent->initialized = true; },
+        "ReinitComp",
+        [testComponent](Component&) { testComponent->initialized = true; },
         [testComponent]() { testComponent->cleaned_up = true; });
 
     registry.initializeAll();
     EXPECT_TRUE(testComponent->initialized);
 
     testComponent->initialized = false;
-    registry.reinitializeComponent("Component1");
+    registry.reinitializeComponent("ReinitComp");
     EXPECT_TRUE(testComponent->initialized);
 }
-
-*/
 
 TEST(RegistryTest, CircularDependencyDetection) {
     auto& registry = Registry::instance();
@@ -519,3 +522,24 @@ TEST(RegistryTest, GetAllLifecycleEvents) {
     EXPECT_GE(allEvents.size(), 0);
 }
 */
+
+#if ENABLE_HOT_RELOAD
+TEST(RegistryTest, LoadComponentFromMissingFileFails) {
+    auto& registry = Registry::instance();
+    // A path that does not exist must fail rather than throw or crash.
+    EXPECT_FALSE(registry.loadComponentFromFile(
+        "definitely_missing_component_library.dll"));
+}
+
+TEST(RegistryTest, LoadComponentFromNonLibraryFileFails) {
+    auto& registry = Registry::instance();
+    // Create a real file that is not a loadable shared library.
+    const std::string path = "not_a_real_plugin.bin";
+    {
+        std::ofstream f(path, std::ios::binary);
+        f << "this is not a shared library";
+    }
+    EXPECT_FALSE(registry.loadComponentFromFile(path));
+    std::remove(path.c_str());
+}
+#endif  // ENABLE_HOT_RELOAD

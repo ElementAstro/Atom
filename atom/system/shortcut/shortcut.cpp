@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <functional>
 #include <sstream>
+#include <utility>
 
 namespace shortcut_detector {
 
@@ -13,7 +14,14 @@ Shortcut::Shortcut(uint32_t key, bool withCtrl, bool withAlt, bool withShift,
       shift(withShift),
       win(withWin) {}
 
-std::string Shortcut::toString() const {
+const std::string& Shortcut::toString() const {
+    if (!cachedString_) {
+        cachedString_ = generateString();
+    }
+    return *cachedString_;
+}
+
+std::string Shortcut::generateString() const {
     std::stringstream ss;
 
     if (win)
@@ -96,6 +104,80 @@ size_t Shortcut::hash() const {
 bool Shortcut::operator==(const Shortcut& other) const {
     return vkCode == other.vkCode && ctrl == other.ctrl && alt == other.alt &&
            shift == other.shift && win == other.win;
+}
+
+// The cached string/hash are pure memoization, so a copy starts with an empty
+// cache (regenerated lazily). This keeps the copy operations noexcept and
+// allocation-free.
+Shortcut::Shortcut(const Shortcut& other) noexcept
+    : vkCode(other.vkCode),
+      ctrl(other.ctrl),
+      alt(other.alt),
+      shift(other.shift),
+      win(other.win) {}
+
+Shortcut::Shortcut(Shortcut&& other) noexcept
+    : vkCode(other.vkCode),
+      ctrl(other.ctrl),
+      alt(other.alt),
+      shift(other.shift),
+      win(other.win),
+      cachedString_(std::move(other.cachedString_)),
+      cachedHash_(other.cachedHash_),
+      hashCalculated_(other.hashCalculated_) {}
+
+Shortcut& Shortcut::operator=(const Shortcut& other) noexcept {
+    if (this != &other) {
+        vkCode = other.vkCode;
+        ctrl = other.ctrl;
+        alt = other.alt;
+        shift = other.shift;
+        win = other.win;
+        clearCache();
+    }
+    return *this;
+}
+
+Shortcut& Shortcut::operator=(Shortcut&& other) noexcept {
+    if (this != &other) {
+        vkCode = other.vkCode;
+        ctrl = other.ctrl;
+        alt = other.alt;
+        shift = other.shift;
+        win = other.win;
+        cachedString_ = std::move(other.cachedString_);
+        cachedHash_ = other.cachedHash_;
+        hashCalculated_ = other.hashCalculated_;
+    }
+    return *this;
+}
+
+bool Shortcut::operator!=(const Shortcut& other) const noexcept {
+    return !(*this == other);
+}
+
+bool Shortcut::operator<(const Shortcut& other) const noexcept {
+    if (vkCode != other.vkCode) {
+        return vkCode < other.vkCode;
+    }
+    return getModifierMask() < other.getModifierMask();
+}
+
+bool Shortcut::hasModifiers() const noexcept {
+    return ctrl || alt || shift || win;
+}
+
+uint8_t Shortcut::getModifierMask() const noexcept {
+    return static_cast<uint8_t>((ctrl ? 0x01 : 0) | (alt ? 0x02 : 0) |
+                                (shift ? 0x04 : 0) | (win ? 0x08 : 0));
+}
+
+bool Shortcut::isValid() const noexcept { return vkCode != 0; }
+
+void Shortcut::clearCache() const noexcept {
+    cachedString_.reset();
+    cachedHash_ = 0;
+    hashCalculated_ = false;
 }
 
 }  // namespace shortcut_detector

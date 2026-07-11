@@ -21,6 +21,10 @@
 #include <boost/type_traits.hpp>
 #endif
 
+#include "atom/error/exception.hpp"
+
+namespace atom::type {
+
 /**
  * @brief Extended concept to check if a type is a pointer type, including raw
  * pointers, std::shared_ptr, std::unique_ptr, and std::weak_ptr.
@@ -30,24 +34,32 @@
 template <typename T>
 concept PointerType =
 #ifdef ATOM_USE_BOOST
-    boost::is_pointer<T>::value || requires {
-        typename T::element_type;
-        { T{}.get() } -> std::convertible_to<typename T::element_type*>;
-    };
+    boost::is_pointer<T>::value ||
 #else
-    std::is_pointer_v<T> || requires {
+    std::is_pointer_v<T> ||
+#endif
+    // shared_ptr / unique_ptr expose .get()
+    requires {
         typename T::element_type;
         { T{}.get() } -> std::convertible_to<typename T::element_type*>;
+    } ||
+    // std::weak_ptr has no .get(); it exposes .lock() instead
+    requires(T t) {
+        typename T::element_type;
+        t.lock();
     };
-#endif
 
 /**
- * @brief Exception class for pointer-related errors
+ * @brief Exception class for pointer-related errors.
+ *
+ * Derives from atom::error::Exception (the module-wide base) while keeping a
+ * single-message constructor for the throw sites in this header.
  */
-class PointerException : public std::runtime_error {
+class PointerException : public atom::error::Exception {
 public:
     explicit PointerException(const std::string& message)
-        : std::runtime_error(message) {}
+        : atom::error::Exception(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
+                                 message) {}
 };
 
 /**
@@ -175,6 +187,12 @@ public:
     PointerSentinel(PointerSentinel&& other) noexcept {
         std::unique_lock lock(other.mutex_);
         ptr_ = std::move(other.ptr_);
+        // Moving a variant that holds a raw T* only COPIES the pointer (unlike
+        // unique_ptr/shared_ptr, a raw pointer is not nulled on move), so the
+        // moved-from sentinel would still delete it in its destructor → double
+        // free. Reset the source to a null raw pointer (delete nullptr is
+        // safe).
+        other.ptr_ = static_cast<T*>(nullptr);
         is_valid_.store(other.is_valid_.load(std::memory_order_acquire),
                         std::memory_order_release);
         other.is_valid_.store(false, std::memory_order_release);
@@ -225,6 +243,9 @@ public:
             }
 
             ptr_ = std::move(other.ptr_);
+            // See the move constructor: a raw T* is not nulled on move, so
+            // reset the source to avoid a double free.
+            other.ptr_ = static_cast<T*>(nullptr);
             is_valid_.store(other.is_valid_.load(std::memory_order_acquire),
                             std::memory_order_release);
             other.is_valid_.store(false, std::memory_order_release);
@@ -598,5 +619,7 @@ public:
         }
     }
 };
+
+}  // namespace atom::type
 
 #endif  // ATOM_TYPE_POINTER_HPP

@@ -212,8 +212,8 @@ public:
      * @return Vector of results from applying the function to each element
      */
     template <typename Iterator, typename Function>
-        requires std::invocable<
-            Function, typename std::iterator_traits<Iterator>::value_type>
+        requires std::invocable<Function, typename std::iterator_traits<
+                                              Iterator>::value_type>
     static auto map(Iterator begin, Iterator end, Function func,
                     size_t numThreads = 0)
         -> std::vector<std::invoke_result_t<
@@ -403,8 +403,8 @@ public:
      * @return Vector of elements that satisfy the predicate
      */
     template <typename Iterator, typename Predicate>
-        requires std::predicate<
-            Predicate, typename std::iterator_traits<Iterator>::value_type>
+        requires std::predicate<Predicate, typename std::iterator_traits<
+                                               Iterator>::value_type>
     static auto filter(Iterator begin, Iterator end, Predicate pred,
                        size_t numThreads = 0)
         -> std::vector<typename std::iterator_traits<Iterator>::value_type> {

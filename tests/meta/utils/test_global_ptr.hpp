@@ -139,7 +139,9 @@ TEST_F(GlobalPtrTest, CreateWeakPtrDirectly) {
     ASSERT_TRUE(lockedPtr);
     EXPECT_EQ(lockedPtr->getValue(), 100);
 
-    // Reset the original shared pointer to expire the weak pointers
+    // Drop ALL strong references (lockedPtr holds one too) so the weak
+    // pointers expire
+    lockedPtr.reset();
     sharedPtr.reset();
 
     // Verify the weak pointer is now expired
@@ -161,8 +163,10 @@ TEST_F(GlobalPtrTest, GetSharedPtrFromWeakPtr) {
     ASSERT_TRUE(retrievedPtr);
     EXPECT_EQ(retrievedPtr->getValue(), 42);
 
-    // Reset original to test expiration
+    // Reset all strong references to test expiration (retrievedPtr also
+    // keeps the object alive, so it must be released as well)
     ptr1.reset();
+    retrievedPtr.reset();
 
     // Try to get shared ptr from now-expired weak ptr
     auto nullPtr = GlobalSharedPtrManager::getInstance()
@@ -214,7 +218,7 @@ TEST_F(GlobalPtrTest, CustomDeleter) {
     // Get pointer info to verify custom deleter is registered
     auto info = GetPtrInfo("tracker");
     ASSERT_TRUE(info.has_value());
-    EXPECT_TRUE(info->has_custom_deleter);
+    EXPECT_TRUE(info->flags.has_custom_deleter);
 
     // Remove the pointer to trigger deletion
     RemovePtr("tracker");
@@ -236,7 +240,7 @@ TEST_F(GlobalPtrTest, PointerMetadata) {
     EXPECT_TRUE(info->type_name.find("SimpleClass") != std::string::npos);
 
     // Check it's not a weak pointer
-    EXPECT_FALSE(info->is_weak);
+    EXPECT_FALSE(info->flags.is_weak);
 
     // Check access count (should be at least 1 from our GetPtrInfo call)
     EXPECT_GE(info->access_count, 1);
@@ -247,7 +251,7 @@ TEST_F(GlobalPtrTest, PointerMetadata) {
 
     auto weakInfo = GetPtrInfo("weak_meta");
     ASSERT_TRUE(weakInfo.has_value());
-    EXPECT_TRUE(weakInfo->is_weak);
+    EXPECT_TRUE(weakInfo->flags.is_weak);
 }
 
 // Test removing expired weak pointers
@@ -392,11 +396,14 @@ TEST_F(GlobalPtrTest, TypeSafety) {
     auto correctTypePtr = GetPtr<SimpleClass>("type_test");
     EXPECT_TRUE(correctTypePtr.has_value());
 
-    // Add a derived class
+    // Add a derived class instance registered under its base type. The
+    // manager stores pointers type-erased (std::any) and matches the exact
+    // registered type, so an implicit upcast on retrieval is not possible;
+    // register as the base type to retrieve as the base type.
     auto derivedPtr = std::make_shared<DerivedClass>(100);
-    AddPtr("derived", derivedPtr);
+    AddPtr("derived", std::static_pointer_cast<SimpleClass>(derivedPtr));
 
-    // Can retrieve with base class type
+    // Can retrieve with the registered (base) type
     auto retrievedAsBase = GetPtr<SimpleClass>("derived");
     EXPECT_TRUE(retrievedAsBase.has_value());
     EXPECT_EQ(retrievedAsBase.value()->getValue(), 100);
@@ -479,9 +486,11 @@ TEST_F(GlobalPtrTest, GetOrCreatePtrWithDeleterMacro) {
     // Check the metadata
     auto info = GetPtrInfo("deleter_test");
     ASSERT_TRUE(info.has_value());
-    EXPECT_TRUE(info->has_custom_deleter);
+    EXPECT_TRUE(info->flags.has_custom_deleter);
 
-    // Clear the manager to trigger deletion
+    // Release the local reference, then clear the manager to trigger
+    // deletion (the deleter only runs once the last owner is gone)
+    ptr.reset();
     GlobalSharedPtrManager::getInstance().clearAll();
 
     // Check that our custom deleter was called
@@ -574,6 +583,39 @@ TEST_F(GlobalPtrTest, GetWeakPtrMacroSimulated) {
     EXPECT_FALSE(thrown);
 }
 #endif
+
+// getOrCreateSharedPtr: existing entry of a DIFFERENT type must be replaced
+// (also exercises PointerMetadata copy-assignment via PointerEntry assignment).
+TEST(GlobalPtrExtraTest, GetOrCreateReplacesEntryOfDifferentType) {
+    auto& mgr = GlobalSharedPtrManager::getInstance();
+    mgr.addSharedPtr<int>("gp_mismatch", std::make_shared<int>(1));
+
+    // Same key, different type -> takes the replacement branch and runs the
+    // creator instead of returning the (wrongly-typed) stored value.
+    bool created = false;
+    auto dbl = mgr.getOrCreateSharedPtr<double>("gp_mismatch", [&] {
+        created = true;
+        return std::make_shared<double>(2.5);
+    });
+    EXPECT_TRUE(created);
+    ASSERT_NE(dbl, nullptr);
+    EXPECT_DOUBLE_EQ(*dbl, 2.5);
+
+    // The entry is now a double; fetching it as double succeeds.
+    auto again = mgr.getSharedPtr<double>("gp_mismatch");
+    ASSERT_TRUE(again.has_value());
+    EXPECT_DOUBLE_EQ(**again, 2.5);
+}
+
+// getSharedPtrFromWeakPtr: a key holding a shared_ptr (not a weak_ptr) must
+// fall through to nullptr rather than throwing.
+TEST(GlobalPtrExtraTest, GetSharedFromWeakWrongStoredKindReturnsNull) {
+    auto& mgr = GlobalSharedPtrManager::getInstance();
+    mgr.addSharedPtr<int>("gp_shared_only", std::make_shared<int>(7));
+
+    auto p = mgr.getSharedPtrFromWeakPtr<int>("gp_shared_only");
+    EXPECT_EQ(p, nullptr);
+}
 
 }  // namespace atom::test
 

@@ -44,6 +44,7 @@
 #include <vector>
 
 #include "func_traits.hpp"
+#include "invoke.hpp"
 
 namespace atom::meta {
 
@@ -922,14 +923,6 @@ auto composeDecorators(Func&& func, Decorators&&... decorators) {
     return (... |
             std::forward<Decorators>(decorators))(std::forward<Func>(func));
 }
-
-/**
- * @brief Concept for decorator types
- */
-template <typename D, typename F>
-concept Decorator = requires(D d, F f) {
-    { d(f) } -> std::invocable;
-};
 
 //==============================================================================
 // Integration with func_traits.hpp and invoke.hpp

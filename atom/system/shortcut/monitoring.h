@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef _WIN32
+#include <windows.h>  // LRESULT/HHOOK/WPARAM/LPARAM used in the keyboard hook
+#endif
+
 #include <functional>
 #include <vector>
 #include <unordered_map>
@@ -10,7 +14,7 @@
 #include <chrono>
 #include <queue>
 #include "shortcut.h"
-#include "advanced_shortcut.h"
+#include "shortcut_binding.h"
 #include "status.h"
 
 namespace shortcut_detector {
@@ -36,12 +40,12 @@ enum class MonitoringEventType {
 struct MonitoringEvent {
     MonitoringEventType type;
     std::chrono::system_clock::time_point timestamp;
-    AdvancedShortcut shortcut;
+    ShortcutBinding shortcut;
     std::string source;           // Source of the event (process, system, etc.)
     std::string description;      // Human-readable description
     std::unordered_map<std::string, std::string> metadata; // Additional data
 
-    MonitoringEvent(MonitoringEventType t, const AdvancedShortcut& s = AdvancedShortcut(),
+    MonitoringEvent(MonitoringEventType t, const ShortcutBinding& s = ShortcutBinding(),
                    const std::string& src = "", const std::string& desc = "")
         : type(t), timestamp(std::chrono::system_clock::now()),
           shortcut(s), source(src), description(desc) {}
@@ -127,17 +131,17 @@ public:
     /**
      * @brief Add shortcut to monitor
      */
-    void addShortcut(const AdvancedShortcut& shortcut, const std::string& owner = "");
+    void addShortcut(const ShortcutBinding& shortcut, const std::string& owner = "");
 
     /**
      * @brief Remove shortcut from monitoring
      */
-    void removeShortcut(const AdvancedShortcut& shortcut);
+    void removeShortcut(const ShortcutBinding& shortcut);
 
     /**
      * @brief Get all monitored shortcuts
      */
-    std::vector<AdvancedShortcut> getMonitoredShortcuts() const;
+    std::vector<ShortcutBinding> getMonitoredShortcuts() const;
 
     /**
      * @brief Force conflict detection check
@@ -209,7 +213,7 @@ private:
 
     // Monitored shortcuts
     mutable std::mutex shortcutMutex_;
-    std::unordered_map<AdvancedShortcut, std::string> monitoredShortcuts_;
+    std::unordered_map<ShortcutBinding, std::string> monitoredShortcuts_;
 
     // Statistics
     mutable std::mutex statsMutex_;
@@ -255,7 +259,7 @@ public:
     /**
      * @brief Resolve conflict between shortcuts
      */
-    AdvancedShortcut resolveConflict(const std::vector<AdvancedShortcut>& conflictingShortcuts);
+    ShortcutBinding resolveConflict(const std::vector<ShortcutBinding>& conflictingShortcuts);
 
     /**
      * @brief Set resolution strategy
@@ -270,14 +274,14 @@ public:
     /**
      * @brief Set user choice callback for UserChoice strategy
      */
-    void setUserChoiceCallback(std::function<int(const std::vector<AdvancedShortcut>&)> callback);
+    void setUserChoiceCallback(std::function<int(const std::vector<ShortcutBinding>&)> callback);
 
 private:
     ResolutionStrategy strategy_;
-    std::function<int(const std::vector<AdvancedShortcut>&)> userChoiceCallback_;
+    std::function<int(const std::vector<ShortcutBinding>&)> userChoiceCallback_;
 
-    int calculatePriority(const AdvancedShortcut& shortcut) const;
-    int automaticResolution(const std::vector<AdvancedShortcut>& shortcuts) const;
+    int calculatePriority(const ShortcutBinding& shortcut) const;
+    int automaticResolution(const std::vector<ShortcutBinding>& shortcuts) const;
 };
 
 /**

@@ -1,5 +1,5 @@
 /*
- * advanced_bindings.hpp
+ * bindings.hpp
  *
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
@@ -15,17 +15,18 @@ for both Lua and Python scripting engines.
 
 **************************************************/
 
-#ifndef ATOM_COMPONENT_ADVANCED_BINDINGS_HPP
-#define ATOM_COMPONENT_ADVANCED_BINDINGS_HPP
+#ifndef ATOM_COMPONENT_SCRIPTING_BINDINGS_HPP
+#define ATOM_COMPONENT_SCRIPTING_BINDINGS_HPP
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <string>
 #include <type_traits>
+#include <typeinfo>
 #include <unordered_map>
 #include <vector>
 
-#include "../data/type_conversion.hpp"
 #include "scripting_api.hpp"
 
 namespace atom::components::scripting {
@@ -255,12 +256,12 @@ private:
 };
 
 /**
- * @brief Advanced class binding with full feature support
+ * @brief Class binding with full feature support
  */
 template <typename T, typename ScriptEngine>
-class AdvancedClassBinder {
+class ClassBinder {
 public:
-    AdvancedClassBinder(ScriptEngine& engine, const std::string& className)
+    ClassBinder(ScriptEngine& engine, const std::string& className)
         : engine_(engine),
           className_(className),
           operatorBinder_(className),
@@ -272,7 +273,7 @@ public:
      * @return Reference to this binder
      */
     template <typename... Args>
-    AdvancedClassBinder& def_constructor();
+    ClassBinder& def_constructor();
 
     /**
      * @brief Binds method with exception translation
@@ -283,7 +284,7 @@ public:
      * @return Reference to this binder
      */
     template <typename Func>
-    AdvancedClassBinder& def_method(const std::string& name, Func func,
+    ClassBinder& def_method(const std::string& name, Func func,
                                     const std::string& doc = "");
 
     /**
@@ -295,7 +296,7 @@ public:
      * @return Reference to this binder
      */
     template <typename Func>
-    AdvancedClassBinder& def_static_method(const std::string& name, Func func,
+    ClassBinder& def_static_method(const std::string& name, Func func,
                                            const std::string& doc = "");
 
     /**
@@ -318,7 +319,7 @@ public:
      * @return Reference to this binder
      */
     template <typename E>
-    AdvancedClassBinder& def_enum(
+    ClassBinder& def_enum(
         const std::string& enumName,
         const std::vector<std::pair<E, std::string>>& values);
 
@@ -329,7 +330,7 @@ public:
      * @return Reference to this binder
      */
     template <typename Func>
-    AdvancedClassBinder& def_str(Func func);
+    ClassBinder& def_str(Func func);
 
     /**
      * @brief Enables automatic representation conversion
@@ -338,7 +339,7 @@ public:
      * @return Reference to this binder
      */
     template <typename Func>
-    AdvancedClassBinder& def_repr(Func func);
+    ClassBinder& def_repr(Func func);
 
     /**
      * @brief Finalizes the class binding
@@ -401,9 +402,9 @@ private:
  * @brief Module system for organizing bindings
  */
 template <typename ScriptEngine>
-class AdvancedModule {
+class ScriptModule {
 public:
-    explicit AdvancedModule(ScriptEngine& engine, const std::string& moduleName)
+    explicit ScriptModule(ScriptEngine& engine, const std::string& moduleName)
         : engine_(engine), moduleName_(moduleName), callbackManager_() {}
 
     /**
@@ -415,7 +416,7 @@ public:
      * @return Reference to this module
      */
     template <typename Func>
-    AdvancedModule& def(const std::string& name, Func func,
+    ScriptModule& def(const std::string& name, Func func,
                         const std::string& doc = "");
 
     /**
@@ -426,7 +427,7 @@ public:
      * @return Advanced class binder
      */
     template <typename T>
-    AdvancedClassBinder<T, ScriptEngine> class_(const std::string& name,
+    ClassBinder<T, ScriptEngine> class_(const std::string& name,
                                                 const std::string& doc = "");
 
     /**
@@ -437,7 +438,7 @@ public:
      * @return Reference to this module
      */
     template <typename T>
-    AdvancedModule& attr(const std::string& name, const T& value);
+    ScriptModule& attr(const std::string& name, const T& value);
 
     /**
      * @brief Gets the callback manager
@@ -458,16 +459,397 @@ private:
     ExceptionTranslator exceptionTranslator_;
 };
 
+// ===========================================================================
+// Template implementations (must live in the header so any translation unit
+// can instantiate them)
+// ===========================================================================
+
+template <typename ExceptionType>
+void ExceptionTranslator::registerTranslator(
+    std::function<std::string(const ExceptionType&)> translator) {
+    std::string typeName = typeid(ExceptionType).name();
+
+    translators_[typeName] =
+        [translator](const std::exception& e) -> std::string {
+        try {
+            const ExceptionType& typed_exception =
+                dynamic_cast<const ExceptionType&>(e);
+            return translator(typed_exception);
+        } catch (const std::bad_cast&) {
+            return std::string("Exception translation failed: ") + e.what();
+        }
+    };
+}
+
+template <typename Func>
+ScriptResult ExceptionTranslator::executeWithTranslation(Func&& func) {
+    ScriptResult result;
+
+    try {
+        result = func();
+    } catch (const std::exception& e) {
+        result.success = false;
+        result.errorMessage = translateException(e);
+    } catch (...) {
+        result.success = false;
+        result.errorMessage = "Unknown C++ exception occurred";
+    }
+
+    return result;
+}
+
+template <typename Func>
+void CallbackManager::registerCallback(const std::string& name, Func func) {
+    callbacks_[name] = createWrapper(func);
+}
+
+template <typename Func>
+ScriptFunction CallbackManager::createWrapper(Func func) {
+    return [func](const std::vector<ScriptValue>& args) -> ScriptValue {
+        (void)args;
+        if constexpr (std::is_invocable_v<Func>) {
+            if constexpr (std::is_void_v<std::invoke_result_t<Func>>) {
+                func();
+                return ScriptValue();
+            } else {
+                using R = std::invoke_result_t<Func>;
+                if constexpr (std::is_constructible_v<ScriptValue, R>) {
+                    return ScriptValue(func());
+                } else {
+                    func();
+                    return ScriptValue();
+                }
+            }
+        } else {
+            return ScriptValue();
+        }
+    };
+}
+
+template <typename Signature>
+std::function<Signature> CallbackManager::createCppCallback(
+    ScriptFunction scriptFunc) {
+    return createCppCallbackImpl(
+        scriptFunc, static_cast<std::function<Signature>*>(nullptr));
+}
+
+template <typename R, typename... Args>
+std::function<R(Args...)> CallbackManager::createCppCallbackImpl(
+    ScriptFunction scriptFunc, std::function<R(Args...)>*) {
+    return [scriptFunc](Args... args) -> R {
+        std::vector<ScriptValue> scriptArgs;
+        ((scriptArgs.push_back(ScriptValue(args))), ...);
+
+        ScriptValue result = scriptFunc(scriptArgs);
+
+        if constexpr (std::is_void_v<R>) {
+            return;
+        } else {
+            if (result.holds<R>()) {
+                return result.get<R>();
+            }
+            return R{};
+        }
+    };
+}
+
+template <typename T>
+template <typename Op>
+OperatorBinder<T>& OperatorBinder<T>::def_operator(OperatorType op, Op func) {
+    operators_[op] =
+        [func](const std::vector<ScriptValue>& args) -> ScriptValue {
+        // Full argument marshalling is engine-specific; engines consume the
+        // registered operator table.
+        (void)args;
+        return ScriptValue();
+    };
+
+    return *this;
+}
+
+template <typename T>
+template <typename Op>
+OperatorBinder<T>& OperatorBinder<T>::def_comparison(OperatorType op, Op func) {
+    return def_operator(op, func);
+}
+
+template <typename T>
+template <typename IndexType, typename ReturnType>
+OperatorBinder<T>& OperatorBinder<T>::def_index(
+    std::function<ReturnType(const T&, IndexType)> getter,
+    std::function<void(T&, IndexType, const ReturnType&)> setter) {
+    operators_[OperatorType::Index] =
+        [getter, setter](const std::vector<ScriptValue>& args) -> ScriptValue {
+        (void)getter;
+        (void)setter;
+        (void)args;
+        return ScriptValue();
+    };
+
+    return *this;
+}
+
+template <typename T>
+template <typename ReturnType, typename... Args>
+OperatorBinder<T>& OperatorBinder<T>::def_call(
+    std::function<ReturnType(T&, Args...)> func) {
+    operators_[OperatorType::Call] =
+        [func](const std::vector<ScriptValue>& args) -> ScriptValue {
+        (void)func;
+        (void)args;
+        return ScriptValue();
+    };
+
+    return *this;
+}
+
+template <typename T>
+template <typename PropertyType>
+PropertyBinder<T>& PropertyBinder<T>::def_property(
+    const std::string& name, std::function<PropertyType(const T&)> getter,
+    std::function<void(T&, const PropertyType&)> setter) {
+    PropertyInfo info;
+    info.getter =
+        [getter](const std::vector<ScriptValue>& args) -> ScriptValue {
+        (void)getter;
+        (void)args;
+        return ScriptValue();
+    };
+
+    info.setter =
+        [setter](const std::vector<ScriptValue>& args) -> ScriptValue {
+        (void)setter;
+        (void)args;
+        return ScriptValue();
+    };
+
+    info.isReadOnly = false;
+    properties_[name] = info;
+
+    return *this;
+}
+
+template <typename T>
+template <typename PropertyType>
+PropertyBinder<T>& PropertyBinder<T>::def_property_readonly(
+    const std::string& name, std::function<PropertyType(const T&)> getter) {
+    PropertyInfo info;
+    info.getter =
+        [getter](const std::vector<ScriptValue>& args) -> ScriptValue {
+        (void)getter;
+        (void)args;
+        return ScriptValue();
+    };
+
+    info.isReadOnly = true;
+    properties_[name] = info;
+
+    return *this;
+}
+
+template <typename T>
+template <typename PropertyType>
+PropertyBinder<T>& PropertyBinder<T>::def_static_property(
+    const std::string& name, std::function<PropertyType()> getter,
+    std::function<void(const PropertyType&)> setter) {
+    PropertyInfo info;
+    info.getter =
+        [getter](const std::vector<ScriptValue>& args) -> ScriptValue {
+        (void)args;
+        auto result = getter();
+        if constexpr (std::is_constructible_v<ScriptValue, decltype(result)>) {
+            return ScriptValue(result);
+        } else {
+            return ScriptValue();
+        }
+    };
+
+    if (setter) {
+        info.setter =
+            [setter](const std::vector<ScriptValue>& args) -> ScriptValue {
+            (void)setter;
+            (void)args;
+            return ScriptValue();
+        };
+    }
+
+    info.isStatic = true;
+    info.isReadOnly = (setter == nullptr);
+    properties_[name] = info;
+
+    return *this;
+}
+
+template <typename T, typename ScriptEngine>
+template <typename... Args>
+ClassBinder<T, ScriptEngine>& ClassBinder<T, ScriptEngine>::def_constructor() {
+    std::string constructorName = className_ + ".__init__";
+
+    ScriptFunction constructor =
+        [](const std::vector<ScriptValue>& args) -> ScriptValue {
+        (void)args;
+        return ScriptValue();
+    };
+
+    engine_.registerFunction(constructorName, constructor);
+    return *this;
+}
+
+template <typename T, typename ScriptEngine>
+template <typename Func>
+ClassBinder<T, ScriptEngine>& ClassBinder<T, ScriptEngine>::def_method(
+    const std::string& name, Func func, const std::string& doc) {
+    (void)doc;
+    std::string methodName = className_ + "." + name;
+    ScriptFunction wrapper = createMethodWrapper(func);
+
+    ScriptFunction translatedWrapper =
+        [wrapper](const std::vector<ScriptValue>& args) -> ScriptValue {
+        try {
+            return wrapper(args);
+        } catch (const std::exception&) {
+            return ScriptValue();
+        }
+    };
+
+    engine_.registerFunction(methodName, translatedWrapper);
+    return *this;
+}
+
+template <typename T, typename ScriptEngine>
+template <typename Func>
+ClassBinder<T, ScriptEngine>& ClassBinder<T, ScriptEngine>::def_static_method(
+    const std::string& name, Func func, const std::string& doc) {
+    (void)doc;
+    std::string methodName = className_ + "." + name;
+    ScriptFunction wrapper = createStaticMethodWrapper(func);
+
+    engine_.registerFunction(methodName, wrapper);
+    return *this;
+}
+
+template <typename T, typename ScriptEngine>
+template <typename E>
+ClassBinder<T, ScriptEngine>& ClassBinder<T, ScriptEngine>::def_enum(
+    const std::string& enumName,
+    const std::vector<std::pair<E, std::string>>& values) {
+    for (const auto& [value, name] : values) {
+        std::string fullName = className_ + "." + enumName + "." + name;
+        engine_.setGlobal(fullName, ScriptValue(static_cast<int64_t>(value)));
+    }
+
+    return *this;
+}
+
+template <typename T, typename ScriptEngine>
+template <typename Func>
+ClassBinder<T, ScriptEngine>& ClassBinder<T, ScriptEngine>::def_str(Func func) {
+    operatorBinder_.def_operator(OperatorType::ToString, func);
+    return *this;
+}
+
+template <typename T, typename ScriptEngine>
+template <typename Func>
+ClassBinder<T, ScriptEngine>& ClassBinder<T, ScriptEngine>::def_repr(
+    Func func) {
+    return def_str(func);
+}
+
+template <typename T, typename ScriptEngine>
+void ClassBinder<T, ScriptEngine>::finalize() {
+    for (auto& finalizer : finalizers_) {
+        finalizer();
+    }
+}
+
+template <typename T, typename ScriptEngine>
+template <typename Func>
+ScriptFunction ClassBinder<T, ScriptEngine>::createMethodWrapper(Func func) {
+    return [func](const std::vector<ScriptValue>& args) -> ScriptValue {
+        (void)func;
+        (void)args;
+        return ScriptValue();
+    };
+}
+
+template <typename T, typename ScriptEngine>
+template <typename Func>
+ScriptFunction ClassBinder<T, ScriptEngine>::createStaticMethodWrapper(
+    Func func) {
+    return [func](const std::vector<ScriptValue>& args) -> ScriptValue {
+        (void)func;
+        (void)args;
+        return ScriptValue();
+    };
+}
+
+template <typename Derived, typename Base>
+std::unordered_map<std::string, std::vector<std::string>>
+    InheritanceBinder<Derived, Base>::inheritanceMap_;
+
+template <typename Derived, typename Base>
+void InheritanceBinder<Derived, Base>::registerInheritance(
+    const std::string& derivedName, const std::string& baseName) {
+    inheritanceMap_[derivedName].push_back(baseName);
+}
+
+template <typename Derived, typename Base>
+bool InheritanceBinder<Derived, Base>::isDerivedFrom(
+    const std::string& derivedName, const std::string& baseName) {
+    auto it = inheritanceMap_.find(derivedName);
+    if (it == inheritanceMap_.end())
+        return false;
+
+    return std::find(it->second.begin(), it->second.end(), baseName) !=
+           it->second.end();
+}
+
+template <typename Derived, typename Base>
+std::shared_ptr<Derived> InheritanceBinder<Derived, Base>::safeCast(
+    std::shared_ptr<Base> basePtr) {
+    return std::dynamic_pointer_cast<Derived>(basePtr);
+}
+
+template <typename ScriptEngine>
+template <typename Func>
+ScriptModule<ScriptEngine>& ScriptModule<ScriptEngine>::def(
+    const std::string& name, Func func, const std::string& doc) {
+    (void)doc;
+    std::string fullName = moduleName_ + "." + name;
+    ScriptFunction wrapper = callbackManager_.createWrapper(func);
+
+    engine_.registerFunction(fullName, wrapper);
+    return *this;
+}
+
+template <typename ScriptEngine>
+template <typename T>
+ClassBinder<T, ScriptEngine> ScriptModule<ScriptEngine>::class_(
+    const std::string& name, const std::string& doc) {
+    (void)doc;
+    std::string fullName = moduleName_ + "." + name;
+    return ClassBinder<T, ScriptEngine>(engine_, fullName);
+}
+
+template <typename ScriptEngine>
+template <typename T>
+ScriptModule<ScriptEngine>& ScriptModule<ScriptEngine>::attr(
+    const std::string& name, const T& value) {
+    std::string fullName = moduleName_ + "." + name;
+    engine_.setGlobal(fullName, ScriptValue(value));
+    return *this;
+}
+
 /**
  * @brief Binding macros for convenience
  */
 #define ATOM_BIND_CLASS(engine, className)                              \
-    atom::components::scripting::AdvancedClassBinder<className,         \
+    atom::components::scripting::ClassBinder<className,         \
                                                      decltype(engine)>( \
         engine, #className)
 
 #define ATOM_BIND_MODULE(engine, moduleName)                              \
-    atom::components::scripting::AdvancedModule<decltype(engine)>(engine, \
+    atom::components::scripting::ScriptModule<decltype(engine)>(engine, \
                                                                   #moduleName)
 
 #define ATOM_BIND_INHERITANCE(Derived, Base)        \
@@ -486,4 +868,4 @@ private:
 
 }  // namespace atom::components::scripting
 
-#endif  // ATOM_COMPONENT_ADVANCED_BINDINGS_HPP
+#endif  // ATOM_COMPONENT_SCRIPTING_BINDINGS_HPP

@@ -127,7 +127,8 @@ TEST_F(SerializationTest, VectorSerialization) {
 // The Serializable concept doesn't recognize std::vector<std::string> even though specialized
 // serialize/deserialize functions exist for vectors. The generic concept constraint prevents compilation.
     // Vector of strings
-    verifySerializationCycle<std::vector<std::string>>({"hello", "world", "test"});
+    verifySerializationCycle<std::vector<std::string>>(
+        {"hello", "world", "test"});
     verifySerializationCycle<std::vector<std::string>>({});
     verifySerializationCycle<std::vector<std::string>>({"single"});
 #endif
@@ -209,8 +210,7 @@ TEST_F(SerializationTest, TupleSerialization) {
     verifySerializationCycle<std::tuple<>>(std::make_tuple());
 
     verifySerializationCycle<std::tuple<int, int, int>>(
-        std::make_tuple(1, 2, 3)
-    );
+        std::make_tuple(1, 2, 3));
 }
 #endif
 
@@ -286,7 +286,8 @@ TEST_F(SerializationTest, FileSerialization) {
     EXPECT_EQ(testData, deserializedData.value());
 
     // Test with non-existent file
-    auto nonExistentResult = deserializeFromFile<std::vector<int>>("non_existent_file.bin");
+    auto nonExistentResult =
+        deserializeFromFile<std::vector<int>>("non_existent_file.bin");
     EXPECT_FALSE(nonExistentResult.has_value());
 }
 #endif
@@ -413,7 +414,7 @@ struct CustomType {
 };
 
 // Specialize serialization for CustomType
-template<>
+template <>
 std::vector<uint8_t> serialize<CustomType>(const CustomType& obj) {
     auto bytes1 = serialize(obj.value1);
     auto bytes2 = serialize(obj.value2);
@@ -425,8 +426,9 @@ std::vector<uint8_t> serialize<CustomType>(const CustomType& obj) {
     return result;
 }
 
-template<>
-CustomType deserialize<CustomType>(std::span<const uint8_t> data, size_t& offset) {
+template <>
+CustomType deserialize<CustomType>(std::span<const uint8_t> data,
+                                   size_t& offset) {
     CustomType result;
     result.value1 = deserialize<int>(data, offset);
     result.value2 = deserializeString(data, offset);
@@ -485,7 +487,8 @@ TEST_F(SerializationTest, CompressionIntegration) {
 
     // Decompress and verify
     size_t offset = 0;
-    auto decompressed = deserializeCompressed<std::vector<int>>(compressedBytes, offset);
+    auto decompressed =
+        deserializeCompressed<std::vector<int>>(compressedBytes, offset);
     EXPECT_EQ(repetitiveData, decompressed);
 }
 #endif
@@ -513,12 +516,14 @@ TEST_F(SerializationTest, VersioningSupport) {
 
     size_t offset = 0;
     uint32_t version;
-    auto deserialized1 = deserializeWithVersion<VersionedData>(bytes1, offset, version);
+    auto deserialized1 =
+        deserializeWithVersion<VersionedData>(bytes1, offset, version);
     EXPECT_EQ(version, 1u);
     EXPECT_EQ(v1, deserialized1);
 
     offset = 0;
-    auto deserialized2 = deserializeWithVersion<VersionedData>(bytes2, offset, version);
+    auto deserialized2 =
+        deserializeWithVersion<VersionedData>(bytes2, offset, version);
     EXPECT_EQ(version, 2u);
     EXPECT_EQ(v2, deserialized2);
 }

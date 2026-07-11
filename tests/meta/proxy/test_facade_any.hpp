@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 
 #include <any>
+#include <array>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -139,7 +140,7 @@ protected:
     double doubleValue;
     std::string stringValue;
     bool boolValue;
-    TestPerson personValue;
+    TestPerson personValue{"", 0};
     TestCallable callableValue;
 };
 
@@ -494,4 +495,309 @@ TEST_F(EnhancedBoxedValueTest, ConvenienceFactoryFunctions) {
     EXPECT_TRUE(stringVal.hasValue());
     EXPECT_TRUE(stringVal.isType<std::string>());
     EXPECT_EQ(stringVal.toString(), "Hello");
+}
+
+//==============================================================================
+// Additional crafted types to exercise every reachable skill-dispatch branch
+//==============================================================================
+
+// Convertible to std::string (no toString/to_string) -> stringable convertible
+// branch and printable "[unprintable]" fallback.
+struct StringConvertible {
+    std::string s;
+    explicit StringConvertible(std::string v = "conv") : s(std::move(v)) {}
+    operator std::string() const { return s; }
+};
+
+// snake_case to_string() only -> stringable has_to_string + printable
+// has_to_string branches.
+struct SnakeStringable {
+    std::string to_string() const { return "snake"; }
+};
+
+// toString() but no operator<< -> printable has_toString branch.
+struct ToStringOnly {
+    std::string toString() const { return "camel"; }
+};
+
+// No printable/stringable/comparable/serializable traits at all -> every
+// fallback branch (unprintable, no string conversion, equals=false,
+// serialize "null", deserialize false, clone via copy-construct).
+struct Opaque {
+    int v = 0;
+};
+
+// toJson()/fromJson() but no serialize/deserialize -> serialize_impl toJson
+// branch, json_convertible toJson/fromJson branches.
+struct JsonCamel {
+    int n = 7;
+    std::string toJson() const { return "{\"n\":" + std::to_string(n) + "}"; }
+    bool fromJson(const std::string& j) {
+        n = static_cast<int>(j.size());
+        return true;
+    }
+};
+
+// to_json()/from_json() (snake_case) -> the snake_case JSON branches.
+struct JsonSnake {
+    int n = 3;
+    std::string to_json() const { return "snake_json"; }
+    bool from_json(const std::string&) { return true; }
+};
+
+// Larger than restrict_layout<256> -> forced onto the deep-copying HeapHolder,
+// exercising HeapHolder operator==/operator</operator<< and the copy-only
+// init path. Provides comparison + streaming so the held type is usable.
+struct BigStreamable {
+    std::array<char, 512> pad{};
+    int id = 0;
+    bool operator==(const BigStreamable& o) const { return id == o.id; }
+    bool operator<(const BigStreamable& o) const { return id < o.id; }
+    friend std::ostream& operator<<(std::ostream& os, const BigStreamable& b) {
+        return os << "Big(" << b.id << ")";
+    }
+};
+
+// Callable returning void (no args and single-arg) -> the void branches of
+// callable_dispatch::call_impl.
+struct VoidCallable {
+    mutable int calls = 0;
+    void operator()() const { ++calls; }
+    void operator()(const std::any&) const { ++calls; }
+};
+
+TEST(FacadeAnyDispatchTest, StringableConvertibleBranch) {
+    EnhancedBoxedValue v(StringConvertible{"hi"});
+    EXPECT_EQ(v.toString(), "hi");
+}
+
+TEST(FacadeAnyDispatchTest, StringableSnakeToStringBranch) {
+    EnhancedBoxedValue v(SnakeStringable{});
+    EXPECT_EQ(v.toString(), "snake");
+    std::ostringstream oss;
+    v.print(oss);
+    EXPECT_EQ(oss.str(), "snake");
+}
+
+TEST(FacadeAnyDispatchTest, PrintableToStringBranch) {
+    EnhancedBoxedValue v(ToStringOnly{});
+    std::ostringstream oss;
+    v.print(oss);
+    EXPECT_EQ(oss.str(), "camel");
+}
+
+TEST(FacadeAnyDispatchTest, AllFallbackBranchesForOpaqueType) {
+    EnhancedBoxedValue a(Opaque{1});
+    EnhancedBoxedValue b(Opaque{1});
+
+    // stringable fallback
+    EXPECT_THAT(a.toString(), HasSubstr("no string conversion"));
+    // printable fallback
+    std::ostringstream oss;
+    a.print(oss);
+    EXPECT_THAT(oss.str(), HasSubstr("unprintable"));
+    // comparable fallback: no operator== -> equals returns false even when the
+    // underlying values are identical.
+    EXPECT_FALSE(a.equals(b));
+    // serializable fallback -> "null"
+    EXPECT_EQ(a.toJson(), "null");
+    // deserialize fallback -> false
+    EXPECT_FALSE(a.fromJson("{}"));
+    // clone via copy constructor (no clone() member)
+    EnhancedBoxedValue c = a.clone();
+    EXPECT_TRUE(c.isType<Opaque>());
+}
+
+TEST(FacadeAnyDispatchTest, SerializeArithmeticAndBoolAndStringBranches) {
+    EXPECT_EQ(EnhancedBoxedValue(true).toJson(), "true");
+    EXPECT_EQ(EnhancedBoxedValue(false).toJson(), "false");
+    EXPECT_EQ(EnhancedBoxedValue(123).toJson(), "123");
+    EXPECT_EQ(EnhancedBoxedValue(std::string("hey")).toJson(), "\"hey\"");
+}
+
+TEST(FacadeAnyDispatchTest, JsonCamelCaseBranches) {
+    EnhancedBoxedValue v(JsonCamel{});
+    EXPECT_EQ(v.toJson(), "{\"n\":7}");
+    EXPECT_TRUE(v.fromJson("abcd"));
+}
+
+TEST(FacadeAnyDispatchTest, JsonSnakeCaseBranches) {
+    EnhancedBoxedValue v(JsonSnake{});
+    EXPECT_EQ(v.toJson(), "snake_json");
+    EXPECT_TRUE(v.fromJson("anything"));
+}
+
+TEST(FacadeAnyDispatchTest, HeapHolderPathForLargeType) {
+    BigStreamable big;
+    big.id = 5;
+    EnhancedBoxedValue v(big);
+    EXPECT_TRUE(v.hasProxy());
+    EXPECT_TRUE(v.isType<BigStreamable>());
+
+    // HeapHolder operator<< via print
+    std::ostringstream oss;
+    v.print(oss);
+    EXPECT_EQ(oss.str(), "Big(5)");
+
+    // HeapHolder operator== via equals
+    EnhancedBoxedValue same(big);
+    EXPECT_TRUE(v.equals(same));
+
+    BigStreamable other;
+    other.id = 9;
+    EnhancedBoxedValue diff(other);
+    EXPECT_FALSE(v.equals(diff));
+
+    // clone of a heap-held value
+    EnhancedBoxedValue cloned = v.clone();
+    EXPECT_TRUE(cloned.isType<BigStreamable>());
+}
+
+TEST(FacadeAnyDispatchTest, VoidCallableBranches) {
+    EnhancedBoxedValue v(VoidCallable{});
+    // no-arg void call returns empty any
+    std::any r0 = v.call();
+    EXPECT_FALSE(r0.has_value());
+    // single-arg void call returns empty any
+    std::any r1 = v.call({std::any(1)});
+    EXPECT_FALSE(r1.has_value());
+}
+
+TEST(FacadeAnyDispatchTest, ConstructFromBoxedValueUsesVisitor) {
+    // The BoxedValue constructor routes through initProxy()/ProxyVisitor
+    // rather than the typed fast-path.
+    BoxedValue bv(42);
+    EnhancedBoxedValue v(bv);
+    EXPECT_TRUE(v.hasProxy());
+    EXPECT_TRUE(v.isType<int>());
+    EXPECT_EQ(v.toString(), "42");
+}
+
+TEST(FacadeAnyDispatchTest, GetProxyAndBoxedValueAccessors) {
+    EnhancedBoxedValue v(7);
+    // getBoxedValue accessor
+    EXPECT_TRUE(v.getBoxedValue().isType<int>());
+    // getProxy succeeds when a proxy exists
+    EXPECT_NO_THROW((void)v.getProxy());
+
+    // getProxy throws when there is no proxy
+    EnhancedBoxedValue empty;
+    EXPECT_THROW((void)empty.getProxy(), std::runtime_error);
+}
+
+TEST(FacadeAnyDispatchTest, GetTypeInfoForTypedValue) {
+    EnhancedBoxedValue v(3.5);
+    EXPECT_FALSE(v.getTypeInfo().name().empty());
+}
+
+TEST(FacadeAnyDispatchTest, CopyAssignEmptyOverValueResetsProxy) {
+    EnhancedBoxedValue valued(99);
+    EnhancedBoxedValue empty;
+    valued = empty;  // copy-assign with other.has_proxy_ == false
+    EXPECT_FALSE(valued.hasProxy());
+    EXPECT_FALSE(valued.hasValue());
+}
+
+//==============================================================================
+// Direct exercise of the skill-dispatch implementations.
+//
+// EnhancedBoxedValue routes JSON through json_convertible_dispatch and never
+// invokes comparable_dispatch::less_than_impl or serializable_dispatch
+// directly, so several reachable branches in those implementations can only be
+// covered by calling the static dispatch helpers explicitly. These are part of
+// the public skill protocol and are meaningful to test on their own.
+//==============================================================================
+
+namespace eas = atom::meta::enhanced_any_skills;
+
+TEST(FacadeAnyDispatchImplTest, ComparableEqualsImplBranches) {
+    int a = 1, b = 1, c = 2;
+    EXPECT_TRUE(eas::comparable_dispatch::equals_impl<int>(&a, &b, typeid(int)));
+    EXPECT_FALSE(eas::comparable_dispatch::equals_impl<int>(&a, &c, typeid(int)));
+
+    // Type mismatch -> early false.
+    double d = 1.0;
+    EXPECT_FALSE(
+        eas::comparable_dispatch::equals_impl<int>(&a, &d, typeid(double)));
+
+    // No operator== (Opaque) -> fallback false even for identical values.
+    Opaque o1{1}, o2{1};
+    EXPECT_FALSE(eas::comparable_dispatch::equals_impl<Opaque>(&o1, &o2,
+                                                              typeid(Opaque)));
+}
+
+TEST(FacadeAnyDispatchImplTest, ComparableLessThanImplBranches) {
+    int a = 1, b = 2;
+    // Arithmetic less-than branch.
+    EXPECT_TRUE(
+        eas::comparable_dispatch::less_than_impl<int>(&a, &b, typeid(int)));
+    EXPECT_FALSE(
+        eas::comparable_dispatch::less_than_impl<int>(&b, &a, typeid(int)));
+
+    // Type mismatch -> typeid ordering (deterministic, just exercise it).
+    double d = 1.0;
+    (void)eas::comparable_dispatch::less_than_impl<int>(&a, &d, typeid(double));
+
+    // Custom operator< (BigStreamable).
+    BigStreamable lo;
+    lo.id = 1;
+    BigStreamable hi;
+    hi.id = 2;
+    EXPECT_TRUE(eas::comparable_dispatch::less_than_impl<BigStreamable>(
+        &lo, &hi, typeid(BigStreamable)));
+
+    // No operator< (Opaque) -> fallback false.
+    Opaque o1{1}, o2{2};
+    EXPECT_FALSE(eas::comparable_dispatch::less_than_impl<Opaque>(
+        &o1, &o2, typeid(Opaque)));
+}
+
+TEST(FacadeAnyDispatchImplTest, SerializeImplAllBranches) {
+    TestPerson tp("Alice", 30);  // has serialize()
+    EXPECT_EQ(eas::serializable_dispatch::serialize_impl<TestPerson>(&tp),
+              "{\"name\":\"Alice\",\"age\":30}");
+
+    JsonCamel jc;  // has toJson()
+    EXPECT_EQ(eas::serializable_dispatch::serialize_impl<JsonCamel>(&jc),
+              "{\"n\":7}");
+
+    JsonSnake js;  // has to_json()
+    EXPECT_EQ(eas::serializable_dispatch::serialize_impl<JsonSnake>(&js),
+              "snake_json");
+
+    std::string str = "x";
+    EXPECT_EQ(eas::serializable_dispatch::serialize_impl<std::string>(&str),
+              "\"x\"");
+    bool bt = true;
+    EXPECT_EQ(eas::serializable_dispatch::serialize_impl<bool>(&bt), "true");
+    int n = 5;
+    EXPECT_EQ(eas::serializable_dispatch::serialize_impl<int>(&n), "5");
+    Opaque o{0};  // no serializer -> "null"
+    EXPECT_EQ(eas::serializable_dispatch::serialize_impl<Opaque>(&o), "null");
+}
+
+TEST(FacadeAnyDispatchImplTest, DeserializeImplAllBranches) {
+    TestPerson tp("a", 1);  // has deserialize()
+    EXPECT_TRUE(eas::serializable_dispatch::deserialize_impl<TestPerson>(
+        &tp, "{\"name\":\"b\",\"age\":2}"));
+
+    JsonCamel jc;  // has fromJson()
+    EXPECT_TRUE(
+        eas::serializable_dispatch::deserialize_impl<JsonCamel>(&jc, "abcd"));
+
+    JsonSnake js;  // has from_json()
+    EXPECT_TRUE(
+        eas::serializable_dispatch::deserialize_impl<JsonSnake>(&js, "x"));
+
+    Opaque o{0};  // no deserializer -> false
+    EXPECT_FALSE(eas::serializable_dispatch::deserialize_impl<Opaque>(&o, "x"));
+}
+
+// A pointer value: the typed fast-path declines (pointers are excluded) and
+// falls through to the visitor, which also declines pointers -> no proxy.
+TEST(FacadeAnyDispatchImplTest, PointerValueFallsThroughToNoProxy) {
+    int x = 5;
+    EnhancedBoxedValue v(&x);
+    EXPECT_FALSE(v.hasProxy());
+    EXPECT_TRUE(v.hasValue());
 }

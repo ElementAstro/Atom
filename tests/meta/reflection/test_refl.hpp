@@ -2,572 +2,315 @@
 #include "atom/meta/refl.hpp"
 
 #include <string>
+#include <string_view>
 #include <type_traits>
+#include <vector>
 
-namespace {
+// Reflected test types. They live at namespace scope (not inside the
+// anonymous namespace) so the TypeInfo specializations below land in the
+// real ::atom::meta namespace.
+namespace refl_test {
 
-// Test fixture for reflection tests
-class ReflTest : public ::testing::Test {
-protected:
-    void SetUp() override {}
-    void TearDown() override {}
-};
-
-// Helper types for testing
-struct TestStruct {
-    int value;
-    std::string name;
-    double data;
+struct Point {
+    float x;
+    float y;
 };
 
 struct BaseStruct {
     int base_value;
 };
 
-struct DerivedStruct : public BaseStruct {
-    std::string derived_name;
+struct DerivedStruct : BaseStruct {
+    int derived_value;
 };
 
-// Test TStr template string system
+struct VirtualBase {
+    int virtual_value;
+};
+
+struct VirtualDerived : virtual VirtualBase {
+    int derived_value;
+};
+
+struct Tagged {
+    int id;
+};
+
+enum class Color { Red = 1, Green = 2 };
+
+// Intentionally left without reflection metadata.
+struct Unreflected {
+    int value;
+};
+
+}  // namespace refl_test
+
+ATOM_META_TYPEINFO(refl_test::Point, ATOM_META_FIELD("x", &refl_test::Point::x),
+                   ATOM_META_FIELD("y", &refl_test::Point::y))
+
+ATOM_META_TYPEINFO(refl_test::BaseStruct,
+                   ATOM_META_FIELD("base_value",
+                                   &refl_test::BaseStruct::base_value))
+
+ATOM_META_TYPEINFO(refl_test::VirtualBase,
+                   ATOM_META_FIELD("virtual_value",
+                                   &refl_test::VirtualBase::virtual_value))
+
+// Specializations with base classes / attributes are written by hand because
+// ATOM_META_TYPEINFO only covers the base-less, attribute-less case.
+namespace atom::meta {
+
+template <>
+struct TypeInfo<refl_test::DerivedStruct>
+    : TypeInfoBase<refl_test::DerivedStruct, Base<refl_test::BaseStruct>> {
+    static constexpr auto fields = FieldList(
+        Field(TSTR("derived_value"), &refl_test::DerivedStruct::derived_value));
+};
+
+template <>
+struct TypeInfo<refl_test::VirtualDerived>
+    : TypeInfoBase<refl_test::VirtualDerived,
+                   Base<refl_test::VirtualBase, true>> {
+    static constexpr auto fields = FieldList(Field(
+        TSTR("derived_value"), &refl_test::VirtualDerived::derived_value));
+};
+
+template <>
+struct TypeInfo<refl_test::Tagged> : TypeInfoBase<refl_test::Tagged> {
+    static constexpr auto fields =
+        FieldList(Field(TSTR("id"), &refl_test::Tagged::id,
+                        AttrList{Attr{TSTR("key")}, Attr{TSTR("version"), 2}}));
+};
+
+template <>
+struct TypeInfo<refl_test::Color> : TypeInfoBase<refl_test::Color> {
+    static constexpr auto fields =
+        FieldList(Field(TSTR("Red"), refl_test::Color::Red),
+                  Field(TSTR("Green"), refl_test::Color::Green));
+};
+
+}  // namespace atom::meta
+
+namespace {
+
+class ReflTest : public ::testing::Test {
+protected:
+    void SetUp() override {}
+    void TearDown() override {}
+};
+
+// Test the compile-time string produced by the TSTR macro
 TEST_F(ReflTest, TStrBasics) {
-    using namespace atom::meta;
+    constexpr auto str = TSTR("hello");
+    using Str = std::decay_t<decltype(str)>;
 
-    // Test TStr creation and basic operations
-    constexpr auto str1 = TStr<'h', 'e', 'l', 'l', 'o'>{};
-    constexpr auto str2 = TStr<'w', 'o', 'r', 'l', 'd'>{};
+    static_assert(Str::Size() == 5);
+    static_assert(Str::View() == "hello");
+    static_assert(Str::Is(TSTR("hello")));
+    static_assert(!Str::Is(TSTR("world")));
 
-    // Test size
-    static_assert(str1.size() == 5);
-    static_assert(str2.size() == 5);
-
-    // Test string conversion
-    EXPECT_EQ(str1.str(), "hello");
-    EXPECT_EQ(str2.str(), "world");
-
-    // Test c_str
-    EXPECT_STREQ(str1.c_str(), "hello");
-    EXPECT_STREQ(str2.c_str(), "world");
+    EXPECT_EQ(Str::View(), "hello");
+    EXPECT_STREQ(Str::Data(), "hello");
 }
 
-// Test TStr concatenation
-TEST_F(ReflTest, TStrConcatenation) {
-    using namespace atom::meta;
+// Test NamedValue name/value semantics
+TEST_F(ReflTest, NamedValueBasics) {
+    using Name = std::decay_t<decltype(TSTR("answer"))>;
+    constexpr atom::meta::NamedValue<Name, int> nv{42};
 
-    constexpr auto hello = TStr<'h', 'e', 'l', 'l', 'o'>{};
-    constexpr auto space = TStr<' '>{};
-    constexpr auto world = TStr<'w', 'o', 'r', 'l', 'd'>{};
+    static_assert(nv.has_value);
+    static_assert(nv.name == "answer");
 
-    // Test concatenation
-    constexpr auto combined = hello + space + world;
-    static_assert(combined.size() == 11);
+    EXPECT_TRUE(nv == 42);
+    EXPECT_FALSE(nv == 43);
+    EXPECT_FALSE(nv == 42.0);  // different type never compares equal
 
-    EXPECT_EQ(combined.str(), "hello world");
+    constexpr atom::meta::NamedValue<Name, void> empty{};
+    static_assert(!empty.has_value);
+    EXPECT_FALSE(empty == 42);
 }
 
-// Test TStr comparison
-TEST_F(ReflTest, TStrComparison) {
-    using namespace atom::meta;
-
-    constexpr auto str1 = TStr<'t', 'e', 's', 't'>{};
-    constexpr auto str2 = TStr<'t', 'e', 's', 't'>{};
-    constexpr auto str3 = TStr<'o', 't', 'h', 'e', 'r'>{};
-
-    // Test equality
-    static_assert(str1 == str2);
-    static_assert(!(str1 == str3));
-
-    // Test inequality
-    static_assert(!(str1 != str2));
-    static_assert(str1 != str3);
-}
-
-// Test TStr platform-specific implementations
-TEST_F(ReflTest, TStrPlatformSpecific) {
-    using namespace atom::meta;
-
-    // Test that TStr works with different character types
-    constexpr auto ascii_str = TStr<'A', 'S', 'C', 'I', 'I'>{};
-    EXPECT_EQ(ascii_str.str(), "ASCII");
-
-    // Test empty string
-    constexpr auto empty_str = TStr<>{};
-    static_assert(empty_str.size() == 0);
-    EXPECT_EQ(empty_str.str(), "");
-}
-
-// Test ElemList template operations
-TEST_F(ReflTest, ElemListOperations) {
-    using namespace atom::meta;
-
-    // Test basic ElemList operations
-    using TestList = ElemList<int, double, std::string>;
-
-    // Test size
-    static_assert(TestList::size() == 3);
-
-    // Test type access (if available)
-    static_assert(std::is_same_v<TestList::template at<0>, int>);
-    static_assert(std::is_same_v<TestList::template at<1>, double>);
-    static_assert(std::is_same_v<TestList::template at<2>, std::string>);
-}
-
-// Test ElemList Find operation
-TEST_F(ReflTest, ElemListFind) {
-    using namespace atom::meta;
-
-    using TestList = ElemList<int, double, std::string, int>;
-
-    // Test Find operation
-    static_assert(TestList::template Find<int>() == 0);  // First occurrence
-    static_assert(TestList::template Find<double>() == 1);
-    static_assert(TestList::template Find<std::string>() == 2);
-
-    // Test Contains operation
-    static_assert(TestList::template Contains<int>());
-    static_assert(TestList::template Contains<double>());
-    static_assert(TestList::template Contains<std::string>());
-    static_assert(!TestList::template Contains<char>());
-}
-
-// Test ElemList Push operations
-TEST_F(ReflTest, ElemListPush) {
-    using namespace atom::meta;
-
-    using OriginalList = ElemList<int, double>;
-    using PushedList = OriginalList::template Push<std::string>;
-
-    // Test that Push adds element to the end
-    static_assert(PushedList::size() == 3);
-    static_assert(std::is_same_v<PushedList::template at<0>, int>);
-    static_assert(std::is_same_v<PushedList::template at<1>, double>);
-    static_assert(std::is_same_v<PushedList::template at<2>, std::string>);
-}
-
-// Test ElemList Insert operations
-TEST_F(ReflTest, ElemListInsert) {
-    using namespace atom::meta;
-
-    using OriginalList = ElemList<int, std::string>;
-    using InsertedList = OriginalList::template Insert<1, double>;
-
-    // Test that Insert adds element at specified position
-    static_assert(InsertedList::size() == 3);
-    static_assert(std::is_same_v<InsertedList::template at<0>, int>);
-    static_assert(std::is_same_v<InsertedList::template at<1>, double>);
-    static_assert(std::is_same_v<InsertedList::template at<2>, std::string>);
-}
-
-// Test FieldList operations
+// Test FieldList / ElemList operations on a reflected type
 TEST_F(ReflTest, FieldListOperations) {
-    using namespace atom::meta;
+    using PointInfo = atom::meta::TypeInfo<refl_test::Point>;
 
-    // Create field list for TestStruct
-    using TestFieldList =
-        FieldList<Field<TStr<'v', 'a', 'l', 'u', 'e'>, int>,
-                  Field<TStr<'n', 'a', 'm', 'e'>, std::string>,
-                  Field<TStr<'d', 'a', 't', 'a'>, double>>;
+    static_assert(PointInfo::fields.size == 2);
+    static_assert(!decltype(PointInfo::fields)::empty());
+    static_assert(PointInfo::fields.Contains(TSTR("x")));
+    static_assert(PointInfo::fields.Contains(TSTR("y")));
+    static_assert(!PointInfo::fields.Contains(TSTR("z")));
 
-    // Test field list size
-    static_assert(TestFieldList::size() == 3);
+    constexpr auto& xField = PointInfo::fields.Find(TSTR("x"));
+    static_assert(xField.name == "x");
+    static_assert(!xField.is_static);
+    static_assert(!xField.is_func);
 
-    // Test field access
-    using FirstField = TestFieldList::template at<0>;
-    static_assert(std::is_same_v<typename FirstField::Type, int>);
+    constexpr auto& yField = PointInfo::fields.Get<1>();
+    static_assert(yField.name == "y");
 
-    using SecondField = TestFieldList::template at<1>;
-    static_assert(std::is_same_v<typename SecondField::Type, std::string>);
-
-    using ThirdField = TestFieldList::template at<2>;
-    static_assert(std::is_same_v<typename ThirdField::Type, double>);
+    refl_test::Point p{1.0F, 2.0F};
+    EXPECT_FLOAT_EQ(p.*(xField.value), 1.0F);
+    EXPECT_FLOAT_EQ(p.*(yField.value), 2.0F);
 }
 
-// Test AttrList operations
-TEST_F(ReflTest, AttrListOperations) {
+// Test ElemList::Push and ElemList::Insert
+TEST_F(ReflTest, ElemListPushAndInsert) {
     using namespace atom::meta;
 
-    // Create attribute list
-    using TestAttrList = AttrList<
-        Attr<TStr<'s', 'e', 'r', 'i', 'a', 'l', 'i', 'z', 'a', 'b', 'l', 'e'>,
-             bool>,
-        Attr<TStr<'v', 'e', 'r', 's', 'i', 'o', 'n'>, int>>;
+    static constexpr auto list = ElemList{Attr{TSTR("one"), 1}};
+    static constexpr auto pushed = list.Push(Attr{TSTR("two"), 2});
+    static_assert(pushed.size == 2);
+    static_assert(pushed.Contains(TSTR("two")));
 
-    // Test attribute list size
-    static_assert(TestAttrList::size() == 2);
-
-    // Test attribute access
-    using FirstAttr = TestAttrList::template at<0>;
-    static_assert(std::is_same_v<typename FirstAttr::Type, bool>);
-
-    using SecondAttr = TestAttrList::template at<1>;
-    static_assert(std::is_same_v<typename SecondAttr::Type, int>);
+    // Insert is a no-op for an element type already in the list
+    static constexpr auto inserted = pushed.Insert(Attr{TSTR("two"), 2});
+    static_assert(inserted.size == 2);
 }
 
-// Test BaseList operations for inheritance
-TEST_F(ReflTest, BaseListOperations) {
-    using namespace atom::meta;
+// Test field value access helpers
+TEST_F(ReflTest, FieldAccess) {
+    using PointInfo = atom::meta::TypeInfo<refl_test::Point>;
+    using XName = std::decay_t<decltype(TSTR("x"))>;
 
-    // Create base list for inheritance hierarchy
-    using TestBaseList = BaseList<BaseStruct>;
+    refl_test::Point p{1.5F, 2.5F};
+    EXPECT_FLOAT_EQ(PointInfo::GetFieldValue<XName>(p), 1.5F);
 
-    // Test base list size
-    static_assert(TestBaseList::size() == 1);
-
-    // Test base access
-    using FirstBase = TestBaseList::template at<0>;
-    static_assert(std::is_same_v<FirstBase, BaseStruct>);
+    PointInfo::SetFieldValue<XName>(p, 3.5F);
+    EXPECT_FLOAT_EQ(p.x, 3.5F);
 }
 
-// Test TypeInfo and TypeInfoBase
-TEST_F(ReflTest, TypeInfoSystem) {
-    using namespace atom::meta;
+// Test iteration over all non-static member variables, including bases
+TEST_F(ReflTest, ForEachVarOf) {
+    refl_test::DerivedStruct d{};
+    d.base_value = 10;
+    d.derived_value = 32;
 
-    // Test TypeInfo creation
-    using TestTypeInfo =
-        TypeInfo<TStr<'T', 'e', 's', 't', 'S', 't', 'r', 'u', 'c', 't'>,
-                 FieldList<Field<TStr<'v', 'a', 'l', 'u', 'e'>, int>,
-                           Field<TStr<'n', 'a', 'm', 'e'>, std::string>>,
-                 AttrList<>, BaseList<>>;
+    int sum = 0;
+    std::size_t count = 0;
+    atom::meta::TypeInfo<refl_test::DerivedStruct>::ForEachVarOf(
+        d, [&](const auto& /*field*/, const auto& value) {
+            sum += value;
+            ++count;
+        });
 
-    // Test TypeInfo properties
-    static_assert(TestTypeInfo::fields.size() == 2);
-    static_assert(TestTypeInfo::attrs.size() == 0);
-    static_assert(TestTypeInfo::bases.size() == 0);
-
-    // Test name access
-    EXPECT_EQ(TestTypeInfo::name.str(), "TestStruct");
+    EXPECT_EQ(count, 2U);
+    EXPECT_EQ(sum, 42);
 }
 
-// Test DFS traversal for inheritance
-TEST_F(ReflTest, DFSTraversal) {
-    using namespace atom::meta;
-
-    // Create type info with inheritance
-    using DerivedTypeInfo =
-        TypeInfo<TStr<'D', 'e', 'r', 'i', 'v', 'e', 'd'>,
-                 FieldList<Field<TStr<'d', 'e', 'r', 'i', 'v', 'e', 'd', '_',
-                                      'n', 'a', 'm', 'e'>,
-                                 std::string>>,
-                 AttrList<>, BaseList<BaseStruct>>;
-
-    // Test that DFS traversal works (implementation-specific)
-    static_assert(DerivedTypeInfo::bases.size() == 1);
-
-    using BaseType = DerivedTypeInfo::bases::template at<0>;
-    static_assert(std::is_same_v<BaseType, BaseStruct>);
-}
-
-// Test compile-time string manipulation
-TEST_F(ReflTest, CompileTimeStringManipulation) {
-    using namespace atom::meta;
-
-    // Test string creation from literals
-    constexpr auto test_str = TStr<'t', 'e', 's', 't'>{};
-
-    // Test string operations
-    EXPECT_EQ(test_str.size(), 4);
-    EXPECT_EQ(test_str.str(), "test");
-    EXPECT_STREQ(test_str.c_str(), "test");
-
-    // Test string comparison
-    constexpr auto same_str = TStr<'t', 'e', 's', 't'>{};
-    constexpr auto diff_str = TStr<'o', 't', 'h', 'e', 'r'>{};
-
-    static_assert(test_str == same_str);
-    static_assert(test_str != diff_str);
-}
-
-// Test template metaprogramming utilities
-TEST_F(ReflTest, TemplateMetaprogrammingUtilities) {
-    using namespace atom::meta;
-
-    // Test SFINAE techniques (if available)
-    static_assert(std::is_same_v<int, int>);
-    static_assert(!std::is_same_v<int, double>);
-
-    // Test type trait utilities
-    static_assert(std::is_integral_v<int>);
-    static_assert(std::is_floating_point_v<double>);
-    static_assert(std::is_class_v<TestStruct>);
-}
-
-// Test reflection macros (if available)
-TEST_F(ReflTest, ReflectionMacros) {
-    using namespace atom::meta;
-
-    // Test ATOM_META_TYPEINFO macro usage (if available)
-    // This would typically be used in actual type definitions
-
-    // Test ATOM_META_FIELD macro usage (if available)
-    // This would typically be used to define field metadata
-
-    // For now, test that the basic reflection system works
-    // without macros by manually creating type info
-
-    using ManualTypeInfo = TypeInfo<
-        TStr<'M', 'a', 'n', 'u', 'a', 'l'>,
-        FieldList<Field<TStr<'f', 'i', 'e', 'l', 'd', '1'>, int>,
-                  Field<TStr<'f', 'i', 'e', 'l', 'd', '2'>, std::string>>,
-        AttrList<Attr<TStr<'v', 'e', 'r', 's', 'i', 'o', 'n'>, int>>,
-        BaseList<>>;
-
-    static_assert(ManualTypeInfo::fields.size() == 2);
-    static_assert(ManualTypeInfo::attrs.size() == 1);
-    EXPECT_EQ(ManualTypeInfo::name.str(), "Manual");
-}
-
-// Test field metadata extraction
-TEST_F(ReflTest, FieldMetadataExtraction) {
-    using namespace atom::meta;
-
-    using TestTypeInfo =
-        TypeInfo<TStr<'T', 'e', 's', 't'>,
-                 FieldList<Field<TStr<'i', 'd'>, int>,
-                           Field<TStr<'n', 'a', 'm', 'e'>, std::string>,
-                           Field<TStr<'v', 'a', 'l', 'u', 'e'>, double>>,
-                 AttrList<>, BaseList<>>;
-
-    // Test field count
-    static_assert(TestTypeInfo::fields.size() == 3);
-
-    // Test individual field access
-    using IdField = TestTypeInfo::fields::template at<0>;
-    using NameField = TestTypeInfo::fields::template at<1>;
-    using ValueField = TestTypeInfo::fields::template at<2>;
-
-    // Test field types
-    static_assert(std::is_same_v<typename IdField::Type, int>);
-    static_assert(std::is_same_v<typename NameField::Type, std::string>);
-    static_assert(std::is_same_v<typename ValueField::Type, double>);
-
-    // Test field names
-    EXPECT_EQ(IdField::name.str(), "id");
-    EXPECT_EQ(NameField::name.str(), "name");
-    EXPECT_EQ(ValueField::name.str(), "value");
-}
-
-// Test attribute metadata extraction
-TEST_F(ReflTest, AttributeMetadataExtraction) {
-    using namespace atom::meta;
-
-    using TestTypeInfo = TypeInfo<
-        TStr<'T', 'e', 's', 't'>, FieldList<>,
-        AttrList<Attr<TStr<'s', 'e', 'r', 'i', 'a', 'l', 'i', 'z', 'a', 'b',
-                           'l', 'e'>,
-                      bool>,
-                 Attr<TStr<'v', 'e', 'r', 's', 'i', 'o', 'n'>, int>,
-                 Attr<TStr<'a', 'u', 't', 'h', 'o', 'r'>, std::string>>,
-        BaseList<>>;
-
-    // Test attribute count
-    static_assert(TestTypeInfo::attrs.size() == 3);
-
-    // Test individual attribute access
-    using SerializableAttr = TestTypeInfo::attrs::template at<0>;
-    using VersionAttr = TestTypeInfo::attrs::template at<1>;
-    using AuthorAttr = TestTypeInfo::attrs::template at<2>;
-
-    // Test attribute types
-    static_assert(std::is_same_v<typename SerializableAttr::Type, bool>);
-    static_assert(std::is_same_v<typename VersionAttr::Type, int>);
-    static_assert(std::is_same_v<typename AuthorAttr::Type, std::string>);
-
-    // Test attribute names
-    EXPECT_EQ(SerializableAttr::name.str(), "serializable");
-    EXPECT_EQ(VersionAttr::name.str(), "version");
-    EXPECT_EQ(AuthorAttr::name.str(), "author");
-}
-
-// Test inheritance hierarchy reflection
-TEST_F(ReflTest, InheritanceHierarchyReflection) {
-    using namespace atom::meta;
-
-    // Base class type info
-    using BaseTypeInfo = TypeInfo<
-        TStr<'B', 'a', 's', 'e'>,
-        FieldList<
-            Field<TStr<'b', 'a', 's', 'e', '_', 'v', 'a', 'l', 'u', 'e'>, int>>,
-        AttrList<>, BaseList<>>;
-
-    // Derived class type info
-    using DerivedTypeInfo =
-        TypeInfo<TStr<'D', 'e', 'r', 'i', 'v', 'e', 'd'>,
-                 FieldList<Field<TStr<'d', 'e', 'r', 'i', 'v', 'e', 'd', '_',
-                                      'n', 'a', 'm', 'e'>,
-                                 std::string>>,
-                 AttrList<>, BaseList<BaseStruct>>;
-
-    // Test base class has no bases
-    static_assert(BaseTypeInfo::bases.size() == 0);
-
-    // Test derived class has one base
-    static_assert(DerivedTypeInfo::bases.size() == 1);
-
-    using DerivedBase = DerivedTypeInfo::bases::template at<0>;
-    static_assert(std::is_same_v<DerivedBase, BaseStruct>);
-}
-
-// Test virtual base class handling
+// Test iteration across a virtual inheritance hierarchy
 TEST_F(ReflTest, VirtualBaseClassHandling) {
-    using namespace atom::meta;
+    using VDInfo = atom::meta::TypeInfo<refl_test::VirtualDerived>;
 
-    // Test with virtual inheritance (if supported)
-    struct VirtualBase {
-        int virtual_value;
-    };
+    static_assert(VDInfo::bases.size == 1);
+    static_assert(VDInfo::bases.Get<0>().is_virtual);
+    static_assert(VDInfo::VirtualBases().size == 1);
 
-    struct VirtualDerived : virtual public VirtualBase {
-        std::string derived_data;
-    };
+    refl_test::VirtualDerived vd{};
+    vd.virtual_value = 5;
+    vd.derived_value = 6;
 
-    using VirtualDerivedTypeInfo =
-        TypeInfo<TStr<'V', 'i', 'r', 't', 'u', 'a', 'l', 'D', 'e', 'r', 'i',
-                      'v', 'e', 'd'>,
-                 FieldList<Field<TStr<'d', 'e', 'r', 'i', 'v', 'e', 'd', '_',
-                                      'd', 'a', 't', 'a'>,
-                                 std::string>>,
-                 AttrList<>, BaseList<VirtualBase>>;
-
-    static_assert(VirtualDerivedTypeInfo::bases.size() == 1);
-
-    using VirtualBaseType = VirtualDerivedTypeInfo::bases::template at<0>;
-    static_assert(std::is_same_v<VirtualBaseType, VirtualBase>);
+    int sum = 0;
+    VDInfo::ForEachVarOf(vd, [&](const auto& /*field*/, const auto& value) {
+        sum += value;
+    });
+    EXPECT_EQ(sum, 11);
 }
 
-// Test complex type hierarchies
-TEST_F(ReflTest, ComplexTypeHierarchies) {
-    using namespace atom::meta;
-
-    // Multiple inheritance scenario
-    struct Interface1 {
-        virtual void method1() = 0;
-    };
-
-    struct Interface2 {
-        virtual void method2() = 0;
-    };
-
-    struct Implementation : public Interface1, public Interface2 {
-        void method1() override {}
-        void method2() override {}
-        int impl_data;
-    };
-
-    using ImplementationTypeInfo =
-        TypeInfo<TStr<'I', 'm', 'p', 'l', 'e', 'm', 'e', 'n', 't', 'a', 't',
-                      'i', 'o', 'n'>,
-                 FieldList<Field<
-                     TStr<'i', 'm', 'p', 'l', '_', 'd', 'a', 't', 'a'>, int>>,
-                 AttrList<>, BaseList<Interface1, Interface2>>;
-
-    static_assert(ImplementationTypeInfo::bases.size() == 2);
-
-    using FirstBase = ImplementationTypeInfo::bases::template at<0>;
-    using SecondBase = ImplementationTypeInfo::bases::template at<1>;
-
-    static_assert(std::is_same_v<FirstBase, Interface1>);
-    static_assert(std::is_same_v<SecondBase, Interface2>);
+// Test depth-first traversal of the inheritance hierarchy
+TEST_F(ReflTest, DFSTraversal) {
+    std::size_t types_visited = 0;
+    atom::meta::TypeInfo<refl_test::DerivedStruct>::DFS_ForEach(
+        [&](auto /*type_info*/, auto /*depth*/) { ++types_visited; });
+    EXPECT_EQ(types_visited, 2U);  // DerivedStruct + BaseStruct
 }
 
-// Test integration with type_info system
-TEST_F(ReflTest, TypeInfoSystemIntegration) {
+// Test the HasReflection concept and the helper variable templates
+TEST_F(ReflTest, ReflectionConceptAndHelpers) {
     using namespace atom::meta;
 
-    // Test that reflection system integrates with type_info
-    using IntegratedTypeInfo =
-        TypeInfo<TStr<'I', 'n', 't', 'e', 'g', 'r', 'a', 't', 'e', 'd'>,
-                 FieldList<Field<TStr<'i', 'd'>, int>,
-                           Field<TStr<'n', 'a', 'm', 'e'>, std::string>>,
-                 AttrList<Attr<TStr<'v', 'e', 'r', 's', 'i', 'o', 'n'>, int>>,
-                 BaseList<>>;
+    static_assert(HasReflection<refl_test::Point>);
+    static_assert(!HasReflection<refl_test::Unreflected>);
 
-    // Test type name
-    EXPECT_EQ(IntegratedTypeInfo::name.str(), "Integrated");
-
-    // Test field integration
-    static_assert(IntegratedTypeInfo::fields.size() == 2);
-
-    using IdField = IntegratedTypeInfo::fields::template at<0>;
-    using NameField = IntegratedTypeInfo::fields::template at<1>;
-
-    EXPECT_EQ(IdField::name.str(), "id");
-    EXPECT_EQ(NameField::name.str(), "name");
-
-    // Test attribute integration
-    static_assert(IntegratedTypeInfo::attrs.size() == 1);
-
-    using VersionAttr = IntegratedTypeInfo::attrs::template at<0>;
-    EXPECT_EQ(VersionAttr::name.str(), "version");
+    static_assert(field_count_v<refl_test::Point> == 2);
+    static_assert(
+        has_field_v<refl_test::Point, std::decay_t<decltype(TSTR("x"))>>);
+    static_assert(
+        !has_field_v<refl_test::Point, std::decay_t<decltype(TSTR("nope"))>>);
 }
 
-// Test compile-time reflection validation
-TEST_F(ReflTest, CompileTimeReflectionValidation) {
-    using namespace atom::meta;
+// Test field-wise object comparison
+TEST_F(ReflTest, EqualByFields) {
+    refl_test::Point a{1.0F, 2.0F};
+    refl_test::Point b{1.0F, 2.0F};
+    refl_test::Point c{1.0F, 3.0F};
 
-    // Test that reflection information is available at compile time
-    using ValidatedTypeInfo = TypeInfo<
-        TStr<'V', 'a', 'l', 'i', 'd', 'a', 't', 'e', 'd'>,
-        FieldList<Field<TStr<'f', 'i', 'e', 'l', 'd', '1'>, int>,
-                  Field<TStr<'f', 'i', 'e', 'l', 'd', '2'>, double>,
-                  Field<TStr<'f', 'i', 'e', 'l', 'd', '3'>, std::string>>,
-        AttrList<Attr<TStr<'a', 't', 't', 'r', '1'>, bool>,
-                 Attr<TStr<'a', 't', 't', 'r', '2'>, int>>,
-        BaseList<BaseStruct>>;
-
-    // All these checks happen at compile time
-    static_assert(ValidatedTypeInfo::fields.size() == 3);
-    static_assert(ValidatedTypeInfo::attrs.size() == 2);
-    static_assert(ValidatedTypeInfo::bases.size() == 1);
-
-    // Test field types are correct
-    static_assert(
-        std::is_same_v<typename ValidatedTypeInfo::fields::template at<0>::Type,
-                       int>);
-    static_assert(
-        std::is_same_v<typename ValidatedTypeInfo::fields::template at<1>::Type,
-                       double>);
-    static_assert(
-        std::is_same_v<typename ValidatedTypeInfo::fields::template at<2>::Type,
-                       std::string>);
-
-    // Test attribute types are correct
-    static_assert(
-        std::is_same_v<typename ValidatedTypeInfo::attrs::template at<0>::Type,
-                       bool>);
-    static_assert(
-        std::is_same_v<typename ValidatedTypeInfo::attrs::template at<1>::Type,
-                       int>);
-
-    // Test base type is correct
-    static_assert(
-        std::is_same_v<typename ValidatedTypeInfo::bases::template at<0>,
-                       BaseStruct>);
+    EXPECT_TRUE(atom::meta::equalByFields(a, b));
+    EXPECT_FALSE(atom::meta::equalByFields(a, c));
+    EXPECT_TRUE(atom::meta::reflectedEqual(a, b));
+    EXPECT_FALSE(atom::meta::reflectedEqual(a, c));
 }
 
-// Test edge cases and error conditions
-TEST_F(ReflTest, EdgeCasesAndErrorConditions) {
-    using namespace atom::meta;
+// Test field attributes and the attribute query helpers
+TEST_F(ReflTest, AttributeMetadata) {
+    using TaggedInfo = atom::meta::TypeInfo<refl_test::Tagged>;
+    using IdName = std::decay_t<decltype(TSTR("id"))>;
+    using KeyName = std::decay_t<decltype(TSTR("key"))>;
+    using MissingName = std::decay_t<decltype(TSTR("missing"))>;
 
-    // Test empty type info
-    using EmptyTypeInfo = TypeInfo<TStr<'E', 'm', 'p', 't', 'y'>, FieldList<>,
-                                   AttrList<>, BaseList<>>;
+    constexpr auto& idField = TaggedInfo::fields.Find(TSTR("id"));
+    static_assert(idField.attrs.size == 2);
+    static_assert(idField.attrs.Contains(TSTR("key")));
 
-    static_assert(EmptyTypeInfo::fields.size() == 0);
-    static_assert(EmptyTypeInfo::attrs.size() == 0);
-    static_assert(EmptyTypeInfo::bases.size() == 0);
+    constexpr auto& versionAttr = idField.attrs.Find(TSTR("version"));
+    static_assert(versionAttr.value == 2);
 
-    EXPECT_EQ(EmptyTypeInfo::name.str(), "Empty");
+    static_assert(TaggedInfo::HasFieldAttribute<IdName, KeyName>());
+    static_assert(!TaggedInfo::HasFieldAttribute<IdName, MissingName>());
 
-    // Test single element lists
-    using SingleFieldTypeInfo =
-        TypeInfo<TStr<'S', 'i', 'n', 'g', 'l', 'e'>,
-                 FieldList<Field<TStr<'o', 'n', 'l', 'y'>, int>>, AttrList<>,
-                 BaseList<>>;
+    constexpr auto metadata = TaggedInfo::GetFieldMetadata<IdName>();
+    static_assert(metadata.size == 2);
+}
 
-    static_assert(SingleFieldTypeInfo::fields.size() == 1);
+// Test enum-style reflection with static fields
+TEST_F(ReflTest, EnumReflection) {
+    constexpr auto& fields = atom::meta::TypeInfo<refl_test::Color>::fields;
 
-    using OnlyField = SingleFieldTypeInfo::fields::template at<0>;
-    static_assert(std::is_same_v<typename OnlyField::Type, int>);
-    EXPECT_EQ(OnlyField::name.str(), "only");
+    static_assert(fields.size == 2);
+    static_assert(fields.Get<0>().is_static);
+
+    EXPECT_EQ(fields.NameOfValue(refl_test::Color::Red), "Red");
+    EXPECT_EQ(fields.ValueOfName<refl_test::Color>(std::string_view{"Green"}),
+              refl_test::Color::Green);
+
+    constexpr auto idx = fields.FindValue(refl_test::Color::Green);
+    static_assert(idx == 1);
+}
+
+// Test compile-time field counting helpers on TypeInfoBase
+TEST_F(ReflTest, FieldCountHelpers) {
+    using PointInfo = atom::meta::TypeInfo<refl_test::Point>;
+
+    static_assert(PointInfo::GetFieldCount() == 2);
+    static_assert(PointInfo::GetNonStaticFieldCount() == 2);
+    static_assert(
+        atom::meta::TypeInfo<refl_test::Color>::GetNonStaticFieldCount() == 0);
+
+    constexpr bool allNonFunc = PointInfo::ValidateFields([](const auto& f) {
+        return !std::decay_t<decltype(f)>::is_func;
+    });
+    static_assert(allNonFunc);
+}
+
+// Test indexed iteration over member variables
+TEST_F(ReflTest, ForEachVarOfWithIndex) {
+    refl_test::Point p{1.0F, 2.0F};
+
+    std::vector<std::size_t> indices;
+    atom::meta::TypeInfo<refl_test::Point>::ForEachVarOfWithIndex(
+        p, [&](const auto& /*field*/, const auto& /*value*/,
+               std::size_t index) { indices.push_back(index); });
+
+    EXPECT_EQ(indices, (std::vector<std::size_t>{0, 1}));
 }
 
 }  // namespace

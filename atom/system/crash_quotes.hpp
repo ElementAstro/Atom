@@ -6,10 +6,10 @@
  * "atom/system/debug/crash_quotes.hpp" instead.
  */
 
-#ifndef ATOM_SYSTEM_CRASH_QUOTES_HPP
-#define ATOM_SYSTEM_CRASH_QUOTES_HPP
+#ifndef ATOM_SYSTEM_CRASH_QUOTES_COMPAT_HPP
+#define ATOM_SYSTEM_CRASH_QUOTES_COMPAT_HPP
 
 // Forward to the new location
 #include "debug/crash_quotes.hpp"
 
-#endif  // ATOM_SYSTEM_CRASH_QUOTES_HPP
+#endif  // ATOM_SYSTEM_CRASH_QUOTES_COMPAT_HPP

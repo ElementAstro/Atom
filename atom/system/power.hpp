@@ -6,10 +6,10 @@
  * "atom/system/power/power.hpp" instead.
  */
 
-#ifndef ATOM_SYSTEM_POWER_HPP
-#define ATOM_SYSTEM_POWER_HPP
+#ifndef ATOM_SYSTEM_POWER_COMPAT_HPP
+#define ATOM_SYSTEM_POWER_COMPAT_HPP
 
 // Forward to the new location
 #include "power/power.hpp"
 
-#endif  // ATOM_SYSTEM_POWER_HPP
+#endif  // ATOM_SYSTEM_POWER_COMPAT_HPP

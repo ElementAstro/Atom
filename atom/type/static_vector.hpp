@@ -20,6 +20,7 @@ support)
 #include <array>
 #include <cassert>
 #include <cstddef>
+#include <format>
 #include <iostream>
 #include <iterator>
 #include <memory>
@@ -40,8 +41,7 @@ support)
 #include <boost/container/static_vector.hpp>
 #endif
 
-namespace atom {
-namespace type {
+namespace atom::type {
 
 /**
  * @brief A static vector implementation with a fixed capacity.
@@ -1208,8 +1208,9 @@ constexpr void swap(StaticVector<T, Capacity, Alignment>& lhs,
  * @return True if all elements were added successfully, false otherwise.
  */
 template <typename T, std::size_t Capacity, std::size_t Alignment = alignof(T)>
-bool safeAddElements(StaticVector<T, Capacity, Alignment>& vec,
-                     std::span<const T> elements) noexcept {
+bool safeAddElements(
+    StaticVector<T, Capacity, Alignment>& vec,
+    std::span<const std::type_identity_t<T>> elements) noexcept {
     try {
         if (vec.size() + elements.size() > vec.capacity()) {
             std::cerr << "Warning: Cannot add all elements - capacity would be "
@@ -1366,7 +1367,38 @@ private:
     std::shared_ptr<vector_type> m_vec;
 };
 
-}  // namespace type
-}  // namespace atom
+}  // namespace atom::type
+
+/**
+ * @brief std::format support for StaticVector, rendered as "[a, b, c]".
+ *
+ * Requires the element type to be formattable.
+ */
+template <typename T, std::size_t Capacity, std::size_t Alignment,
+          typename CharT>
+    requires std::formattable<T, CharT>
+struct std::formatter<atom::type::StaticVector<T, Capacity, Alignment>, CharT> {
+    constexpr auto parse(std::basic_format_parse_context<CharT>& ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const atom::type::StaticVector<T, Capacity, Alignment>& vec,
+                FormatContext& ctx) const {
+        auto out = ctx.out();
+        *out++ = CharT{'['};
+        bool first = true;
+        for (const auto& elem : vec) {
+            if (!first) {
+                *out++ = CharT{','};
+                *out++ = CharT{' '};
+            }
+            first = false;
+            out = std::format_to(out, "{}", elem);
+        }
+        *out++ = CharT{']'};
+        return out;
+    }
+};
 
 #endif  // ATOM_TYPE_STATIC_VECTOR_HPP

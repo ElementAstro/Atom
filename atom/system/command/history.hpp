@@ -128,7 +128,7 @@ public:
      * @param criteria Search criteria for filtering commands.
      * @return Vector of matching command entries.
      */
-    ATOM_NODISCARD auto searchCommandsAdvanced(const HistorySearchCriteria& criteria) const
+    ATOM_NODISCARD auto searchCommandsByCriteria(const HistorySearchCriteria& criteria) const
         -> std::vector<CommandEntry>;
 
     /**

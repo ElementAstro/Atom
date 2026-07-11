@@ -11,8 +11,8 @@
  * - Reduced virtual function call overhead
  */
 
-#ifndef ATOM_META_ANY_HPP
-#define ATOM_META_ANY_HPP
+#ifndef ATOM_META_VANY_HPP
+#define ATOM_META_VANY_HPP
 
 #include <array>
 #include <bit>
@@ -23,6 +23,10 @@
 #include <string>
 #include <typeinfo>
 #include <utility>
+
+#ifdef _WIN32
+#include <malloc.h>  // _aligned_malloc / _aligned_free
+#endif
 
 #include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
@@ -181,12 +185,17 @@ public:
         []() noexcept -> const std::type_info& { return typeid(T); },
         &defaultToString<T>,
         []() noexcept -> size_t { return sizeof(T); },
+        &getAlignment<T>,
+        &isTriviallyCopyable<T>,
+        &isTriviallyDestructible<T>,
         &defaultInvoke<T>,
         &defaultForeach<T>,
         &defaultEquals<T>,
         &defaultHash<T>};
 
-    static constexpr size_t kSmallObjectSize = 3 * sizeof(void*);
+    // 4 words so common value types (std::string is 32 bytes on LP64
+    // libstdc++) stay in the inline buffer instead of hitting the heap.
+    static constexpr size_t kSmallObjectSize = 4 * sizeof(void*);
 
     union {
         alignas(std::max_align_t) std::array<char, kSmallObjectSize> storage;
@@ -240,6 +249,21 @@ public:
         return static_cast<T*>(ptr);
     }
 
+    /**
+     * @brief Free memory obtained from allocateAligned().
+     *
+     * Must match the allocator used in allocateAligned(): _aligned_malloc on
+     * Windows requires _aligned_free; mixing it with std::free corrupts the
+     * heap.
+     */
+    static void deallocateAligned(void* p) noexcept {
+#ifdef _WIN32
+        _aligned_free(p);
+#else
+        std::free(p);
+#endif
+    }
+
 public:
     /**
      * @brief Default constructor creates an empty Any.
@@ -253,24 +277,29 @@ public:
      */
     Any(const Any& other) : vptr_(other.vptr_), is_small_(other.is_small_) {
         if (vptr_ != nullptr) {
-            try {
-                if (is_small_) {
-                    std::memcpy(storage.data(), other.getPtr(), vptr_->size());
-                } else {
-                    ptr = std::malloc(vptr_->size());
-                    if (ptr == nullptr) {
-                        throw std::bad_alloc();
+            if (is_small_) {
+                try {
+                    if (vptr_->is_trivially_copyable()) {
+                        std::memcpy(storage.data(), other.getPtr(),
+                                    vptr_->size());
+                    } else {
+                        vptr_->copy(other.getPtr(), storage.data());
                     }
-                    vptr_->copy(other.getPtr(), ptr);
+                } catch (...) {
+                    vptr_ = nullptr;
+                    throw;
                 }
-            } catch (...) {
-                if (!is_small_ && ptr != nullptr) {
-                    std::free(ptr);
-                    ptr = nullptr;
+            } else {
+                void* temp = allocateAligned(vptr_->size(), vptr_->alignment());
+                try {
+                    vptr_->copy(other.getPtr(), temp);
+                } catch (...) {
+                    deallocateAligned(temp);
+                    vptr_ = nullptr;
+                    is_small_ = true;
+                    throw;
                 }
-                vptr_ = nullptr;
-                is_small_ = true;
-                throw;
+                ptr = temp;
             }
         }
     }
@@ -283,6 +312,9 @@ public:
         if (vptr_ != nullptr) {
             if (is_small_) {
                 vptr_->move(other.storage.data(), storage.data());
+                // The moved-from object still lives in other's buffer and
+                // must be destroyed before other is marked empty.
+                vptr_->destroy(other.storage.data());
             } else {
                 ptr = other.ptr;
                 other.ptr = nullptr;
@@ -326,7 +358,7 @@ public:
                     ptr = temp;
                     is_small_ = false;
                 } catch (...) {
-                    std::free(temp);
+                    deallocateAligned(temp);
                     throw;
                 }
             }
@@ -370,6 +402,7 @@ public:
             if (vptr_ != nullptr) {
                 if (is_small_) {
                     vptr_->move(other.storage.data(), storage.data());
+                    vptr_->destroy(other.storage.data());
                 } else {
                     ptr = other.ptr;
                     other.ptr = nullptr;
@@ -552,7 +585,7 @@ public:
             vptr_->destroy(getPtr());
 
             if (!is_small_ && ptr != nullptr) {
-                std::free(ptr);
+                deallocateAligned(ptr);
                 ptr = nullptr;
             }
 

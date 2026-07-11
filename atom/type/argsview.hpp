@@ -23,7 +23,7 @@
 #include <boost/tuple/tuple.hpp>
 #endif
 
-namespace atom {
+namespace atom::type {
 
 #ifdef ATOM_USE_BOOST
 using string_type = std::string;
@@ -408,8 +408,8 @@ constexpr auto get(ArgsView<Args...> args_view) -> decltype(auto) {
  * @return false otherwise.
  */
 template <typename... Args1, typename... Args2>
-constexpr auto operator==(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
-    -> bool {
+constexpr auto operator==(ArgsView<Args1...> lhs,
+                          ArgsView<Args2...> rhs) -> bool {
     return lhs.size() == rhs.size() &&
            lhs.apply([&rhs](const auto&... lhs_args) {
                return rhs.apply([&lhs_args...](const auto&... rhs_args) {
@@ -429,8 +429,8 @@ constexpr auto operator==(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
  * @return false if lhs is equal to rhs.
  */
 template <typename... Args1, typename... Args2>
-constexpr auto operator!=(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
-    -> bool {
+constexpr auto operator!=(ArgsView<Args1...> lhs,
+                          ArgsView<Args2...> rhs) -> bool {
     return !(lhs == rhs);
 }
 
@@ -445,8 +445,8 @@ constexpr auto operator!=(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
  * @return false otherwise.
  */
 template <typename... Args1, typename... Args2>
-constexpr auto operator<(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
-    -> bool {
+constexpr auto operator<(ArgsView<Args1...> lhs,
+                         ArgsView<Args2...> rhs) -> bool {
     return lhs.apply([&rhs](const auto&... lhs_args) {
         return rhs.apply([&lhs_args...](const auto&... rhs_args) {
             return std::tie(lhs_args...) < std::tie(rhs_args...);
@@ -465,8 +465,8 @@ constexpr auto operator<(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
  * @return false otherwise.
  */
 template <typename... Args1, typename... Args2>
-constexpr auto operator<=(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
-    -> bool {
+constexpr auto operator<=(ArgsView<Args1...> lhs,
+                          ArgsView<Args2...> rhs) -> bool {
     return !(rhs < lhs);
 }
 
@@ -481,8 +481,8 @@ constexpr auto operator<=(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
  * @return false otherwise.
  */
 template <typename... Args1, typename... Args2>
-constexpr auto operator>(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
-    -> bool {
+constexpr auto operator>(ArgsView<Args1...> lhs,
+                         ArgsView<Args2...> rhs) -> bool {
     return rhs < lhs;
 }
 
@@ -497,12 +497,12 @@ constexpr auto operator>(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
  * @return false otherwise.
  */
 template <typename... Args1, typename... Args2>
-constexpr auto operator>=(ArgsView<Args1...> lhs, ArgsView<Args2...> rhs)
-    -> bool {
+constexpr auto operator>=(ArgsView<Args1...> lhs,
+                          ArgsView<Args2...> rhs) -> bool {
     return !(lhs < rhs);
 }
 
-}  // namespace atom
+}  // namespace atom::type
 
 namespace std {
 #ifdef ATOM_USE_BOOST
@@ -512,14 +512,15 @@ namespace std {
  * @tparam Args Types of the arguments.
  */
 template <typename... Args>
-struct hash<atom::ArgsView<Args...>> {
+struct hash<atom::type::ArgsView<Args...>> {
     /**
      * @brief Compute the hash value for an ArgsView.
      *
      * @param args_view The ArgsView to hash.
      * @return std::size_t The hash value.
      */
-    auto operator()(atom::ArgsView<Args...> args_view) const -> std::size_t {
+    auto operator()(atom::type::ArgsView<Args...> args_view) const
+        -> std::size_t {
         std::size_t seed = 0;
         args_view.forEach([&seed](const auto& arg) {
             boost::hash_combine(seed, boost::hash_value(arg));
@@ -534,14 +535,14 @@ struct hash<atom::ArgsView<Args...>> {
  * @tparam Args Types of the arguments.
  */
 template <typename... Args>
-struct hash<atom::ArgsView<Args...>> {
+struct hash<atom::type::ArgsView<Args...>> {
     /**
      * @brief Compute the hash value for an ArgsView.
      *
      * @param args_view The ArgsView to hash.
      * @return std::size_t The hash value.
      */
-    auto operator()(const atom::ArgsView<Args...>& args_view) const
+    auto operator()(const atom::type::ArgsView<Args...>& args_view) const
         -> std::size_t {
         std::size_t seed = 0;
         args_view.forEach([&seed](const auto& arg) {
@@ -556,7 +557,7 @@ struct hash<atom::ArgsView<Args...>> {
 
 #ifdef __DEBUG__
 #include <iostream>
-namespace atom {
+namespace atom::type {
 /**
  * @brief Print the arguments to the standard output.
  *
@@ -569,7 +570,7 @@ void print(Args&&... args) {
         [](const auto& arg) { std::cout << arg << ' '; });
     std::cout << '\n';
 }
-}  // namespace atom
+}  // namespace atom::type
 #endif
 
 #endif  // ATOM_TYPE_ARGSVIEW_HPP

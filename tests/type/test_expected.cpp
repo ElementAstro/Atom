@@ -269,6 +269,40 @@ TEST_F(ExpectedTest, Map) {
     EXPECT_EQ(result5.value(), 42);
 }
 
+// Test transform (the C++23 std::expected canonical name for map)
+TEST_F(ExpectedTest, Transform) {
+    auto double_val = [](int val) { return val * 2; };
+
+    expected<int> ok(21);
+    auto r1 = ok.transform(double_val);
+    EXPECT_TRUE(r1.has_value());
+    EXPECT_EQ(r1.value(), 42);
+
+    expected<int> err(Error<std::string>("error"));
+    auto r2 = err.transform(double_val);
+    EXPECT_FALSE(r2.has_value());
+    EXPECT_EQ(r2.error().error(), "error");
+
+    // rvalue overload
+    auto r3 = std::move(ok).transform(double_val);
+    EXPECT_TRUE(r3.has_value());
+    EXPECT_EQ(r3.value(), 42);
+}
+
+// Test error_or (C++23 std::expected: error payload or a default)
+TEST_F(ExpectedTest, ErrorOr) {
+    expected<int, std::string> ok(5);
+    expected<int, std::string> err(Error<std::string>("boom"));
+
+    // value present -> returns the supplied default error
+    EXPECT_EQ(ok.error_or("default"), "default");
+    // error present -> returns the contained error payload
+    EXPECT_EQ(err.error_or("default"), "boom");
+
+    // rvalue overload
+    EXPECT_EQ(std::move(err).error_or("default"), "boom");
+}
+
 // Test transform_error operation
 TEST_F(ExpectedTest, TransformError) {
     auto append_info = [](const std::string& err) {

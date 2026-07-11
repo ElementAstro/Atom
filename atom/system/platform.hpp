@@ -10,10 +10,10 @@
  * "atom/system/core/platform.hpp" instead.
  */
 
-#ifndef ATOM_SYSTEM_PLATFORM_HPP
-#define ATOM_SYSTEM_PLATFORM_HPP
+#ifndef ATOM_SYSTEM_PLATFORM_COMPAT_HPP
+#define ATOM_SYSTEM_PLATFORM_COMPAT_HPP
 
 // Forward to the new location
 #include "core/platform.hpp"
 
-#endif  // ATOM_SYSTEM_PLATFORM_HPP
+#endif  // ATOM_SYSTEM_PLATFORM_COMPAT_HPP

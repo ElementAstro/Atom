@@ -16,7 +16,7 @@
 #include "atom/meta/stepper.hpp"
 
 // Helper function to print resultstemplate <typename T>
-void printResult(const atom::meta::Result<T>& result) {
+void printResult(const atom::meta::StepResult<T>& result) {
     if (result.isSuccess()) {
         try {
             const auto& value = result.value();

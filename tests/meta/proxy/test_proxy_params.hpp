@@ -632,10 +632,64 @@ TEST_F(FunctionParamsTest, ComplexUsageScenarios) {
     EXPECT_EQ((*roundtrippedOptions)[2], "opt3");
 }
 
-}  // namespace atom::meta::test
+// Exercise every type handler in to_json/from_json plus the error and
+// no-default branches.
+TEST_F(ArgTest, JsonHandlersForAllSupportedTypes) {
+    FunctionParams params{
+        Arg("f", 1.5f),
+        Arg("d", 2.5),
+        Arg("b", true),
+        Arg("s", std::string("str")),
+        Arg("sv", std::string_view("view")),
+        Arg("cc", "literal"),  // const char*
+        Arg("vs", std::vector<std::string>{"a", "b"}),
+        Arg("vi", std::vector<int>{1, 2, 3}),
+        Arg("vd", std::vector<double>{1.1, 2.2}),
+        Arg("nodefault"),  // no default -> null branch
+    };
 
-// Main function to run the tests
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+    nlohmann::json j = params.toJson();
+    ASSERT_EQ(j.size(), 10u);
+    EXPECT_TRUE(j[9].at("default_value").is_null());
+
+    auto rt = FunctionParams::fromJson(j);
+    ASSERT_EQ(rt.size(), 10u);
+    EXPECT_TRUE(rt.getValueAs<bool>(2).value_or(false));
+    EXPECT_EQ(rt.getValueAs<std::vector<int>>(7).value().size(), 3u);
+    EXPECT_EQ(rt.getValueAs<std::vector<double>>(8).value().size(), 2u);
 }
+
+// to_json on an Arg whose default has no registered handler records an error
+// rather than crashing.
+TEST_F(ArgTest, JsonUnsupportedTypeRecordsError) {
+    struct Unsupported {
+        int x = 0;
+    };
+    Arg arg("weird", Unsupported{});
+    nlohmann::json j;
+    to_json(j, arg);
+    EXPECT_TRUE(j["default_value"].is_null());
+    EXPECT_TRUE(j.contains("error"));
+}
+
+// from_json on unsupported JSON shapes throws ProxyTypeError.
+TEST_F(ArgTest, FromJsonUnsupportedShapesThrow) {
+    std::any out;
+    // object is not a supported scalar/array element
+    nlohmann::json obj = nlohmann::json::object();
+    obj["k"] = 1;
+    EXPECT_THROW(from_json(obj, out), ProxyTypeError);
+
+    // array of objects -> unsupported element type
+    nlohmann::json arr = nlohmann::json::array();
+    arr.push_back(nlohmann::json::object());
+    EXPECT_THROW(from_json(arr, out), ProxyTypeError);
+}
+
+// getValueAs returns nullopt when the Arg has no default value.
+TEST_F(ArgTest, GetValueAsNulloptWithoutDefault) {
+    Arg arg("empty");
+    EXPECT_FALSE(arg.getValueAs<int>().has_value());
+}
+
+}  // namespace atom::meta::test

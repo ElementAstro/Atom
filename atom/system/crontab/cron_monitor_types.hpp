@@ -91,12 +91,13 @@ struct PerformanceMetrics {
  */
 struct HealthCheckResult {
     std::string check_name;
-    bool is_healthy;
+    bool is_healthy{false};
     std::string status_message;
     std::chrono::system_clock::time_point last_check;
     std::chrono::milliseconds response_time{0};
     std::unordered_map<std::string, std::string> details;
 
+    HealthCheckResult() = default;
     HealthCheckResult(std::string name, bool healthy, std::string msg)
         : check_name(std::move(name)),
           is_healthy(healthy),
@@ -117,6 +118,7 @@ struct AlertConfig {
     std::vector<std::string> notification_channels;
     bool is_enabled{true};
 
+    AlertConfig() = default;
     AlertConfig(std::string id, std::string n, std::string desc)
         : alert_id(std::move(id)),
           name(std::move(n)),

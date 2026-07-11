@@ -15,7 +15,7 @@ protected:
 };
 
 // Test class that inherits from NonCopyable
-class TestNonCopyable : public NonCopyable {
+class TestNonCopyable : public atom::type::NonCopyable {
 public:
     TestNonCopyable() : value_(0) {}
     explicit TestNonCopyable(int value) : value_(value) {}
@@ -28,7 +28,7 @@ private:
 };
 
 // Test class with virtual destructor
-class VirtualTestNonCopyable : public NonCopyable {
+class VirtualTestNonCopyable : public atom::type::NonCopyable {
 public:
     VirtualTestNonCopyable() : value_(0) {}
     explicit VirtualTestNonCopyable(int value) : value_(value) {}
@@ -211,7 +211,7 @@ TEST_F(NonCopyableTest, ReturnByValue) {
 // RAII Tests
 TEST_F(NonCopyableTest, RAIIPattern) {
     // Test RAII pattern with NonCopyable
-    class RAIIResource : public NonCopyable {
+    class RAIIResource : public atom::type::NonCopyable {
     public:
         RAIIResource() : acquired_(true) {}
         ~RAIIResource() { release(); }
@@ -239,7 +239,7 @@ TEST_F(NonCopyableTest, ThreadSafetyConsiderations) {
     // NonCopyable itself doesn't provide thread safety,
     // but it prevents accidental copying in multithreaded contexts
 
-    class ThreadSafeCounter : public NonCopyable {
+    class ThreadSafeCounter : public atom::type::NonCopyable {
     public:
         ThreadSafeCounter() : count_(0) {}
 
@@ -280,7 +280,7 @@ TEST_F(NonCopyableTest, BoostCompatibility) {
 // Edge Cases Tests
 TEST_F(NonCopyableTest, EmptyDerivedClass) {
     // Test that even empty derived classes work correctly
-    class EmptyNonCopyable : public NonCopyable {};
+    class EmptyNonCopyable : public atom::type::NonCopyable {};
 
     static_assert(!std::is_copy_constructible_v<EmptyNonCopyable>);
     static_assert(!std::is_copy_assignable_v<EmptyNonCopyable>);
@@ -302,7 +302,8 @@ TEST_F(NonCopyableTest, MultipleInheritance) {
         virtual int getOtherValue() const { return 999; }
     };
 
-    class MultipleInheritance : public NonCopyable, public OtherBase {
+    class MultipleInheritance : public atom::type::NonCopyable,
+                                public OtherBase {
     public:
         MultipleInheritance() : value_(42) {}
         int getValue() const { return value_; }

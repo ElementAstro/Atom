@@ -80,9 +80,25 @@ std::optional<T> EnvCacheManager::getSystemInfo(const String& key) {
 
     auto result = systemInfoCache_->get(key);
     if (result) {
-        // This is a simplified implementation - in practice, you'd need
-        // proper serialization/deserialization for complex types
-        return T(*result);
+        // Values are cached as strings; convert back to the requested type.
+        if constexpr (std::is_same_v<T, String>) {
+            return *result;
+        } else if constexpr (std::is_same_v<T, bool>) {
+            return *result == "1" || *result == "true" || *result == "TRUE";
+        } else if constexpr (std::is_integral_v<T> ||
+                             std::is_floating_point_v<T>) {
+            try {
+                if constexpr (std::is_floating_point_v<T>) {
+                    return static_cast<T>(std::stod(*result));
+                } else {
+                    return static_cast<T>(std::stoll(*result));
+                }
+            } catch (const std::exception&) {
+                return std::nullopt;
+            }
+        } else {
+            return T(*result);
+        }
     }
     return std::nullopt;
 }
@@ -93,9 +109,14 @@ void EnvCacheManager::cacheSystemInfo(const String& key, const T& value) {
         return;
     }
 
-    // This is a simplified implementation - in practice, you'd need
-    // proper serialization/deserialization for complex types
-    systemInfoCache_->put(key, String(value));
+    // Values are cached as strings; serialize the requested type.
+    if constexpr (std::is_same_v<T, String>) {
+        systemInfoCache_->put(key, value);
+    } else if constexpr (std::is_same_v<T, bool>) {
+        systemInfoCache_->put(key, String(value ? "1" : "0"));
+    } else {
+        systemInfoCache_->put(key, String(std::to_string(value)));
+    }
 }
 
 void EnvCacheManager::clearAll() {

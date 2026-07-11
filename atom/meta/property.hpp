@@ -1,10 +1,15 @@
 #ifndef ATOM_META_PROPERTY_HPP
 #define ATOM_META_PROPERTY_HPP
 
+#include <concepts>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
+#include <string>
+#include <unordered_map>
 
 #include "atom/error/exception.hpp"
 
@@ -25,6 +30,8 @@ private:
     std::function<void(const T&)> setter_;
     std::function<void(const T&)> onChange_;
     mutable std::shared_mutex mutex_;
+    mutable std::unordered_map<std::string, T> cache_;
+    mutable std::shared_mutex cacheMutex_;
 
 public:
     /**
@@ -300,60 +307,141 @@ public:
     auto operator!=(const T& other) const -> bool { return !(*this == other); }
 
     /**
-     * @brief Addition assignment operator.
+     * @brief Atomically read-modify-write the property value.
+     *
+     * The whole read-compute-store cycle happens under one exclusive lock,
+     * so concurrent modify() calls never lose updates (unlike separate
+     * get()/set() pairs).
+     *
+     * @param mutator Callable receiving a mutable reference to the value.
+     * @return Property& A reference to this Property object.
+     */
+    template <typename F>
+        requires std::invocable<F, T&>
+    auto modify(F&& mutator) -> Property& {
+        T updated;
+        {
+            std::unique_lock lock(mutex_);
+            T current = getter_   ? getter_()
+                        : hasValue_ ? value_
+                                    : T{};
+            std::forward<F>(mutator)(current);
+            if (setter_) {
+                setter_(current);
+            } else {
+                value_ = current;
+                hasValue_ = true;
+            }
+            updated = std::move(current);
+        }
+        notifyChange(updated);
+        return *this;
+    }
+
+    /**
+     * @brief Addition assignment operator (atomic read-modify-write).
      *
      * @param other The other value to add.
      * @return Property& A reference to this Property object.
      */
     auto operator+=(const T& other) -> Property& {
-        *this = static_cast<T>(*this) + other;
-        return *this;
+        return modify([&](T& value) { value = value + other; });
     }
 
     /**
-     * @brief Subtraction assignment operator.
+     * @brief Subtraction assignment operator (atomic read-modify-write).
      *
      * @param other The other value to subtract.
      * @return Property& A reference to this Property object.
      */
     auto operator-=(const T& other) -> Property& {
-        *this = static_cast<T>(*this) - other;
-        return *this;
+        return modify([&](T& value) { value = value - other; });
     }
 
     /**
-     * @brief Multiplication assignment operator.
+     * @brief Multiplication assignment operator (atomic read-modify-write).
      *
      * @param other The other value to multiply.
      * @return Property& A reference to this Property object.
      */
     auto operator*=(const T& other) -> Property& {
-        *this = static_cast<T>(*this) * other;
-        return *this;
+        return modify([&](T& value) { value = value * other; });
     }
 
     /**
-     * @brief Division assignment operator.
+     * @brief Division assignment operator (atomic read-modify-write).
      *
      * @param other The other value to divide.
      * @return Property& A reference to this Property object.
      */
     auto operator/=(const T& other) -> Property& {
-        *this = static_cast<T>(*this) / other;
-        return *this;
+        return modify([&](T& value) { value = value / other; });
     }
 
     /**
-     * @brief Modulus assignment operator.
+     * @brief Modulus assignment operator (atomic read-modify-write).
      *
      * @param other The other value to modulus.
      * @return Property& A reference to this Property object.
      */
-    template <typename U = T>
-    auto operator%=(const T& other)
-        -> std::enable_if_t<std::is_integral_v<U>, Property&> {
-        *this = static_cast<T>(*this) % other;
-        return *this;
+    auto operator%=(const T& other) -> Property&
+        requires requires(const T& lhs, const T& rhs) { lhs % rhs; }
+    {
+        return modify([&](T& value) { value = value % other; });
+    }
+
+    /**
+     * @brief Asynchronously gets the value of the property.
+     *
+     * @return std::future<T> A future holding the property value.
+     */
+    [[nodiscard]] auto asyncGet() const -> std::future<T> {
+        return std::async(std::launch::async, [this]() { return get(); });
+    }
+
+    /**
+     * @brief Asynchronously sets the value of the property.
+     *
+     * @param newValue The new value to set.
+     * @return std::future<void> A future that completes once the value is set.
+     */
+    auto asyncSet(const T& newValue) -> std::future<void> {
+        return std::async(std::launch::async,
+                          [this, newValue]() { set(newValue); });
+    }
+
+    /**
+     * @brief Caches a value under the given key.
+     *
+     * @param key The cache key.
+     * @param value The value to cache.
+     */
+    void cacheValue(const std::string& key, const T& value) const {
+        std::unique_lock lock(cacheMutex_);
+        cache_.insert_or_assign(key, value);
+    }
+
+    /**
+     * @brief Retrieves a cached value by key.
+     *
+     * @param key The cache key.
+     * @return std::optional<T> The cached value, or std::nullopt if not found.
+     */
+    [[nodiscard]] auto getCachedValue(const std::string& key) const
+        -> std::optional<T> {
+        std::shared_lock lock(cacheMutex_);
+        if (auto it = cache_.find(key); it != cache_.end()) {
+            return it->second;
+        }
+        return std::nullopt;
+    }
+
+    /**
+     * @brief Clears all cached values.
+     */
+    void clearCache() const {
+        std::unique_lock lock(cacheMutex_);
+        cache_.clear();
     }
 
 private:

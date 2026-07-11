@@ -30,6 +30,7 @@ and schema validation.
 #include <vector>
 
 #include "../core/component.hpp"
+#include "atom/type/expected.hpp"
 #include "atom/type/json.hpp"
 
 namespace atom::components {
@@ -66,28 +67,51 @@ struct SerializationOptions {
 };
 
 /**
- * @brief Serialization result
+ * @brief Serialization error categories
+ */
+enum class SerializationErrorCode : uint8_t {
+    NoSerializer,       ///< No serializer registered for the requested format
+    SerializeFailed,    ///< The serializer threw while encoding
+    DeserializeFailed,  ///< The serializer threw while decoding
+    InvalidData,        ///< Input data was malformed or truncated
+    ChecksumMismatch,   ///< Binary checksum did not match
+    FileError           ///< File could not be opened/read/written
+};
+
+/**
+ * @brief Structured serialization error
+ */
+struct SerializationError {
+    SerializationErrorCode code;
+    std::string message;
+};
+
+/**
+ * @brief Successful serialization payload (data + metadata)
  */
 struct SerializationResult {
-    bool success = false;
     std::vector<uint8_t> data;
-    std::string errorMessage;
     size_t originalSize = 0;
     size_t compressedSize = 0;
     std::chrono::microseconds serializationTime{0};
 };
 
 /**
- * @brief Deserialization result
+ * @brief Successful deserialization payload (component + metadata)
  */
 struct DeserializationResult {
-    bool success = false;
     std::shared_ptr<Component> component;
-    std::string errorMessage;
     uint32_t version = 0;
     std::chrono::system_clock::time_point timestamp;
     std::chrono::microseconds deserializationTime{0};
 };
+
+/// Result of a serialize call: payload on success, structured error on failure.
+using SerializationOutcome =
+    atom::type::expected<SerializationResult, SerializationError>;
+/// Result of a deserialize call: payload on success, structured error on failure.
+using DeserializationOutcome =
+    atom::type::expected<DeserializationResult, SerializationError>;
 
 /**
  * @brief Type trait for serializable types
@@ -117,10 +141,10 @@ class ISerializer {
 public:
     virtual ~ISerializer() = default;
 
-    virtual SerializationResult serialize(
+    virtual SerializationOutcome serialize(
         const Component& component, const SerializationOptions& options) = 0;
 
-    virtual DeserializationResult deserialize(
+    virtual DeserializationOutcome deserialize(
         const std::vector<uint8_t>& data,
         const SerializationOptions& options) = 0;
 
@@ -133,10 +157,10 @@ public:
  */
 class JsonSerializer : public ISerializer {
 public:
-    SerializationResult serialize(const Component& component,
-                                  const SerializationOptions& options) override;
+    SerializationOutcome serialize(const Component& component,
+                                   const SerializationOptions& options) override;
 
-    DeserializationResult deserialize(
+    DeserializationOutcome deserialize(
         const std::vector<uint8_t>& data,
         const SerializationOptions& options) override;
 
@@ -159,10 +183,10 @@ private:
  */
 class BinarySerializer : public ISerializer {
 public:
-    SerializationResult serialize(const Component& component,
-                                  const SerializationOptions& options) override;
+    SerializationOutcome serialize(const Component& component,
+                                   const SerializationOptions& options) override;
 
-    DeserializationResult deserialize(
+    DeserializationOutcome deserialize(
         const std::vector<uint8_t>& data,
         const SerializationOptions& options) override;
 
@@ -227,8 +251,8 @@ public:
      * @param options Serialization options
      * @return Serialization result
      */
-    SerializationResult serialize(const Component& component,
-                                  const SerializationOptions& options = {});
+    SerializationOutcome serialize(const Component& component,
+                                   const SerializationOptions& options = {});
 
     /**
      * @brief Deserializes component data
@@ -236,8 +260,8 @@ public:
      * @param options Deserialization options
      * @return Deserialization result
      */
-    DeserializationResult deserialize(const std::vector<uint8_t>& data,
-                                      const SerializationOptions& options = {});
+    DeserializationOutcome deserialize(const std::vector<uint8_t>& data,
+                                       const SerializationOptions& options = {});
 
     /**
      * @brief Serializes a component to file
@@ -256,7 +280,7 @@ public:
      * @param options Deserialization options
      * @return Deserialization result
      */
-    DeserializationResult deserializeFromFile(
+    DeserializationOutcome deserializeFromFile(
         const std::string& filename, const SerializationOptions& options = {});
 
     /**

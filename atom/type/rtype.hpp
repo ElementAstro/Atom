@@ -13,6 +13,28 @@ namespace atom::type {
 
 using namespace atom::meta;
 
+namespace rtype_detail {
+// A push_back-able sequence (vector, etc.).
+template <typename C>
+concept PushBackSequence = requires(C& c) {
+    typename C::value_type;
+    c.push_back(std::declval<typename C::value_type>());
+};
+
+// A sequence whose elements are strings (e.g. std::vector<std::string>). Note
+// atom::meta::StringContainer means a container OF CHARS (a string itself), so
+// it does not match this; rtype needs the element-is-string notion instead.
+template <typename C>
+concept StringSequence =
+    PushBackSequence<C> && StringType<typename C::value_type>;
+
+// A sequence whose elements are non-bool arithmetic (e.g. std::vector<int>).
+template <typename C>
+concept NumberSequence =
+    PushBackSequence<C> && Number<typename C::value_type> &&
+    !std::is_same_v<typename C::value_type, bool>;
+}  // namespace rtype_detail
+
 /**
  * @struct Field
  * @brief Represents a field in a reflectable type.
@@ -21,6 +43,7 @@ using namespace atom::meta;
  */
 template <typename T, typename MemberType>
 struct Field {
+    using class_type = T;  ///< The reflected (owning) type.
     using member_type = MemberType;
     const char* name;          ///< The name of the field.
     const char* description;   ///< The description of the field.
@@ -59,6 +82,7 @@ struct Field {
  */
 template <typename T, typename MemberType, typename ReflectType>
 struct ComplexField {
+    using class_type = T;  ///< The reflected (owning) type.
     using member_type = MemberType;
     const char* name;          ///< The name of the field.
     const char* description;   ///< The description of the field.
@@ -109,21 +133,24 @@ struct Reflectable {
                          typename std::decay_t<decltype(field)>::member_type;
 
                      if (it != j.end()) {
-                         if constexpr (StringType<MemberType> ||
-                                       AnyChar<MemberType>) {
+                         // bool is checked before Number: bool is arithmetic,
+                         // so the Number branch would otherwise swallow it.
+                         if constexpr (std::is_same_v<MemberType, bool>) {
+                             obj.*(field.member) = it->second.as_bool();
+                         } else if constexpr (StringType<MemberType> ||
+                                              AnyChar<MemberType>) {
                              obj.*(field.member) = it->second.as_string();
                          } else if constexpr (Number<MemberType>) {
-                             obj.*(field.member) =
-                                 static_cast<int>(it->second.as_number());
-                         } else if constexpr (std::is_same_v<MemberType,
-                                                             bool>) {
-                             obj.*(field.member) = it->second.as_bool();
-                         } else if constexpr (StringContainer<MemberType>) {
+                             obj.*(field.member) = static_cast<MemberType>(
+                                 it->second.as_number());
+                         } else if constexpr (rtype_detail::StringSequence<
+                                                  MemberType>) {
                              for (const auto& item : it->second.as_array()) {
                                  (obj.*(field.member))
                                      .push_back(item.as_string());
                              }
-                         } else if constexpr (NumberContainer<MemberType>) {
+                         } else if constexpr (rtype_detail::NumberSequence<
+                                                  MemberType>) {
                              for (const auto& item : it->second.as_array()) {
                                  (obj.*(field.member))
                                      .push_back(
@@ -131,7 +158,9 @@ struct Reflectable {
                                              typename MemberType::value_type>(
                                              item.as_number()));
                              }
-                         } else if constexpr (std::is_class_v<MemberType>) {
+                         } else if constexpr (requires {
+                                                  field.reflect_type;
+                                              }) {
                              obj.*(field.member) = field.reflect_type.from_json(
                                  it->second.as_object());
                          } else {
@@ -174,21 +203,23 @@ struct Reflectable {
                 (([&] {
                      using MemberType =
                          typename std::decay_t<decltype(field)>::member_type;
-                     if constexpr (StringType<MemberType> ||
-                                   AnyChar<MemberType>) {
+                     if constexpr (std::is_same_v<MemberType, bool>) {
+                         j[field.name] = JsonValue(obj.*(field.member));
+                     } else if constexpr (StringType<MemberType> ||
+                                          AnyChar<MemberType>) {
                          j[field.name] = JsonValue(obj.*(field.member));
                      } else if constexpr (Number<MemberType>) {
                          j[field.name] = JsonValue(
                              static_cast<MemberType>(obj.*(field.member)));
-                     } else if constexpr (std::is_same_v<MemberType, bool>) {
-                         j[field.name] = JsonValue(obj.*(field.member));
-                     } else if constexpr (StringContainer<MemberType>) {
+                     } else if constexpr (rtype_detail::StringSequence<
+                                              MemberType>) {
                          JsonArray arr;
                          for (const auto& item : obj.*(field.member)) {
                              arr.push_back(JsonValue(item));
                          }
                          j[field.name] = JsonValue(arr);
-                     } else if constexpr (NumberContainer<MemberType>) {
+                     } else if constexpr (rtype_detail::NumberSequence<
+                                              MemberType>) {
                          JsonArray arr;
                          for (const auto& item : obj.*(field.member)) {
                              arr.push_back(JsonValue(
@@ -196,7 +227,7 @@ struct Reflectable {
                                      item)));
                          }
                          j[field.name] = JsonValue(arr);
-                     } else if constexpr (std::is_class_v<MemberType>) {
+                     } else if constexpr (requires { field.reflect_type; }) {
                          j[field.name] = JsonValue(
                              field.reflect_type.to_json(obj.*(field.member)));
                      } else {
@@ -225,19 +256,42 @@ struct Reflectable {
                          typename std::decay_t<decltype(field)>::member_type;
 
                      if (it != y.end()) {
-                         if constexpr (StringType<MemberType> ||
-                                       AnyChar<MemberType>) {
+                         if constexpr (std::is_same_v<MemberType, bool>) {
+                             obj.*(field.member) = it->second.as_bool();
+                         } else if constexpr (StringType<MemberType> ||
+                                              AnyChar<MemberType>) {
                              obj.*(field.member) = it->second.as_string();
                          } else if constexpr (Number<MemberType>) {
-                             obj.*(field.member) =
-                                 static_cast<int>(it->second.as_number());
-                         } else if constexpr (std::is_same_v<MemberType,
-                                                             bool>) {
-                             obj.*(field.member) = it->second.as_bool();
+                             obj.*(field.member) = static_cast<MemberType>(
+                                 it->second.as_number());
                          } else if constexpr (StringContainer<MemberType>) {
                              for (const auto& item : it->second.as_array()) {
                                  (obj.*(field.member))
                                      .push_back(item.as_string());
+                             }
+                         } else if constexpr (AssociativeContainer<
+                                                  MemberType>) {
+                             // Maps must be checked BEFORE the generic
+                             // Container branch: an unordered_map satisfies
+                             // Container (size + iterable) too, but its element
+                             // type is a pair, so the Container branch would
+                             // match and silently populate nothing.
+                             if constexpr (Number<typename MemberType::
+                                                      mapped_type>) {
+                                 for (const auto& item :
+                                      it->second.as_object()) {
+                                     (obj.*(field.member))[item.first] =
+                                         static_cast<
+                                             typename MemberType::mapped_type>(
+                                             item.second.as_number());
+                                 }
+                             } else if constexpr (
+                                 StringType<typename MemberType::mapped_type>) {
+                                 for (const auto& item :
+                                      it->second.as_object()) {
+                                     (obj.*(field.member))[item.first] =
+                                         item.second.as_string();
+                                 }
                              }
                          } else if constexpr (Container<MemberType>) {
                              if constexpr (Number<typename MemberType::
@@ -266,26 +320,9 @@ struct Reflectable {
                                          .push_back(item.as_bool());
                                  }
                              }
-                         } else if constexpr (AssociativeContainer<
-                                                  MemberType>) {
-                             if constexpr (Number<typename MemberType::
-                                                      mapped_type>) {
-                                 for (const auto& item :
-                                      it->second.as_object()) {
-                                     (obj.*(field.member))[item.first] =
-                                         static_cast<
-                                             typename MemberType::mapped_type>(
-                                             item.second.as_number());
-                                 }
-                             } else if constexpr (
-                                 StringType<typename MemberType::mapped_type>) {
-                                 for (const auto& item :
-                                      it->second.as_object()) {
-                                     (obj.*(field.member))[item.first] =
-                                         item.second.as_string();
-                                 }
-                             }
-                         } else if constexpr (std::is_class_v<MemberType>) {
+                         } else if constexpr (requires {
+                                                  field.reflect_type;
+                                              }) {
                              obj.*(field.member) = field.reflect_type.from_yaml(
                                  it->second.as_object());
                          } else {
@@ -354,7 +391,7 @@ struct Reflectable {
                                  YamlValue(static_cast<double>(item)));
                          }
                          y[field.name] = YamlValue(arr);
-                     } else if constexpr (std::is_class_v<MemberType>) {
+                     } else if constexpr (requires { field.reflect_type; }) {
                          y[field.name] = YamlValue(
                              field.reflect_type.to_yaml(obj.*(field.member)));
                      } else {
@@ -368,6 +405,19 @@ struct Reflectable {
         return y;
     }
 };
+
+/**
+ * @brief Deduction guide so a Reflectable can be built directly from its fields
+ * without spelling out the field types: `Reflectable(make_field(...), ...)`.
+ *
+ * The reflected type T is recovered from the first field's `class_type` (every
+ * Field/ComplexField exposes it). This makes `Reflectable<T>(fields...)`
+ * unnecessary — and indeed impossible, since T alone leaves the Fields pack
+ * empty — so callers use class template argument deduction instead.
+ */
+template <typename FirstField, typename... RestFields>
+Reflectable(FirstField, RestFields...)
+    -> Reflectable<typename FirstField::class_type, FirstField, RestFields...>;
 
 /**
  * @brief Creates a Field object.
@@ -384,8 +434,8 @@ struct Reflectable {
  */
 template <typename T, typename MemberType>
 auto make_field(const char* name, const char* description,
-                MemberType T::*member, bool required = true,
-                MemberType default_value = {},
+                MemberType T::* member, bool required = true,
+                std::type_identity_t<MemberType> default_value = {},
                 typename Field<T, MemberType>::Validator validator = nullptr)
     -> Field<T, MemberType> {
     return Field<T, MemberType>(name, description, member, required,

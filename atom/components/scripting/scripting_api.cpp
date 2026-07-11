@@ -55,12 +55,16 @@ std::unique_ptr<IScriptEngine> ComponentScriptingAPI::createEngine(
 #endif
             break;
 
-        case ScriptLanguage::ChaiScript:
-            // ChaiScript engine would be created here
+        case ScriptLanguage::Python:
+#if ATOM_ENABLE_PYTHON
+            if (PythonEngineFactory::isAvailable()) {
+                engine = PythonEngineFactory::create();
+            }
+#endif
             break;
 
         case ScriptLanguage::Auto:
-            // Try Lua first, then Python, then ChaiScript
+            // Try Lua first, then Python
 #if ATOM_ENABLE_LUA
             if (LuaEngineFactory::isAvailable()) {
                 engine = LuaEngineFactory::create();
@@ -150,8 +154,8 @@ ScriptLanguage ComponentScriptingAPI::detectLanguage(const std::string& script,
 
         if (extension == ".lua") {
             return ScriptLanguage::Lua;
-        } else if (extension == ".chai" || extension == ".chaiscript") {
-            return ScriptLanguage::ChaiScript;
+        } else if (extension == ".py") {
+            return ScriptLanguage::Python;
         }
     } else {
         // Detect by content patterns (simplified)
@@ -159,10 +163,10 @@ ScriptLanguage ComponentScriptingAPI::detectLanguage(const std::string& script,
             script.find("local") != std::string::npos ||
             script.find("end") != std::string::npos) {
             return ScriptLanguage::Lua;
-        } else if (script.find("def") != std::string::npos ||
-                   script.find("var") != std::string::npos ||
-                   script.find("auto") != std::string::npos) {
-            return ScriptLanguage::ChaiScript;
+        } else if (script.find("def ") != std::string::npos ||
+                   script.find("import ") != std::string::npos ||
+                   script.find("print(") != std::string::npos) {
+            return ScriptLanguage::Python;
         }
     }
 

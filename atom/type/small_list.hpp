@@ -16,8 +16,9 @@ Description: A Small List Implementation
 #define ATOM_TYPE_SMALL_LIST_HPP
 
 #include <algorithm>
+#include <compare>
 #include <cstddef>
-#include <execution>
+#include <format>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
@@ -26,6 +27,10 @@ Description: A Small List Implementation
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+#ifdef ATOM_USE_PARALLEL_ALGORITHMS
+#include <execution>
+#endif
 
 namespace atom::type {
 
@@ -40,6 +45,15 @@ class SmallList {
     static_assert(std::is_swappable_v<T>, "T must be swappable");
     static_assert(std::is_copy_constructible_v<T>,
                   "T must be copy constructible");
+
+public:
+    // Standard container type aliases (required by generic algorithms and by
+    // GoogleMock container matchers, which key off value_type).
+    using value_type = T;
+    using reference = T&;
+    using const_reference = const T&;
+    using size_type = std::size_t;
+    using difference_type = std::ptrdiff_t;
 
 private:
     /**
@@ -257,7 +271,9 @@ public:
                 tail_ = head_.get();
             } else {
                 newNode->next = std::move(head_);
-                head_->prev = newNode.get();
+                // head_ was just moved-from (now null); the old head is owned
+                // by newNode->next. Point its prev at the new node.
+                newNode->next->prev = newNode.get();
                 head_ = std::move(newNode);
             }
             ++list_size_;
@@ -280,7 +296,9 @@ public:
                 tail_ = head_.get();
             } else {
                 newNode->next = std::move(head_);
-                head_->prev = newNode.get();
+                // head_ was just moved-from (now null); the old head is owned
+                // by newNode->next. Point its prev at the new node.
+                newNode->next->prev = newNode.get();
                 head_ = std::move(newNode);
             }
             ++list_size_;
@@ -437,8 +455,12 @@ public:
          * @brief Constructs an iterator pointing to the given node.
          *
          * @param ptr The node to point to.
+         * @param tail The list tail, so a past-the-end iterator (ptr == null)
+         *             can be decremented back to the last element. Required for
+         *             std::reverse_iterator support.
          */
-        explicit Iterator(Node* ptr = nullptr) noexcept : nodePtr(ptr) {}
+        explicit Iterator(Node* ptr = nullptr, Node* tail = nullptr) noexcept
+            : nodePtr(ptr), tailPtr(tail) {}
 
         /**
          * @brief Advances the iterator to the next element.
@@ -471,7 +493,17 @@ public:
          * beginning.
          */
         Iterator& operator--() {
-            if (!nodePtr && !hasPrevious()) {
+            if (!nodePtr) {
+                // Decrementing a past-the-end iterator: step to the tail.
+                if (!tailPtr) {
+                    throw std::out_of_range(
+                        "Cannot decrement iterator at the beginning of the "
+                        "list");
+                }
+                nodePtr = tailPtr;
+                return *this;
+            }
+            if (!nodePtr->prev) {
                 throw std::out_of_range(
                     "Cannot decrement iterator at the beginning of the list");
             }
@@ -557,6 +589,7 @@ public:
         }
 
         Node* nodePtr;  ///< Pointer to the current node.
+        Node* tailPtr{nullptr};  ///< List tail, for decrementing end().
     };
 
     /**
@@ -708,7 +741,7 @@ public:
      *
      * @return An iterator to the end of the list.
      */
-    [[nodiscard]] Iterator end() noexcept { return Iterator(nullptr); }
+    [[nodiscard]] Iterator end() noexcept { return Iterator(nullptr, tail_); }
 
     /**
      * @brief Returns a const iterator to the beginning of the list.
@@ -956,7 +989,10 @@ public:
             ++nextIt;
 
             if (nextIt != end() && *it == *nextIt) {
-                it = erase(nextIt);
+                // Erase the duplicate but keep `it` on the first element of the
+                // run so a run of 3+ equal elements collapses fully. Advancing
+                // `it` here would skip the third consecutive duplicate.
+                erase(nextIt);
                 ++removedCount;
             } else {
                 ++it;
@@ -989,10 +1025,13 @@ public:
 
             // Sort the vector (potentially using parallel algorithms for large
             // datasets)
+#ifdef ATOM_USE_PARALLEL_ALGORITHMS
             if (size() > 10000) {
                 std::sort(std::execution::par_unseq, tempVector.begin(),
                           tempVector.end());
-            } else {
+            } else
+#endif
+            {
                 std::sort(tempVector.begin(), tempVector.end());
             }
 
@@ -1046,10 +1085,13 @@ public:
 
             // Sort the vector (potentially using parallel algorithms for large
             // datasets)
+#ifdef ATOM_USE_PARALLEL_ALGORITHMS
             if (size() > 10000) {
                 std::sort(std::execution::par_unseq, tempVector.begin(),
                           tempVector.end(), comp);
-            } else {
+            } else
+#endif
+            {
                 std::sort(tempVector.begin(), tempVector.end(), comp);
             }
 
@@ -1204,7 +1246,9 @@ public:
                 tail_ = head_.get();
             } else {
                 newNode->next = std::move(head_);
-                head_->prev = newNode.get();
+                // head_ was just moved-from (now null); the old head is owned
+                // by newNode->next. Point its prev at the new node.
+                newNode->next->prev = newNode.get();
                 head_ = std::move(newNode);
             }
             ++list_size_;
@@ -1393,62 +1437,18 @@ public:
     }
 
     /**
-     * @brief Compares two lists for inequality.
+     * @brief Lexicographically compares two lists (C++20 three-way).
+     *
+     * operator!=, <, <=, >, >= are synthesized by the compiler from
+     * operator== and operator<=>.
      *
      * @param lhs The first list.
      * @param rhs The second list.
-     * @return True if the lists are not equal, false otherwise.
+     * @return The ordering of lhs relative to rhs.
      */
-    friend bool operator!=(const SmallList<T>& lhs, const SmallList<T>& rhs) {
-        return !(lhs == rhs);
-    }
-
-    /**
-     * @brief Lexicographically compares two lists.
-     *
-     * @param lhs The first list.
-     * @param rhs The second list.
-     * @return True if lhs is lexicographically less than rhs, false otherwise.
-     */
-    friend bool operator<(const SmallList<T>& lhs, const SmallList<T>& rhs) {
-        return std::lexicographical_compare(lhs.begin(), lhs.end(), rhs.begin(),
-                                            rhs.end());
-    }
-
-    /**
-     * @brief Lexicographically compares two lists.
-     *
-     * @param lhs The first list.
-     * @param rhs The second list.
-     * @return True if lhs is lexicographically less than or equal to rhs, false
-     * otherwise.
-     */
-    friend bool operator<=(const SmallList<T>& lhs, const SmallList<T>& rhs) {
-        return !(rhs < lhs);
-    }
-
-    /**
-     * @brief Lexicographically compares two lists.
-     *
-     * @param lhs The first list.
-     * @param rhs The second list.
-     * @return True if lhs is lexicographically greater than rhs, false
-     * otherwise.
-     */
-    friend bool operator>(const SmallList<T>& lhs, const SmallList<T>& rhs) {
-        return rhs < lhs;
-    }
-
-    /**
-     * @brief Lexicographically compares two lists.
-     *
-     * @param lhs The first list.
-     * @param rhs The second list.
-     * @return True if lhs is lexicographically greater than or equal to rhs,
-     * false otherwise.
-     */
-    friend bool operator>=(const SmallList<T>& lhs, const SmallList<T>& rhs) {
-        return !(lhs < rhs);
+    friend auto operator<=>(const SmallList<T>& lhs, const SmallList<T>& rhs) {
+        return std::lexicographical_compare_three_way(lhs.begin(), lhs.end(),
+                                                      rhs.begin(), rhs.end());
     }
 
     /**
@@ -1463,5 +1463,34 @@ public:
 };
 
 }  // namespace atom::type
+
+/**
+ * @brief std::format support for SmallList, rendered as "[a, b, c]".
+ */
+template <typename T, typename CharT>
+    requires std::formattable<T, CharT>
+struct std::formatter<atom::type::SmallList<T>, CharT> {
+    constexpr auto parse(std::basic_format_parse_context<CharT>& ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const atom::type::SmallList<T>& list,
+                FormatContext& ctx) const {
+        auto out = ctx.out();
+        *out++ = CharT{'['};
+        bool first = true;
+        for (const auto& elem : list) {
+            if (!first) {
+                *out++ = CharT{','};
+                *out++ = CharT{' '};
+            }
+            first = false;
+            out = std::format_to(out, "{}", elem);
+        }
+        *out++ = CharT{']'};
+        return out;
+    }
+};
 
 #endif  // ATOM_TYPE_SMALL_LIST_HPP

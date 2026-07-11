@@ -52,8 +52,11 @@ int main() {
               << std::endl;
 
     // Get statistics about the current Cron jobs
-    int stats = manager.statistics();
-    std::cout << "Cron job statistics: " << stats << std::endl;
+    auto stats = manager.statistics();
+    std::cout << "Cron job statistics:" << std::endl;
+    for (const auto& [key, value] : stats) {
+        std::cout << "  " << key << ": " << value << std::endl;
+    }
 
     return 0;
 }

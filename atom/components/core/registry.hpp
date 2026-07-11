@@ -25,11 +25,21 @@ Description: Component Registry for Managing Component Lifecycle
 #include <vector>
 
 #include <stdexcept>
+
+#if ENABLE_HOT_RELOAD
+#include <filesystem>
+#include <future>
+#endif
+
 #include "../lifecycle/lifecycle.hpp"
 #include "component.hpp"
 #include "component_pool.hpp"
 
 class Component;
+
+namespace atom::meta {
+class DynamicLibrary;
+}  // namespace atom::meta
 
 /**
  * @brief Registry for managing component lifecycle.
@@ -108,6 +118,20 @@ public:
     void addInitializer(const std::string& name, Component::InitFunc init_func,
                         Component::CleanupFunc cleanup_func = nullptr,
                         std::optional<ComponentInfo> metadata = std::nullopt);
+
+    /**
+     * @brief Register an externally created component instance
+     * @param name Component name
+     * @param instance Existing component instance (must not be null)
+     * @param init_func Optional initialization function run by
+     * initializeAll()/initializeComponent
+     * @param cleanup_func Optional cleanup function run during cleanup
+     * @throws RegistryException If the instance is null
+     */
+    void registerComponentInstance(
+        const std::string& name, std::shared_ptr<Component> instance,
+        Component::InitFunc init_func = nullptr,
+        Component::CleanupFunc cleanup_func = nullptr);
 
     /**
      * @brief Add a component dependency
@@ -383,6 +407,9 @@ private:
         atom::components::EventCallback callback;
     };
 
+    // Events use their own lock so triggerEvent can be called from code
+    // paths that already hold mutex_ (e.g. initializeAll/cleanupAll).
+    mutable std::shared_mutex eventMutex_;
     std::unordered_map<std::string, std::vector<EventSubscription>>
         eventSubscriptions_;
     std::atomic<atom::components::EventCallbackId> nextEventId_{1};
@@ -391,6 +418,10 @@ private:
 #if ENABLE_HOT_RELOAD
     std::unordered_map<std::string, std::filesystem::file_time_type>
         componentFileTimestamps_;
+    // Loaded dynamic libraries keyed by module name. Holding the handle keeps
+    // the shared object mapped for the lifetime of the component it provides.
+    std::unordered_map<std::string, std::shared_ptr<atom::meta::DynamicLibrary>>
+        loadedLibraries_;
     std::atomic<bool> watchingForChanges_{false};
     std::future<void> fileWatcherFuture_;
 #endif

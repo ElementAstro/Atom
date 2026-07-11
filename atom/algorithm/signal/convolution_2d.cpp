@@ -312,11 +312,10 @@ auto pad2DImpl(const std::vector<std::vector<T>>& input, usize padTop,
 }
 
 // Helper function to get output dimensions for convolution
-auto getConvolutionOutputDimensions(usize inputHeight, usize inputWidth,
-                                    usize kernelHeight, usize kernelWidth,
-                                    usize strideY, usize strideX,
-                                    PaddingMode paddingMode)
-    -> std::pair<usize, usize> {
+auto getConvolutionOutputDimensions(
+    usize inputHeight, usize inputWidth, usize kernelHeight, usize kernelWidth,
+    usize strideY, usize strideX,
+    PaddingMode paddingMode) -> std::pair<usize, usize> {
     if (kernelHeight > inputHeight || kernelWidth > inputWidth) {
         THROW_CONVOLVE_ERROR(
             "Kernel dimensions ({},{}) cannot be larger than input dimensions "
@@ -390,8 +389,8 @@ auto createCommandQueue(cl_context context) -> CLCmdQueuePtr {
     return CLCmdQueuePtr(commandQueue);
 }
 
-auto createProgram(const std::string& source, cl_context context)
-    -> CLProgramPtr {
+auto createProgram(const std::string& source,
+                   cl_context context) -> CLProgramPtr {
     const char* sourceStr = source.c_str();
     cl_int err;
     cl_program program =
@@ -598,8 +597,8 @@ auto deconvolve2DOpenCL(const std::vector<std::vector<f64>>& signal,
 // Function to convolve a 2D input with a 2D kernel using multithreading or
 // OpenCL
 auto convolve2D(const std::vector<std::vector<f64>>& input,
-                const std::vector<std::vector<f64>>& kernel, i32 numThreads)
-    -> std::vector<std::vector<f64>> {
+                const std::vector<std::vector<f64>>& kernel,
+                i32 numThreads) -> std::vector<std::vector<f64>> {
     try {
         if (input.empty() || input[0].empty()) {
             THROW_CONVOLVE_ERROR("Input matrix cannot be empty");
@@ -729,8 +728,8 @@ auto convolve2D(const std::vector<std::vector<f64>>& input,
 // Function to deconvolve a 2D input with a 2D kernel using multithreading or
 // OpenCL
 auto deconvolve2D(const std::vector<std::vector<f64>>& signal,
-                  const std::vector<std::vector<f64>>& kernel, i32 numThreads)
-    -> std::vector<std::vector<f64>> {
+                  const std::vector<std::vector<f64>>& kernel,
+                  i32 numThreads) -> std::vector<std::vector<f64>> {
     try {
         if (signal.empty() || signal[0].empty()) {
             THROW_CONVOLVE_ERROR("Signal matrix cannot be empty");

@@ -297,8 +297,8 @@ void base64EncodeSIMD(std::string_view input, OutputIt dest,
 
 // 改进后的Base64解码实现 - 使用atom::type::expected
 template <typename OutputIt>
-auto base64DecodeImpl(std::string_view input, OutputIt dest) noexcept
-    -> atom::type::expected<usize> {
+auto base64DecodeImpl(std::string_view input,
+                      OutputIt dest) noexcept -> atom::type::expected<usize> {
     usize outSize = 0;
     std::array<u8, 4> inBlock{};
     std::array<u8, 3> outBlock{};
@@ -407,8 +407,8 @@ auto base64DecodeImpl(std::string_view input, OutputIt dest) noexcept
 #ifdef ATOM_USE_SIMD
 // 完善的SIMD优化Base64解码实现
 template <typename OutputIt>
-auto base64DecodeSIMD(std::string_view input, OutputIt dest) noexcept
-    -> atom::type::expected<usize> {
+auto base64DecodeSIMD(std::string_view input,
+                      OutputIt dest) noexcept -> atom::type::expected<usize> {
 #if defined(__AVX2__)
     // AVX2实现
     // 这里应实现完整的AVX2 Base64解码逻辑
@@ -426,8 +426,8 @@ auto base64DecodeSIMD(std::string_view input, OutputIt dest) noexcept
 #endif
 
 // Base64编码接口
-auto base64Encode(std::string_view input, bool padding) noexcept
-    -> atom::type::expected<std::string> {
+auto base64Encode(std::string_view input,
+                  bool padding) noexcept -> atom::type::expected<std::string> {
     try {
         std::string output;
         const usize outSize = ((input.size() + 2) / 3) * 4;

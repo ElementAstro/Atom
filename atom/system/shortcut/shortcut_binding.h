@@ -55,9 +55,9 @@ enum class MultimediaKey {
 };
 
 /**
- * @brief Advanced shortcut representation
+ * @brief Shortcut binding representation
  */
-class AdvancedShortcut {
+class ShortcutBinding {
 public:
     ShortcutType type;
     std::vector<Shortcut> keySequence;          // For sequential shortcuts
@@ -67,28 +67,28 @@ public:
     std::string description;
     std::string category;
 
-    AdvancedShortcut(ShortcutType t = ShortcutType::Keyboard);
+    ShortcutBinding(ShortcutType t = ShortcutType::Keyboard);
 
     /**
      * @brief Create keyboard shortcut
      */
-    static AdvancedShortcut createKeyboard(const Shortcut& shortcut);
+    static ShortcutBinding createKeyboard(const Shortcut& shortcut);
 
     /**
      * @brief Create mouse shortcut
      */
-    static AdvancedShortcut createMouse(const std::vector<MouseButton>& buttons,
+    static ShortcutBinding createMouse(const std::vector<MouseButton>& buttons,
                                        const Shortcut& modifiers = Shortcut(0));
 
     /**
      * @brief Create multimedia shortcut
      */
-    static AdvancedShortcut createMultimedia(MultimediaKey key);
+    static ShortcutBinding createMultimedia(MultimediaKey key);
 
     /**
      * @brief Create sequential shortcut
      */
-    static AdvancedShortcut createSequential(const std::vector<Shortcut>& sequence,
+    static ShortcutBinding createSequential(const std::vector<Shortcut>& sequence,
                                             std::chrono::milliseconds maxTime = std::chrono::milliseconds(2000));
 
     /**
@@ -109,19 +109,37 @@ public:
     /**
      * @brief Equality operator
      */
-    bool operator==(const AdvancedShortcut& other) const;
+    bool operator==(const ShortcutBinding& other) const;
 };
+
+}  // namespace shortcut_detector
+
+// Hash specialization for ShortcutBinding. Must precede any
+// std::unordered_map<ShortcutBinding, ...> instantiation (e.g. in
+// ShortcutBindingManager below), otherwise the disabled primary std::hash is
+// selected ("hash function must be copy constructible").
+namespace std {
+template <>
+struct hash<shortcut_detector::ShortcutBinding> {
+    size_t operator()(
+        const shortcut_detector::ShortcutBinding& shortcut) const {
+        return shortcut.hash();
+    }
+};
+}  // namespace std
+
+namespace shortcut_detector {
 
 /**
  * @brief Shortcut conflict information
  */
 struct ShortcutConflict {
-    AdvancedShortcut shortcut1;
-    AdvancedShortcut shortcut2;
+    ShortcutBinding shortcut1;
+    ShortcutBinding shortcut2;
     std::string conflictReason;
     enum class Severity { Low, Medium, High, Critical } severity;
 
-    ShortcutConflict(const AdvancedShortcut& s1, const AdvancedShortcut& s2,
+    ShortcutConflict(const ShortcutBinding& s1, const ShortcutBinding& s2,
                     const std::string& reason, Severity sev = Severity::Medium)
         : shortcut1(s1), shortcut2(s2), conflictReason(reason), severity(sev) {}
 };
@@ -130,48 +148,48 @@ struct ShortcutConflict {
  * @brief Custom key mapping for remapping shortcuts
  */
 struct KeyMapping {
-    AdvancedShortcut from;
-    AdvancedShortcut to;
+    ShortcutBinding from;
+    ShortcutBinding to;
     std::string application;  // Empty for global mapping
     bool enabled{true};
 
-    KeyMapping(const AdvancedShortcut& fromShortcut, const AdvancedShortcut& toShortcut,
+    KeyMapping(const ShortcutBinding& fromShortcut, const ShortcutBinding& toShortcut,
               const std::string& app = "")
         : from(fromShortcut), to(toShortcut), application(app) {}
 };
 
 /**
- * @brief Advanced shortcut manager with conflict detection and resolution
+ * @brief Shortcut binding manager with conflict detection and resolution
  */
-class AdvancedShortcutManager {
+class ShortcutBindingManager {
 public:
-    AdvancedShortcutManager();
-    ~AdvancedShortcutManager();
+    ShortcutBindingManager();
+    ~ShortcutBindingManager();
 
     /**
      * @brief Register a shortcut
      */
-    bool registerShortcut(const AdvancedShortcut& shortcut, const std::string& owner = "");
+    bool registerShortcut(const ShortcutBinding& shortcut, const std::string& owner = "");
 
     /**
      * @brief Unregister a shortcut
      */
-    bool unregisterShortcut(const AdvancedShortcut& shortcut);
+    bool unregisterShortcut(const ShortcutBinding& shortcut);
 
     /**
      * @brief Check for conflicts with existing shortcuts
      */
-    std::vector<ShortcutConflict> checkConflicts(const AdvancedShortcut& shortcut) const;
+    std::vector<ShortcutConflict> checkConflicts(const ShortcutBinding& shortcut) const;
 
     /**
      * @brief Get all registered shortcuts
      */
-    std::vector<AdvancedShortcut> getAllShortcuts() const;
+    std::vector<ShortcutBinding> getAllShortcuts() const;
 
     /**
      * @brief Get shortcuts by category
      */
-    std::vector<AdvancedShortcut> getShortcutsByCategory(const std::string& category) const;
+    std::vector<ShortcutBinding> getShortcutsByCategory(const std::string& category) const;
 
     /**
      * @brief Add custom key mapping
@@ -181,7 +199,7 @@ public:
     /**
      * @brief Remove key mapping
      */
-    void removeKeyMapping(const AdvancedShortcut& from);
+    void removeKeyMapping(const ShortcutBinding& from);
 
     /**
      * @brief Get all key mappings
@@ -191,13 +209,13 @@ public:
     /**
      * @brief Resolve shortcut through mappings
      */
-    AdvancedShortcut resolveShortcut(const AdvancedShortcut& shortcut,
+    ShortcutBinding resolveShortcut(const ShortcutBinding& shortcut,
                                    const std::string& application = "") const;
 
     /**
      * @brief Auto-resolve conflicts by suggesting alternatives
      */
-    std::vector<AdvancedShortcut> suggestAlternatives(const AdvancedShortcut& shortcut) const;
+    std::vector<ShortcutBinding> suggestAlternatives(const ShortcutBinding& shortcut) const;
 
     /**
      * @brief Export shortcuts to JSON
@@ -215,13 +233,13 @@ public:
     void clear();
 
 private:
-    std::unordered_map<AdvancedShortcut, std::string> registeredShortcuts_;
+    std::unordered_map<ShortcutBinding, std::string> registeredShortcuts_;
     std::vector<KeyMapping> keyMappings_;
 
-    bool hasConflict(const AdvancedShortcut& s1, const AdvancedShortcut& s2) const;
-    std::string getConflictReason(const AdvancedShortcut& s1, const AdvancedShortcut& s2) const;
-    ShortcutConflict::Severity assessConflictSeverity(const AdvancedShortcut& s1,
-                                                      const AdvancedShortcut& s2) const;
+    bool hasConflict(const ShortcutBinding& s1, const ShortcutBinding& s2) const;
+    std::string getConflictReason(const ShortcutBinding& s1, const ShortcutBinding& s2) const;
+    ShortcutConflict::Severity assessConflictSeverity(const ShortcutBinding& s1,
+                                                      const ShortcutBinding& s2) const;
 };
 
 /**
@@ -270,13 +288,3 @@ namespace mouse_utils {
 }
 
 }  // namespace shortcut_detector
-
-// Hash specialization for AdvancedShortcut
-namespace std {
-template <>
-struct hash<shortcut_detector::AdvancedShortcut> {
-    size_t operator()(const shortcut_detector::AdvancedShortcut& shortcut) const {
-        return shortcut.hash();
-    }
-};
-}  // namespace std

@@ -29,10 +29,12 @@
 #include <optional>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 
 #include "atom/error/exception.hpp"
+#include "atom/meta/refl_field.hpp"
 
 namespace atom::meta {
 
@@ -118,47 +120,15 @@ public:
     }
 };
 
-// Enhanced helper structure: used to store field names and member pointers with optimizations
+// YAML field descriptor: the shared base provides name/member binding,
+// required/default handling, validation and introspection metadata.
+// (The former per-field atomic counters were broken by design: fields are
+// copied into the apply() lambdas, so counts landed on the copies. The
+// Reflectable-level YamlPerformanceMetrics below is the working metric.)
 template <typename T, typename MemberType>
-struct Field {
-    const char* name;
-    MemberType T::* member;
-    bool required;
-    MemberType default_value;
-    using Validator = std::function<bool(const MemberType&)>;
-    Validator validator;
-
-    // Enhanced: Performance tracking
-    mutable std::atomic<uint64_t> access_count{0};
-    mutable std::atomic<uint64_t> validation_count{0};
-    mutable std::atomic<uint64_t> validation_failures{0};
-
-    Field(const char* n, MemberType T::* m, bool r = true, MemberType def = {},
-          Validator v = nullptr)
-        : name(n),
-          member(m),
-          required(r),
-          default_value(std::move(def)),
-          validator(std::move(v)) {}
-
-    // Enhanced: Performance tracking methods
-    void recordAccess() const noexcept {
-        access_count.fetch_add(1, std::memory_order_relaxed);
-    }
-
-    void recordValidation(bool success) const noexcept {
-        validation_count.fetch_add(1, std::memory_order_relaxed);
-        if (!success) {
-            validation_failures.fetch_add(1, std::memory_order_relaxed);
-        }
-    }
-
-    double getValidationSuccessRate() const noexcept {
-        auto total = validation_count.load(std::memory_order_relaxed);
-        if (total == 0) return 1.0;
-        auto failures = validation_failures.load(std::memory_order_relaxed);
-        return static_cast<double>(total - failures) / total;
-    }
+struct Field : FieldBase<T, MemberType> {
+    using Base = FieldBase<T, MemberType>;
+    using Base::Base;
 };
 
 // Enhanced Reflectable class template with performance optimizations
@@ -197,10 +167,10 @@ struct Reflectable {
 
         T obj;
         std::apply(
-            [&](auto... field) {
+            [&](const auto&... field) {
                 (([&] {
-                     using MemberType = decltype(T().*(field.member));
-                     field.recordAccess();
+                     using MemberType = typename std::remove_cvref_t<
+                         decltype(field)>::member_type;
 
                      if (node[field.name]) {
                          // Deserialize into a value first
@@ -208,16 +178,11 @@ struct Reflectable {
                          // Then assign the value to the object
                          obj.*(field.member) = std::move(temp);
 
-                         // Enhanced: Validation with performance tracking
-                         if (field.validator) {
-                             bool validation_result = field.validator(obj.*(field.member));
-                             field.recordValidation(validation_result);
-                             if (!validation_result) {
-                                 metrics_.recordValidationFailure();
-                                 THROW_INVALID_ARGUMENT(
-                                     std::string("Validation failed for field: ") +
-                                     field.name);
-                             }
+                         if (!field.validate(obj.*(field.member))) {
+                             metrics_.recordValidationFailure();
+                             THROW_INVALID_ARGUMENT(
+                                 std::string("Validation failed for field: ") +
+                                 field.name);
                          }
                      } else if (!field.required) {
                          obj.*(field.member) = field.default_value;
@@ -243,8 +208,8 @@ struct Reflectable {
 
         YAML::Node node;
         std::apply(
-            [&](auto... field) {
-                ((field.recordAccess(), node[field.name] = obj.*(field.member)), ...);
+            [&](const auto&... field) {
+                ((node[field.name] = obj.*(field.member)), ...);
             },
             fields);
 
@@ -258,7 +223,7 @@ struct Reflectable {
 
 // Enhanced field creation function
 template <typename T, typename MemberType>
-auto make_field(const char* name, MemberType T::* member, bool required = true,
+auto make_field(const char* name, MemberType T::*member, bool required = true,
                 MemberType default_value = {},
                 typename Field<T, MemberType>::Validator validator = nullptr)
     -> Field<T, MemberType> {
@@ -338,20 +303,22 @@ template <typename T, typename... Fields>
 auto get_reflection_stats(const Reflectable<T, Fields...>& reflector) -> ReflectionStats<T, Fields...> {
     const auto& metrics = reflector.getMetrics();
 
-    // Calculate field-level statistics
-    double total_validation_success = 0.0;
-    std::size_t field_count = 0;
-
-    std::apply([&](auto... field) {
-        ((total_validation_success += field.getValidationSuccessRate(), ++field_count), ...);
-    }, reflector.fields);
+    const auto deserializations =
+        metrics.deserialization_count.load(std::memory_order_relaxed);
+    const auto failures =
+        metrics.validation_failures.load(std::memory_order_relaxed);
+    const double success_rate =
+        deserializations > 0
+            ? static_cast<double>(deserializations - failures) /
+                  static_cast<double>(deserializations)
+            : 1.0;
 
     return {
-        field_count,
+        sizeof...(Fields),
         reflector.getCacheSize(),
         metrics.getAverageSerializationTime(),
         metrics.getAverageDeserializationTime(),
-        field_count > 0 ? total_validation_success / field_count : 1.0,
+        success_rate,
         metrics.serialization_count.load() + metrics.deserialization_count.load()
     };
 }

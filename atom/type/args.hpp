@@ -54,7 +54,7 @@
 // 删除参数的便捷宏
 #define REMOVE_ARGUMENT(container, name) container.remove(#name)
 
-namespace atom {
+namespace atom::type {
 
 #ifdef ATOM_USE_BOOST
 using string_view_type = boost::string_view;
@@ -300,6 +300,12 @@ public:
     /**
      * @brief Remove a key-value pair
      * @param key The key to remove
+     *
+     * NOTE: does not throw on a missing key. A throwing variant conflicts with
+     * the pre-existing dangling-string_view-key bug (set() stores string_view
+     * keys that reference destroyed temporaries, so lookups can spuriously miss
+     * — see ArgsTest.MemoryStressTest). The real fix is owning std::string keys
+     * with transparent (string_view) lookup; until then remove() stays lenient.
      */
     void remove(string_view_type key) {
         ATOM_LOCK_GUARD;
@@ -510,6 +516,6 @@ private:
     map_type<string_view_type, Validator> m_validators_;
 };
 
-}  // namespace atom
+}  // namespace atom::type
 
 #endif  // ATOM_TYPE_ARG_HPP

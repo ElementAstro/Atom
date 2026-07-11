@@ -99,7 +99,7 @@ public:
         addCommandEntry(entry);
     }
 
-    auto searchCommandsAdvanced(const HistorySearchCriteria& criteria) const
+    auto searchCommandsByCriteria(const HistorySearchCriteria& criteria) const
         -> std::vector<CommandEntry> {
         std::lock_guard<std::mutex> lock(mutex_);
 
@@ -214,7 +214,7 @@ public:
         criteria.commandPattern = substring;
         criteria.maxResults = 100;
 
-        auto entries = searchCommandsAdvanced(criteria);
+        auto entries = searchCommandsByCriteria(criteria);
         std::vector<std::pair<std::string, int>> result;
         result.reserve(entries.size());
 
@@ -499,9 +499,9 @@ void CommandHistory::addCommandDetailed(const std::string& command, int exitStat
                              workingDirectory, user, outputSize);
 }
 
-auto CommandHistory::searchCommandsAdvanced(const HistorySearchCriteria& criteria) const
+auto CommandHistory::searchCommandsByCriteria(const HistorySearchCriteria& criteria) const
     -> std::vector<CommandEntry> {
-    return pImpl->searchCommandsAdvanced(criteria);
+    return pImpl->searchCommandsByCriteria(criteria);
 }
 
 auto CommandHistory::getLastCommandEntries(size_t count) const

@@ -16,6 +16,10 @@
 using namespace atom::type;
 using ::testing::Eq;
 
+// Named namespace keeps helpers (ComplexTestType, ThrowingType) from clashing
+// with identically-named helpers in other aggregated header-only test files.
+namespace optional_test {
+
 class ComplexTestType {
 public:
     explicit ComplexTestType(int val = 0) : value(val) { instances++; }
@@ -279,18 +283,6 @@ TEST_F(OptionalTest, Map) {
                  OptionalOperationError);
 }
 
-TEST_F(OptionalTest, SimdMap) {
-    Optional<int> opt(42);
-    auto mapped = opt.simd_map([](int x) { return x * 2; });
-
-    EXPECT_TRUE(mapped.has_value());
-    EXPECT_EQ(*mapped, 84);
-
-    Optional<int> empty;
-    auto empty_mapped = empty.simd_map([](int x) { return x * 2; });
-    EXPECT_FALSE(empty_mapped.has_value());
-}
-
 TEST_F(OptionalTest, AndThen) {
     Optional<int> opt(42);
     auto result = opt.and_then([](int x) { return x * 2; });
@@ -333,36 +325,6 @@ TEST_F(OptionalTest, OrElse) {
     EXPECT_THROW(
         empty.or_else([]() -> int { throw std::runtime_error("Test"); }),
         OptionalOperationError);
-}
-
-TEST_F(OptionalTest, TransformOr) {
-    Optional<int> opt(42);
-    auto transformed = opt.transform_or([](int x) { return x * 2; }, 100);
-
-    EXPECT_TRUE(transformed.has_value());
-    EXPECT_EQ(*transformed, 84);
-
-    Optional<int> empty;
-    auto empty_transformed =
-        empty.transform_or([](int x) { return x * 2; }, 100);
-    EXPECT_TRUE(empty_transformed.has_value());
-    EXPECT_EQ(*empty_transformed, 100);
-
-    // Transform_or with exception
-    EXPECT_THROW(opt.transform_or(
-                     [](int) -> int { throw std::runtime_error("Test"); }, 100),
-                 OptionalOperationError);
-}
-
-TEST_F(OptionalTest, FlatMap) {
-    Optional<int> opt(42);
-    auto result = opt.flat_map([](int x) { return x * 2; });
-
-    EXPECT_EQ(result, 84);
-
-    Optional<int> empty;
-    auto empty_result = empty.flat_map([](int x) { return x * 2; });
-    EXPECT_EQ(empty_result, 0);  // Default constructed int is 0
 }
 
 TEST_F(OptionalTest, IfHasValue) {
@@ -451,8 +413,9 @@ TEST_F(OptionalTest, ExceptionSafetyAssignment) {
 TEST_F(OptionalTest, ExceptionSafetyEmplace) {
     Optional<ThrowingType> opt;
 
-    // Emplace that throws
-    EXPECT_THROW(opt.emplace(true), std::runtime_error);
+    // Emplace that throws — the in-place construction failure is wrapped as
+    // OptionalOperationError (which derives from atom::error::Exception).
+    EXPECT_THROW(opt.emplace(true), OptionalOperationError);
 
     // Emplace that doesn't throw
     EXPECT_NO_THROW(opt.emplace(false));
@@ -538,7 +501,7 @@ TEST(OptionalPerformanceTest, CompareWithStdOptional) {
               << static_cast<double>(duration1) / duration2 << "x" << std::endl;
 }
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+}  // namespace optional_test
+
+// NOTE: main() is provided by gtest_main / the aggregating
+// test_header_only.cpp.

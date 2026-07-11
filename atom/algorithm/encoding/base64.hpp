@@ -28,6 +28,8 @@ Description: Base64 encoding/decoding algorithms with SIMD optimizations
 
 namespace atom::algorithm {
 
+using atom::type::StaticString;
+
 namespace detail {
 /**
  * @brief Base64 character set.

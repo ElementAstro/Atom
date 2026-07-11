@@ -33,8 +33,10 @@ Description: Crash Report
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
-// Disable minidump functionality for now due to header compatibility issues
-#define ATOM_DISABLE_MINIDUMP 1
+// dbghelp.h declares MiniDumpWriteDump / MINIDUMP_EXCEPTION_INFORMATION and must
+// be included after windows.h. Link against dbghelp (added in CMake for WIN32;
+// MSVC also picks it up via the pragma below).
+#include <dbghelp.h>
 #ifdef _MSC_VER
 #pragma comment(lib, "dbghelp.lib")
 #endif

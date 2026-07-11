@@ -24,7 +24,7 @@
 #include <boost/type_traits/is_object.hpp>
 #endif
 
-namespace atom {
+namespace atom::type {
 
 /**
  * @brief Exception thrown when attempting to access an invalid UnshiftedPtr.
@@ -240,25 +240,26 @@ public:
         requires std::constructible_from<T, Args...>
 #endif
     constexpr void reset(Args&&... args) {
-        if constexpr (Safety == ThreadSafetyPolicy::None) {
-            destroy();
-            try {
+        // Strong exception guarantee: build the new value in a temporary FIRST,
+        // so if its constructor throws the existing object is left intact.
+        // (Destroying first then constructing would leave the pointer empty on
+        // failure.) Falls back to construct-in-place for non-movable T.
+        auto do_reset = [&] {
+            if constexpr (std::is_move_constructible_v<T>) {
+                T tmp(std::forward<Args>(args)...);  // may throw; old intact
+                destroy();
+                new (&storage_) T(std::move(tmp));
+            } else {
+                destroy();
                 new (&storage_) T(std::forward<Args>(args)...);
-                set_ownership_unsafe(true);
-            } catch (...) {
-                set_ownership_unsafe(false);
-                throw;
             }
+            set_ownership_unsafe(true);
+        };
+        if constexpr (Safety == ThreadSafetyPolicy::None) {
+            do_reset();
         } else {
             std::lock_guard<mutex_type> lock(mutex_);
-            destroy();
-            try {
-                new (&storage_) T(std::forward<Args>(args)...);
-                set_ownership_unsafe(true);
-            } catch (...) {
-                set_ownership_unsafe(false);
-                throw;
-            }
+            do_reset();
         }
     }
 
@@ -498,9 +499,14 @@ private:
     }
 
     /**
-     * @brief Relinquishes ownership without destroying the object.
+     * @brief Destroys the (moved-from) object and clears ownership.
+     *
+     * Used by the move ctor/assignment on the moved-from source: the object was
+     * already moved out, so it must be destroyed rather than merely flagged
+     * not-owning — otherwise its destructor never runs (the UnshiftedPtr dtor
+     * only destroys when owns_ is true) and the object leaks.
      */
-    constexpr void relinquish_ownership() noexcept { set_ownership(false); }
+    constexpr void relinquish_ownership() noexcept { destroy(); }
 
     /**
      * @brief Relinquishes ownership without locking (must be called under lock
@@ -525,6 +531,6 @@ using ThreadSafeUnshiftedPtr = UnshiftedPtr<T, ThreadSafetyPolicy::Mutex>;
 template <typename T>
 using LockFreeUnshiftedPtr = UnshiftedPtr<T, ThreadSafetyPolicy::Atomic>;
 
-}  // namespace atom
+}  // namespace atom::type
 
 #endif  // ATOM_TYPE_NO_OFFSET_PTR_HPP

@@ -6,10 +6,10 @@
  * "atom/system/process/pidwatcher.hpp" instead.
  */
 
-#ifndef ATOM_SYSTEM_PIDWATCHER_HPP
-#define ATOM_SYSTEM_PIDWATCHER_HPP
+#ifndef ATOM_SYSTEM_PIDWATCHER_COMPAT_HPP
+#define ATOM_SYSTEM_PIDWATCHER_COMPAT_HPP
 
 // Forward to the new location
 #include "process/pidwatcher.hpp"
 
-#endif  // ATOM_SYSTEM_PIDWATCHER_HPP
+#endif  // ATOM_SYSTEM_PIDWATCHER_COMPAT_HPP

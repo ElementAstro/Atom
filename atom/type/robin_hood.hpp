@@ -1,16 +1,16 @@
 #ifndef ATOM_UTILS_CONTAINERS_ROBIN_HOOD_HPP
 #define ATOM_UTILS_CONTAINERS_ROBIN_HOOD_HPP
 
-#include <fmt/format.h>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
-namespace atom::utils {
+namespace atom::type {
 
 /**
  * @brief A high-performance hash map implementation using Robin Hood hashing
@@ -109,6 +109,14 @@ private:
     class iterator {
         using storage_iterator = typename Storage::iterator;
         storage_iterator it_;
+        storage_iterator end_;
+
+        // Empty slots are marked with dist == 0; iteration must skip them.
+        void skip_empty() {
+            while (it_ != end_ && it_->dist == 0) {
+                ++it_;
+            }
+        }
 
     public:
         using iterator_category = std::forward_iterator_tag;
@@ -117,17 +125,21 @@ private:
         using pointer = value_type*;
         using reference = value_type&;
 
-        explicit iterator(storage_iterator it) : it_(it) {}
+        iterator(storage_iterator it, storage_iterator end)
+            : it_(it), end_(end) {
+            skip_empty();
+        }
 
         reference operator*() const { return it_->data; }
         pointer operator->() const { return &it_->data; }
         iterator& operator++() {
             ++it_;
+            skip_empty();
             return *this;
         }
         iterator operator++(int) {
             iterator tmp(*this);
-            ++it_;
+            ++(*this);
             return tmp;
         }
         bool operator==(const iterator& other) const {
@@ -144,6 +156,13 @@ private:
     class const_iterator {
         using storage_const_iterator = typename Storage::const_iterator;
         storage_const_iterator it_;
+        storage_const_iterator end_;
+
+        void skip_empty() {
+            while (it_ != end_ && it_->dist == 0) {
+                ++it_;
+            }
+        }
 
     public:
         using iterator_category = std::forward_iterator_tag;
@@ -152,17 +171,21 @@ private:
         using pointer = const value_type*;
         using reference = const value_type&;
 
-        explicit const_iterator(storage_const_iterator it) : it_(it) {}
+        const_iterator(storage_const_iterator it, storage_const_iterator end)
+            : it_(it), end_(end) {
+            skip_empty();
+        }
 
         reference operator*() const { return it_->data; }
         pointer operator->() const { return &it_->data; }
         const_iterator& operator++() {
             ++it_;
+            skip_empty();
             return *this;
         }
         const_iterator operator++(int) {
             const_iterator tmp(*this);
-            ++it_;
+            ++(*this);
             return tmp;
         }
         bool operator==(const const_iterator& other) const {
@@ -212,6 +235,12 @@ private:
             static_cast<std::mutex*>(lock_.get())->unlock();
         }
     }
+
+    /// RAII helper: releases the write lock on scope exit.
+    struct WriteUnlock {
+        unordered_flat_map* m;
+        ~WriteUnlock() { m->unlock_write(); }
+    };
 
 public:
     /**
@@ -281,34 +310,36 @@ public:
      * @brief Returns an iterator to the beginning
      * @return Iterator to the first element
      */
-    iterator begin() noexcept { return iterator(table_.begin()); }
+    iterator begin() noexcept { return iterator(table_.begin(), table_.end()); }
 
     /**
      * @brief Returns an iterator to the end
      * @return Iterator to one past the last element
      */
-    iterator end() noexcept { return iterator(table_.end()); }
+    iterator end() noexcept { return iterator(table_.end(), table_.end()); }
 
     /**
      * @brief Returns a const iterator to the beginning
      * @return Const iterator to the first element
      */
     const_iterator begin() const noexcept {
-        return const_iterator(table_.begin());
+        return const_iterator(table_.begin(), table_.end());
     }
 
     /**
      * @brief Returns a const iterator to the end
      * @return Const iterator to one past the last element
      */
-    const_iterator end() const noexcept { return const_iterator(table_.end()); }
+    const_iterator end() const noexcept {
+        return const_iterator(table_.end(), table_.end());
+    }
 
     /**
      * @brief Returns a const iterator to the beginning
      * @return Const iterator to the first element
      */
     const_iterator cbegin() const noexcept {
-        return const_iterator(table_.begin());
+        return const_iterator(table_.begin(), table_.end());
     }
 
     /**
@@ -316,7 +347,7 @@ public:
      * @return Const iterator to one past the last element
      */
     const_iterator cend() const noexcept {
-        return const_iterator(table_.end());
+        return const_iterator(table_.end(), table_.end());
     }
 
     /**
@@ -339,6 +370,12 @@ public:
      */
     template <typename K, typename V>
     std::pair<iterator, bool> insert(K&& key, V&& value) {
+        // Serialize writers per the threading policy. rehash() does not take a
+        // lock itself, so calling it here does not re-enter (the mutex is
+        // non-recursive).
+        lock_write();
+        WriteUnlock guard{this};
+
         if (size_ + 1 > max_load_)
             rehash(table_.empty() ? 16 : table_.size() * 2);
 
@@ -351,7 +388,7 @@ public:
                 entry.swap(table_[idx]);
                 if (entry.dist == 0) {
                     ++size_;
-                    return {iterator(table_.begin() + idx), true};
+                    return {iterator(table_.begin() + idx, table_.end()), true};
                 }
             }
             idx = (idx + 1) & mask;
@@ -378,7 +415,7 @@ public:
             }
             if (table_[idx].dist == dist &&
                 key_equal_(table_[idx].data.first, key)) {
-                return iterator(table_.begin() + idx);
+                return iterator(table_.begin() + idx, table_.end());
             }
             idx = (idx + 1) & mask;
             ++dist;
@@ -404,7 +441,7 @@ public:
             }
             if (table_[idx].dist == dist &&
                 key_equal_(table_[idx].data.first, key)) {
-                return const_iterator(table_.begin() + idx);
+                return const_iterator(table_.begin() + idx, table_.end());
             }
             idx = (idx + 1) & mask;
             ++dist;
@@ -420,8 +457,7 @@ public:
     Value& at(const Key& key) {
         auto it = find(key);
         if (it == end()) {
-            throw std::out_of_range(
-                fmt::format("Key not found in unordered_flat_map"));
+            throw std::out_of_range("Key not found in unordered_flat_map");
         }
         return it->second;
     }
@@ -435,8 +471,7 @@ public:
     const Value& at(const Key& key) const {
         auto it = find(key);
         if (it == end()) {
-            throw std::out_of_range(
-                fmt::format("Key not found in unordered_flat_map"));
+            throw std::out_of_range("Key not found in unordered_flat_map");
         }
         return it->second;
     }
@@ -486,8 +521,8 @@ private:
     void rehash(size_type count) {
         if (count > max_size()) {
             throw std::length_error(
-                fmt::format("Requested capacity {} exceeds max_size() of {}",
-                            count, max_size()));
+                "Requested capacity " + std::to_string(count) +
+                " exceeds max_size() of " + std::to_string(max_size()));
         }
 
         Storage new_table(count, alloc_);
@@ -513,6 +548,6 @@ private:
     }
 };
 
-}  // namespace atom::utils
+}  // namespace atom::type
 
 #endif

@@ -1,6 +1,12 @@
 // Helper macros for registering initializers, dependencies, and modules
 #include <spdlog/spdlog.h>
 
+// Version reported by ATOM_MODULE's <name>_getVersion(); the build system may
+// predefine it with the real project version.
+#ifndef ATOM_VERSION
+#define ATOM_VERSION "0.1.0"
+#endif
+
 #ifndef REGISTER_INITIALIZER
 #define REGISTER_INITIALIZER(name, init_func, cleanup_func)       \
     namespace {                                                   \
@@ -56,10 +62,9 @@
         static void init() {                                                   \
             spdlog::info("Initializing module: {}", #module_name);             \
             std::shared_ptr<Component> instance = init_func();                 \
-            Registry::instance().registerModule(                               \
-                #module_name, [instance]() { return instance; });              \
-            Registry::instance().addInitializer(                               \
-                #module_name, [instance]() { instance->initialize(); });       \
+            Registry::instance().registerComponentInstance(                    \
+                #module_name, instance,                                        \
+                [](Component& component) { component.initialize(); });         \
             auto neededComponents = instance->getNeededComponents();           \
             for (const auto& comp : neededComponents) {                        \
                 Registry::instance().addDependency(#module_name, comp);        \
@@ -209,17 +214,17 @@
 
 // Macro for hot-reloadable component
 #ifndef ATOM_HOT_COMPONENT
-#define ATOM_HOT_COMPONENT(component_name, component_type)               \
-    ATOM_COMPONENT(component_name, component_type)                       \
-    bool initialize() override {                                         \
-        if (!component_type::initialize())                               \
-            return false;                                                \
-        Registry::instance().registerModule(                             \
-            #component_name, []() { return component_name::create(); }); \
-        return true;                                                     \
-    }                                                                    \
-    bool reload() {                                                      \
-        spdlog::info("Reloading component: {}", getName());              \
-        return destroy() && initialize();                                \
+#define ATOM_HOT_COMPONENT(component_name, component_type)   \
+    ATOM_COMPONENT(component_name, component_type)            \
+    bool initialize() override {                              \
+        if (!component_type::initialize())                    \
+            return false;                                     \
+        Registry::instance().registerComponentInstance(       \
+            #component_name, this->shared_from_this());       \
+        return true;                                          \
+    }                                                         \
+    bool reload() {                                           \
+        spdlog::info("Reloading component: {}", getName());   \
+        return destroy() && initialize();                     \
     }
 #endif

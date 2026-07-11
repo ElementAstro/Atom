@@ -73,11 +73,11 @@ TEST_F(SignatureTest, SignatureWithDefaultValues) {
 
     EXPECT_TRUE(params[0].hasDefaultValue);
     ASSERT_TRUE(params[0].defaultValue.has_value());
-    EXPECT_EQ(*params[0].defaultValue, "\"World\");
+    EXPECT_EQ(*params[0].defaultValue, "\"World\"");
 
     EXPECT_TRUE(params[1].hasDefaultValue);
     ASSERT_TRUE(params[1].defaultValue.has_value());
-    EXPECT_EQ(*params[1].defaultValue, "\"Hello\");
+    EXPECT_EQ(*params[1].defaultValue, "\"Hello\"");
 }
 
 TEST_F(SignatureTest, SignatureWithComplexTypes) {
@@ -453,6 +453,317 @@ TEST_F(SignatureTest, ParameterComparison) {
     EXPECT_NE(p1, p3);
     EXPECT_NE(p1, p4);
     EXPECT_NE(p1, p5);
+}
+
+//------------------------------------------------------------------------------
+// toString modifier coverage
+//------------------------------------------------------------------------------
+
+TEST_F(SignatureTest, ToStringWithExplicit) {
+    auto result = parseFunctionDefinition("explicit def ctor(val: int)");
+    ASSERT_TRUE(result.has_value());
+    std::string str = result.value().toString();
+    EXPECT_TRUE(str.find("explicit") != std::string::npos);
+}
+
+TEST_F(SignatureTest, ToStringNoexceptModifier) {
+    auto result = parseFunctionDefinition("def safeOp() noexcept -> void");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value().getModifiers(), FunctionModifier::Noexcept);
+    std::string str = result.value().toString();
+    EXPECT_TRUE(str.find("noexcept") != std::string::npos);
+}
+
+TEST_F(SignatureTest, ToStringConstNoexceptModifier) {
+    auto result = parseFunctionDefinition("def readOp() const noexcept -> int");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value().getModifiers(), FunctionModifier::ConstNoexcept);
+    std::string str = result.value().toString();
+    EXPECT_TRUE(str.find("const noexcept") != std::string::npos);
+}
+
+TEST_F(SignatureTest, ToStringVirtualModifier) {
+    auto result = parseFunctionDefinition("virtual def baseOp()");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value().getModifiers(), FunctionModifier::Virtual);
+    std::string str = result.value().toString();
+    EXPECT_TRUE(str.find("virtual") != std::string::npos);
+}
+
+TEST_F(SignatureTest, ToStringOverrideModifier) {
+    auto result = parseFunctionDefinition("def derivedOp() override");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value().getModifiers(), FunctionModifier::Override);
+    std::string str = result.value().toString();
+    EXPECT_TRUE(str.find("override") != std::string::npos);
+}
+
+TEST_F(SignatureTest, ToStringFinalModifier) {
+    auto result = parseFunctionDefinition("def sealedOp() final");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value().getModifiers(), FunctionModifier::Final);
+    std::string str = result.value().toString();
+    EXPECT_TRUE(str.find("final") != std::string::npos);
+}
+
+TEST_F(SignatureTest, ToStringNoneModifier) {
+    auto result = parseFunctionDefinition("def plainOp()");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value().getModifiers(), FunctionModifier::None);
+    std::string str = result.value().toString();
+    EXPECT_TRUE(str.find("plainOp") != std::string::npos);
+    // None modifier: no trailing qualifier word appended
+    EXPECT_EQ(str.find(" const"), std::string::npos);
+    EXPECT_EQ(str.find(" noexcept"), std::string::npos);
+    EXPECT_EQ(str.find(" override"), std::string::npos);
+}
+
+TEST_F(SignatureTest, ToStringParamWithEmptyType) {
+    // Construct a FunctionSignature directly with a param that has empty type
+    // to cover the "if (!param.type.empty())" false branch in toString
+    Parameter p;
+    p.name = "x";
+    p.type = "";
+    p.hasDefaultValue = false;
+    std::vector<Parameter> params{p};
+    FunctionSignature sig("noTypeFn", params, std::nullopt);
+    std::string str = sig.toString();
+    EXPECT_TRUE(str.find("noTypeFn") != std::string::npos);
+    EXPECT_TRUE(str.find("x") != std::string::npos);
+    // No colon should appear since type is empty
+    EXPECT_EQ(str.find(":"), std::string::npos);
+}
+
+//------------------------------------------------------------------------------
+// parseDocComment edge cases
+//------------------------------------------------------------------------------
+
+TEST_F(SignatureTest, DocCommentNoMarker) {
+    // parseDocComment called with a string that has no "/**" -> returns early
+    DocComment doc = parseDocComment("some text without doc marker");
+    EXPECT_TRUE(doc.raw == "some text without doc marker");
+    EXPECT_TRUE(doc.tags.empty());
+}
+
+TEST_F(SignatureTest, DocCommentTagAtEndNoValue) {
+    // Tag at position where there's no whitespace after it (tagEnd == npos)
+    DocComment doc = parseDocComment("/** @brief");
+    // Should not crash; no complete tag parsed
+    EXPECT_FALSE(doc.hasTag("brief"));
+}
+
+TEST_F(SignatureTest, DocCommentTagNoValueStart) {
+    // valueStart == npos: nothing after the tag name
+    DocComment doc = parseDocComment("/**@brief\t");
+    // The tab after @brief -> tagEnd found, but then nothing follows
+    // result is either empty or partial - just verify no crash
+    (void)doc;
+}
+
+TEST_F(SignatureTest, DocCommentNoClosingMarker) {
+    // valueEnd path where no @, no "*/" -> uses comment.size()
+    DocComment doc = parseDocComment("/** @note some content without close");
+    EXPECT_TRUE(doc.hasTag("note"));
+    ASSERT_TRUE(doc.getTag("note").has_value());
+    EXPECT_FALSE(doc.getTag("note")->empty());
+}
+
+TEST_F(SignatureTest, DocCommentGetTagMissing) {
+    // getTag for a tag that doesn't exist -> returns nullopt
+    DocComment doc = parseDocComment("/** @brief Hello */");
+    auto val = doc.getTag("nonexistent");
+    EXPECT_FALSE(val.has_value());
+}
+
+TEST_F(SignatureTest, DocCommentSecondParamTagSkipped) {
+    // Second @param tag should be skipped (only first stored)
+    std::string sig =
+        "def fn(a: int, b: int) /** @param a first\n"
+        " * @param b second\n"
+        " */";
+    auto result = parseFunctionDefinition(sig);
+    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.value().getDocComment().has_value());
+    const DocComment& doc = *result.value().getDocComment();
+    // Only first @param stored
+    ASSERT_TRUE(doc.getTag("param").has_value());
+    EXPECT_EQ(*doc.getTag("param"), "a first");
+}
+
+//------------------------------------------------------------------------------
+// Bracket/brace/square unbalanced error paths in parameter parsing
+//------------------------------------------------------------------------------
+
+TEST_F(SignatureTest, ErrorUnbalancedSquareBracketClose) {
+    // Closing ']' before any '[' in a parameter
+    expectParsingError("def fn(a: array]int[)",
+                       ParsingErrorCode::UnbalancedBrackets);
+}
+
+TEST_F(SignatureTest, ErrorUnbalancedAngleBracketClose) {
+    // Closing '>' before any '<' in a parameter
+    expectParsingError("def fn(a: >int)",
+                       ParsingErrorCode::UnbalancedBrackets);
+}
+
+TEST_F(SignatureTest, ErrorUnbalancedBraceClose) {
+    // Closing '}' before any '{' in a parameter
+    expectParsingError("def fn(a: }int)",
+                       ParsingErrorCode::UnbalancedBrackets);
+}
+
+TEST_F(SignatureTest, BalancedSquareBracketsInParam) {
+    // '[' followed by ']' -> balanced, should parse OK
+    auto result = parseFunctionDefinition("def fn(a: array[int])");
+    ASSERT_TRUE(result.has_value());
+    auto params = result.value().getParameters();
+    ASSERT_EQ(params.size(), 1);
+    EXPECT_EQ(params[0].name, "a");
+    EXPECT_EQ(params[0].type, "array[int]");
+}
+
+TEST_F(SignatureTest, BalancedBracesInParam) {
+    // '{' followed by '}' in type -> balanced
+    auto result = parseFunctionDefinition("def fn(a: set{int})");
+    ASSERT_TRUE(result.has_value());
+    auto params = result.value().getParameters();
+    ASSERT_EQ(params.size(), 1);
+    EXPECT_EQ(params[0].name, "a");
+}
+
+TEST_F(SignatureTest, TrailingCommaEmptyParam) {
+    // A trailing comma creates an empty param string that should be skipped
+    // The parser trims and skips empty params; paramStr ends up empty-like
+    // Construct a case: "def fn(a: int,)" -> empty param after comma
+    auto result = parseFunctionDefinition("def fn(a: int,)");
+    ASSERT_TRUE(result.has_value());
+    auto params = result.value().getParameters();
+    // Should have 1 param, the empty trailing one is skipped
+    EXPECT_EQ(params.size(), 1);
+    EXPECT_EQ(params[0].name, "a");
+}
+
+//------------------------------------------------------------------------------
+// Equals-sign scanning: quotes and square brackets
+//------------------------------------------------------------------------------
+
+TEST_F(SignatureTest, DefaultValueWithSingleQuoteString) {
+    // Single-quoted default value -> inQuotes path with quoteChar = '\''
+    auto result = parseFunctionDefinition("def fn(x: string = 'hello')");
+    ASSERT_TRUE(result.has_value());
+    auto params = result.value().getParameters();
+    ASSERT_EQ(params.size(), 1);
+    EXPECT_TRUE(params[0].hasDefaultValue);
+    ASSERT_TRUE(params[0].defaultValue.has_value());
+    EXPECT_EQ(*params[0].defaultValue, "'hello'");
+}
+
+TEST_F(SignatureTest, DefaultValueWithSquareBrackets) {
+    // '=' inside square brackets in default value -> squareBracketDepth
+    auto result = parseFunctionDefinition("def fn(x: list = [1, 2])");
+    ASSERT_TRUE(result.has_value());
+    auto params = result.value().getParameters();
+    ASSERT_EQ(params.size(), 1);
+    EXPECT_TRUE(params[0].hasDefaultValue);
+    ASSERT_TRUE(params[0].defaultValue.has_value());
+    EXPECT_EQ(*params[0].defaultValue, "[1, 2]");
+}
+
+TEST_F(SignatureTest, DefaultValueWithEscapedQuote) {
+    // Escaped quote inside a double-quoted string: '\' before '"' keeps
+    // inQuotes=true. The '=' after the string is the real default separator.
+    auto result =
+        parseFunctionDefinition("def fn(x: string = \"val\\\"end\")");
+    ASSERT_TRUE(result.has_value());
+    auto params = result.value().getParameters();
+    ASSERT_EQ(params.size(), 1);
+    EXPECT_TRUE(params[0].hasDefaultValue);
+}
+
+TEST_F(SignatureTest, DefaultValueEqualSignInsideBraces) {
+    // '=' inside braces -> not treated as default separator
+    // e.g. "def fn(x: map = {k=v})" -> default is "{k=v}"
+    auto result = parseFunctionDefinition("def fn(x: map = {k=v})");
+    ASSERT_TRUE(result.has_value());
+    auto params = result.value().getParameters();
+    ASSERT_EQ(params.size(), 1);
+    EXPECT_TRUE(params[0].hasDefaultValue);
+    ASSERT_TRUE(params[0].defaultValue.has_value());
+    EXPECT_EQ(*params[0].defaultValue, "{k=v}");
+}
+
+//------------------------------------------------------------------------------
+// Registry: register an invalid signature (coverage for cache-miss error path)
+//------------------------------------------------------------------------------
+
+TEST_F(SignatureTest, RegistryInvalidSignatureNotCached) {
+    auto& registry = SignatureRegistry::instance();
+    registry.clearCache();
+
+    // Invalid: no 'def' keyword
+    auto result = registry.registerSignature("bad input no def keyword");
+    EXPECT_FALSE(result.has_value());
+    // Error results must NOT be cached
+    EXPECT_EQ(registry.getCacheSize(), 0);
+}
+
+//------------------------------------------------------------------------------
+// Additional coverage: lines 563-564 (empty param skip), 581-599 (quote scan)
+//------------------------------------------------------------------------------
+
+TEST_F(SignatureTest, LeadingCommaEmptyParam) {
+    // " , a: int" -> first split gives whitespace-only param that trims to empty
+    // This hits lines 563-564 (paramStart = paramEnd + 1; continue;)
+    auto result = parseFunctionDefinition("def fn( , a: int)");
+    ASSERT_TRUE(result.has_value());
+    auto params = result.value().getParameters();
+    // Empty param is skipped; only "a: int" is parsed
+    ASSERT_EQ(params.size(), 1);
+    EXPECT_EQ(params[0].name, "a");
+    EXPECT_EQ(params[0].type, "int");
+}
+
+TEST_F(SignatureTest, DefaultValueWithQuoteBeforeEquals) {
+    // Quoted type value before the '=' - this forces lines 581-582 (enter inQuotes)
+    // and lines 597-599 (exit inQuotes) to be executed before finding equalsPos
+    // param string: "x: 'hello=world' = 'default'"
+    auto result = parseFunctionDefinition("def fn(x: str = 'ab\\'cd')");
+    // Just verify it parses without crash; actual value may vary
+    ASSERT_TRUE(result.has_value());
+    auto params = result.value().getParameters();
+    ASSERT_EQ(params.size(), 1);
+    EXPECT_EQ(params[0].name, "x");
+    EXPECT_TRUE(params[0].hasDefaultValue);
+}
+
+TEST_F(SignatureTest, TypeWithQuoteAndEqualsDefault) {
+    // Force the inQuotes path: param with a quote in type before '='
+    // "x: 'quoted_type' = value" -> enters inQuotes at opening quote,
+    // exits at closing quote, then finds '=' for default
+    auto result =
+        parseFunctionDefinition("def fn(x: string = 'quoted=inside')");
+    ASSERT_TRUE(result.has_value());
+    auto params = result.value().getParameters();
+    ASSERT_EQ(params.size(), 1);
+    EXPECT_TRUE(params[0].hasDefaultValue);
+    // Default value is everything after the outer '='
+    ASSERT_TRUE(params[0].defaultValue.has_value());
+    EXPECT_EQ(*params[0].defaultValue, "'quoted=inside'");
+}
+
+TEST_F(SignatureTest, QuotedTypeBeforeEqualsSign) {
+    // param = "x: \"some type\" = 42"
+    // The '"' at position 3 is encountered BEFORE any unquoted '=' sign,
+    // so the equals-scan enters inQuotes (lines 581-582) then exits (597-599)
+    // before finding the actual default-value '=' at position 15.
+    auto result = parseFunctionDefinition("def fn(x: \"some type\" = 42)");
+    ASSERT_TRUE(result.has_value());
+    auto params = result.value().getParameters();
+    ASSERT_EQ(params.size(), 1);
+    EXPECT_EQ(params[0].name, "x");
+    EXPECT_TRUE(params[0].hasDefaultValue);
+    ASSERT_TRUE(params[0].defaultValue.has_value());
+    EXPECT_EQ(*params[0].defaultValue, "42");
 }
 
 }  // namespace atom::meta::test

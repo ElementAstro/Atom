@@ -372,7 +372,8 @@ TEST_F(FlatSetTest, EraseRange) {
 
     auto next_it = set.erase(first, last);
 
-    EXPECT_EQ(set.size(), 3);
+    // {1,2,3,4,5} minus the erased range {2,3,4} leaves {1,5}.
+    EXPECT_EQ(set.size(), 2);
     EXPECT_FALSE(set.contains(2));
     EXPECT_FALSE(set.contains(3));
     EXPECT_FALSE(set.contains(4));
@@ -443,68 +444,70 @@ TEST_F(FlatSetTest, Contains) {
 }
 
 TEST_F(FlatSetTest, EqualRange) {
-    auto [first, last] = small_set_.equalRange(3);
+    auto [first, last] = small_set_.equal_range(3);
     EXPECT_NE(first, small_set_.end());
     EXPECT_EQ(*first, 3);
     EXPECT_EQ(std::distance(first, last), 1);
 
-    auto [first_not_found, last_not_found] = small_set_.equalRange(10);
+    auto [first_not_found, last_not_found] = small_set_.equal_range(10);
     EXPECT_EQ(first_not_found, last_not_found);
 
     // Test const version
     const auto& const_set = small_set_;
-    auto [const_first, const_last] = const_set.equalRange(3);
+    auto [const_first, const_last] = const_set.equal_range(3);
     EXPECT_NE(const_first, const_set.end());
     EXPECT_EQ(*const_first, 3);
     EXPECT_EQ(std::distance(const_first, const_last), 1);
 }
 
 TEST_F(FlatSetTest, LowerBound) {
-    auto it = small_set_.lowerBound(3);
+    auto it = small_set_.lower_bound(3);
     EXPECT_NE(it, small_set_.end());
     EXPECT_EQ(*it, 3);
 
-    it = small_set_.lowerBound(2.5);  // Between 2 and 3
+    // FlatSet<int> uses std::less<int> (non-transparent), so a double argument
+    // is converted to int: 2.5 -> 2, and lower_bound(2) yields the element 2.
+    it = small_set_.lower_bound(2.5);
     EXPECT_NE(it, small_set_.end());
-    EXPECT_EQ(*it, 3);
+    EXPECT_EQ(*it, 2);
 
-    it = small_set_.lowerBound(10);  // Beyond the last element
+    it = small_set_.lower_bound(10);  // Beyond the last element
     EXPECT_EQ(it, small_set_.end());
 
     // Test const version
     const auto& const_set = small_set_;
-    auto const_it = const_set.lowerBound(3);
+    auto const_it = const_set.lower_bound(3);
     EXPECT_NE(const_it, const_set.end());
     EXPECT_EQ(*const_it, 3);
 }
 
 TEST_F(FlatSetTest, UpperBound) {
-    auto it = small_set_.upperBound(3);
+    auto it = small_set_.upper_bound(3);
     EXPECT_NE(it, small_set_.end());
     EXPECT_EQ(*it, 4);
 
-    it = small_set_.upperBound(2.5);  // Between 2 and 3
+    it = small_set_.upper_bound(2.5);  // Between 2 and 3
     EXPECT_NE(it, small_set_.end());
     EXPECT_EQ(*it, 3);
 
-    it = small_set_.upperBound(10);  // Beyond the last element
+    it = small_set_.upper_bound(10);  // Beyond the last element
     EXPECT_EQ(it, small_set_.end());
 
     // Test const version
     const auto& const_set = small_set_;
-    auto const_it = const_set.upperBound(3);
+    auto const_it = const_set.upper_bound(3);
     EXPECT_NE(const_it, const_set.end());
     EXPECT_EQ(*const_it, 4);
 }
 
 TEST_F(FlatSetTest, KeyComp) {
-    auto comp = small_set_.keyComp();
+    auto comp = small_set_.key_comp();
     EXPECT_TRUE(comp(1, 2));
     EXPECT_FALSE(comp(2, 1));
 }
 
 TEST_F(FlatSetTest, ValueComp) {
-    auto comp = small_set_.valueComp();
+    auto comp = small_set_.value_comp();
     EXPECT_TRUE(comp(1, 2));
     EXPECT_FALSE(comp(2, 1));
 }

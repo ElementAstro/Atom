@@ -10,7 +10,11 @@ namespace atom::type {
 JsonValue::JsonValue() : type_(Type::Null), value_(nullptr) {}
 JsonValue::JsonValue(const std::string& value)
     : type_(Type::String), value_(value) {}
+JsonValue::JsonValue(const char* value)
+    : type_(Type::String), value_(std::string(value)) {}
 JsonValue::JsonValue(double value) : type_(Type::Number), value_(value) {}
+JsonValue::JsonValue(int value)
+    : type_(Type::Number), value_(static_cast<double>(value)) {}
 JsonValue::JsonValue(bool value) : type_(Type::Bool), value_(value) {}
 JsonValue::JsonValue(const JsonObject& value)
     : type_(Type::Object), value_(value) {}
@@ -20,47 +24,47 @@ JsonValue::JsonValue(const JsonArray& value)
 // Accessors for JsonValue types
 auto JsonValue::type() const -> Type { return type_; }
 
-auto JsonValue::asString() const -> const std::string& {
+auto JsonValue::as_string() const -> const std::string& {
     if (type_ != Type::String) {
         THROW_INVALID_ARGUMENT("Not a string");
     }
     return std::get<std::string>(value_);
 }
 
-auto JsonValue::asNumber() const -> double {
+auto JsonValue::as_number() const -> double {
     if (type_ != Type::Number) {
         THROW_INVALID_ARGUMENT("Not a number");
     }
     return std::get<double>(value_);
 }
 
-auto JsonValue::asBool() const -> bool {
+auto JsonValue::as_bool() const -> bool {
     if (type_ != Type::Bool) {
         THROW_INVALID_ARGUMENT("Not a bool");
     }
     return std::get<bool>(value_);
 }
 
-auto JsonValue::asObject() const -> const JsonObject& {
+auto JsonValue::as_object() const -> const JsonObject& {
     if (type_ != Type::Object) {
         THROW_INVALID_ARGUMENT("Not an object");
     }
     return std::get<JsonObject>(value_);
 }
 
-auto JsonValue::asArray() const -> const JsonArray& {
+auto JsonValue::as_array() const -> const JsonArray& {
     if (type_ != Type::Array) {
         THROW_INVALID_ARGUMENT("Not an array");
     }
     return std::get<JsonArray>(value_);
 }
 
-auto JsonValue::toString() const -> std::string {
+auto JsonValue::to_string() const -> std::string {
     switch (type_) {
         case Type::Null:
             return "null";
         case Type::String: {
-            std::string escaped = asString();
+            std::string escaped = as_string();
             std::string result = "\"";
             for (char c : escaped) {
                 switch (c) {
@@ -94,7 +98,7 @@ auto JsonValue::toString() const -> std::string {
             return result;
         }
         case Type::Number: {
-            double num = asNumber();
+            double num = as_number();
             // Check if the number is an integer
             if (num == std::floor(num)) {
                 return std::to_string(static_cast<long long>(num));
@@ -107,26 +111,26 @@ auto JsonValue::toString() const -> std::string {
             }
         }
         case Type::Bool:
-            return asBool() ? "true" : "false";
+            return as_bool() ? "true" : "false";
         case Type::Object: {
             std::string result = "{";
-            const auto& obj = asObject();
+            const auto& obj = as_object();
             for (auto it = obj.begin(); it != obj.end(); ++it) {
                 if (it != obj.begin()) {
                     result += ",";
                 }
-                result += "\"" + it->first + "\":" + it->second.toString();
+                result += "\"" + it->first + "\":" + it->second.to_string();
             }
             result += "}";
             return result;
         }
         case Type::Array: {
             std::string result = "[";
-            const auto& arr = asArray();
+            const auto& arr = as_array();
             for (size_t i = 0; i < arr.size(); ++i) {
                 if (i > 0)
                     result += ",";
-                result += arr[i].toString();
+                result += arr[i].to_string();
             }
             result += "]";
             return result;
@@ -140,14 +144,14 @@ auto JsonValue::operator[](const std::string& key) const -> const JsonValue& {
     if (type_ != Type::Object) {
         THROW_INVALID_ARGUMENT("Not an object");
     }
-    return asObject().at(key);
+    return as_object().at(key);
 }
 
 auto JsonValue::operator[](size_t index) const -> const JsonValue& {
     if (type_ != Type::Array) {
         THROW_INVALID_ARGUMENT("Not an array");
     }
-    return asArray().at(index);
+    return as_array().at(index);
 }
 
 // JsonParser Implementation

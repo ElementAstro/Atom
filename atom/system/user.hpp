@@ -6,10 +6,10 @@
  * "atom/system/info/user.hpp" instead.
  */
 
-#ifndef ATOM_SYSTEM_USER_HPP
-#define ATOM_SYSTEM_USER_HPP
+#ifndef ATOM_SYSTEM_USER_COMPAT_HPP
+#define ATOM_SYSTEM_USER_COMPAT_HPP
 
 // Forward to the new location
 #include "info/user.hpp"
 
-#endif  // ATOM_SYSTEM_USER_HPP
+#endif  // ATOM_SYSTEM_USER_COMPAT_HPP

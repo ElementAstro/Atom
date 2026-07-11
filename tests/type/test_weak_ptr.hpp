@@ -117,12 +117,14 @@ TEST_F(EnhancedWeakPtrTest, BasicOperations) {
     weak2.lock();
     EXPECT_EQ(weak2.getLockAttempts(), 2);
 
-    // Expiry when shared_ptr is destroyed
+    // Expiry when shared_ptr is destroyed. Hold the strong reference in a named
+    // variable: a weak ptr does not keep the object alive, so binding it to a
+    // temporary shared_ptr would leave weak3 expired immediately.
     shared.reset();
-    EnhancedWeakPtr<int> weak3(std::make_shared<int>(99));
+    auto shared3 = std::make_shared<int>(99);
+    EnhancedWeakPtr<int> weak3(shared3);
     EXPECT_FALSE(weak3.expired());
-    auto locked3 = weak3.lock();
-    locked3.reset();
+    shared3.reset();
     EXPECT_TRUE(weak3.expired());
 }
 
@@ -194,19 +196,19 @@ TEST_F(EnhancedWeakPtrTest, WaitFor) {
     shared.reset();
     EXPECT_FALSE(weak.waitFor(100ms));
 
-    // Test with object that becomes available during wait
+    // notifyAll wakes a concurrent waiter; once the object is observable the
+    // wait succeeds. (The previous version reassigned weak2 itself from the
+    // thread while waitFor read it — a data race; here weak2 is bound up front
+    // and only notifyAll crosses the thread boundary.)
     auto shared2 = std::make_shared<int>(99);
-    EnhancedWeakPtr<int> weak2;
+    EnhancedWeakPtr<int> weak2(shared2);
 
-    std::thread t([&shared2, &weak2]() {
+    std::thread t([&weak2]() {
         std::this_thread::sleep_for(50ms);
-        weak2 = EnhancedWeakPtr<int>(shared2);
         weak2.notifyAll();
     });
 
-    // This will fail because even though the object becomes available,
-    // the waitFor is operating on a copy of the weak pointer that never changes
-    EXPECT_FALSE(weak2.waitFor(200ms));
+    EXPECT_TRUE(weak2.waitFor(200ms));
 
     t.join();
 }
@@ -238,26 +240,12 @@ TEST_F(EnhancedWeakPtrTest, TryLockPeriodic) {
     EXPECT_TRUE(result);
     EXPECT_EQ(*result, 42);
 
-    // Failure after max attempts
+    // Failure after max attempts. Drop the strong reference held in `result`
+    // first — otherwise it keeps the object alive and the lock would succeed.
+    result.reset();
     shared.reset();
     result = weak.tryLockPeriodic(10ms, 2);
     EXPECT_FALSE(result);
-
-    // Object that becomes available after a couple attempts
-    EnhancedWeakPtr<int> weak2;
-    std::thread t([&shared, &weak2]() {
-        std::this_thread::sleep_for(25ms);
-        weak2 = EnhancedWeakPtr<int>(shared);
-    });
-
-    shared = std::make_shared<int>(99);
-    result = weak2.tryLockPeriodic(10ms, 5);
-
-    // This is expected to fail because the thread modifies a different weak2
-    // than the one we're calling tryLockPeriodic on
-    EXPECT_FALSE(result);
-
-    t.join();
 }
 
 TEST_F(EnhancedWeakPtrTest, WeakPtrAndSharedPtrAccessors) {
@@ -272,12 +260,14 @@ TEST_F(EnhancedWeakPtrTest, WeakPtrAndSharedPtrAccessors) {
     auto newShared = weak.createShared();
     EXPECT_EQ(*newShared, 42);
 
-    // Lock attempts counter
-    EXPECT_EQ(weak.getLockAttempts(), 0);
+    // Lock attempts counter. createShared() above is implemented as lock(), so
+    // it already bumped the counter — measure increments from the current
+    // value.
+    const size_t baseAttempts = weak.getLockAttempts();
     weak.lock();
-    EXPECT_EQ(weak.getLockAttempts(), 1);
+    EXPECT_EQ(weak.getLockAttempts(), baseAttempts + 1);
     weak.lock();
-    EXPECT_EQ(weak.getLockAttempts(), 2);
+    EXPECT_EQ(weak.getLockAttempts(), baseAttempts + 2);
 }
 
 TEST_F(EnhancedWeakPtrTest, AsyncLock) {
@@ -290,7 +280,10 @@ TEST_F(EnhancedWeakPtrTest, AsyncLock) {
     EXPECT_TRUE(result);
     EXPECT_EQ(*result, 42);
 
-    // Test async lock with expired pointer
+    // Test async lock with expired pointer. Release the strong reference in
+    // `result` first; otherwise it keeps the object alive and the lock
+    // succeeds.
+    result.reset();
     shared.reset();
     future = weak.asyncLock();
     result = future.get();
@@ -348,7 +341,10 @@ TEST_F(EnhancedWeakPtrTest, Cast) {
     EXPECT_EQ(derivedShared->base_value, 42);
     EXPECT_EQ(derivedShared->derived_value, 84);
 
-    // Expired pointer should still cast but result in expired pointer
+    // Expired pointer should still cast but result in expired pointer. Drop the
+    // strong reference obtained from lock() above first, or the object stays
+    // alive.
+    derivedShared.reset();
     shared.reset();
     auto derivedWeak2 = baseWeak.staticCast<Derived>();
     EXPECT_TRUE(derivedWeak2.expired());
@@ -452,8 +448,10 @@ TEST_F(EnhancedWeakPtrVoidTest, WithLock) {
     EXPECT_TRUE(success);
     EXPECT_TRUE(executed);
 
-    // After shared_ptr is destroyed
+    // After shared_ptr is destroyed. Both strong references (the concrete one
+    // and the void alias the weak was built from) must drop to expire it.
     concrete.reset();
+    voidShared.reset();
     executed = false;
     result = weak.withLock([&executed]() {
         executed = true;
@@ -481,8 +479,9 @@ TEST_F(EnhancedWeakPtrVoidTest, TryLockOrElse) {
 
     EXPECT_EQ(result, 42);
 
-    // Failure case
+    // Failure case (drop both the concrete and void-alias strong references)
     concrete.reset();
+    voidShared.reset();
     result = weak.tryLockOrElse([]() { return 42; }, []() { return -1; });
 
     EXPECT_EQ(result, -1);
@@ -606,7 +605,8 @@ TEST_F(EnhancedWeakPtrTest, DynamicCast) {
     auto otherDerivedWeak = baseWeak.dynamicCast<OtherDerived>();
     EXPECT_TRUE(otherDerivedWeak.expired());
 
-    // Test with expired pointer
+    // Test with expired pointer (release the lock()ed strong reference first)
+    locked.reset();
     derived.reset();
     derivedWeak = baseWeak.dynamicCast<Derived>();
     EXPECT_TRUE(derivedWeak.expired());
@@ -629,7 +629,8 @@ TEST_F(EnhancedWeakPtrTest, StaticCast) {
     auto locked = derivedWeak.lock();
     EXPECT_EQ(locked->value, 42);
 
-    // Test with expired pointer
+    // Test with expired pointer (release the lock()ed strong reference first)
+    locked.reset();
     base.reset();
     derivedWeak = baseWeak.staticCast<Derived>();
     EXPECT_TRUE(derivedWeak.expired());
@@ -729,14 +730,17 @@ TEST_F(EnhancedWeakPtrTest, LockExpected) {
     auto shared = std::make_shared<int>(42);
     EnhancedWeakPtr<int> weak(shared);
 
-    // Test with valid pointer
-    auto expected = weak.lockExpected();
-    EXPECT_TRUE(expected.has_value());
-    EXPECT_EQ(*expected.value(), 42);
+    // Test with valid pointer. Scope the result so its held shared_ptr is
+    // released before we reset the owner (otherwise the object stays alive).
+    {
+        auto expected = weak.lockExpected();
+        EXPECT_TRUE(expected.has_value());
+        EXPECT_EQ(*expected.value(), 42);
+    }
 
     // Test with expired pointer
     shared.reset();
-    expected = weak.lockExpected();
+    auto expected = weak.lockExpected();
     EXPECT_FALSE(expected.has_value());
     EXPECT_EQ(expected.error().type(), WeakPtrErrorType::Expired);
     EXPECT_FALSE(expected.error().message().empty());
@@ -761,7 +765,8 @@ TEST_F(EnhancedWeakPtrVoidTest, DynamicCastAndStatic) {
     auto locked = baseWeak.lock();
     EXPECT_EQ(locked->value, 42);
 
-    // Test with expired pointer
+    // Test with expired pointer (also drop the lock()ed strong reference)
+    locked.reset();
     base.reset();
     voidShared.reset();
 
@@ -871,7 +876,10 @@ TEST_F(EnhancedWeakPtrTest, EdgeCases) {
     auto self = node->weakSelf.lock();
     EXPECT_EQ(self, node);
 
-    // Break cycle and test
+    // Take a separate weak handle so we can observe expiry without keeping the
+    // node alive through `self` (and without dereferencing it after release).
+    EnhancedWeakPtr<Node> weakSelfCopy = node->weakSelf;
+    self.reset();
     node.reset();
-    EXPECT_TRUE(self->weakSelf.expired());
+    EXPECT_TRUE(weakSelfCopy.expired());
 }

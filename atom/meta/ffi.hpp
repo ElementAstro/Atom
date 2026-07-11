@@ -203,37 +203,55 @@ template <>
 struct FFITypeMap<double> {
     static constexpr ffi_type* value = &ffi_type_double;
 };
+// Specialize on fundamental types rather than fixed-width aliases:
+// aliases like int32_t map to different fundamental types per platform
+// (e.g. int vs long), which causes duplicate specializations.
 template <>
-struct FFITypeMap<uint8_t> {
+struct FFITypeMap<bool> {
     static constexpr ffi_type* value = &ffi_type_uint8;
 };
 template <>
-struct FFITypeMap<uint16_t> {
-    static constexpr ffi_type* value = &ffi_type_uint16;
+struct FFITypeMap<char> {
+    static constexpr ffi_type* value =
+        std::is_signed_v<char> ? &ffi_type_sint8 : &ffi_type_uint8;
 };
 template <>
-struct FFITypeMap<uint32_t> {
-    static constexpr ffi_type* value = &ffi_type_uint32;
-};
-template <>
-struct FFITypeMap<uint64_t> {
-    static constexpr ffi_type* value = &ffi_type_uint64;
-};
-template <>
-struct FFITypeMap<int8_t> {
+struct FFITypeMap<signed char> {
     static constexpr ffi_type* value = &ffi_type_sint8;
 };
 template <>
-struct FFITypeMap<int16_t> {
+struct FFITypeMap<unsigned char> {
+    static constexpr ffi_type* value = &ffi_type_uint8;
+};
+template <>
+struct FFITypeMap<short> {
     static constexpr ffi_type* value = &ffi_type_sint16;
 };
 template <>
-struct FFITypeMap<int32_t> {
-    static constexpr ffi_type* value = &ffi_type_sint32;
+struct FFITypeMap<unsigned short> {
+    static constexpr ffi_type* value = &ffi_type_uint16;
 };
 template <>
-struct FFITypeMap<int64_t> {
+struct FFITypeMap<unsigned int> {
+    static constexpr ffi_type* value = &ffi_type_uint;
+};
+template <>
+struct FFITypeMap<long> {
+    static constexpr ffi_type* value =
+        sizeof(long) == 8 ? &ffi_type_sint64 : &ffi_type_sint32;
+};
+template <>
+struct FFITypeMap<unsigned long> {
+    static constexpr ffi_type* value =
+        sizeof(unsigned long) == 8 ? &ffi_type_uint64 : &ffi_type_uint32;
+};
+template <>
+struct FFITypeMap<long long> {
     static constexpr ffi_type* value = &ffi_type_sint64;
+};
+template <>
+struct FFITypeMap<unsigned long long> {
+    static constexpr ffi_type* value = &ffi_type_uint64;
 };
 template <>
 struct FFITypeMap<void> {
@@ -828,9 +846,12 @@ public:
      * \brief Get raw library handle for advanced usage
      * \return Library handle or error
      */
-    [[nodiscard]] auto getHandle() const -> FFIResult<void*> {
-        std::shared_lock lock(mutex_);
+    [[nodiscard]] auto getHandle() -> FFIResult<void*> {
+        // Honour the load strategy on access: Lazy (and Immediate) load here,
+        // while OnDemand still requires an explicit loadLibrary() call.
+        ensureLibraryLoaded();
 
+        std::shared_lock lock(mutex_);
         if (!handle_.isLoaded()) {
             return type::unexpected(FFIError::LibraryLoadFailed);
         }
@@ -900,10 +921,13 @@ public:
     void registerCallback(std::string_view callbackName, Func&& func) {
         std::unique_lock lock(mutex_);
 
-        // Store the function directly without trying to construct a specific
-        // signature
-        callbackMap_.emplace(std::string(callbackName),
-                             std::any{std::forward<Func>(func)});
+        // Wrap in a std::function with the deduced signature so getCallback<Sig>
+        // can recover it via an exact any_cast. Storing the raw closure type
+        // would make every getCallback<Sig> miss (pointer-form any_cast yields
+        // nullptr), and the caller would dereference that null.
+        callbackMap_.emplace(
+            std::string(callbackName),
+            std::any{std::function{std::forward<Func>(func)}});
     }
 
     /**
@@ -922,11 +946,13 @@ public:
             return type::unexpected(FFIError::CallbackNotFound);
         }
 
-        try {
-            return std::any_cast<std::function<Func>>(&it->second);
-        } catch (const std::bad_any_cast&) {
+        // Pointer-form any_cast returns nullptr (it does not throw) when the
+        // stored signature differs from Func; never dereference that null.
+        auto* callback = std::any_cast<std::function<Func>>(&it->second);
+        if (callback == nullptr) {
             return type::unexpected(FFIError::TypeMismatch);
         }
+        return callback;
     }
 
     /**
@@ -939,14 +965,11 @@ public:
     void registerAsyncCallback(std::string_view callbackName, Func&& func) {
         std::unique_lock lock(mutex_);
 
-        // Store the async wrapper directly without trying to construct a
-        // specific signature
-        auto asyncWrapper = [func = std::forward<Func>(func)](auto&&... args) {
-            return std::async(std::launch::async, func,
-                              std::forward<decltype(args)>(args)...);
-        };
-
-        callbackMap_.emplace(std::string(callbackName), std::any{asyncWrapper});
+        // Deduce the wrapped signature R(Args...) via std::function CTAD, then
+        // store a std::function<std::future<R>(Args...)> so a matching
+        // getCallback<std::future<R>(Args...)> recovers it by exact any_cast.
+        registerAsyncImpl(callbackName,
+                          std::function{std::forward<Func>(func)});
     }
 
     /**
@@ -978,6 +1001,20 @@ public:
     }
 
 private:
+    // Builds the async wrapper with a concrete std::future<R>(Args...)
+    // signature deduced from the registered callable. Called while holding the
+    // write lock taken by registerAsyncCallback.
+    template <typename R, typename... Args>
+    void registerAsyncImpl(std::string_view callbackName,
+                           std::function<R(Args...)> func) {
+        std::function<std::future<R>(Args...)> asyncWrapper =
+            [func = std::move(func)](Args... args) {
+                return std::async(std::launch::async, func, args...);
+            };
+        callbackMap_.emplace(std::string(callbackName),
+                             std::any{std::move(asyncWrapper)});
+    }
+
     std::unordered_map<std::string, std::any> callbackMap_;
     mutable std::shared_mutex mutex_;
 };

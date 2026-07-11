@@ -24,33 +24,40 @@
 #include <unordered_set>
 #include <vector>
 
+#include "atom/error/exception.hpp"
+
 namespace atom::type {
 
 /**
- * @brief Custom exceptions for concurrent_set operations
+ * @brief Domain-specific exceptions for ConcurrentSet operations.
+ *
+ * Derive from atom::error::Exception so they integrate with the framework's
+ * error hierarchy (catchable as atom::error::Exception) while keeping a simple
+ * single-message constructor for the throw sites.
  */
-class concurrent_set_exception : public std::runtime_error {
+class ConcurrentSetException : public atom::error::Exception {
 public:
-    explicit concurrent_set_exception(const std::string& msg)
-        : std::runtime_error(msg) {}
+    explicit ConcurrentSetException(const std::string& msg)
+        : atom::error::Exception(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME,
+                                 msg) {}
 };
 
-class cache_exception : public concurrent_set_exception {
+class CacheException : public ConcurrentSetException {
 public:
-    explicit cache_exception(const std::string& msg)
-        : concurrent_set_exception(msg) {}
+    explicit CacheException(const std::string& msg)
+        : ConcurrentSetException(msg) {}
 };
 
-class transaction_exception : public concurrent_set_exception {
+class TransactionException : public ConcurrentSetException {
 public:
-    explicit transaction_exception(const std::string& msg)
-        : concurrent_set_exception(msg) {}
+    explicit TransactionException(const std::string& msg)
+        : ConcurrentSetException(msg) {}
 };
 
-class io_exception : public concurrent_set_exception {
+class IoException : public ConcurrentSetException {
 public:
-    explicit io_exception(const std::string& msg)
-        : concurrent_set_exception(msg) {}
+    explicit IoException(const std::string& msg)
+        : ConcurrentSetException(msg) {}
 };
 
 /**
@@ -149,6 +156,24 @@ public:
     }
 
     /**
+     * @brief Removes a key from the cache if present.
+     *
+     * The cache is used as a positive-membership cache (a hit means the key is
+     * present in the owning set), so erasing a key from the set MUST remove it
+     * here too — otherwise lookups would report deleted keys as present.
+     *
+     * @param key The key to remove.
+     */
+    void remove(const Key& key) {
+        std::unique_lock lock(cache_mutex);
+        auto it = cache_map.find(key);
+        if (it != cache_map.end()) {
+            cache.erase(it->second);
+            cache_map.erase(it);
+        }
+    }
+
+    /**
      * @brief Clears all items from the cache.
      */
     void clear() noexcept {
@@ -231,7 +256,7 @@ public:
  */
 template <typename Key, typename SetType = std::unordered_set<Key>,
           typename Hash = std::hash<Key>>
-class concurrent_set {
+class ConcurrentSet {
 private:
     // Main data structures
     SetType data;  ///< The underlying data storage.
@@ -240,12 +265,17 @@ private:
     std::unique_ptr<LRUCache<Key>>
         lru_cache;  ///< LRU cache for faster lookups.
 
-    // Thread pool components
-    std::queue<std::function<void()>>
+    // Thread pool components. move_only_function (C++23) is required because
+    // tasks include std::packaged_task and lambdas that capture move-only
+    // state; std::function would reject them (it needs a copy-constructible
+    // target).
+    std::queue<std::move_only_function<void()>>
         task_queue;  ///< Queue of tasks to be executed.
     std::vector<std::thread>
         thread_pool;  ///< The thread pool for executing tasks.
     std::atomic<bool> stop_pool{false};  ///< Flag to stop the thread pool.
+    std::atomic<size_t> active_tasks{
+        0};                           ///< Tasks popped but not yet finished.
     mutable std::mutex pool_mutex;    ///< Mutex for protecting the task queue.
     std::condition_variable pool_cv;  ///< Condition variable for task queue.
 
@@ -253,7 +283,7 @@ private:
     std::atomic<size_t> insertion_count{0};  ///< Count of insert operations.
     std::atomic<size_t> deletion_count{0};   ///< Count of delete operations.
     std::atomic<size_t> find_count{0};       ///< Count of find operations.
-    std::atomic<size_t> error_count{0};      ///< Count of errors.
+    mutable std::atomic<size_t> error_count{0};  ///< Count of errors.
 
     // Custom error handling
     std::function<void(std::string_view, std::exception_ptr)> error_callback;
@@ -263,7 +293,7 @@ private:
      */
     void thread_pool_worker() {
         while (true) {
-            std::function<void()> task;
+            std::move_only_function<void()> task;
             {
                 std::unique_lock lock(pool_mutex);
                 pool_cv.wait(
@@ -276,6 +306,11 @@ private:
                 if (!task_queue.empty()) {
                     task = std::move(task_queue.front());
                     task_queue.pop();
+                    // Count the task as in-flight while still holding
+                    // pool_mutex so wait_for_tasks cannot observe "queue empty
+                    // + 0 active" in the window between popping and running the
+                    // task.
+                    ++active_tasks;
                 } else {
                     continue;
                 }
@@ -290,6 +325,26 @@ private:
                 handle_error("Unknown thread pool error",
                              std::current_exception());
             }
+            {
+                std::lock_guard lock(pool_mutex);
+                --active_tasks;
+            }
+            pool_cv.notify_all();
+        }
+    }
+
+    /**
+     * @brief Clears the stop flag and starts `count` fresh worker threads bound
+     * to this object. Caller must ensure no workers are currently running.
+     */
+    void start_worker_pool(size_t count) {
+        {
+            std::lock_guard lock(pool_mutex);
+            stop_pool = false;
+        }
+        thread_pool.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+            thread_pool.emplace_back(&ConcurrentSet::thread_pool_worker, this);
         }
     }
 
@@ -300,7 +355,7 @@ private:
      * @param eptr The exception pointer.
      */
     void handle_error(std::string_view error_message,
-                      std::exception_ptr eptr = nullptr) noexcept {
+                      std::exception_ptr eptr = nullptr) const noexcept {
         error_count++;
 
         if (error_callback) {
@@ -327,13 +382,13 @@ private:
 
 public:
     /**
-     * @brief Constructs a concurrent_set with improved configuration.
+     * @brief Constructs a ConcurrentSet with improved configuration.
      *
      * @param num_threads The number of threads in the thread pool.
      * @param cache_size The size of the LRU cache. Set to 0 to disable caching.
      * @throws std::invalid_argument if num_threads is 0
      */
-    explicit concurrent_set(
+    explicit ConcurrentSet(
         size_t num_threads = std::thread::hardware_concurrency(),
         size_t cache_size = 1000)
         : thread_pool() {
@@ -346,7 +401,7 @@ public:
             try {
                 lru_cache = std::make_unique<LRUCache<Key>>(cache_size);
             } catch (const std::exception& e) {
-                throw concurrent_set_exception(
+                throw ConcurrentSetException(
                     std::string("Failed to initialize cache: ") + e.what());
             }
         } else {
@@ -357,12 +412,16 @@ public:
         thread_pool.reserve(num_threads);
         try {
             for (size_t i = 0; i < num_threads; ++i) {
-                thread_pool.emplace_back(&concurrent_set::thread_pool_worker,
+                thread_pool.emplace_back(&ConcurrentSet::thread_pool_worker,
                                          this);
             }
         } catch (...) {
-            // Clean up if thread creation fails
-            stop_pool = true;
+            // Clean up if thread creation fails (stop_pool under the lock to
+            // avoid the lost-wakeup race described in the destructor).
+            {
+                std::lock_guard lock(pool_mutex);
+                stop_pool = true;
+            }
             pool_cv.notify_all();
             for (auto& t : thread_pool) {
                 if (t.joinable())
@@ -373,12 +432,18 @@ public:
     }
 
     /**
-     * @brief Destructor for concurrent_set.
+     * @brief Destructor for ConcurrentSet.
      */
-    ~concurrent_set() {
+    ~ConcurrentSet() {
         try {
-            // Stop the thread pool and join all threads
-            stop_pool = true;
+            // Stop the thread pool and join all threads. Set stop_pool UNDER
+            // pool_mutex: otherwise a worker that has just evaluated its wait
+            // predicate (false) but not yet blocked can miss this notify and
+            // sleep forever, hanging the join (a lost-wakeup race).
+            {
+                std::lock_guard lock(pool_mutex);
+                stop_pool = true;
+            }
             pool_cv.notify_all();
 
             for (auto& t : thread_pool) {
@@ -388,54 +453,39 @@ public:
             }
         } catch (...) {
             // Best effort cleanup, don't throw from destructor
-            std::cerr << "Error during concurrent_set destruction" << std::endl;
+            std::cerr << "Error during ConcurrentSet destruction" << std::endl;
         }
     }
 
     // Prevent copying to avoid complex synchronization issues
-    concurrent_set(const concurrent_set&) = delete;
-    concurrent_set& operator=(const concurrent_set&) = delete;
+    ConcurrentSet(const ConcurrentSet&) = delete;
+    ConcurrentSet& operator=(const ConcurrentSet&) = delete;
 
-    // Allow moving
-    concurrent_set(concurrent_set&& other) noexcept {
-        std::unique_lock lock1(mtx, std::defer_lock);
-        std::unique_lock lock2(other.mtx, std::defer_lock);
-        std::lock(lock1, lock2);
+    // Allow moving. Worker threads CANNOT be moved: each is bound to the
+    // address of the object it was created on (&other), so moving the
+    // std::thread objects would leave them operating on the moved-from object's
+    // members (and using them after that object dies). Instead we quiesce the
+    // source pool (which also drains its task queue, since a worker only exits
+    // once stop_pool is set AND the queue is empty), move the data, and then
+    // start a fresh worker pool bound to THIS object.
+    ConcurrentSet(ConcurrentSet&& other) noexcept {
+        size_t pool_size = other.thread_pool.size();
 
-        data = std::move(other.data);
-        lru_cache = std::move(other.lru_cache);
-        insertion_count.store(other.insertion_count.load());
-        deletion_count.store(other.deletion_count.load());
-        find_count.store(other.find_count.load());
-        error_count.store(other.error_count.load());
-        error_callback = std::move(other.error_callback);
+        // Stop+join the source's pool BEFORE taking mtx — a worker running a
+        // task holds other.mtx, so joining while holding it would deadlock.
+        {
+            std::lock_guard pool_lock(other.pool_mutex);
+            other.stop_pool = true;
+        }
+        other.pool_cv.notify_all();
+        for (auto& t : other.thread_pool) {
+            if (t.joinable())
+                t.join();
+        }
+        other.thread_pool.clear();
 
-        // Take ownership of threads (risky but possible)
-        stop_pool = other.stop_pool.load();
-        std::lock_guard pool_lock(pool_mutex);
-        task_queue = std::move(other.task_queue);
-        thread_pool = std::move(other.thread_pool);
-    }
-
-    concurrent_set& operator=(concurrent_set&& other) noexcept {
-        if (this != &other) {
-            // First, clean up our resources
-            {
-                std::lock_guard pool_lock(pool_mutex);
-                stop_pool = true;
-                pool_cv.notify_all();
-            }
-
-            for (auto& t : thread_pool) {
-                if (t.joinable())
-                    t.join();
-            }
-
-            // Now move from other
-            std::unique_lock lock1(mtx, std::defer_lock);
-            std::unique_lock lock2(other.mtx, std::defer_lock);
-            std::lock(lock1, lock2);
-
+        {
+            std::unique_lock lock(other.mtx);
             data = std::move(other.data);
             lru_cache = std::move(other.lru_cache);
             insertion_count.store(other.insertion_count.load());
@@ -443,11 +493,46 @@ public:
             find_count.store(other.find_count.load());
             error_count.store(other.error_count.load());
             error_callback = std::move(other.error_callback);
+        }
 
-            std::lock_guard pool_lock(pool_mutex);
-            stop_pool = other.stop_pool.load();
-            task_queue = std::move(other.task_queue);
-            thread_pool = std::move(other.thread_pool);
+        start_worker_pool(std::max<size_t>(1, pool_size));
+    }
+
+    ConcurrentSet& operator=(ConcurrentSet&& other) noexcept {
+        if (this != &other) {
+            const size_t pool_size = other.thread_pool.size();
+
+            // Quiesce BOTH pools (this and other) before moving any data.
+            auto stop_and_join = [](ConcurrentSet& s) {
+                {
+                    std::lock_guard pool_lock(s.pool_mutex);
+                    s.stop_pool = true;
+                }
+                s.pool_cv.notify_all();
+                for (auto& t : s.thread_pool) {
+                    if (t.joinable())
+                        t.join();
+                }
+                s.thread_pool.clear();
+            };
+            stop_and_join(*this);
+            stop_and_join(other);
+
+            {
+                std::unique_lock lock1(mtx, std::defer_lock);
+                std::unique_lock lock2(other.mtx, std::defer_lock);
+                std::lock(lock1, lock2);
+
+                data = std::move(other.data);
+                lru_cache = std::move(other.lru_cache);
+                insertion_count.store(other.insertion_count.load());
+                deletion_count.store(other.deletion_count.load());
+                find_count.store(other.find_count.load());
+                error_count.store(other.error_count.load());
+                error_callback = std::move(other.error_callback);
+            }
+
+            start_worker_pool(std::max<size_t>(1, pool_size));
         }
         return *this;
     }
@@ -456,7 +541,7 @@ public:
      * @brief Inserts an element into the set with improved error handling.
      *
      * @param key The key to insert.
-     * @throws concurrent_set_exception if insertion fails
+     * @throws ConcurrentSetException if insertion fails
      */
     void insert(const Key& key) {
         try {
@@ -471,8 +556,8 @@ public:
             }
         } catch (const std::exception& e) {
             handle_error("Insert operation failed", std::current_exception());
-            throw concurrent_set_exception(std::string("Insert failed: ") +
-                                           e.what());
+            throw ConcurrentSetException(std::string("Insert failed: ") +
+                                         e.what());
         }
     }
 
@@ -480,7 +565,7 @@ public:
      * @brief Inserts an element into the set using move semantics.
      *
      * @param key The key to insert (moved).
-     * @throws concurrent_set_exception if insertion fails
+     * @throws ConcurrentSetException if insertion fails
      */
     void insert(Key&& key) {
         try {
@@ -497,8 +582,8 @@ public:
             }
         } catch (const std::exception& e) {
             handle_error("Insert operation failed", std::current_exception());
-            throw concurrent_set_exception(std::string("Insert failed: ") +
-                                           e.what());
+            throw ConcurrentSetException(std::string("Insert failed: ") +
+                                         e.what());
         }
     }
 
@@ -628,18 +713,17 @@ public:
             size_t count = data.erase(key);
             if (count > 0) {
                 deletion_count++;
-                // Update cache to reflect deletion
+                // Remove from cache so lookups don't report the key as present
                 if (lru_cache) {
-                    // We keep the key in cache but mark it as deleted
-                    lru_cache->put(key);
+                    lru_cache->remove(key);
                 }
                 return true;
             }
             return false;
         } catch (const std::exception& e) {
             handle_error("Erase operation failed", std::current_exception());
-            throw concurrent_set_exception(std::string("Erase failed: ") +
-                                           e.what());
+            throw ConcurrentSetException(std::string("Erase failed: ") +
+                                         e.what());
         }
     }
 
@@ -679,7 +763,7 @@ public:
      * @brief Inserts a batch of elements into the set with improved efficiency.
      *
      * @param keys The keys to insert.
-     * @throws concurrent_set_exception if batch insertion fails
+     * @throws ConcurrentSetException if batch insertion fails
      */
     void batch_insert(const std::vector<Key>& keys) {
         if (keys.empty())
@@ -700,8 +784,8 @@ public:
         } catch (const std::exception& e) {
             handle_error("Batch insert operation failed",
                          std::current_exception());
-            throw concurrent_set_exception(
-                std::string("Batch insert failed: ") + e.what());
+            throw ConcurrentSetException(std::string("Batch insert failed: ") +
+                                         e.what());
         }
     }
 
@@ -775,9 +859,9 @@ public:
                 if (count > 0) {
                     deletion_count++;
                     erased_count++;
-                    // Update cache
+                    // Remove from cache so lookups don't report it as present
                     if (lru_cache) {
-                        lru_cache->put(key);  // Mark as deleted in cache
+                        lru_cache->remove(key);
                     }
                 }
             }
@@ -786,8 +870,8 @@ public:
         } catch (const std::exception& e) {
             handle_error("Batch erase operation failed",
                          std::current_exception());
-            throw concurrent_set_exception(std::string("Batch erase failed: ") +
-                                           e.what());
+            throw ConcurrentSetException(std::string("Batch erase failed: ") +
+                                         e.what());
         }
     }
 
@@ -804,8 +888,8 @@ public:
             // Don't reset counters as they represent historical data
         } catch (const std::exception& e) {
             handle_error("Clear operation failed", std::current_exception());
-            throw concurrent_set_exception(std::string("Clear failed: ") +
-                                           e.what());
+            throw ConcurrentSetException(std::string("Clear failed: ") +
+                                         e.what());
         }
     }
 
@@ -865,7 +949,7 @@ public:
      * thread pool.
      *
      * @param func The function to apply to each element.
-     * @throws concurrent_set_exception if operation fails
+     * @throws ConcurrentSetException if operation fails
      */
     template <typename Func>
     void parallel_for_each(Func func) {
@@ -933,7 +1017,7 @@ public:
             }
         } catch (const std::exception& e) {
             handle_error("Parallel for_each failed", std::current_exception());
-            throw concurrent_set_exception(
+            throw ConcurrentSetException(
                 std::string("Parallel for_each operation failed: ") + e.what());
         }
     }
@@ -950,61 +1034,43 @@ public:
         }
 
         try {
-            std::lock_guard lock(pool_mutex);
+            if (new_size == thread_pool.size()) {
+                return;
+            }
 
-            if (new_size > thread_pool.size()) {
-                // Add more threads
-                size_t to_add = new_size - thread_pool.size();
-                thread_pool.reserve(new_size);
-
-                for (size_t i = 0; i < to_add; ++i) {
-                    thread_pool.emplace_back(
-                        &concurrent_set::thread_pool_worker, this);
+            // Stop every worker, drain the join, then start `new_size` fresh
+            // workers. Queued tasks are preserved: a worker only returns once
+            // stop_pool is set AND the queue is empty, so it finishes the
+            // backlog before exiting. The previous implementation tried to
+            // retire individual threads with exception-throwing "exit tasks"
+            // while holding pool_mutex — the exit tasks then blocked on that
+            // same mutex and the join deadlocked (and a thrown task never
+            // actually left the worker loop anyway).
+            {
+                std::lock_guard lock(pool_mutex);
+                stop_pool = true;
+            }
+            pool_cv.notify_all();
+            for (auto& t : thread_pool) {
+                if (t.joinable()) {
+                    t.join();
                 }
-            } else if (new_size < thread_pool.size()) {
-                // Remove excess threads
-                size_t current_size = thread_pool.size();
-                size_t to_remove = current_size - new_size;
+            }
+            thread_pool.clear();
 
-                // Create temporary threads that will exit immediately
-                std::vector<std::thread> exiting_threads;
-                exiting_threads.reserve(to_remove);
-
-                for (size_t i = 0; i < to_remove; ++i) {
-                    // Add a task that will make a thread exit
-                    task_queue.push([this]() {
-                        std::unique_lock<std::mutex> lock(this->pool_mutex);
-                        // This thread will now exit
-                        throw std::runtime_error("Thread exit requested");
-                    });
-                }
-
-                // Wake up threads to process the exit tasks
-                pool_cv.notify_all();
-
-                // Wait for the threads to exit
-                for (size_t i = 0; i < to_remove; ++i) {
-                    if (i < thread_pool.size() &&
-                        thread_pool[thread_pool.size() - 1 - i].joinable()) {
-                        thread_pool[thread_pool.size() - 1 - i].join();
-                    }
-                }
-
-                // Remove the joined threads
-                thread_pool.resize(new_size);
-
-                // Create new threads to replace those that exited
-                for (size_t i = 0; i < new_size; ++i) {
-                    if (!thread_pool[i].joinable()) {
-                        thread_pool[i] = std::thread(
-                            &concurrent_set::thread_pool_worker, this);
-                    }
-                }
+            {
+                std::lock_guard lock(pool_mutex);
+                stop_pool = false;
+            }
+            thread_pool.reserve(new_size);
+            for (size_t i = 0; i < new_size; ++i) {
+                thread_pool.emplace_back(&ConcurrentSet::thread_pool_worker,
+                                         this);
             }
         } catch (const std::exception& e) {
             handle_error("Adjust thread pool size failed",
                          std::current_exception());
-            throw concurrent_set_exception(
+            throw ConcurrentSetException(
                 std::string("Failed to adjust thread pool size: ") + e.what());
         }
     }
@@ -1030,38 +1096,52 @@ public:
         if (operations.empty())
             return true;
 
+        // Snapshot for rollback under a brief lock. We must NOT hold mtx while
+        // executing the operations: each operation (e.g. insert/erase) is a
+        // public method that locks mtx itself, and mtx is a non-recursive
+        // shared_mutex — holding it here would self-deadlock.
+        SetType data_backup;
+        size_t insertion_count_before;
+        size_t deletion_count_before;
         try {
-            std::unique_lock lock(mtx);
+            std::shared_lock lock(mtx);
+            data_backup = data;
+            insertion_count_before = insertion_count.load();
+            deletion_count_before = deletion_count.load();
+        } catch (const std::exception& e) {
+            handle_error("Transaction snapshot failed",
+                         std::current_exception());
+            throw TransactionException(std::string("Transaction failed: ") +
+                                       e.what());
+        }
 
-            // Make a copy of the data for rollback
-            SetType data_backup = data;
-            size_t insertion_count_before = insertion_count.load();
-            size_t deletion_count_before = deletion_count.load();
-
-            try {
-                // Execute all operations
-                for (const auto& op : operations) {
-                    if (!op)
-                        throw std::invalid_argument(
-                            "Transaction contains null operation");
-                    op();
-                }
-                return true;  // All operations succeeded
-            } catch (const std::exception& e) {
-                // Rollback on failure
+        try {
+            // Execute all operations (each takes its own lock).
+            for (const auto& op : operations) {
+                if (!op)
+                    throw std::invalid_argument(
+                        "Transaction contains null operation");
+                op();
+            }
+            return true;  // All operations succeeded
+        } catch (const std::exception& e) {
+            // Rollback on failure under a brief exclusive lock. The LRU cache
+            // must be invalidated too: operations that ran before the failure
+            // (e.g. insert) populated the cache, and find() consults the cache
+            // before the main store — a stale entry would otherwise report a
+            // rolled-back key as still present.
+            {
+                std::unique_lock lock(mtx);
                 data = std::move(data_backup);
                 insertion_count.store(insertion_count_before);
                 deletion_count.store(deletion_count_before);
-
-                handle_error(std::string("Transaction failed: ") + e.what(),
-                             std::current_exception());
-                return false;
+                if (lru_cache) {
+                    lru_cache->clear();
+                }
             }
-        } catch (const std::exception& e) {
-            handle_error("Transaction lock acquisition failed",
+            handle_error(std::string("Transaction failed: ") + e.what(),
                          std::current_exception());
-            throw transaction_exception(std::string("Transaction failed: ") +
-                                        e.what());
+            return false;
         }
     }
 
@@ -1092,7 +1172,7 @@ public:
             return result;
         } catch (const std::exception& e) {
             handle_error("Conditional find failed", std::current_exception());
-            throw concurrent_set_exception(
+            throw ConcurrentSetException(
                 std::string("Conditional find failed: ") + e.what());
         }
     }
@@ -1136,7 +1216,7 @@ public:
      *
      * @param filename The name of the file to save to.
      * @return True if the save is successful, false otherwise.
-     * @throws io_exception on file write errors
+     * @throws IoException on file write errors
      */
     bool save_to_file(std::string_view filename) const {
         if (filename.empty()) {
@@ -1148,8 +1228,8 @@ public:
             std::ofstream out(std::string(filename), std::ios::binary);
 
             if (!out.is_open()) {
-                throw io_exception("Could not open file for writing: " +
-                                   std::string(filename));
+                throw IoException("Could not open file for writing: " +
+                                  std::string(filename));
             }
 
             // Write header with version information
@@ -1189,16 +1269,16 @@ public:
                       sizeof(find_count));
 
             if (!out.good()) {
-                throw io_exception("Error writing to file: " +
-                                   std::string(filename));
+                throw IoException("Error writing to file: " +
+                                  std::string(filename));
             }
 
             out.close();
             return true;
         } catch (const std::exception& e) {
             handle_error("Save to file failed", std::current_exception());
-            throw io_exception(std::string("Failed to save to file: ") +
-                               e.what());
+            throw IoException(std::string("Failed to save to file: ") +
+                              e.what());
         }
     }
 
@@ -1207,7 +1287,7 @@ public:
      *
      * @param filename The name of the file to load from.
      * @return True if the load is successful, false otherwise.
-     * @throws io_exception on file read errors
+     * @throws IoException on file read errors
      */
     bool load_from_file(std::string_view filename) {
         if (filename.empty()) {
@@ -1218,8 +1298,8 @@ public:
             std::ifstream in(std::string(filename), std::ios::binary);
 
             if (!in.is_open()) {
-                throw io_exception("Could not open file for reading: " +
-                                   std::string(filename));
+                throw IoException("Could not open file for reading: " +
+                                  std::string(filename));
             }
 
             // Read and verify header
@@ -1227,8 +1307,8 @@ public:
             in.read(reinterpret_cast<char*>(&version), sizeof(version));
 
             if (version != 1) {
-                throw io_exception("Unsupported file version: " +
-                                   std::to_string(version));
+                throw IoException("Unsupported file version: " +
+                                  std::to_string(version));
             }
 
             // Read data size
@@ -1237,8 +1317,8 @@ public:
 
             if (size >
                 10'000'000) {  // Sanity check to prevent memory exhaustion
-                throw io_exception("File contains too many elements: " +
-                                   std::to_string(size));
+                throw IoException("File contains too many elements: " +
+                                  std::to_string(size));
             }
 
             // Create new data to replace existing
@@ -1265,8 +1345,8 @@ public:
                     in.read(reinterpret_cast<char*>(&bytes), sizeof(bytes));
 
                     if (bytes > 1'000'000) {  // Sanity check
-                        throw io_exception("Element serialization too large: " +
-                                           std::to_string(bytes));
+                        throw IoException("Element serialization too large: " +
+                                          std::to_string(bytes));
                     }
 
                     std::vector<char> buffer(bytes);
@@ -1284,8 +1364,8 @@ public:
             in.read(reinterpret_cast<char*>(&find_cnt), sizeof(find_cnt));
 
             if (!in.good() && !in.eof()) {
-                throw io_exception("Error reading from file: " +
-                                   std::string(filename));
+                throw IoException("Error reading from file: " +
+                                  std::string(filename));
             }
 
             // Now update our actual data
@@ -1307,8 +1387,8 @@ public:
             return true;
         } catch (const std::exception& e) {
             handle_error("Load from file failed", std::current_exception());
-            throw io_exception(std::string("Failed to load from file: ") +
-                               e.what());
+            throw IoException(std::string("Failed to load from file: ") +
+                              e.what());
         }
     }
 
@@ -1372,7 +1452,7 @@ public:
      * @brief Resizes the LRU cache.
      *
      * @param new_size The new size of the cache. Set to 0 to disable caching.
-     * @throws cache_exception if resizing fails
+     * @throws CacheException if resizing fails
      */
     void resize_cache(size_t new_size) {
         try {
@@ -1391,8 +1471,8 @@ public:
             }
         } catch (const std::exception& e) {
             handle_error("Cache resize failed", std::current_exception());
-            throw cache_exception(std::string("Failed to resize cache: ") +
-                                  e.what());
+            throw CacheException(std::string("Failed to resize cache: ") +
+                                 e.what());
         }
     }
 
@@ -1440,7 +1520,11 @@ public:
         while (true) {
             {
                 std::lock_guard lock(pool_mutex);
-                if (task_queue.empty()) {
+                // Done only when nothing is queued AND nothing is
+                // mid-execution; the worker pops a task before running it, so
+                // an empty queue alone does not mean the work has actually
+                // completed.
+                if (task_queue.empty() && active_tasks.load() == 0) {
                     return true;  // All tasks are done
                 }
             }

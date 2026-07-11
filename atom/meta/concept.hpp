@@ -14,6 +14,8 @@
 #endif
 
 #include <atomic>
+#include <chrono>
+#include <complex>
 #include <concepts>
 #include <coroutine>
 #include <deque>
@@ -29,6 +31,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -1123,5 +1126,187 @@ concept Cloneable = requires(const T& t) {
 
 // Note: Advanced Type Manipulation Concepts (Aggregate, StandardLayout, POD,
 // HasVirtualDestructor) are defined earlier in this file - removed duplicates
+
+//==============================================================================
+// Container Operation Concepts
+//==============================================================================
+
+/**
+ * @brief Concept for types subscriptable with an index type
+ */
+template <typename T, typename Index = std::size_t>
+concept Subscriptable = requires(T t, Index i) { t[i]; };
+
+/**
+ * @brief Concept for containers supporting capacity reservation
+ */
+template <typename T>
+concept Reservable = requires(T t, std::size_t n) { t.reserve(n); };
+
+/**
+ * @brief Concept for containers with key-based lookup
+ */
+template <typename T>
+concept AssociativeLookup = requires(T t, typename T::key_type key) {
+    { t.find(key) } -> std::same_as<typename T::iterator>;
+};
+
+/**
+ * @brief Concept for ordered associative containers
+ */
+template <typename T>
+concept OrderedContainer =
+    AssociativeLookup<T> && requires { typename T::key_compare; };
+
+/**
+ * @brief Concept for types reporting a size
+ */
+template <typename T>
+concept HasSize = requires(const T& t) {
+    { t.size() } -> std::convertible_to<std::size_t>;
+};
+
+/**
+ * @brief Concept for types with an emptiness check
+ */
+template <typename T>
+concept EmptyCheckable = requires(const T& t) {
+    { t.empty() } -> std::convertible_to<bool>;
+};
+
+/**
+ * @brief Concept for containers that can be cleared
+ */
+template <typename T>
+concept Clearable = requires(T t) { t.clear(); };
+
+/**
+ * @brief Concept for containers supporting push_back
+ */
+template <typename T>
+concept BackInsertable =
+    requires(T t, typename T::value_type v) { t.push_back(v); };
+
+/**
+ * @brief Concept for containers supporting emplace_back
+ */
+template <typename T>
+concept BackEmplaceable =
+    requires(T t, typename T::value_type v) { t.emplace_back(std::move(v)); };
+
+/**
+ * @brief Concept for containers with front/back element access
+ */
+template <typename T>
+concept FrontBackAccessible = requires(T t) {
+    { t.front() } -> std::same_as<typename T::reference>;
+    { t.back() } -> std::same_as<typename T::reference>;
+};
+
+//==============================================================================
+// Chrono Concepts
+//==============================================================================
+
+namespace detail {
+template <typename T>
+inline constexpr bool is_duration_v = false;
+template <typename Rep, typename Period>
+inline constexpr bool is_duration_v<std::chrono::duration<Rep, Period>> = true;
+
+template <typename T>
+inline constexpr bool is_time_point_v = false;
+template <typename Clock, typename Dur>
+inline constexpr bool is_time_point_v<std::chrono::time_point<Clock, Dur>> =
+    true;
+}  // namespace detail
+
+/**
+ * @brief Concept for std::chrono::duration specializations
+ */
+template <typename T>
+concept Duration = detail::is_duration_v<std::remove_cvref_t<T>>;
+
+/**
+ * @brief Concept for std::chrono::time_point specializations
+ */
+template <typename T>
+concept TimePoint = detail::is_time_point_v<std::remove_cvref_t<T>>;
+
+//==============================================================================
+// Value Semantics Concepts
+//==============================================================================
+
+/**
+ * @brief Concept for nullable handle types (bool-testable and resettable)
+ */
+template <typename T>
+concept Nullable = requires(T t) {
+    { static_cast<bool>(t) };
+    t.reset();
+};
+
+/**
+ * @brief Concept for atomic-like types
+ */
+template <typename T>
+concept AtomicLike = requires(T t, typename T::value_type v) {
+    { t.load() } -> std::convertible_to<typename T::value_type>;
+    t.store(v);
+    { t.exchange(v) } -> std::convertible_to<typename T::value_type>;
+};
+
+/**
+ * @brief Concept for move-only types
+ */
+template <typename T>
+concept MoveOnly = std::movable<T> && !std::copy_constructible<T>;
+
+/**
+ * @brief Concept for regular types (see std::regular)
+ */
+template <typename T>
+concept Regular = std::regular<T>;
+
+/**
+ * @brief Concept for semiregular types (see std::semiregular)
+ */
+template <typename T>
+concept Semiregular = std::semiregular<T>;
+
+/**
+ * @brief Concept for three-way comparable types
+ */
+template <typename T>
+concept ThreeWayComparable = std::three_way_comparable<T>;
+
+//==============================================================================
+// Type Pack Utilities
+//==============================================================================
+
+/**
+ * @brief True when T is the same as one of Ts
+ */
+template <typename T, typename... Ts>
+inline constexpr bool is_one_of_v = (std::same_as<T, Ts> || ...);
+
+/**
+ * @brief First type of a parameter pack
+ */
+template <typename First, typename... Rest>
+using first_type_t = First;
+
+namespace detail {
+template <typename... Ts>
+struct last_type_impl {
+    using type = std::tuple_element_t<sizeof...(Ts) - 1, std::tuple<Ts...>>;
+};
+}  // namespace detail
+
+/**
+ * @brief Last type of a parameter pack
+ */
+template <typename... Ts>
+    requires(sizeof...(Ts) > 0)
+using last_type_t = typename detail::last_type_impl<Ts...>::type;
 
 #endif  // ATOM_META_CONCEPT_HPP

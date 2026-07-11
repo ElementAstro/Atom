@@ -110,6 +110,22 @@ public:
                           ScriptFunction /*function*/) override {}
 
     ScriptLanguage getLanguage() const override { return ScriptLanguage::Auto; }
+
+    const Statistics& getStatistics() const override { return statistics_; }
+    void resetStatistics() override { statistics_ = Statistics{}; }
+    void shutdown() override {}
+
+protected:
+    ScriptValue cppToScript(const std::any& /*value*/) override {
+        return ScriptValue();
+    }
+    std::any scriptToCpp(const ScriptValue& /*value*/,
+                         const std::type_info& /*targetType*/) override {
+        return {};
+    }
+
+private:
+    Statistics statistics_;
 };
 
 // Test fixture for ScriptEngine tests
@@ -134,7 +150,7 @@ protected:
 
 TEST(ScriptLanguageTest, EnumValues) {
     EXPECT_EQ(static_cast<uint8_t>(ScriptLanguage::Lua), 0);
-    EXPECT_EQ(static_cast<uint8_t>(ScriptLanguage::ChaiScript), 1);
+    EXPECT_EQ(static_cast<uint8_t>(ScriptLanguage::Python), 1);
     EXPECT_EQ(static_cast<uint8_t>(ScriptLanguage::Auto), 2);
 }
 
@@ -180,7 +196,7 @@ TEST_F(ScriptValueTest, ArrayConstruction) {
 
 TEST_F(ScriptValueTest, ObjectConstruction) {
     EXPECT_TRUE(
-        objectValue_.holds<std::unordered_map<std::string, ScriptValue>>());
+        (objectValue_.holds<std::unordered_map<std::string, ScriptValue>>()));
 
     const auto& object =
         objectValue_.get<std::unordered_map<std::string, ScriptValue>>();
@@ -289,7 +305,7 @@ TEST_F(ComponentScriptingAPITest, DetectLanguage) {
     // Should return some language or Auto
     EXPECT_TRUE(autoLang == ScriptLanguage::Auto ||
                 autoLang == ScriptLanguage::Lua ||
-                autoLang == ScriptLanguage::ChaiScript);
+                autoLang == ScriptLanguage::Python);
 }
 
 TEST_F(ComponentScriptingAPITest, RegisterComponentAPI) {

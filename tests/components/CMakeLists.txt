@@ -98,14 +98,13 @@ set(TEST_SOURCES
     # Data management tests
     ${PROJECT_SOURCE_DIR}/var.cpp
     ${PROJECT_SOURCE_DIR}/serialization.cpp
-    # ${PROJECT_SOURCE_DIR}/type_conversion.cpp  # Disabled: uses non-existent
-    # converter methods Scripting system tests - disabled due to API mismatch
-    # between tests and implementation ${PROJECT_SOURCE_DIR}/scripting_api.cpp
-    # ${PROJECT_SOURCE_DIR}/script_sandbox.cpp
-    # ${PROJECT_SOURCE_DIR}/script_engine.cpp
-    # ${PROJECT_SOURCE_DIR}/advanced_bindings.cpp Utility tests - disabled due
-    # to non-existent macros ${PROJECT_SOURCE_DIR}/types_and_macros.cpp
-)
+    # Scripting system tests
+    ${PROJECT_SOURCE_DIR}/scripting_api.cpp
+    ${PROJECT_SOURCE_DIR}/script_sandbox.cpp
+    ${PROJECT_SOURCE_DIR}/script_engine.cpp
+    ${PROJECT_SOURCE_DIR}/bindings.cpp
+    # Utility tests
+    ${PROJECT_SOURCE_DIR}/types_and_macros.cpp)
 
 # Conditionally add engine-specific tests based on build configuration
 if(ATOM_ENABLE_LUA)

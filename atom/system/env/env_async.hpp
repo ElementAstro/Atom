@@ -51,6 +51,22 @@ struct EnvResult {
 };
 
 /**
+ * @brief Result specialization for operations that produce no value.
+ *
+ * A primary EnvResult<void> would contain a `void value;` member, which is
+ * ill-formed, so void results carry only success/error.
+ */
+template<>
+struct EnvResult<void> {
+    bool success;
+    String error;
+
+    EnvResult(bool s = true, const String& e = "") : success(s), error(e) {}
+
+    explicit operator bool() const { return success; }
+};
+
+/**
  * @brief Async task wrapper for environment operations
  */
 class EnvTask {

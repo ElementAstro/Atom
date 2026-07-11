@@ -18,6 +18,8 @@
 #define ATOM_META_TYPE_CASTER_HPP
 
 #include <any>
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <functional>
 #include <memory>
@@ -183,8 +185,8 @@ public:
     struct TypeInfoPairHash {
         std::size_t operator()(
             const std::pair<TypeInfo, TypeInfo>& p) const noexcept {
-            auto h1 = p.first.getHash();
-            auto h2 = p.second.getHash();
+            auto h1 = std::hash<TypeInfo>{}(p.first);
+            auto h2 = std::hash<TypeInfo>{}(p.second);
             return h1 ^ (h2 << 1);  // Simple but effective hash combination
         }
     };
@@ -253,6 +255,7 @@ private:
     mutable std::shared_mutex path_cache_mutex_;
     static constexpr std::chrono::minutes CACHE_TTL{10};  // Cache time-to-live
 
+public:
     /*!
      * \brief Optimized conversion with caching for better performance
      * \tparam DestinationType The type to convert to.

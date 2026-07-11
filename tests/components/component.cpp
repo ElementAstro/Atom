@@ -903,3 +903,77 @@ TEST_F(AdvancedComponentTest, ConcurrentAccess) {
     // Most operations should succeed (allowing for some thread contention)
     EXPECT_GT(successCount.load(), numThreads * operationsPerThread * 0.8);
 }
+
+// ============================================================================
+// Event system tests (require ATOM_COMPONENTS_ENABLE_EVENTS)
+// ============================================================================
+#if ENABLE_EVENT_SYSTEM
+
+TEST_F(ComponentTest, EmitEventDeliversPayloadToHandler) {
+    std::string receivedName;
+    std::string receivedSource;
+    int receivedValue = 0;
+
+    auto id = component->on(
+        "custom.event", [&](const atom::components::Event& event) {
+            receivedName = event.name;
+            receivedSource = event.source;
+            receivedValue = std::any_cast<int>(event.data);
+        });
+    ASSERT_NE(id, 0u);
+
+    component->emitEvent("custom.event", 42);
+
+    EXPECT_EQ(receivedName, "custom.event");
+    EXPECT_EQ(receivedSource, "TestComponent");
+    EXPECT_EQ(receivedValue, 42);
+}
+
+TEST_F(ComponentTest, OnceHandlerFiresExactlyOnce) {
+    int callCount = 0;
+    auto id = component->once(
+        "once.event",
+        [&](const atom::components::Event&) { ++callCount; });
+    ASSERT_NE(id, 0u);
+
+    component->emitEvent("once.event");
+    component->emitEvent("once.event");
+
+    EXPECT_EQ(callCount, 1);
+}
+
+TEST_F(ComponentTest, OffUnsubscribesHandler) {
+    int callCount = 0;
+    auto id = component->on(
+        "off.event", [&](const atom::components::Event&) { ++callCount; });
+    ASSERT_NE(id, 0u);
+
+    EXPECT_TRUE(component->off("off.event", id));
+    component->emitEvent("off.event");
+
+    EXPECT_EQ(callCount, 0);
+    EXPECT_FALSE(component->off("off.event", id));
+}
+
+TEST_F(ComponentTest, NullCallbackIsRejected) {
+    EXPECT_EQ(component->on("null.event", nullptr), 0u);
+    EXPECT_EQ(component->once("null.event", nullptr), 0u);
+}
+
+TEST_F(ComponentTest, EmitEventPropagatesToRegistry) {
+    int registryCallCount = 0;
+    auto id = Registry::instance().subscribeToEvent(
+        "registry.event",
+        [&](const atom::components::Event&) { ++registryCallCount; });
+    ASSERT_NE(id, 0u);
+
+    component->emitEvent("registry.event");
+    EXPECT_EQ(registryCallCount, 1);
+
+    EXPECT_TRUE(
+        Registry::instance().unsubscribeFromEvent("registry.event", id));
+    component->emitEvent("registry.event");
+    EXPECT_EQ(registryCallCount, 1);
+}
+
+#endif  // ENABLE_EVENT_SYSTEM

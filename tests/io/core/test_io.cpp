@@ -3,6 +3,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <random>
 #include <string>
 #include <vector>

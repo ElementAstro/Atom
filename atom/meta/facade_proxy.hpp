@@ -33,21 +33,67 @@ namespace atom::meta {
 namespace enhanced_proxy_skills {
 
 /*!
+ * \brief Compile-time check whether Func can be invoked through the
+ * type-erased call machinery.
+ *
+ * Either the callable natively accepts `const std::vector<std::any>&`
+ * (bound/composed functions) or its signature can be analyzed via
+ * FunctionTraits so ProxyFunction can unpack the arguments.
+ */
+template <typename Func>
+concept erased_invocable =
+    std::is_invocable_r_v<std::any, const Func&,
+                          const std::vector<std::any>&> ||
+    requires { typename FunctionTraits<Func>::return_type; };
+
+/*!
+ * \brief Invoke a wrapped callable with type-erased arguments.
+ *
+ * Callables that natively accept `const std::vector<std::any>&` are invoked
+ * directly; everything else goes through ProxyFunction, which validates,
+ * converts and unpacks the arguments.
+ */
+template <typename Func>
+std::any invoke_erased(const Func& func, const std::vector<std::any>& args) {
+    if constexpr (std::is_invocable_r_v<std::any, const Func&,
+                                        const std::vector<std::any>&>) {
+        return func(args);
+    } else {
+        ProxyFunction<Func> proxy_func{Func(func)};
+        return proxy_func(args);
+    }
+}
+
+/*!
  * \struct callable_dispatch
  * \brief Skill dispatch for synchronous function invocation
  */
 struct callable_dispatch {
     static constexpr bool is_direct = false;
     using dispatch_type = callable_dispatch;
+    using uses_generic_skill_protocol = void;
     using invoke_func_t = std::any (*)(const void*,
                                        const std::vector<std::any>&);
 
     template <typename Func>
+    static constexpr bool applicable = erased_invocable<Func>;
+
+    template <typename Func>
+    static const void* skill_entry() {
+        return reinterpret_cast<const void*>(&invoke_impl<Func>);
+    }
+
+    template <class R>
+        requires std::same_as<R, std::any>
+    static R invoke_skill(const void* entry, const void* obj,
+                          const std::vector<std::any>& args) {
+        return reinterpret_cast<invoke_func_t>(entry)(obj, args);
+    }
+
+    template <typename Func>
     static std::any invoke_impl(const void* func_ptr,
                                 const std::vector<std::any>& args) {
-        const Func& func = *static_cast<const Func*>(func_ptr);
-        ProxyFunction<Func> proxy_func(func);
-        return proxy_func(args);
+        return invoke_erased(*static_cast<const Func*>(func_ptr), args);
     }
 };
 
@@ -58,15 +104,36 @@ struct callable_dispatch {
 struct async_callable_dispatch {
     static constexpr bool is_direct = false;
     using dispatch_type = async_callable_dispatch;
+    using uses_generic_skill_protocol = void;
     using invoke_async_func_t =
         std::future<std::any> (*)(const void*, const std::vector<std::any>&);
 
     template <typename Func>
+    static constexpr bool applicable = erased_invocable<Func>;
+
+    template <typename Func>
+    static const void* skill_entry() {
+        return reinterpret_cast<const void*>(&invoke_async_impl<Func>);
+    }
+
+    template <class R>
+        requires std::same_as<R, std::future<std::any>>
+    static R invoke_skill(const void* entry, const void* obj,
+                          const std::vector<std::any>& args) {
+        return reinterpret_cast<invoke_async_func_t>(entry)(obj, args);
+    }
+
+    template <typename Func>
     static std::future<std::any> invoke_async_impl(
         const void* func_ptr, const std::vector<std::any>& args) {
+        // Copy the callable into the task so it stays alive for the whole
+        // asynchronous execution (the proxy storage could be destroyed
+        // before the future runs).
         const Func& func = *static_cast<const Func*>(func_ptr);
-        AsyncProxyFunction<Func> async_proxy_func(func);
-        return async_proxy_func(args);
+        return std::async(std::launch::async,
+                          [func = Func(func), args]() -> std::any {
+                              return invoke_erased(func, args);
+                          });
     }
 };
 
@@ -172,17 +239,33 @@ struct printable_dispatch {
 struct bindable_dispatch {
     static constexpr bool is_direct = false;
     using dispatch_type = bindable_dispatch;
+    using uses_generic_skill_protocol = void;
     using bind_func_t = std::shared_ptr<void> (*)(const void*,
                                                   const std::vector<std::any>&);
+
+    template <typename Func>
+    static constexpr bool applicable = erased_invocable<Func>;
+
+    template <typename Func>
+    static const void* skill_entry() {
+        return reinterpret_cast<const void*>(&bind_impl<Func>);
+    }
+
+    template <class R>
+        requires std::same_as<R, std::shared_ptr<void>>
+    static R invoke_skill(const void* entry, const void* obj,
+                          const std::vector<std::any>& bound_args) {
+        return reinterpret_cast<bind_func_t>(entry)(obj, bound_args);
+    }
 
     template <typename Func>
     static std::shared_ptr<void> bind_impl(
         const void* func_ptr, const std::vector<std::any>& bound_args) {
         const Func& func = *static_cast<const Func*>(func_ptr);
 
-        auto bound_func =
-            [func,
-             bound_args](const std::vector<std::any>& call_args) -> std::any {
+        std::function<std::any(const std::vector<std::any>&)> bound_func =
+            [func = Func(func), bound_args](
+                const std::vector<std::any>& call_args) -> std::any {
             std::vector<std::any> merged_args;
             merged_args.reserve(bound_args.size() + call_args.size());
             merged_args.insert(merged_args.end(), bound_args.begin(),
@@ -190,11 +273,12 @@ struct bindable_dispatch {
             merged_args.insert(merged_args.end(), call_args.begin(),
                                call_args.end());
 
-            ProxyFunction<Func> proxy_func(func);
-            return proxy_func(merged_args);
+            return invoke_erased(func, merged_args);
         };
 
-        return std::make_shared<decltype(bound_func)>(std::move(bound_func));
+        return std::make_shared<
+            std::function<std::any(const std::vector<std::any>&)>>(
+            std::move(bound_func));
     }
 };
 
@@ -221,7 +305,24 @@ struct composable_dispatch {
 
 }  // namespace enhanced_proxy_skills
 
-using enhanced_proxy_facade = default_builder::add_convention<
+/*!
+ * \brief Builder for the enhanced proxy facade.
+ *
+ * The storage must be large enough (and sufficiently aligned) to hold
+ * composed proxy functors such as ComposedProxy, and copyability is
+ * nontrivial because std::function copies may throw.
+ */
+using enhanced_proxy_builder =
+    facade_builder<std::tuple<>, std::tuple<>,
+                   proxiable_constraints{
+                       .max_size = 2048,
+                       .max_align = 64,
+                       .copyability = constraint_level::nontrivial,
+                       .relocatability = constraint_level::nothrow,
+                       .destructibility = constraint_level::nothrow,
+                       .concurrency = thread_safety::none}>;
+
+using enhanced_proxy_facade = enhanced_proxy_builder::add_convention<
     enhanced_proxy_skills::callable_dispatch,
     std::any(const std::vector<std::any>&)>::
     add_convention<enhanced_proxy_skills::async_callable_dispatch,
@@ -241,11 +342,7 @@ using enhanced_proxy_facade = default_builder::add_convention<
                         enhanced_proxy_skills::composable_dispatch,
                         std::shared_ptr<void>(
                             const proxy<typename default_builder::build>&)>::
-                        restrict_layout<128>::support_copy<
-                            constraint_level::nothrow>::
-                            support_relocation<constraint_level::nothrow>::
-                                support_destruction<
-                                    constraint_level::nothrow>::build;
+                        build;
 
 /*!
  * \class EnhancedProxyFunction
@@ -309,10 +406,7 @@ public:
      * \brief Set the function name
      * \param name The name to set
      */
-    void setName(std::string_view name) {
-        info_.setName(std::string(name));
-        ProxyFunction<Func> proxy_func(func_, info_);
-    }
+    void setName(std::string_view name) { info_.setName(std::string(name)); }
 
     /*!
      * \brief Set the parameter name
@@ -326,28 +420,25 @@ public:
     /*!
      * \brief Get the function info
      * \return The function info
+     *
+     * Runtime metadata (name, parameter names) only exists in this wrapper,
+     * so metadata queries answer from the locally collected info instead of
+     * reconstructing it through the type-erased proxy.
      */
-    [[nodiscard]] FunctionInfo getFunctionInfo() const {
-        return proxy_.call<enhanced_proxy_skills::function_info_dispatch,
-                           FunctionInfo>();
-    }
+    [[nodiscard]] FunctionInfo getFunctionInfo() const { return info_; }
 
     /*!
      * \brief Get the function name
      * \return The function name
      */
-    [[nodiscard]] std::string getName() const {
-        return proxy_
-            .call<enhanced_proxy_skills::function_info_dispatch, std::string>();
-    }
+    [[nodiscard]] std::string getName() const { return info_.getName(); }
 
     /*!
      * \brief Get the return type
      * \return The return type
      */
     [[nodiscard]] std::string getReturnType() const {
-        return proxy_
-            .call<enhanced_proxy_skills::function_info_dispatch, std::string>();
+        return info_.getReturnType();
     }
 
     /*!
@@ -355,8 +446,7 @@ public:
      * \return The parameter types
      */
     [[nodiscard]] std::vector<std::string> getParameterTypes() const {
-        return proxy_.call<enhanced_proxy_skills::function_info_dispatch,
-                           std::vector<std::string>>();
+        return info_.getArgumentTypes();
     }
 
     /*!
@@ -404,8 +494,7 @@ public:
      * \return The JSON string representing the function info
      */
     [[nodiscard]] std::string serialize() const {
-        return proxy_
-            .call<enhanced_proxy_skills::serializable_dispatch, std::string>();
+        return info_.toJson().dump();
     }
 
     /*!
@@ -413,7 +502,26 @@ public:
      * \param os The output stream
      */
     void print(std::ostream& os = std::cout) const {
-        proxy_.call<enhanced_proxy_skills::printable_dispatch>(os);
+        os << "Function: " << info_.getName() << "\n"
+           << "Return type: " << info_.getReturnType() << "\n"
+           << "Parameters: ";
+
+        const auto& arg_types = info_.getArgumentTypes();
+        const auto& param_names = info_.getParameterNames();
+
+        for (size_t i = 0; i < arg_types.size(); ++i) {
+            if (i > 0)
+                os << ", ";
+            os << arg_types[i];
+            if (i < param_names.size() && !param_names[i].empty()) {
+                os << " " << param_names[i];
+            }
+        }
+
+        os << "\n";
+        if (info_.isNoexcept()) {
+            os << "noexcept\n";
+        }
     }
 
     /*!
@@ -450,25 +558,64 @@ public:
     }
 
     /*!
-     * \brief Compose with another function
-     * \tparam OtherFunc The type of the other function
-     * \param other The other function to compose with
+     * \brief Get the wrapped callable
+     * \return Reference to the wrapped callable
+     */
+    [[nodiscard]] const std::decay_t<Func>& getFunction() const {
+        return func_;
+    }
+
+    /*!
+     * \brief Compose with another function: `other` consumes the leading
+     * arguments, its result becomes this function's first argument and the
+     * remaining arguments are passed through.
+     *
+     * For `outer.compose(inner)` with outer arity N, a call with arguments
+     * (a..., b...) evaluates outer(inner(a...), b...) where b... are the
+     * trailing N-1 arguments.
+     *
+     * \tparam OtherFunc The type of the inner function
+     * \param other The inner function to compose with
      * \return A new composed function
      */
     template <typename OtherFunc>
     auto compose(const EnhancedProxyFunction<OtherFunc>& other) const {
-        using ComposedFuncType = decltype(composeProxy(
-            std::declval<Func>(), std::declval<OtherFunc>()));
+        auto composed = [outer = func_, inner = other.getFunction()](
+                            const std::vector<std::any>& args) -> std::any {
+            constexpr std::size_t outer_arity = []() -> std::size_t {
+                if constexpr (requires {
+                                  FunctionTraits<std::decay_t<Func>>::arity;
+                              }) {
+                    return FunctionTraits<std::decay_t<Func>>::arity;
+                } else {
+                    return 1;
+                }
+            }();
+            constexpr std::size_t rest = outer_arity > 0 ? outer_arity - 1 : 0;
 
-        auto composed_func_ptr =
-            proxy_.call<enhanced_proxy_skills::composable_dispatch,
-                        std::shared_ptr<void>>(other.getProxy());
+            if (args.size() < rest) {
+                throw ProxyArgumentError(
+                    "Too few arguments for composed function: expected at "
+                    "least " +
+                    std::to_string(rest) + ", got " +
+                    std::to_string(args.size()));
+            }
 
-        auto composed_func =
-            *std::static_pointer_cast<ComposedFuncType>(composed_func_ptr);
+            const auto split =
+                args.end() - static_cast<std::ptrdiff_t>(rest);
+            std::vector<std::any> inner_args(args.begin(), split);
+            std::any intermediate =
+                enhanced_proxy_skills::invoke_erased(inner, inner_args);
 
-        return EnhancedProxyFunction<ComposedFuncType>(
-            std::move(composed_func),
+            std::vector<std::any> outer_args;
+            outer_args.reserve(rest + 1);
+            outer_args.push_back(std::move(intermediate));
+            outer_args.insert(outer_args.end(), split, args.end());
+            return enhanced_proxy_skills::invoke_erased(outer, outer_args);
+        };
+
+        return EnhancedProxyFunction<decltype(composed)>(
+            std::move(composed),
             "composed_" + info_.getName() + "_" + other.getName());
     }
 
@@ -488,7 +635,11 @@ private:
     void initProxy() { proxy_ = proxy<enhanced_proxy_facade>(func_); }
 
     void collectFunctionInfo() {
-        ProxyFunction<std::decay_t<Func>> proxy_func(func_, info_);
+        if constexpr (requires { sizeof(FunctionTraits<std::decay_t<Func>>); }) {
+            std::decay_t<Func> func_copy(func_);
+            ProxyFunction<std::decay_t<Func>> proxy_func(std::move(func_copy),
+                                                         info_);
+        }
     }
 };
 

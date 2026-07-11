@@ -13,13 +13,9 @@ Description: System Information Module - Disk Monitoring
 **************************************************/
 
 #include "disk_monitor.hpp"
-<<<<<<<<HEAD : atom / sysinfo / src / disk / components / disk_monitor.cpp
+
 #include "disk_device.hpp"
 #include "disk_info.hpp"
-        == == == ==>>>>>>>> test -
-    fixes / systematic -
-    testing : atom / sysinfo / storage / disk /
-              disk_monitor.cpp
 #include "disk_security.hpp"
 
 #include <algorithm>
@@ -53,7 +49,7 @@ Description: System Information Module - Disk Monitoring
 
 #include <spdlog/spdlog.h>
 
-              namespace atom::system {
+namespace atom::system {
 
     static std::atomic_bool g_monitoringActive{false};
 

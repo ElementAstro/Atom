@@ -6,10 +6,10 @@
  * "atom/utils/conversion/to_byte.hpp" instead.
  */
 
-#ifndef ATOM_UTILS_TO_BYTE_HPP
-#define ATOM_UTILS_TO_BYTE_HPP
+#ifndef ATOM_UTILS_TO_BYTE_COMPAT_HPP
+#define ATOM_UTILS_TO_BYTE_COMPAT_HPP
 
 // Forward to the new location
 #include "conversion/to_byte.hpp"
 
-#endif  // ATOM_UTILS_TO_BYTE_HPP
+#endif  // ATOM_UTILS_TO_BYTE_COMPAT_HPP

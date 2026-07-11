@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-#include <nlohmann/json.hpp>
+#include "atom/type/json.hpp"
 #include "atom/system/scheduling/crontab.hpp"
 
 namespace fs = std::filesystem;
@@ -34,26 +34,26 @@ protected:
 // CronJob Structure Tests
 TEST_F(CronJobTest, DefaultConstruction) {
     CronJob job;
-    EXPECT_TRUE(job.time_.empty());
-    EXPECT_TRUE(job.command_.empty());
-    EXPECT_TRUE(job.enabled_);
-    EXPECT_EQ(job.category_, "default");
-    EXPECT_TRUE(job.description_.empty());
-    EXPECT_EQ(job.run_count_, 0);
-    EXPECT_EQ(job.priority_, 5);
-    EXPECT_EQ(job.max_retries_, 0);
-    EXPECT_EQ(job.current_retries_, 0);
-    EXPECT_FALSE(job.one_time_);
+    EXPECT_TRUE(job.getTime().empty());
+    EXPECT_TRUE(job.getCommand().empty());
+    EXPECT_TRUE(job.isEnabled());
+    EXPECT_EQ(job.getCategory(), "default");
+    EXPECT_TRUE(job.getDescription().empty());
+    EXPECT_EQ(job.getRunCount(), 0);
+    EXPECT_EQ(static_cast<int>(job.getPriority()), 5);
+    EXPECT_EQ(job.getMaxRetries(), 0);
+    EXPECT_EQ(job.getCurrentRetries(), 0);
+    EXPECT_FALSE(job.isOneTime());
 }
 
 TEST_F(CronJobTest, ParameterizedConstruction) {
     CronJob job("* * * * *", "echo test", true, "test_category", "Test job");
 
-    EXPECT_EQ(job.time_, "* * * * *");
-    EXPECT_EQ(job.command_, "echo test");
-    EXPECT_TRUE(job.enabled_);
-    EXPECT_EQ(job.category_, "test_category");
-    EXPECT_EQ(job.description_, "Test job");
+    EXPECT_EQ(job.getTime(), "* * * * *");
+    EXPECT_EQ(job.getCommand(), "echo test");
+    EXPECT_TRUE(job.isEnabled());
+    EXPECT_EQ(job.getCategory(), "test_category");
+    EXPECT_EQ(job.getDescription(), "Test job");
 }
 
 TEST_F(CronJobTest, GetId) {
@@ -65,14 +65,14 @@ TEST_F(CronJobTest, GetId) {
 TEST_F(CronJobTest, RecordExecution) {
     CronJob job("* * * * *", "test_command");
 
-    EXPECT_EQ(job.run_count_, 0);
-    EXPECT_TRUE(job.execution_history_.empty());
+    EXPECT_EQ(job.getRunCount(), 0);
+    EXPECT_TRUE(job.getExecutionHistory().empty());
 
     job.recordExecution(true);
 
-    EXPECT_EQ(job.run_count_, 1);
-    EXPECT_EQ(job.execution_history_.size(), 1);
-    EXPECT_TRUE(job.execution_history_[0].second);  // Success
+    EXPECT_EQ(job.getRunCount(), 1);
+    EXPECT_EQ(job.getExecutionHistory().size(), 1);
+    EXPECT_TRUE(job.getExecutionHistory()[0].success);  // Success
 }
 
 TEST_F(CronJobTest, ToJson) {
@@ -105,13 +105,13 @@ TEST_F(CronJobTest, FromJson) {
 
     CronJob job = CronJob::fromJson(json);
 
-    EXPECT_EQ(job.time_, "30 2 * * *");
-    EXPECT_EQ(job.command_, "night_task");
-    EXPECT_FALSE(job.enabled_);
-    EXPECT_EQ(job.category_, "night");
-    EXPECT_EQ(job.priority_, 3);
-    EXPECT_EQ(job.max_retries_, 2);
-    EXPECT_TRUE(job.one_time_);
+    EXPECT_EQ(job.getTime(), "30 2 * * *");
+    EXPECT_EQ(job.getCommand(), "night_task");
+    EXPECT_FALSE(job.isEnabled());
+    EXPECT_EQ(job.getCategory(), "night");
+    EXPECT_EQ(static_cast<int>(job.getPriority()), 3);
+    EXPECT_EQ(job.getMaxRetries(), 2);
+    EXPECT_TRUE(job.isOneTime());
 }
 
 // CronManager Tests
@@ -215,8 +215,8 @@ TEST_F(CronManagerTest, UpdateCronJob) {
     EXPECT_TRUE(manager_->updateCronJob("original_command", updated));
 
     auto job = manager_->viewCronJob("original_command");
-    EXPECT_EQ(job.time_, "0 0 * * *");
-    EXPECT_EQ(job.category_, "updated");
+    EXPECT_EQ(job.getTime(), "0 0 * * *");
+    EXPECT_EQ(job.getCategory(), "updated");
 }
 
 TEST_F(CronManagerTest, UpdateCronJobById) {
@@ -233,8 +233,8 @@ TEST_F(CronManagerTest, ViewCronJob) {
     manager_->createCronJob(job);
 
     auto viewed = manager_->viewCronJob("morning_task");
-    EXPECT_EQ(viewed.time_, "30 6 * * *");
-    EXPECT_EQ(viewed.category_, "morning");
+    EXPECT_EQ(viewed.getTime(), "30 6 * * *");
+    EXPECT_EQ(viewed.getCategory(), "morning");
 }
 
 TEST_F(CronManagerTest, ViewCronJobById) {
@@ -243,7 +243,7 @@ TEST_F(CronManagerTest, ViewCronJobById) {
 
     std::string id = job.getId();
     auto viewed = manager_->viewCronJobById(id);
-    EXPECT_EQ(viewed.command_, "evening_task");
+    EXPECT_EQ(viewed.getCommand(), "evening_task");
 }
 
 TEST_F(CronManagerTest, SearchCronJobs) {
@@ -270,11 +270,11 @@ TEST_F(CronManagerTest, EnableDisableCronJob) {
 
     EXPECT_TRUE(manager_->disableCronJob("toggle_job"));
     auto disabled = manager_->viewCronJob("toggle_job");
-    EXPECT_FALSE(disabled.enabled_);
+    EXPECT_FALSE(disabled.isEnabled());
 
     EXPECT_TRUE(manager_->enableCronJob("toggle_job"));
     auto enabled = manager_->viewCronJob("toggle_job");
-    EXPECT_TRUE(enabled.enabled_);
+    EXPECT_TRUE(enabled.isEnabled());
 }
 
 TEST_F(CronManagerTest, SetJobEnabledById) {
@@ -300,9 +300,13 @@ TEST_F(CronManagerTest, EnableDisableByCategory) {
 }
 
 TEST_F(CronManagerTest, BatchCreateJobs) {
-    std::vector<CronJob> jobs = {CronJob("* * * * *", "batch1"),
-                                 CronJob("0 * * * *", "batch2"),
-                                 CronJob("0 0 * * *", "batch3")};
+    // CronJob is move-only, so build the vector with emplace_back rather than
+    // an initializer_list (which would require copies).
+    std::vector<CronJob> jobs;
+    jobs.reserve(3);
+    jobs.emplace_back("* * * * *", "batch1");
+    jobs.emplace_back("0 * * * *", "batch2");
+    jobs.emplace_back("0 0 * * *", "batch3");
 
     int created = manager_->batchCreateJobs(jobs);
     EXPECT_EQ(created, 3);
@@ -325,7 +329,7 @@ TEST_F(CronManagerTest, RecordJobExecution) {
     EXPECT_TRUE(manager_->recordJobExecution("exec_job"));
 
     auto updated = manager_->viewCronJob("exec_job");
-    EXPECT_EQ(updated.run_count_, 1);
+    EXPECT_EQ(updated.getRunCount(), 1);
 }
 
 TEST_F(CronManagerTest, ClearAllJobs) {
@@ -359,7 +363,7 @@ TEST_F(CronManagerTest, SetJobPriority) {
     EXPECT_TRUE(manager_->setJobPriority(id, 1));
 
     auto updated = manager_->viewCronJobById(id);
-    EXPECT_EQ(updated.priority_, 1);
+    EXPECT_EQ(static_cast<int>(updated.getPriority()), 1);
 }
 
 TEST_F(CronManagerTest, SetJobMaxRetries) {
@@ -370,7 +374,7 @@ TEST_F(CronManagerTest, SetJobMaxRetries) {
     EXPECT_TRUE(manager_->setJobMaxRetries(id, 5));
 
     auto updated = manager_->viewCronJobById(id);
-    EXPECT_EQ(updated.max_retries_, 5);
+    EXPECT_EQ(updated.getMaxRetries(), 5);
 }
 
 TEST_F(CronManagerTest, SetJobOneTime) {
@@ -381,7 +385,7 @@ TEST_F(CronManagerTest, SetJobOneTime) {
     EXPECT_TRUE(manager_->setJobOneTime(id, true));
 
     auto updated = manager_->viewCronJobById(id);
-    EXPECT_TRUE(updated.one_time_);
+    EXPECT_TRUE(updated.isOneTime());
 }
 
 TEST_F(CronManagerTest, GetJobExecutionHistory) {
@@ -418,7 +422,8 @@ TEST_F(CronManagerTest, GetJobsByPriority) {
     auto sorted = manager_->getJobsByPriority();
     EXPECT_EQ(sorted.size(), 3);
     // First should be highest priority (lowest number)
-    EXPECT_LE(sorted[0].priority_, sorted[1].priority_);
+    EXPECT_LE(static_cast<int>(sorted[0].getPriority()),
+              static_cast<int>(sorted[1].getPriority()));
 }
 
 TEST_F(CronManagerTest, ExportToJSON) {

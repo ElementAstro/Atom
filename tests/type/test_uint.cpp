@@ -8,6 +8,8 @@
 #include "atom/error/exception.hpp"
 #include "atom/type/uint.hpp"
 
+using namespace atom::type;
+
 namespace {
 
 // Test fixture for uint literals

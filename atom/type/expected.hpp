@@ -1,6 +1,7 @@
 #ifndef ATOM_TYPE_EXPECTED_HPP
 #define ATOM_TYPE_EXPECTED_HPP
 
+#include <format>
 #include <functional>
 #include <stdexcept>
 #include <string>
@@ -447,6 +448,37 @@ public:
     }
 
     /**
+     * @brief Gets the error payload, or a default if a value is present.
+     *
+     * Mirrors C++23 std::expected<T, E>::error_or: returns the contained error
+     * (the E payload, not the Error<E> wrapper) when in the error state, else
+     * the supplied default. Complements value_or for the error channel.
+     *
+     * @tparam G The type of the default error value
+     * @param default_error The error to return when a value is present
+     * @return E The contained error payload or the default
+     */
+    template <typename G = E>
+    [[nodiscard]] constexpr E error_or(G&& default_error) const& {
+        return has_value() ? static_cast<E>(std::forward<G>(default_error))
+                           : std::get<1>(value_).error();
+    }
+
+    /**
+     * @brief Gets the error payload, or a default if a value is present
+     * (move version).
+     *
+     * @tparam G The type of the default error value
+     * @param default_error The error to return when a value is present
+     * @return E The contained error payload or the default
+     */
+    template <typename G = E>
+    [[nodiscard]] constexpr E error_or(G&& default_error) && {
+        return has_value() ? static_cast<E>(std::forward<G>(default_error))
+                           : std::get<1>(std::move(value_)).error();
+    }
+
+    /**
      * @brief Dereference operator for convenient value access.
      *
      * @return T& Reference to the stored value
@@ -541,6 +573,29 @@ public:
                 "Attempted to access error, but it contains a value.");
         }
         return std::get<1>(std::move(value_));
+    }
+
+    /**
+     * @brief Gets the unwrapped error value directly.
+     *
+     * Convenience accessor returning the underlying E, avoiding the
+     * `.error().error()` double access otherwise required to reach it.
+     *
+     * @return const E& Const reference to the stored error value
+     * @throws std::logic_error if the expected contains a value
+     */
+    [[nodiscard]] constexpr const E& error_value() const& {
+        return error().error();
+    }
+
+    /**
+     * @brief Gets the unwrapped error value directly (move version).
+     *
+     * @return E&& Rvalue reference to the stored error value
+     * @throws std::logic_error if the expected contains a value
+     */
+    [[nodiscard]] constexpr E&& error_value() && {
+        return std::move(*this).error().error();
     }
 
     /**
@@ -680,6 +735,27 @@ public:
             return expected<ReturnType, E>(func(std::move(value())));
         }
         return expected<ReturnType, E>(std::move(error()));
+    }
+
+    /**
+     * @brief Alias for map(), using the C++23 std::expected canonical name.
+     *
+     * std::expected names its value-mapping monadic operation `transform`
+     * (whereas this type historically used the functional name `map`). These
+     * forwarders give std::expected-interface parity so familiar code reads the
+     * same; `map` remains as the equivalent functional-style spelling.
+     */
+    template <typename Func>
+    constexpr auto transform(Func&& func) & {
+        return map(std::forward<Func>(func));
+    }
+    template <typename Func>
+    constexpr auto transform(Func&& func) const& {
+        return map(std::forward<Func>(func));
+    }
+    template <typename Func>
+    constexpr auto transform(Func&& func) && {
+        return std::move(*this).map(std::forward<Func>(func));
     }
 
     /**
@@ -942,6 +1018,29 @@ public:
                 "Attempted to access error, but it contains a value.");
         }
         return std::get<1>(std::move(value_));
+    }
+
+    /**
+     * @brief Gets the unwrapped error value directly.
+     *
+     * Convenience accessor returning the underlying E, avoiding the
+     * `.error().error()` double access otherwise required to reach it.
+     *
+     * @return const E& Const reference to the stored error value
+     * @throws std::logic_error if the expected represents success
+     */
+    [[nodiscard]] constexpr const E& error_value() const& {
+        return error().error();
+    }
+
+    /**
+     * @brief Gets the unwrapped error value directly (move version).
+     *
+     * @return E&& Rvalue reference to the stored error value
+     * @throws std::logic_error if the expected represents success
+     */
+    [[nodiscard]] constexpr E&& error_value() && {
+        return std::move(*this).error().error();
     }
 
     /**
@@ -1212,5 +1311,26 @@ constexpr void swap(expected<T, E>& lhs,
 }
 
 }  // namespace atom::type
+
+/**
+ * @brief std::format support for expected<T, E>, rendered as "expected(value)"
+ * or "unexpected(error)". Requires both T and E to be formattable.
+ */
+template <typename T, typename E, typename CharT>
+    requires std::formattable<T, CharT> && std::formattable<E, CharT>
+struct std::formatter<atom::type::expected<T, E>, CharT> {
+    constexpr auto parse(std::basic_format_parse_context<CharT>& ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const atom::type::expected<T, E>& exp,
+                FormatContext& ctx) const {
+        if (exp.has_value()) {
+            return std::format_to(ctx.out(), "expected({})", exp.value());
+        }
+        return std::format_to(ctx.out(), "unexpected({})", exp.error().error());
+    }
+};
 
 #endif  // ATOM_TYPE_EXPECTED_HPP

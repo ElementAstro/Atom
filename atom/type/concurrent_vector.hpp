@@ -21,16 +21,25 @@
 #include <execution>
 #endif
 
+#include "atom/error/exception.hpp"
+
 namespace atom::type {
 
 /**
- * @brief Custom exceptions for concurrent_vector operations
+ * @brief Domain-specific exception for ConcurrentVector operations.
+ *
+ * Derives from atom::error::Exception so it integrates with the framework's
+ * error hierarchy (stack trace, file/line/function capture) while remaining a
+ * distinct, catchable type. Throw via THROW_CONCURRENT_VECTOR_ERROR.
  */
-class concurrent_vector_error : public std::runtime_error {
+class ConcurrentVectorError : public atom::error::Exception {
 public:
-    explicit concurrent_vector_error(const std::string& message)
-        : std::runtime_error(message) {}
+    using atom::error::Exception::Exception;
 };
+
+#define THROW_CONCURRENT_VECTOR_ERROR(...)                                  \
+    throw atom::type::ConcurrentVectorError(ATOM_FILE_NAME, ATOM_FILE_LINE, \
+                                            ATOM_FUNC_NAME, __VA_ARGS__)
 
 /**
  * @brief A thread-safe vector that supports concurrent operations.
@@ -42,7 +51,7 @@ public:
  * @tparam T The type of elements stored in the vector.
  */
 template <typename T>
-class concurrent_vector {
+class ConcurrentVector {
 private:
     std::vector<T> data;             ///< The underlying data storage
     std::atomic<size_t> valid_size;  ///< The current number of valid elements
@@ -58,7 +67,7 @@ private:
     std::condition_variable_any tasks_done_cv;
 
     // Error handling related
-    std::vector<std::exception_ptr> thread_exceptions;
+    mutable std::vector<std::exception_ptr> thread_exceptions;
     mutable std::mutex exception_mutex;
 
     /**
@@ -118,11 +127,11 @@ private:
      *
      * @param index The index to check
      * @param operation_name Name of the operation for error message
-     * @throws concurrent_vector_error if index is out of bounds
+     * @throws ConcurrentVectorError if index is out of bounds
      */
     void check_bounds(size_t index, const std::string& operation_name) const {
         if (index >= valid_size.load(std::memory_order_acquire)) {
-            throw concurrent_vector_error(
+            THROW_CONCURRENT_VECTOR_ERROR(
                 operation_name + ": Index " + std::to_string(index) +
                 " out of bounds (size: " + std::to_string(valid_size.load()) +
                 ")");
@@ -132,7 +141,7 @@ private:
     /**
      * @brief Rethrow any stored exceptions from worker threads
      */
-    void check_for_exceptions() {
+    void check_for_exceptions() const {
         std::lock_guard<std::mutex> lock(exception_mutex);
         if (!thread_exceptions.empty()) {
             auto exception = thread_exceptions.front();
@@ -148,13 +157,13 @@ public:
     using const_reference = const T&;
 
     /**
-     * @brief Constructs a concurrent_vector with a specified number of threads.
+     * @brief Constructs a ConcurrentVector with a specified number of threads.
      *
      * @param initial_capacity Initial capacity for the vector
      * @param num_threads The number of threads in the thread pool
      * @throws std::invalid_argument If num_threads is 0
      */
-    explicit concurrent_vector(
+    explicit ConcurrentVector(
         size_t initial_capacity = 0,
         size_t num_threads = std::thread::hardware_concurrency())
         : valid_size(0) {
@@ -172,12 +181,18 @@ public:
             // Start the thread pool
             thread_pool.reserve(num_threads);
             for (size_t i = 0; i < num_threads; ++i) {
-                thread_pool.emplace_back(&concurrent_vector::thread_pool_worker,
+                thread_pool.emplace_back(&ConcurrentVector::thread_pool_worker,
                                          this);
             }
         } catch (...) {
-            // Clean up if constructor fails
-            stop_pool.store(true, std::memory_order_release);
+            // Clean up if constructor fails. Set stop_pool UNDER pool_mutex:
+            // otherwise a worker between evaluating its wait predicate and
+            // blocking can miss this notify and sleep forever (lost-wakeup),
+            // hanging the join below.
+            {
+                std::lock_guard lock(pool_mutex);
+                stop_pool.store(true, std::memory_order_release);
+            }
             pool_cv.notify_all();
             for (auto& t : thread_pool) {
                 if (t.joinable()) {
@@ -189,14 +204,18 @@ public:
     }
 
     /**
-     * @brief Destructor for concurrent_vector.
+     * @brief Destructor for ConcurrentVector.
      *
      * Stops the thread pool and joins all threads.
      */
-    ~concurrent_vector() noexcept {
+    ~ConcurrentVector() noexcept {
         try {
-            // Stop the thread pool and join all threads
-            stop_pool.store(true, std::memory_order_release);
+            // Stop the thread pool and join all threads. stop_pool is set under
+            // pool_mutex to avoid a lost-wakeup that would hang the join.
+            {
+                std::lock_guard lock(pool_mutex);
+                stop_pool.store(true, std::memory_order_release);
+            }
             pool_cv.notify_all();
             for (auto& t : thread_pool) {
                 if (t.joinable()) {
@@ -209,13 +228,13 @@ public:
     }
 
     // Delete copy constructor and assignment operator
-    concurrent_vector(const concurrent_vector&) = delete;
-    concurrent_vector& operator=(const concurrent_vector&) = delete;
+    ConcurrentVector(const ConcurrentVector&) = delete;
+    ConcurrentVector& operator=(const ConcurrentVector&) = delete;
 
     /**
      * @brief Move constructor
      */
-    concurrent_vector(concurrent_vector&& other) noexcept {
+    ConcurrentVector(ConcurrentVector&& other) noexcept {
         std::unique_lock lock_other(other.mtx);
         std::unique_lock lock_this(mtx);
 
@@ -225,13 +244,16 @@ public:
 
         // We can't easily move the thread pool, so we'll create a new one
         size_t num_threads = other.thread_pool.size();
-        other.stop_pool.store(true, std::memory_order_release);
+        {
+            std::lock_guard pool_lock(other.pool_mutex);
+            other.stop_pool.store(true, std::memory_order_release);
+        }
         other.pool_cv.notify_all();
 
         // Start new thread pool
         thread_pool.reserve(num_threads);
         for (size_t i = 0; i < num_threads; ++i) {
-            thread_pool.emplace_back(&concurrent_vector::thread_pool_worker,
+            thread_pool.emplace_back(&ConcurrentVector::thread_pool_worker,
                                      this);
         }
 
@@ -247,10 +269,13 @@ public:
     /**
      * @brief Move assignment operator
      */
-    concurrent_vector& operator=(concurrent_vector&& other) noexcept {
+    ConcurrentVector& operator=(ConcurrentVector&& other) noexcept {
         if (this != &other) {
             // Clean up current resources
-            stop_pool.store(true, std::memory_order_release);
+            {
+                std::lock_guard pool_lock(pool_mutex);
+                stop_pool.store(true, std::memory_order_release);
+            }
             pool_cv.notify_all();
             for (auto& t : thread_pool) {
                 if (t.joinable()) {
@@ -272,13 +297,16 @@ public:
             size_t num_threads = other.thread_pool.size();
 
             // Stop other's thread pool
-            other.stop_pool.store(true, std::memory_order_release);
+            {
+                std::lock_guard pool_lock(other.pool_mutex);
+                other.stop_pool.store(true, std::memory_order_release);
+            }
             other.pool_cv.notify_all();
 
             // Start new thread pool
             thread_pool.reserve(num_threads);
             for (size_t i = 0; i < num_threads; ++i) {
-                thread_pool.emplace_back(&concurrent_vector::thread_pool_worker,
+                thread_pool.emplace_back(&ConcurrentVector::thread_pool_worker,
                                          this);
             }
 
@@ -332,7 +360,7 @@ public:
         try {
             data.reserve(new_capacity);
         } catch (const std::length_error& e) {
-            throw concurrent_vector_error(std::string("reserve: ") + e.what());
+            THROW_CONCURRENT_VECTOR_ERROR(std::string("reserve: ") + e.what());
         }
     }
 
@@ -353,7 +381,7 @@ public:
             }
             valid_size.store(current_size + 1, std::memory_order_release);
         } catch (...) {
-            throw concurrent_vector_error(
+            THROW_CONCURRENT_VECTOR_ERROR(
                 "push_back: Failed to add element due to " +
                 std::string(std::current_exception() ? "exception"
                                                      : "unknown reason"));
@@ -377,7 +405,7 @@ public:
             }
             valid_size.store(current_size + 1, std::memory_order_release);
         } catch (...) {
-            throw concurrent_vector_error(
+            THROW_CONCURRENT_VECTOR_ERROR(
                 "push_back: Failed to add element due to " +
                 std::string(std::current_exception() ? "exception"
                                                      : "unknown reason"));
@@ -403,7 +431,7 @@ public:
             }
             valid_size.store(current_size + 1, std::memory_order_release);
         } catch (...) {
-            throw concurrent_vector_error(
+            THROW_CONCURRENT_VECTOR_ERROR(
                 "emplace_back: Failed to construct element due to " +
                 std::string(std::current_exception() ? "exception"
                                                      : "unknown reason"));
@@ -414,14 +442,14 @@ public:
      * @brief Thread-safe pop_back operation.
      *
      * @return Optional containing the popped value
-     * @throws concurrent_vector_error If the vector is empty
+     * @throws ConcurrentVectorError If the vector is empty
      */
     std::optional<T> pop_back() {
         std::unique_lock lock(mtx);
         size_t current_size = valid_size.load(std::memory_order_relaxed);
 
         if (current_size == 0) {
-            throw concurrent_vector_error(
+            THROW_CONCURRENT_VECTOR_ERROR(
                 "pop_back: Cannot remove from an empty vector");
         }
 
@@ -432,7 +460,7 @@ public:
             valid_size.store(current_size - 1, std::memory_order_release);
             return result;
         } catch (...) {
-            throw concurrent_vector_error(
+            THROW_CONCURRENT_VECTOR_ERROR(
                 "pop_back: Failed to pop element due to " +
                 std::string(std::current_exception() ? "exception"
                                                      : "unknown reason"));
@@ -444,7 +472,7 @@ public:
      *
      * @param index The index of the element to retrieve.
      * @return A reference to the element at the specified index.
-     * @throws concurrent_vector_error If index is out of bounds
+     * @throws ConcurrentVectorError If index is out of bounds
      */
     T& at(size_t index) {
         check_bounds(index, "at");
@@ -457,7 +485,7 @@ public:
      *
      * @param index The index of the element to retrieve.
      * @return A constant reference to the element at the specified index.
-     * @throws concurrent_vector_error If index is out of bounds
+     * @throws ConcurrentVectorError If index is out of bounds
      */
     const T& at(size_t index) const {
         check_bounds(index, "at");
@@ -534,7 +562,7 @@ public:
             }
 
         } catch (...) {
-            throw concurrent_vector_error(
+            THROW_CONCURRENT_VECTOR_ERROR(
                 "parallel_for_each: Operation failed due to exception in "
                 "worker task");
         }
@@ -578,7 +606,7 @@ public:
 
                 // Need const_cast because we're submitting to a non-const
                 // object
-                const_cast<concurrent_vector*>(this)->submit_task(
+                const_cast<ConcurrentVector*>(this)->submit_task(
                     std::move(task));
             }
 
@@ -588,7 +616,7 @@ public:
             }
 
         } catch (...) {
-            throw concurrent_vector_error(
+            THROW_CONCURRENT_VECTOR_ERROR(
                 "parallel_for_each: Operation failed due to exception in "
                 "worker task");
         }
@@ -627,7 +655,7 @@ public:
                       data.begin() + current_size);
             valid_size.store(new_size, std::memory_order_release);
         } catch (...) {
-            throw concurrent_vector_error(
+            THROW_CONCURRENT_VECTOR_ERROR(
                 "batch_insert: Failed to insert batch due to " +
                 std::string(std::current_exception() ? "exception"
                                                      : "unknown reason"));
@@ -660,12 +688,15 @@ public:
                 data.resize(new_capacity);
             }
 
-            // Move the data
+            // Move the data, then clear the source so it is left empty (the
+            // element-wise std::move only moves-from the elements; the source
+            // vector keeps its size until cleared).
             std::move(values.begin(), values.end(),
                       data.begin() + current_size);
             valid_size.store(new_size, std::memory_order_release);
+            values.clear();
         } catch (...) {
-            throw concurrent_vector_error(
+            THROW_CONCURRENT_VECTOR_ERROR(
                 "batch_insert: Failed to insert batch due to " +
                 std::string(std::current_exception() ? "exception"
                                                      : "unknown reason"));
@@ -744,7 +775,7 @@ public:
             valid_size.store(new_size, std::memory_order_release);
 
         } catch (...) {
-            throw concurrent_vector_error(
+            THROW_CONCURRENT_VECTOR_ERROR(
                 "parallel_batch_insert: Failed due to " +
                 std::string(std::current_exception() ? "exception"
                                                      : "unknown reason"));
@@ -785,7 +816,7 @@ public:
             data.swap(temp);
             data.shrink_to_fit();
         } catch (...) {
-            throw concurrent_vector_error("shrink_to_fit: Failed due to " +
+            THROW_CONCURRENT_VECTOR_ERROR("shrink_to_fit: Failed due to " +
                                           std::string(std::current_exception()
                                                           ? "exception"
                                                           : "unknown reason"));
@@ -797,17 +828,17 @@ public:
      *
      * @param start The start index of the range to clear.
      * @param end The end index of the range to clear (exclusive).
-     * @throws concurrent_vector_error If range is invalid
+     * @throws ConcurrentVectorError If range is invalid
      */
     void clear_range(size_t start, size_t end) {
         if (start >= end) {
-            throw concurrent_vector_error(
+            THROW_CONCURRENT_VECTOR_ERROR(
                 "clear_range: Invalid range (start >= end)");
         }
 
         size_t current_size = valid_size.load(std::memory_order_acquire);
         if (end > current_size) {
-            throw concurrent_vector_error(
+            THROW_CONCURRENT_VECTOR_ERROR(
                 "clear_range: End index " + std::to_string(end) +
                 " exceeds vector size " + std::to_string(current_size));
         }
@@ -829,7 +860,7 @@ public:
             valid_size.store(current_size - (end - start),
                              std::memory_order_release);
         } catch (...) {
-            throw concurrent_vector_error("clear_range: Failed due to " +
+            THROW_CONCURRENT_VECTOR_ERROR("clear_range: Failed due to " +
                                           std::string(std::current_exception()
                                                           ? "exception"
                                                           : "unknown reason"));
@@ -907,7 +938,7 @@ public:
             return std::nullopt;
 
         } catch (...) {
-            throw concurrent_vector_error("parallel_find: Failed due to " +
+            THROW_CONCURRENT_VECTOR_ERROR("parallel_find: Failed due to " +
                                           std::string(std::current_exception()
                                                           ? "exception"
                                                           : "unknown reason"));
@@ -969,7 +1000,7 @@ public:
             }
 
         } catch (...) {
-            throw concurrent_vector_error("parallel_transform: Failed due to " +
+            THROW_CONCURRENT_VECTOR_ERROR("parallel_transform: Failed due to " +
                                           std::string(std::current_exception()
                                                           ? "exception"
                                                           : "unknown reason"));
@@ -983,12 +1014,12 @@ public:
      *
      * @param task The task to be executed.
      */
-    void submit_task(std::function<void()> task) {
-        if (!task) {
-            throw std::invalid_argument("submit_task: Task cannot be null");
-        }
-
-        std::packaged_task<void()> packaged(std::move(task));
+    // Templated to accept move-only callables (e.g. lambdas capturing a
+    // std::promise). A std::function parameter would reject them since
+    // std::function requires its target to be copy-constructible.
+    template <typename F>
+    void submit_task(F&& task) {
+        std::packaged_task<void()> packaged(std::forward<F>(task));
         {
             std::unique_lock lock(pool_mutex);
             task_queue.emplace(std::move(packaged));
@@ -1023,12 +1054,12 @@ public:
      * @brief Gets the first element in the vector.
      *
      * @return Reference to the first element
-     * @throws concurrent_vector_error If the vector is empty
+     * @throws ConcurrentVectorError If the vector is empty
      */
     T& front() {
         std::shared_lock lock(mtx);
         if (valid_size.load(std::memory_order_acquire) == 0) {
-            throw concurrent_vector_error("front: Vector is empty");
+            THROW_CONCURRENT_VECTOR_ERROR("front: Vector is empty");
         }
         return data[0];
     }
@@ -1037,12 +1068,12 @@ public:
      * @brief Gets the first element in the vector (const version).
      *
      * @return Const reference to the first element
-     * @throws concurrent_vector_error If the vector is empty
+     * @throws ConcurrentVectorError If the vector is empty
      */
     const T& front() const {
         std::shared_lock lock(mtx);
         if (valid_size.load(std::memory_order_acquire) == 0) {
-            throw concurrent_vector_error("front: Vector is empty");
+            THROW_CONCURRENT_VECTOR_ERROR("front: Vector is empty");
         }
         return data[0];
     }
@@ -1051,13 +1082,13 @@ public:
      * @brief Gets the last element in the vector.
      *
      * @return Reference to the last element
-     * @throws concurrent_vector_error If the vector is empty
+     * @throws ConcurrentVectorError If the vector is empty
      */
     T& back() {
         std::shared_lock lock(mtx);
         size_t current_size = valid_size.load(std::memory_order_acquire);
         if (current_size == 0) {
-            throw concurrent_vector_error("back: Vector is empty");
+            THROW_CONCURRENT_VECTOR_ERROR("back: Vector is empty");
         }
         return data[current_size - 1];
     }
@@ -1066,13 +1097,13 @@ public:
      * @brief Gets the last element in the vector (const version).
      *
      * @return Const reference to the last element
-     * @throws concurrent_vector_error If the vector is empty
+     * @throws ConcurrentVectorError If the vector is empty
      */
     const T& back() const {
         std::shared_lock lock(mtx);
         size_t current_size = valid_size.load(std::memory_order_acquire);
         if (current_size == 0) {
-            throw concurrent_vector_error("back: Vector is empty");
+            THROW_CONCURRENT_VECTOR_ERROR("back: Vector is empty");
         }
         return data[current_size - 1];
     }

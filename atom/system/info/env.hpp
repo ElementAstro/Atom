@@ -201,6 +201,19 @@ public:
         const String& key, const String& default_value = "") -> String;
 
     /**
+     * @brief Checks whether an environment variable is set in the current
+     * process environment.
+     *
+     * Complements the static getEnv/setEnv/unsetEnv family: getEnv cannot
+     * distinguish an unset variable from one set to its default value, so this
+     * queries the OS directly.
+     *
+     * @param key The variable name.
+     * @return True if the variable exists (even if empty), false otherwise.
+     */
+    ATOM_NODISCARD static auto hasEnv(const String& key) -> bool;
+
+    /**
      * @brief Gets the value of an environment variable and converts it to the
      * specified type.
      * @tparam T The type to convert the value to.

@@ -8,6 +8,9 @@
 
 #include "atom/type/indestructible.hpp"
 
+// Named namespace isolates test helpers from other aggregated test files.
+namespace indestructible_test {
+
 // Test fixture for Indestructible tests
 class IndestructibleTest : public ::testing::Test {
 protected:
@@ -414,3 +417,5 @@ TEST_F(IndestructibleTest, DirectStructInit) {
     EXPECT_EQ(point->x, 30);
     EXPECT_EQ(point->y, 40);
 }
+
+}  // namespace indestructible_test

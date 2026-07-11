@@ -19,7 +19,7 @@ set(SOURCES
     core/component_pool.cpp
     core/registry.cpp
     # Scripting components
-    scripting/advanced_bindings.cpp
+    scripting/bindings.cpp
     scripting/script_engine.cpp
     scripting/script_sandbox.cpp
     scripting/scripting_api.cpp
@@ -34,7 +34,6 @@ set(SOURCES
 # Header files
 set(HEADERS
     # Backwards compatibility headers (in root)
-    advanced_bindings.hpp
     component.hpp
     component_pool.hpp
     dispatch.hpp
@@ -46,7 +45,6 @@ set(HEADERS
     script_sandbox.hpp
     scripting_api.hpp
     serialization.hpp
-    type_conversion.hpp
     types.hpp
     var.hpp
     module_macro.hpp
@@ -58,7 +56,7 @@ set(HEADERS
     core/types.hpp
     core/module_macro.hpp
     core/package.hpp
-    scripting/advanced_bindings.hpp
+    scripting/bindings.hpp
     scripting/script_engine.hpp
     scripting/script_sandbox.hpp
     scripting/scripting_api.hpp
@@ -66,12 +64,19 @@ set(HEADERS
     lifecycle/iteration.hpp
     lifecycle/lifecycle.hpp
     data/serialization.hpp
-    data/var.hpp
-    data/type_conversion.hpp)
+    data/var.hpp)
 
 # Optional scripting engine support
 option(ATOM_ENABLE_LUA "Enable Lua scripting support" OFF)
 option(ATOM_ENABLE_PYTHON "Enable Python scripting support" OFF)
+
+# Component event system (emitEvent/on/once/off + registry-level pub/sub)
+option(ATOM_COMPONENTS_ENABLE_EVENTS "Enable component event system" ON)
+
+# Hot reload: load components from shared libraries at runtime
+# (Registry::loadComponentFromFile / watchComponentChanges).
+option(ATOM_COMPONENTS_ENABLE_HOT_RELOAD
+       "Enable runtime loading of components from shared libraries" OFF)
 
 # Conditional source files
 set(OPTIONAL_SOURCES)
@@ -133,7 +138,7 @@ endif()
 find_package(spdlog QUIET)
 
 set(LIBS atom-error $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>
-         ${CMAKE_THREAD_LIBS_INIT})
+         ${CMAKE_THREAD_LIBS_INIT} ${CMAKE_DL_LIBS})
 
 if(spdlog_FOUND)
   list(APPEND LIBS spdlog::spdlog)
@@ -152,6 +157,14 @@ target_link_libraries(atom-component PRIVATE ${LIBS})
 
 # Set C++20 for the target
 target_compile_features(atom-component PUBLIC cxx_std_20)
+
+if(ATOM_COMPONENTS_ENABLE_EVENTS)
+  target_compile_definitions(atom-component PUBLIC ENABLE_EVENT_SYSTEM=1)
+endif()
+
+if(ATOM_COMPONENTS_ENABLE_HOT_RELOAD)
+  target_compile_definitions(atom-component PUBLIC ENABLE_HOT_RELOAD=1)
+endif()
 
 # Install library target
 install(
@@ -175,8 +188,7 @@ install(FILES ${HEADERS} ${OPTIONAL_HEADERS}
 
 # Install headers Install backwards compatibility headers
 install(
-  FILES advanced_bindings.hpp
-        component.hpp
+  FILES component.hpp
         component_pool.hpp
         dispatch.hpp
         iteration.hpp
@@ -187,7 +199,6 @@ install(
         script_sandbox.hpp
         scripting_api.hpp
         serialization.hpp
-        type_conversion.hpp
         types.hpp
         var.hpp
         module_macro.hpp

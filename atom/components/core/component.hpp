@@ -18,6 +18,7 @@ Description: Basic Component Definition
 #include "../data/var.hpp"
 #include "../lifecycle/dispatch.hpp"
 #include "module_macro.hpp"
+#include "types.hpp"
 
 #include "atom/memory/memory_pool.hpp"
 #include "atom/memory/object.hpp"
@@ -28,6 +29,10 @@ Description: Basic Component Definition
 #include "atom/meta/type_caster.hpp"
 #include "atom/meta/type_info.hpp"
 #include "atom/type/pointer.hpp"
+
+#include <fmt/format.h>
+
+using atom::type::PointerSentinel;
 
 #include <chrono>
 #include <concepts>
@@ -42,7 +47,7 @@ public:
 
 #define THROW_OBJECT_EXPIRED(...)                                            \
     throw ObjectExpiredError(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
-                             __VA_ARGS__)
+                             fmt::format(__VA_ARGS__))
 
 /**
  * @brief Component lifecycle state
@@ -131,75 +136,77 @@ struct alignas(64) ComponentPerformanceStats {
         return *this = other;
     }
 
-#if defined(_MSC_VER)
     void reset() noexcept {
-#else
-    constexpr void reset() noexcept {
-#endif
         commandCallCount.store(0, std::memory_order_relaxed);
-    commandErrorCount.store(0, std::memory_order_relaxed);
-    eventCount.store(0, std::memory_order_relaxed);
-    memoryAllocations.store(0, std::memory_order_relaxed);
-    timing.totalExecutionTimeNs.store(0, std::memory_order_relaxed);
-    timing.maxExecutionTimeNs.store(0, std::memory_order_relaxed);
-    timing.minExecutionTimeNs.store(UINT64_MAX, std::memory_order_relaxed);
-    timing.avgExecutionTimeNs.store(0, std::memory_order_relaxed);
-}
+        commandErrorCount.store(0, std::memory_order_relaxed);
+        eventCount.store(0, std::memory_order_relaxed);
+        memoryAllocations.store(0, std::memory_order_relaxed);
+        timing.totalExecutionTimeNs.store(0, std::memory_order_relaxed);
+        timing.maxExecutionTimeNs.store(0, std::memory_order_relaxed);
+        timing.minExecutionTimeNs.store(UINT64_MAX, std::memory_order_relaxed);
+        timing.avgExecutionTimeNs.store(0, std::memory_order_relaxed);
+    }
 
     void updateExecutionTime(std::chrono::nanoseconds executionTime) noexcept {
-    const auto timeNs = static_cast<uint64_t>(executionTime.count());
+        const auto timeNs = static_cast<uint64_t>(executionTime.count());
 
-    timing.totalExecutionTimeNs.fetch_add(timeNs, std::memory_order_relaxed);
+        timing.totalExecutionTimeNs.fetch_add(timeNs,
+                                              std::memory_order_relaxed);
 
-    // Update max time
-    uint64_t currentMax =
-        timing.maxExecutionTimeNs.load(std::memory_order_relaxed);
-    while (timeNs > currentMax &&
-           !timing.maxExecutionTimeNs.compare_exchange_weak(
-               currentMax, timeNs, std::memory_order_relaxed)) {
-        // Retry if another thread updated max
+        // Update max time
+        uint64_t currentMax =
+            timing.maxExecutionTimeNs.load(std::memory_order_relaxed);
+        while (timeNs > currentMax &&
+               !timing.maxExecutionTimeNs.compare_exchange_weak(
+                   currentMax, timeNs, std::memory_order_relaxed)) {
+            // Retry if another thread updated max
+        }
+
+        // Update min time
+        uint64_t currentMin =
+            timing.minExecutionTimeNs.load(std::memory_order_relaxed);
+        while (timeNs < currentMin &&
+               !timing.minExecutionTimeNs.compare_exchange_weak(
+                   currentMin, timeNs, std::memory_order_relaxed)) {
+            // Retry if another thread updated min
+        }
+
+        // Update average (approximate for performance)
+        const auto count = std::max(
+            uint64_t{1}, commandCallCount.load(std::memory_order_relaxed));
+        const auto total =
+            timing.totalExecutionTimeNs.load(std::memory_order_relaxed);
+        timing.avgExecutionTimeNs.store(total / count,
+                                        std::memory_order_relaxed);
     }
 
-    // Update min time
-    uint64_t currentMin =
-        timing.minExecutionTimeNs.load(std::memory_order_relaxed);
-    while (timeNs < currentMin &&
-           !timing.minExecutionTimeNs.compare_exchange_weak(
-               currentMin, timeNs, std::memory_order_relaxed)) {
-        // Retry if another thread updated min
+    // Legacy compatibility methods
+    [[nodiscard]] std::chrono::microseconds getTotalExecutionTime()
+        const noexcept {
+        return std::chrono::microseconds{
+            timing.totalExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
     }
 
-    // Update average (approximate for performance)
-    const auto count =
-        std::max(uint64_t{1}, commandCallCount.load(std::memory_order_relaxed));
-    const auto total =
-        timing.totalExecutionTimeNs.load(std::memory_order_relaxed);
-    timing.avgExecutionTimeNs.store(total / count, std::memory_order_relaxed);
-}
+    [[nodiscard]] std::chrono::microseconds getMaxExecutionTime()
+        const noexcept {
+        return std::chrono::microseconds{
+            timing.maxExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
+    }
 
-// Legacy compatibility methods
-[[nodiscard]] std::chrono::microseconds getTotalExecutionTime() const noexcept {
-    return std::chrono::microseconds{
-        timing.totalExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
-}
+    [[nodiscard]] std::chrono::microseconds getMinExecutionTime()
+        const noexcept {
+        const auto minNs =
+            timing.minExecutionTimeNs.load(std::memory_order_relaxed);
+        return std::chrono::microseconds{minNs == UINT64_MAX ? 0
+                                                             : minNs / 1000};
+    }
 
-[[nodiscard]] std::chrono::microseconds getMaxExecutionTime() const noexcept {
-    return std::chrono::microseconds{
-        timing.maxExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
-}
-
-[[nodiscard]] std::chrono::microseconds getMinExecutionTime() const noexcept {
-    const auto minNs =
-        timing.minExecutionTimeNs.load(std::memory_order_relaxed);
-    return std::chrono::microseconds{minNs == UINT64_MAX ? 0 : minNs / 1000};
-}
-
-[[nodiscard]] std::chrono::microseconds getAvgExecutionTime() const noexcept {
-    return std::chrono::microseconds{
-        timing.avgExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
-}
-}
-;
+    [[nodiscard]] std::chrono::microseconds getAvgExecutionTime()
+        const noexcept {
+        return std::chrono::microseconds{
+            timing.avgExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
+    }
+};
 
 /**
  * @brief Optimized base class for components with cache-friendly layout
@@ -553,6 +560,7 @@ public:
     DEF_MEMBER_FUNC(noexcept)
     DEF_MEMBER_FUNC(const noexcept)
     DEF_MEMBER_FUNC(const volatile noexcept)
+#undef DEF_MEMBER_FUNC
 
     /**
      * @brief Registers a member variable.
@@ -601,6 +609,7 @@ public:
     DEF_MEMBER_FUNC_WITH_INSTANCE(noexcept)
     DEF_MEMBER_FUNC_WITH_INSTANCE(const noexcept)
     DEF_MEMBER_FUNC_WITH_INSTANCE(const volatile noexcept)
+#undef DEF_MEMBER_FUNC_WITH_INSTANCE
 
     /**
      * @brief Registers a member variable with an instance.
@@ -776,61 +785,42 @@ public:
     void defClassConversion(
         const std::shared_ptr<atom::meta::TypeConversionBase>& conversion);
 
-/**
- * @brief Registers common operators for a type
- */
-#define OP_EQ(a, b) ((a) == (b))
-#define OP_NE(a, b) ((a) != (b))
-#define OP_LT(a, b) ((a) < (b))
-#define OP_GT(a, b) ((a) > (b))
-#define OP_LE(a, b) ((a) <= (b))
-#define OP_GE(a, b) ((a) >= (b))
-
-// 定义条件检查宏
-#define CONDITION_EQ std::equality_comparable<T>
-#define CONDITION_LT                            \
-    requires(T a, T b) {                        \
-        { a < b } -> std::convertible_to<bool>; \
-    }
-#define CONDITION_GT                            \
-    requires(T a, T b) {                        \
-        { a > b } -> std::convertible_to<bool>; \
-    }
-#define CONDITION_LE                             \
-    requires(T a, T b) {                         \
-        { a <= b } -> std::convertible_to<bool>; \
-    }
-#define CONDITION_GE                             \
-    requires(T a, T b) {                         \
-        { a >= b } -> std::convertible_to<bool>; \
-    }
-
-// 注册操作符的通用宏
-#define REGISTER_OPERATOR(type_name, name, op, condition, description) \
-    if constexpr (condition) {                                         \
-        def(                                                           \
-            type_name + "." name,                                      \
-            [](const T& a, const T& b) -> bool { return op(a, b); },   \
-            "operators", description);                                 \
-    }
-
+    /**
+     * @brief Registers comparison operators for a type, constrained by the
+     * operations the type actually supports.
+     */
     template <typename T>
     void registerOperators(std::string_view typeName) {
-        std::string typeNameStr(typeName);
+        const std::string t{typeName};
 
-        // 注册所有操作符
-        REGISTER_OPERATOR(typeNameStr, "equals", OP_EQ, CONDITION_EQ,
-                          "Check if two objects are equal")
-        REGISTER_OPERATOR(typeNameStr, "notEquals", OP_NE, CONDITION_EQ,
-                          "Check if two objects are not equal")
-        REGISTER_OPERATOR(typeNameStr, "lessThan", OP_LT, CONDITION_LT,
-                          "Compare objects")
-        REGISTER_OPERATOR(typeNameStr, "greaterThan", OP_GT, CONDITION_GT,
-                          "Compare objects")
-        REGISTER_OPERATOR(typeNameStr, "lessThanOrEqual", OP_LE, CONDITION_LE,
-                          "Compare objects")
-        REGISTER_OPERATOR(typeNameStr, "greaterThanOrEqual", OP_GE,
-                          CONDITION_GE, "Compare objects")
+        if constexpr (std::equality_comparable<T>) {
+            def(
+                t + ".equals",
+                [](const T& a, const T& b) -> bool { return a == b; },
+                "operators", "Check if two objects are equal");
+            def(
+                t + ".notEquals",
+                [](const T& a, const T& b) -> bool { return a != b; },
+                "operators", "Check if two objects are not equal");
+        }
+        if constexpr (std::totally_ordered<T>) {
+            def(
+                t + ".lessThan",
+                [](const T& a, const T& b) -> bool { return a < b; },
+                "operators", "Compare objects");
+            def(
+                t + ".greaterThan",
+                [](const T& a, const T& b) -> bool { return a > b; },
+                "operators", "Compare objects");
+            def(
+                t + ".lessThanOrEqual",
+                [](const T& a, const T& b) -> bool { return a <= b; },
+                "operators", "Compare objects");
+            def(
+                t + ".greaterThanOrEqual",
+                [](const T& a, const T& b) -> bool { return a >= b; },
+                "operators", "Compare objects");
+        }
     }
 
     /**
@@ -1090,8 +1080,7 @@ private:
     std::unordered_map<std::string_view, atom::meta::TypeInfo> m_classes_;
 
 #if ENABLE_EVENT_SYSTEM
-    // Event system data - separate cache line
-    alignas(64) struct EventHandler {
+    struct EventHandler {
         atom::components::EventCallbackId id;
         atom::components::EventCallback callback;
         bool once;
@@ -1101,7 +1090,10 @@ private:
             : id(i), callback(std::move(cb)), once(o) {}
     };
 
-    std::unordered_map<std::string, std::vector<EventHandler>> m_EventHandlers_;
+    // Event system data - aligned to start on a separate cache line
+    alignas(64)
+        std::unordered_map<std::string, std::vector<EventHandler>>
+            m_EventHandlers_;
     mutable std::shared_mutex m_EventMutex_;
     std::atomic<atom::components::EventCallbackId> m_NextEventId_{1};
 #endif
@@ -1142,8 +1134,13 @@ void Component::def(std::string_view name, Callable&& func,
     static_assert(Traits::arity <= 8,
                   "Too many arguments in function (maximum is 8)");
 
-    // Include the template implementation
-#include "../component.template"
+    [&]<std::size_t... I>(std::index_sequence<I...>) {
+        (void)m_CommandDispatcher_->def(
+            name, group, description,
+            std::function<typename Traits::return_type(
+                typename Traits::template argument_t<I>...)>(
+                std::forward<Callable>(func)));
+    }(std::make_index_sequence<Traits::arity>{});
 }
 
 template <typename Ret>
@@ -1199,6 +1196,7 @@ DEF_MEMBER_FUNC_IMPL(const volatile)
 DEF_MEMBER_FUNC_IMPL(noexcept)
 DEF_MEMBER_FUNC_IMPL(const noexcept)
 DEF_MEMBER_FUNC_IMPL(const volatile noexcept)
+#undef DEF_MEMBER_FUNC_IMPL
 
 template <typename Ret, typename Class, typename InstanceType>
     requires Pointer<InstanceType> || SmartPointer<InstanceType> ||

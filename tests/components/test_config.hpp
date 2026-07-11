@@ -16,10 +16,6 @@
 #define ATOM_ENABLE_PYTHON 0
 #endif
 
-#ifndef ATOM_ENABLE_CHAISCRIPT
-#define ATOM_ENABLE_CHAISCRIPT 0
-#endif
-
 #ifndef ATOM_ENABLE_SIMD
 #define ATOM_ENABLE_SIMD 1
 #endif

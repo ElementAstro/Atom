@@ -6,7 +6,9 @@
 #include <span>
 #include <string_view>
 
-#if ENABLE_FASTHASH
+#if ATOM_USE_BOOST_CONTAINERS
+#include "atom/containers/boost_containers.hpp"
+#elif ENABLE_FASTHASH
 #include "emhash/hash_set8.hpp"
 #include "emhash/hash_table8.hpp"
 #else
@@ -19,11 +21,10 @@
 #include "atom/meta/proxy.hpp"
 #include "atom/meta/type_caster.hpp"
 #include "atom/type/json.hpp"
+#include "fmt/format.h"
 #include "spdlog/spdlog.h"
 
 #include "atom/macro.hpp"
-
-using json = nlohmann::json;
 
 // -------------------------------------------------------------------
 // Command Exception
@@ -36,7 +37,7 @@ public:
 
 #define THROW_DISPATCH_EXCEPTION(...)                                       \
     throw DispatchException(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
-                            __VA_ARGS__);
+                            fmt::format(__VA_ARGS__));
 
 class DispatchTimeout : public atom::error::Exception {
 public:
@@ -45,7 +46,7 @@ public:
 
 #define THROW_DISPATCH_TIMEOUT(...)                                       \
     throw DispatchTimeout(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
-                          __VA_ARGS__);
+                          fmt::format(__VA_ARGS__));
 
 // -------------------------------------------------------------------
 // Command Dispatcher
@@ -213,7 +214,7 @@ public:
         std::string_view name) const;
 
 #if ATOM_USE_BOOST_CONTAINERS
-    using StringSet = atom::container::string_hash_set;
+    using StringSet = atom::containers::fast_unordered_set<std::string>;
 #elif ENABLE_FASTHASH
     using StringSet = emhash::HashSet<std::string>;
 #else
@@ -379,11 +380,13 @@ private:
 
     // 使用高性能数据结构来存储命令和相关信息
 #if ATOM_USE_BOOST_CONTAINERS
-    using CommandMap = atom::container::unordered_map<
+    using CommandMap = atom::containers::fast_unordered_map<
         std::string, std::unordered_map<std::string, Command>>;
-    using GroupMap = atom::container::unordered_map<std::string, std::string>;
+    using GroupMap =
+        atom::containers::fast_unordered_map<std::string, std::string>;
     using TimeoutMap =
-        atom::container::unordered_map<std::string, std::chrono::milliseconds>;
+        atom::containers::fast_unordered_map<std::string,
+                                             std::chrono::milliseconds>;
 
     CommandMap commands_;
     GroupMap groupMap_;
@@ -407,8 +410,8 @@ private:
     std::atomic<bool> isShuttingDown_;  // Flag for safe shutdown
 };
 
-inline void to_json(json& j, const CommandDispatcher::Command& cmd) {
-    j = json{{"returnType", cmd.returnType},
+inline void to_json(nlohmann::json& j, const CommandDispatcher::Command& cmd) {
+    j = nlohmann::json{{"returnType", cmd.returnType},
              {"argTypes", cmd.argTypes},
              {"hash", cmd.hash},
              {"description", cmd.description},
@@ -427,7 +430,8 @@ inline void to_json(json& j, const CommandDispatcher::Command& cmd) {
     }
 }
 
-inline void from_json(const json& j, CommandDispatcher::Command& cmd) {
+inline void from_json(const nlohmann::json& j,
+                      CommandDispatcher::Command& cmd) {
     j.at("returnType").get_to(cmd.returnType);
     j.at("argTypes").get_to(cmd.argTypes);
     j.at("hash").get_to(cmd.hash);
@@ -688,10 +692,10 @@ auto CommandDispatcher::dispatchHelper(const std::string& name,
         // metadata. If argTypes is empty (common when registering without Arg
         // info), skip this check.
         if (!cmd.argTypes.empty() && args.size() > cmd.argTypes.size()) {
-            THROW_INVALID_ARGUMENT(
+            THROW_INVALID_ARGUMENT(fmt::format(
                 "Too many arguments for command {}: expected at most {}, got "
                 "{}",
-                name, cmd.argTypes.size(), args.size());
+                name, cmd.argTypes.size(), args.size()));
         }
     }
 
@@ -718,8 +722,9 @@ auto CommandDispatcher::completeArgs(const Command& cmd, const ArgsType& args)
         if (cmd.argTypes[i].getDefaultValue()) {
             fullArgs.push_back(cmd.argTypes[i].getDefaultValue().value());
         } else {
-            THROW_INVALID_ARGUMENT("Missing required argument '{}' for command",
-                                   cmd.argTypes[i].getName());
+            THROW_INVALID_ARGUMENT(
+                fmt::format("Missing required argument '{}' for command",
+                            cmd.argTypes[i].getName()));
         }
     }
 

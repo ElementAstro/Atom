@@ -2,6 +2,8 @@
 
 #include "atom/type/string.hpp"
 
+using namespace atom::type;
+
 // New test fixture for String class
 class StringTest : public ::testing::Test {
 protected:

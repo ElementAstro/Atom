@@ -121,7 +121,8 @@ public:
      * @return An optional containing the access count if key exists, otherwise
      * std::nullopt.
      */
-    auto getAccessCount(const Key& key) const -> std::optional<size_t>;
+    [[nodiscard]] auto getAccessCount(const Key& key) const
+        -> std::optional<size_t>;
 
     /**
      * @brief Retrieves the values associated with multiple keys.
@@ -152,7 +153,8 @@ public:
      * @return A vector of key-entry pairs representing all entries in the hash
      * table.
      */
-    auto getAllEntries() const -> std::vector<std::pair<Key, EntryData>>;
+    [[nodiscard]] auto getAllEntries() const
+        -> std::vector<std::pair<Key, EntryData>>;
 
     /**
      * @brief Sorts the entries in the hash table by their access count in
@@ -166,7 +168,7 @@ public:
      * @param N The number of top entries to retrieve.
      * @return A vector of key-entry pairs representing the top N entries.
      */
-    auto getTopNEntries(size_t N) const
+    [[nodiscard]] auto getTopNEntries(size_t N) const
         -> std::vector<std::pair<Key, EntryData>>;
 
     /**

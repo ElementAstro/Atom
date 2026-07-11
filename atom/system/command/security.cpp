@@ -19,6 +19,12 @@
 
 #include <spdlog/spdlog.h>
 
+// <windows.h> (pulled in transitively) defines STRICT as a macro, which
+// collides with the SecurityLevel::STRICT enumerator used below.
+#ifdef STRICT
+#undef STRICT
+#endif
+
 namespace atom::system {
 
 // Global instances

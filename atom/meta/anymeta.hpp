@@ -19,10 +19,13 @@
 #include "any.hpp"
 #include "type_info.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <shared_mutex>
 #include <string>
@@ -66,39 +69,37 @@ public:
     };
 
     /**
-     * \brief Optimized event metadata structure with better listener management
+     * \brief Event metadata with priority-ordered, unsubscribable listeners
      */
     struct ATOM_ALIGNAS(32) Event {
-        std::vector<std::pair<int, EventCallback>> listeners;
+        struct Listener {
+            int priority;
+            std::uint64_t id;
+            EventCallback callback;
+        };
+
+        std::vector<Listener> listeners;
         std::string description;
+        std::uint64_t next_listener_id = 1;
 
-        // Optimized: Event statistics for monitoring
+        // Event statistics for monitoring
         mutable std::atomic<uint64_t> fire_count{0};
-        mutable std::atomic<uint64_t> listener_count{0};
 
-        // Copy constructor
+        Event() = default;
         Event(const Event& other)
             : listeners(other.listeners),
               description(other.description),
-              fire_count(other.fire_count.load()),
-              listener_count(other.listener_count.load()) {}
+              next_listener_id(other.next_listener_id),
+              fire_count(other.fire_count.load()) {}
 
-        // Copy assignment operator
         Event& operator=(const Event& other) {
             if (this != &other) {
                 listeners = other.listeners;
                 description = other.description;
+                next_listener_id = other.next_listener_id;
                 fire_count.store(other.fire_count.load());
-                listener_count.store(other.listener_count.load());
             }
             return *this;
-        }
-
-        // Default constructor
-        Event() = default;
-
-        void updateListenerCount() {
-            listener_count.store(listeners.size(), std::memory_order_relaxed);
         }
     };
 
@@ -110,9 +111,7 @@ private:
         m_constructors_;
     std::unordered_map<std::string, Event> m_events_;
 
-    // Optimized: Cache for frequently accessed items
-    mutable std::unordered_map<std::string, const std::vector<MethodFunction>*>
-        method_cache_;
+    // Guards the per-property value caches
     mutable std::shared_mutex cache_mutex_;
 
 public:
@@ -174,10 +173,11 @@ public:
      */
     void addProperty(const std::string& name, GetterFunction getter,
                      SetterFunction setter, BoxedValue default_value = {},
-                     const std::string& description = "") {
-        m_properties_.emplace(name,
-                              Property{std::move(getter), std::move(setter),
-                                       std::move(default_value), description});
+                     const std::string& description = "",
+                     bool cached = false) {
+        m_properties_.emplace(
+            name, Property{std::move(getter), std::move(setter),
+                           std::move(default_value), description, cached});
     }
 
     /**
@@ -219,15 +219,37 @@ public:
      * \param event_name Event name
      * \param callback Event callback function
      * \param priority Listener priority (higher values execute first)
+     * \return Listener id usable with removeEventListener
      */
-    void addEventListener(const std::string& event_name, EventCallback callback,
-                          int priority = 0) {
-        auto& listeners = m_events_[event_name].listeners;
-        listeners.emplace_back(priority, std::move(callback));
+    std::uint64_t addEventListener(const std::string& event_name,
+                                   EventCallback callback, int priority = 0) {
+        auto& event = m_events_[event_name];
+        const std::uint64_t id = event.next_listener_id++;
+        event.listeners.push_back({priority, id, std::move(callback)});
 
-        std::sort(
-            listeners.begin(), listeners.end(),
-            [](const auto& a, const auto& b) { return a.first > b.first; });
+        std::stable_sort(event.listeners.begin(), event.listeners.end(),
+                         [](const auto& a, const auto& b) {
+                             return a.priority > b.priority;
+                         });
+        return id;
+    }
+
+    /**
+     * \brief Remove a previously registered event listener
+     * \param event_name Event name
+     * \param listener_id Id returned by addEventListener
+     * \return True if a listener was removed
+     */
+    bool removeEventListener(const std::string& event_name,
+                             std::uint64_t listener_id) {
+        if (auto it = m_events_.find(event_name); it != m_events_.end()) {
+            auto& listeners = it->second.listeners;
+            auto removed = std::erase_if(listeners, [&](const auto& l) {
+                return l.id == listener_id;
+            });
+            return removed > 0;
+        }
+        return false;
     }
 
     /**
@@ -239,8 +261,9 @@ public:
     void fireEvent(BoxedValue& obj, const std::string& event_name,
                    const std::vector<BoxedValue>& args) const {
         if (auto it = m_events_.find(event_name); it != m_events_.end()) {
-            for (const auto& [priority, listener] : it->second.listeners) {
-                listener(obj, args);
+            it->second.fire_count.fetch_add(1, std::memory_order_relaxed);
+            for (const auto& listener : it->second.listeners) {
+                listener.callback(obj, args);
             }
         }
     }
@@ -269,6 +292,60 @@ public:
             return it->second;
         }
         return std::nullopt;
+    }
+
+    /**
+     * \brief Read a property value, honoring the property's cache TTL
+     * \param obj Object to read from
+     * \param name Property name
+     * \return Property value, or nullopt if the property is unknown
+     */
+    [[nodiscard]] auto getPropertyValue(const BoxedValue& obj,
+                                        const std::string& name) const
+        -> std::optional<BoxedValue> {
+        auto it = m_properties_.find(name);
+        if (it == m_properties_.end() || !it->second.getter) {
+            return std::nullopt;
+        }
+        const Property& prop = it->second;
+
+        if (prop.is_cached) {
+            const auto now = std::chrono::steady_clock::now();
+            {
+                std::shared_lock lock(cache_mutex_);
+                if (prop.cached_value &&
+                    now - prop.cache_time < Property::CACHE_TTL) {
+                    return *prop.cached_value;
+                }
+            }
+            auto value = prop.getter(obj);
+            std::unique_lock lock(cache_mutex_);
+            prop.cached_value = value;
+            prop.cache_time = now;
+            return value;
+        }
+        return prop.getter(obj);
+    }
+
+    /**
+     * \brief Write a property value and invalidate its cache
+     * \param obj Object to write to
+     * \param name Property name
+     * \param value New value
+     * \return True if the property exists and has a setter
+     */
+    bool setPropertyValue(BoxedValue& obj, const std::string& name,
+                          const BoxedValue& value) {
+        auto it = m_properties_.find(name);
+        if (it == m_properties_.end() || !it->second.setter) {
+            return false;
+        }
+        it->second.setter(obj, value);
+        if (it->second.is_cached) {
+            std::unique_lock lock(cache_mutex_);
+            it->second.cached_value.reset();
+        }
+        return true;
     }
 
     /**
@@ -303,10 +380,16 @@ public:
 
 /**
  * \brief Thread-safe singleton registry for type metadata
+ *
+ * Metadata is stored behind shared_ptr so lookups share the live object:
+ * event statistics, property caches and late method registration all act on
+ * the registered metadata rather than on a copy. Mutating metadata after it
+ * is in concurrent use is not synchronized; register methods/properties
+ * before publishing the type to other threads.
  */
 class TypeRegistry {
 private:
-    std::unordered_map<std::string, TypeMetadata> m_registry_;
+    std::unordered_map<std::string, std::shared_ptr<TypeMetadata>> m_registry_;
     mutable std::shared_mutex m_mutex_;
 
 public:
@@ -326,21 +409,51 @@ public:
      */
     void registerType(const std::string& name, TypeMetadata metadata) {
         std::unique_lock lock(m_mutex_);
-        m_registry_.emplace(name, std::move(metadata));
+        m_registry_[name] =
+            std::make_shared<TypeMetadata>(std::move(metadata));
     }
 
     /**
      * \brief Get metadata for a registered type
      * \param name Type name
-     * \return Type metadata if found, nullopt otherwise
+     * \return Shared pointer to the live metadata, or nullptr if unknown
      */
     [[nodiscard]] auto getMetadata(const std::string& name) const noexcept
-        -> std::optional<TypeMetadata> {
+        -> std::shared_ptr<TypeMetadata> {
         std::shared_lock lock(m_mutex_);
         if (auto it = m_registry_.find(name); it != m_registry_.end()) {
             return it->second;
         }
-        return std::nullopt;
+        return nullptr;
+    }
+
+    /**
+     * \brief Check whether a type is registered
+     */
+    [[nodiscard]] bool isRegistered(const std::string& name) const noexcept {
+        std::shared_lock lock(m_mutex_);
+        return m_registry_.contains(name);
+    }
+
+    /**
+     * \brief Get the names of all registered types
+     */
+    [[nodiscard]] auto getRegisteredTypes() const -> std::vector<std::string> {
+        std::shared_lock lock(m_mutex_);
+        std::vector<std::string> names;
+        names.reserve(m_registry_.size());
+        for (const auto& [name, metadata] : m_registry_) {
+            names.push_back(name);
+        }
+        return names;
+    }
+
+    /**
+     * \brief Remove all registered types
+     */
+    void clear() {
+        std::unique_lock lock(m_mutex_);
+        m_registry_.clear();
     }
 };
 
@@ -375,8 +488,8 @@ inline auto getProperty(const BoxedValue& obj,
                         const std::string& property_name) -> BoxedValue {
     if (auto metadata =
             TypeRegistry::instance().getMetadata(obj.getTypeInfo().name())) {
-        if (auto property = metadata->getProperty(property_name)) {
-            return property->getter(obj);
+        if (auto value = metadata->getPropertyValue(obj, property_name)) {
+            return *value;
         }
     }
     THROW_NOT_FOUND("Property not found: " + property_name);
@@ -393,8 +506,7 @@ inline void setProperty(BoxedValue& obj, const std::string& property_name,
                         const BoxedValue& value) {
     if (auto metadata =
             TypeRegistry::instance().getMetadata(obj.getTypeInfo().name())) {
-        if (auto property = metadata->getProperty(property_name)) {
-            property->setter(obj, value);
+        if (metadata->setPropertyValue(obj, property_name, value)) {
             return;
         }
     }
@@ -490,19 +602,19 @@ public:
     explicit MetadataBuilder(std::string_view name) : type_name_(name) {}
 
     MetadataBuilder& withMethod(std::string_view name,
-                                TypeMetadata::MethodFunction func,
-                                std::string_view desc = "") {
-        metadata_.addMethod(std::string(name), std::move(func),
-                            std::string(desc));
+                                TypeMetadata::MethodFunction func) {
+        metadata_.addMethod(std::string(name), std::move(func));
         return *this;
     }
 
     MetadataBuilder& withProperty(std::string_view name,
                                   TypeMetadata::GetterFunction getter,
                                   TypeMetadata::SetterFunction setter = nullptr,
-                                  std::string_view desc = "") {
+                                  std::string_view desc = "",
+                                  bool cached = false) {
         metadata_.addProperty(std::string(name), std::move(getter),
-                              std::move(setter), {}, std::string(desc));
+                              std::move(setter), {}, std::string(desc),
+                              cached);
         return *this;
     }
 
@@ -548,29 +660,32 @@ public:
             .build();
     }
 
-    template <typename Func>
-    static void registerMethod(std::string_view type_name,
-                               std::string_view method_name, Func&& func) {
+    /**
+     * @brief Register an additional method on an already-registered type
+     *
+     * The callback receives the raw BoxedValue argument list; unpack and
+     * type-check the arguments inside the callback.
+     */
+    static bool registerMethod(std::string_view type_name,
+                               std::string_view method_name,
+                               TypeMetadata::MethodFunction func) {
         if (auto metadata =
                 TypeRegistry::instance().getMetadata(std::string(type_name))) {
-            metadata->addMethod(
-                std::string(method_name),
-                [f = std::forward<Func>(func)](
-                    std::vector<BoxedValue> args) -> BoxedValue {
-                    // Simplified - would need proper argument unpacking
-                    return BoxedValue{};
-                });
+            metadata->addMethod(std::string(method_name), std::move(func));
+            return true;
         }
+        return false;
     }
 };
 
 /**
  * @brief Query metadata for a type
+ * @return Shared pointer to the live metadata, or nullptr if not registered
  */
 template <MetadataSupported T>
-auto queryMetadata() -> std::optional<TypeMetadata*> {
+auto queryMetadata() -> std::shared_ptr<TypeMetadata> {
     auto name = TypeInfo::fromType<T>().name();
-    return TypeRegistry::instance().getMetadata(name);
+    return TypeRegistry::instance().getMetadata(std::string(name));
 }
 
 /**
@@ -579,12 +694,12 @@ auto queryMetadata() -> std::optional<TypeMetadata*> {
 template <typename Result = BoxedValue>
 auto invokeMethod(BoxedValue& obj, std::string_view method_name,
                   std::vector<BoxedValue> args = {}) -> std::optional<Result> {
-    auto result = invoke(obj, std::string(method_name), std::move(args));
+    auto result = callMethod(obj, std::string(method_name), std::move(args));
     if constexpr (std::is_same_v<Result, BoxedValue>) {
         return result;
     } else {
-        if (result.canCast<Result>()) {
-            return result.cast<Result>();
+        if (result.template canCast<Result>()) {
+            return result.template cast<Result>();
         }
         return std::nullopt;
     }
@@ -615,7 +730,7 @@ inline bool hasMethod(std::string_view type_name,
                       std::string_view method_name) {
     if (auto metadata =
             TypeRegistry::instance().getMetadata(std::string(type_name))) {
-        return metadata->getMethod(std::string(method_name)).has_value();
+        return metadata->getMethods(std::string(method_name)) != nullptr;
     }
     return false;
 }

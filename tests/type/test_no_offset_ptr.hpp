@@ -10,8 +10,11 @@
 
 #include "no_offset_ptr.hpp"
 
-using namespace atom;
+using namespace atom::type;
 using ::testing::Eq;
+
+// Named namespace isolates test helpers from other aggregated test files.
+namespace no_offset_ptr_test {
 
 class SimpleTestClass {
 public:
@@ -390,7 +393,7 @@ TEST(NoOffsetPtrPolicyTest, AtomicPolicy) {
     EXPECT_TRUE(ptr.has_value());
 }
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+}  // namespace no_offset_ptr_test
+
+// NOTE: main() is provided by gtest_main / the aggregating
+// test_header_only.cpp.

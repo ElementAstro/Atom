@@ -501,22 +501,29 @@ obj.InternalState = 1.0f;  // OK
 
 ### Test Organization
 
-Tests are located in `tests/meta/`:
+Tests are located in `tests/meta/`, grouped by area; each test's body lives
+in a `.hpp` and its 6-line `.cpp` stub holds the only `main`:
 
-- `test_property.cpp`: Property system tests
-- `test_traits.cpp`: Type traits tests
-- `test_reflection.cpp`: Reflection tests
-- `test_member.cpp`: Member reflection tests
+- `core/`: any, anymeta, constructor, container_traits, conversion,
+  func_traits, template_traits, type_info
+- `functional/`: bind_first, invoke, overload, signature
+- `proxy/`: facade, facade_any, facade_proxy, proxy, proxy_params, vany
+- `reflection/`: field_count, member, raw_name, refl, refl_json, refl_yaml
+- `interop/`: abi, ffi, type_caster
+- `utils/`: awaitable, concept, decorate, enum, global_ptr, god, property,
+  stepper, time
 
 ### Running Tests
 
 ```bash
-# Build tests
-cmake -B build -DBUILD_TESTS=ON
-cmake --build build
+# Configure (meta + its deps only) and build
+cmake -B build/meta -G Ninja -DATOM_BUILD_ALL=OFF -DATOM_BUILD_ERROR=ON \
+  -DATOM_BUILD_TYPE=ON -DATOM_BUILD_UTILS=ON -DATOM_BUILD_META=ON \
+  -DATOM_BUILD_TESTS=ON -DATOM_BUILD_TESTS_SELECTIVE=ON -DATOM_TEST_BUILD_META=ON
+cmake --build build/meta -j
 
 # Run meta tests
-ctest -R meta_ --output-on-failure
+ctest --test-dir build/meta -L meta --output-on-failure
 ```
 
 ---
@@ -564,6 +571,75 @@ ctest -R meta_ --output-on-failure
 ---
 
 ## Change Log
+
+### 2026-06-11 — Module-wide overhaul
+
+Correctness fixes (compile):
+
+- `member.hpp`: implemented missing `member_traits`; `member_offset` is
+  runtime-only (was an uncallable `consteval` + `reinterpret_cast`)
+- `ffi.hpp`: `FFITypeMap` specializes on fundamental integer types instead of
+  fixed-width aliases (duplicate-specialization on Windows)
+- `anymeta.hpp`: repaired the "C++23 Enhanced" section, which called
+  nonexistent APIs; `TypeRegistry` now stores `shared_ptr<TypeMetadata>`
+  (live metadata — caches/statistics/late registration work), added
+  `clear()`/`isRegistered()`/`getRegisteredTypes()`, listener ids +
+  `removeEventListener`, property cache honoring `CACHE_TTL`
+- `refl_json.hpp`: `from_json` no longer instantiates `get<T&>`
+- `refl.hpp`: explicit-`AttrList` default argument; type-changing `Acc` folds
+- `template_traits.hpp`: out-of-range pack indexing guarded; worked around a
+  GCC 15.2 ICE in `type_list` head/tail
+- `conversion.hpp`: concrete conversions override the current base API;
+  `reference_wrapper` payloads convert correctly
+- `proxy.hpp`: lambdas/functors no longer dispatched as member functions
+
+Correctness fixes (runtime):
+
+- `vany.hpp`: heap corruption — `_aligned_malloc` paired with `std::free`,
+  `memcpy` of non-trivially-copyable inline objects, moved-from inline
+  objects never destroyed, include-guard collision with any.hpp; SBO widened
+  to 4 words so `std::string` stays inline
+- `global_ptr`: heap corruption — `addDeleter` created a second control
+  block; weak-ptr entries unretrievable (`any_cast` value-form throw);
+  macro variable shadowing; idle-based cleanup
+- `type_info.hpp`: `TypeFactory` register/lookup used two different static
+  maps (SEGFAULT); smart-pointer/`std::span`/const-ref flag detection
+- `abi.hpp`: demangling enabled on MinGW (`__cxa_demangle` works there)
+- `field_count.hpp`: ambiguous `Any` conversions truncated counts on GCC 15
+- `raw_name.hpp`: GCC parsing used hardcoded prefix lengths (wrong output)
+- `func_traits.hpp`: `has_method`/`has_static_method` ignored return type
+- `invoke.hpp`: `retryCall` made `retries` total attempts instead of 1+retries
+- `stepper.hpp`: `executeParallel` returned while workers were writing
+  (use-after-move); per-item timeouts; failed invocations counted
+- `enum.hpp`: zero-valued enumerators no longer appear in every
+  `get_set_flags`/`serialize_flags` result; constexpr `std::sort` replaces a
+  bubble sort; string helpers use C++23 `string_view` members
+- `god.hpp`: `divCeil` correct for negative dividends; atomic fetch ops work
+  with scoped enums via `std::to_underlying`
+- `cmake/BuildOptimization.cmake`: `-gsplit-dwarf` disabled on Windows/PE
+  (binutils emits unloadable binaries)
+
+New features:
+
+- `refl_field.hpp`: shared `FieldBase` for JSON/YAML field descriptors
+  (C++23 deducing-this builder chaining)
+- `any.hpp`: `BoxedValue::tryCastPtr<T>()` mutable in-place access;
+  compile-time-checked mutable `visit`
+- `enum.hpp`: `enum_switch` (runtime value → `integral_constant` dispatch),
+  `enum_for_each`
+- `concept.hpp`: 19 new concepts (container ops, chrono, `Nullable`,
+  `AtomicLike`, `MoveOnly`, `Regular`, `ThreeWayComparable`, ...) and type
+  pack utilities (`is_one_of_v`, `first_type_t`, `last_type_t`)
+- `property.hpp`: constrained compound assignment operators, async get/set,
+  value cache
+- `global_ptr.hpp`: `addWeakPtr` / `getSharedPtrFromWeakPtr`
+
+Test infrastructure:
+
+- Removed 18 stale duplicate flat tests superseded by the subdirectory
+  layout; removed the MinGW exclusion list that disabled nearly all tests
+- yaml-cpp linked when present; the YAML reflection path now actually
+  compiles and is tested
 
 ### 2025-01-15
 

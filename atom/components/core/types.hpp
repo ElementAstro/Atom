@@ -15,7 +15,38 @@ Description: Basic Component Types Definition and Some Utilities
 #ifndef ATOM_COMPONENT_TYPES_HPP
 #define ATOM_COMPONENT_TYPES_HPP
 
+#include <any>
+#include <chrono>
+#include <cstdint>
+#include <functional>
+#include <string>
+
 #include "atom/meta/enum.hpp"
+
+namespace atom::components {
+
+/**
+ * @brief Identifier returned by event subscription APIs; 0 is invalid.
+ */
+using EventCallbackId = std::uint64_t;
+
+/**
+ * @brief Event payload exchanged between components and the registry.
+ */
+struct Event {
+    std::string name;
+    std::any data;
+    std::string source;
+    std::chrono::steady_clock::time_point timestamp{
+        std::chrono::steady_clock::now()};
+};
+
+/**
+ * @brief Callback invoked when a subscribed event fires.
+ */
+using EventCallback = std::function<void(const Event&)>;
+
+}  // namespace atom::components
 
 enum class ComponentType {
     NONE,

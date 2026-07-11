@@ -130,7 +130,7 @@ concept CallbackInvocable =
  * - Platform-specific optimizations (epoll/kqueue)
  * - Coroutine-based async operations
  */
-class TcpClient : public NonCopyable {
+class TcpClient : public atom::type::NonCopyable {
 public:
     using OnConnectedCallback = TcpCallbacks::OnConnected;
     using OnDisconnectedCallback = TcpCallbacks::OnDisconnected;

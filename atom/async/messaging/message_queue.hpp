@@ -357,7 +357,7 @@ public:
                         if (stoken.stop_requested())
                             break;
 
-                    // After wait, re-check queues. Lock is held.
+                        // After wait, re-check queues. Lock is held.
 #ifdef ATOM_USE_LOCKFREE_QUEUE
                         if (m_lockfreeQueue_.pop(
                                 currentMessage)) {  // Pop while lock is held

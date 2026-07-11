@@ -21,15 +21,20 @@ Description: Variable Manager
 
 #include <shared_mutex>
 
-#if ENABLE_FASTHASH
+#if ATOM_USE_BOOST_CONTAINERS
+#include "atom/containers/boost_containers.hpp"
+#elif ENABLE_FASTHASH
 #include "emhash/hash_table8.hpp"
 #endif
 
+#include <fmt/format.h>
 #include <spdlog/spdlog.h>
 #include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
 #include "atom/meta/concept.hpp"
 #include "atom/type/trackable.hpp"
+
+using atom::type::Trackable;
 
 /**
  * @brief Exception for variable type errors
@@ -41,7 +46,7 @@ public:
 
 #define THROW_TYPE_ERROR(...)                                               \
     throw VariableTypeError(ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, \
-                            __VA_ARGS__)
+                            fmt::format(__VA_ARGS__))
 
 /**
  * @brief Manages variables with tracking, validation, and serialization
@@ -204,15 +209,13 @@ private:
     } ATOM_ALIGNAS(128);
     mutable std::shared_mutex mutex_;
 
-#if USE_BOOST_CONTAINERS
-    atom::components::containers::flat_map<std::string, VariableInfo>
-        variables_;
-    atom::components::containers::flat_map<std::string, std::any> ranges_;
-    atom::components::containers::flat_map<std::string,
-                                           std::vector<std::string>>
+#if ATOM_USE_BOOST_CONTAINERS
+    atom::containers::flat_map<std::string, VariableInfo> variables_;
+    atom::containers::flat_map<std::string, std::any> ranges_;
+    atom::containers::flat_map<std::string, std::vector<std::string>>
         stringOptions_;
-    atom::components::containers::flat_map<
-        std::string, atom::components::containers::flat_set<std::string>>
+    atom::containers::flat_map<std::string,
+                               atom::containers::flat_set<std::string>>
         groups_;
 #elif ENABLE_FASTHASH
     emhash8::HashMap<std::string, VariableInfo> variables_;
@@ -233,7 +236,7 @@ void VariableManager::addVariable(const std::string& name, T initialValue,
                                   const std::string& description,
                                   const std::string& alias,
                                   const std::string& group) {
-    spdlog::info("Adding variable: {}", name);
+    spdlog::trace("Adding variable: {}", name);
 
     std::unique_lock lock(mutex_);
 
@@ -250,7 +253,7 @@ void VariableManager::addVariable(const std::string& name, T initialValue,
     }
 
     if (!alias.empty()) {
-        spdlog::info("Adding alias '{}' for variable '{}'", alias, name);
+        spdlog::trace("Adding alias '{}' for variable '{}'", alias, name);
         if (variables_.contains(alias)) {
             spdlog::warn(
                 "Variable with name '{}' already exists, not adding alias",
@@ -274,7 +277,7 @@ void VariableManager::addVariable(const std::string& name, T C::*memberPointer,
                                   C& instance, const std::string& description,
                                   const std::string& alias,
                                   const std::string& group) {
-    spdlog::info("Adding member variable: {}", name);
+    spdlog::trace("Adding member variable: {}", name);
 
     std::unique_lock lock(mutex_);
 
@@ -295,7 +298,7 @@ void VariableManager::addVariable(const std::string& name, T C::*memberPointer,
     }
 
     if (!alias.empty()) {
-        spdlog::info("Adding alias '{}' for variable '{}'", alias, name);
+        spdlog::trace("Adding alias '{}' for variable '{}'", alias, name);
         if (variables_.contains(alias)) {
             spdlog::warn(
                 "Variable with name '{}' already exists, not adding alias",
@@ -311,7 +314,7 @@ void VariableManager::addVariable(const std::string& name, T C::*memberPointer,
 
 template <Arithmetic T>
 void VariableManager::setRange(const std::string& name, T min, T max) {
-    spdlog::info("Setting range for variable: {} [{}, {}]", name, min, max);
+    spdlog::trace("Setting range for variable: {} [{}, {}]", name, min, max);
 
     std::unique_lock lock(mutex_);
 
@@ -329,8 +332,8 @@ void VariableManager::setRange(const std::string& name, T min, T max) {
                                              const T& newValue) {
         if (newValue < min || newValue > max) {
             THROW_OUT_OF_RANGE(
-                "Value {} out of range [{}, {}] for variable '{}'", newValue,
-                min, max, name);
+                fmt::format("Value {} out of range [{}, {}] for variable '{}'",
+                            newValue, min, max, name));
         }
     });
 }
@@ -390,8 +393,8 @@ void VariableManager::setValue(const std::string& name, T newValue) {
                         newValue > rangePtr->second) {
                         // Note: Removed spdlog::error call to avoid std::vector
                         // formatting issues
-                        THROW_OUT_OF_RANGE(
-                            "Value out of range for variable '{}'", name);
+                        THROW_OUT_OF_RANGE(fmt::format(
+                            "Value out of range for variable '{}'", name));
                     }
                 }
             } catch (const std::bad_any_cast&) {
@@ -408,8 +411,8 @@ void VariableManager::setValue(const std::string& name, T newValue) {
                     spdlog::error("Invalid option '{}' for variable '{}'",
                                   newValue, name);
                     THROW_INVALID_ARGUMENT(
-                        "Invalid option '{}' for variable '{}'", newValue,
-                        name);
+                        fmt::format("Invalid option '{}' for variable '{}'",
+                                    newValue, name));
                 }
             }
         }

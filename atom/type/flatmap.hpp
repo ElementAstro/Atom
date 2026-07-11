@@ -16,8 +16,9 @@ Description: QuickFlatMap for C++20 with optional Boost support
 #define ATOM_TYPE_FLATMAP_HPP
 
 #include <algorithm>
+#include <compare>
 #include <concepts>
-#include <execution>
+#include <format>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
@@ -199,8 +200,9 @@ private:
         return data_.find(key);
 #else
         if (data_.size() > PARALLEL_THRESHOLD) {
-            auto it = std::lower_bound(std::execution::par_unseq, data_.begin(),
-                                       data_.end(), key,
+            // NOTE: std::lower_bound has no parallel execution-policy overload
+            // (unlike sort/find); it is already O(log n) binary search.
+            auto it = std::lower_bound(data_.begin(), data_.end(), key,
                                        [this](const auto& pair, const auto& k) {
                                            return comp_(pair.first, k);
                                        });
@@ -227,8 +229,9 @@ private:
         return data_.find(key);
 #else
         if (data_.size() > PARALLEL_THRESHOLD) {
-            auto it = std::lower_bound(std::execution::par_unseq, data_.begin(),
-                                       data_.end(), key,
+            // NOTE: std::lower_bound has no parallel execution-policy overload
+            // (unlike sort/find); it is already O(log n) binary search.
+            auto it = std::lower_bound(data_.begin(), data_.end(), key,
                                        [this](const auto& pair, const auto& k) {
                                            return comp_(pair.first, k);
                                        });
@@ -801,7 +804,7 @@ template <typename Key, typename Value, typename Compare,
 bool operator==(const FlatMap<Key, Value, Compare, SafetyMode>& lhs,
                 const FlatMap<Key, Value, Compare, SafetyMode>& rhs) {
     return lhs.size() == rhs.size() &&
-           std::ranges::equal(lhs.begin(), lhs.end(), rhs.begin());
+           std::equal(lhs.begin(), lhs.end(), rhs.begin());
 }
 
 /**

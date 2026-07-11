@@ -36,6 +36,12 @@ extern char** environ;
 
 #include <spdlog/spdlog.h>
 
+// <windows.h> defines STRICT as a macro, which collides with
+// ValidationLevel::STRICT used below.
+#ifdef STRICT
+#undef STRICT
+#endif
+
 namespace fs = std::filesystem;
 
 namespace atom::utils {
@@ -51,7 +57,7 @@ std::mutex EnvCore::sValidationMutex;
 size_t EnvCore::sNextValidationId = 1;
 
 // Caching system
-HashMap<String, EnvCacheEntry> EnvCore::sCache;
+HashMap<String, EnvCoreCacheEntry> EnvCore::sCache;
 std::mutex EnvCore::sCacheMutex;
 std::atomic<bool> EnvCore::sCachingEnabled{false};
 std::atomic<int> EnvCore::sCacheTtlSeconds{300};
@@ -682,10 +688,10 @@ auto EnvCore::getCachedValue(const String& key) -> std::optional<String> {
 
 void EnvCore::setCachedValue(const String& key, const String& value) {
     std::lock_guard<std::mutex> lock(sCacheMutex);
-    sCache[key] = EnvCacheEntry(value);
+    sCache[key] = EnvCoreCacheEntry(value);
 }
 
-auto EnvCore::isCacheEntryValid(const EnvCacheEntry& entry) -> bool {
+auto EnvCore::isCacheEntryValid(const EnvCoreCacheEntry& entry) -> bool {
     if (!entry.isValid) {
         return false;
     }

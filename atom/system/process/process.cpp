@@ -1,6 +1,10 @@
 #include "process.hpp"
 
-#include "command.hpp"
+// Only command execution is needed here; include the narrow executor header
+// rather than the full command umbrella, whose command/process_manager.hpp
+// declares a free getProcessInfo(int)->ProcessInfo that would clash with this
+// translation unit's own getProcessInfo(int)->Process.
+#include "atom/system/command/executor.hpp"
 
 #include <algorithm>
 #include <array>

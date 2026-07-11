@@ -280,7 +280,16 @@ template <std::size_t BlockSize, std::integral ValueType>
  */
 template <std::integral T>
 [[nodiscard]] constexpr T divCeil(T value, T divisor) noexcept {
-    return (value + divisor - 1) / divisor;
+    // (value + divisor - 1) / divisor is only correct for non-negative
+    // operands. Integer division truncates toward zero, so adjust the
+    // truncated quotient upward only when there is a remainder and the exact
+    // quotient is positive (operands have the same sign).
+    const T quotient = value / divisor;
+    const T remainder = value % divisor;
+    return quotient +
+           ((remainder != T{0} && ((remainder > T{0}) == (divisor > T{0})))
+                ? T{1}
+                : T{0});
 }
 
 /*!
@@ -489,7 +498,13 @@ template <typename PointerType, typename ValueType>
 [[nodiscard]] ATOM_INLINE auto fetchAnd(
     PointerType* pointer, ValueType value) noexcept -> PointerType {
     PointerType originalValue = *pointer;
-    *pointer &= static_cast<PointerType>(value);
+    if constexpr (std::is_enum_v<PointerType>) {
+        *pointer = static_cast<PointerType>(
+            std::to_underlying(*pointer) &
+            std::to_underlying(static_cast<PointerType>(value)));
+    } else {
+        *pointer &= static_cast<PointerType>(value);
+    }
     return originalValue;
 }
 
@@ -522,7 +537,13 @@ template <typename PointerType, typename ValueType>
 [[nodiscard]] ATOM_INLINE auto fetchOr(
     PointerType* pointer, ValueType value) noexcept -> PointerType {
     PointerType originalValue = *pointer;
-    *pointer |= static_cast<PointerType>(value);
+    if constexpr (std::is_enum_v<PointerType>) {
+        *pointer = static_cast<PointerType>(
+            std::to_underlying(*pointer) |
+            std::to_underlying(static_cast<PointerType>(value)));
+    } else {
+        *pointer |= static_cast<PointerType>(value);
+    }
     return originalValue;
 }
 
@@ -555,7 +576,13 @@ template <typename PointerType, typename ValueType>
 [[nodiscard]] ATOM_INLINE auto fetchXor(
     PointerType* pointer, ValueType value) noexcept -> PointerType {
     PointerType originalValue = *pointer;
-    *pointer ^= static_cast<PointerType>(value);
+    if constexpr (std::is_enum_v<PointerType>) {
+        *pointer = static_cast<PointerType>(
+            std::to_underlying(*pointer) ^
+            std::to_underlying(static_cast<PointerType>(value)));
+    } else {
+        *pointer ^= static_cast<PointerType>(value);
+    }
     return originalValue;
 }
 

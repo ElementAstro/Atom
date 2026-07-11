@@ -117,7 +117,7 @@ bool ShortcutMonitor::start() {
 
         // Emit start event
         MonitoringEvent startEvent(MonitoringEventType::SystemStateChanged,
-                                  AdvancedShortcut(), "ShortcutMonitor", "Monitoring started");
+                                  ShortcutBinding(), "ShortcutMonitor", "Monitoring started");
         emitEvent(startEvent);
 
         return true;
@@ -151,7 +151,7 @@ void ShortcutMonitor::stop() {
 
     // Emit stop event
     MonitoringEvent stopEvent(MonitoringEventType::SystemStateChanged,
-                             AdvancedShortcut(), "ShortcutMonitor", "Monitoring stopped");
+                             ShortcutBinding(), "ShortcutMonitor", "Monitoring stopped");
     emitEvent(stopEvent);
 
     spdlog::info("ShortcutMonitor stopped");
@@ -169,7 +169,7 @@ void ShortcutMonitor::clearCallbacks() {
     spdlog::debug("Cleared all event callbacks");
 }
 
-void ShortcutMonitor::addShortcut(const AdvancedShortcut& shortcut, const std::string& owner) {
+void ShortcutMonitor::addShortcut(const ShortcutBinding& shortcut, const std::string& owner) {
     {
         std::lock_guard<std::mutex> lock(shortcutMutex_);
         monitoredShortcuts_[shortcut] = owner;
@@ -182,7 +182,7 @@ void ShortcutMonitor::addShortcut(const AdvancedShortcut& shortcut, const std::s
     spdlog::debug("Added shortcut to monitoring: {}", shortcut.toString());
 }
 
-void ShortcutMonitor::removeShortcut(const AdvancedShortcut& shortcut) {
+void ShortcutMonitor::removeShortcut(const ShortcutBinding& shortcut) {
     std::string owner;
     {
         std::lock_guard<std::mutex> lock(shortcutMutex_);
@@ -200,9 +200,9 @@ void ShortcutMonitor::removeShortcut(const AdvancedShortcut& shortcut) {
     spdlog::debug("Removed shortcut from monitoring: {}", shortcut.toString());
 }
 
-std::vector<AdvancedShortcut> ShortcutMonitor::getMonitoredShortcuts() const {
+std::vector<ShortcutBinding> ShortcutMonitor::getMonitoredShortcuts() const {
     std::lock_guard<std::mutex> lock(shortcutMutex_);
-    std::vector<AdvancedShortcut> result;
+    std::vector<ShortcutBinding> result;
     result.reserve(monitoredShortcuts_.size());
 
     for (const auto& [shortcut, owner] : monitoredShortcuts_) {
@@ -304,7 +304,7 @@ void ShortcutMonitor::monitoringLoop() {
             spdlog::error("Error in monitoring loop: {}", e.what());
 
             MonitoringEvent errorEvent(MonitoringEventType::ErrorOccurred,
-                                     AdvancedShortcut(), "MonitoringLoop", e.what());
+                                     ShortcutBinding(), "MonitoringLoop", e.what());
             emitEvent(errorEvent);
         }
     }
@@ -399,7 +399,7 @@ void ShortcutMonitor::checkSystemState() {
             static bool lastHookState = false;
             if (hasHooks != lastHookState) {
                 MonitoringEvent event(MonitoringEventType::SystemStateChanged,
-                                    AdvancedShortcut(), "System",
+                                    ShortcutBinding(), "System",
                                     hasHooks ? "Keyboard hooks detected" : "Keyboard hooks removed");
                 emitEvent(event);
                 lastHookState = hasHooks;
@@ -417,7 +417,7 @@ void ShortcutMonitor::detectConflicts() {
     std::lock_guard<std::mutex> lock(shortcutMutex_);
 
     // Simple conflict detection - check for duplicate shortcuts
-    std::unordered_map<std::string, std::vector<AdvancedShortcut>> shortcutGroups;
+    std::unordered_map<std::string, std::vector<ShortcutBinding>> shortcutGroups;
 
     for (const auto& [shortcut, owner] : monitoredShortcuts_) {
         std::string key = shortcut.toString();
@@ -505,7 +505,7 @@ LRESULT CALLBACK ShortcutMonitor::keyboardHookProc(int nCode, WPARAM wParam, LPA
                       (GetAsyncKeyState(VK_RWIN) & 0x8000) != 0;
 
             Shortcut shortcut(kbStruct->vkCode, ctrl, alt, shift, win);
-            AdvancedShortcut advShortcut = AdvancedShortcut::createKeyboard(shortcut);
+            ShortcutBinding advShortcut = ShortcutBinding::createKeyboard(shortcut);
 
             MonitoringEvent event(MonitoringEventType::ShortcutPressed, advShortcut,
                                 "KeyboardHook", "Key combination pressed");
@@ -520,7 +520,7 @@ LRESULT CALLBACK ShortcutMonitor::keyboardHookProc(int nCode, WPARAM wParam, LPA
 // ConflictResolver implementation
 ConflictResolver::ConflictResolver(ResolutionStrategy strategy) : strategy_(strategy) {}
 
-AdvancedShortcut ConflictResolver::resolveConflict(const std::vector<AdvancedShortcut>& conflictingShortcuts) {
+ShortcutBinding ConflictResolver::resolveConflict(const std::vector<ShortcutBinding>& conflictingShortcuts) {
     if (conflictingShortcuts.empty()) {
         throw ValidationException("No shortcuts provided for conflict resolution");
     }
@@ -538,7 +538,7 @@ AdvancedShortcut ConflictResolver::resolveConflict(const std::vector<AdvancedSho
 
         case ResolutionStrategy::HighestPriority: {
             auto maxIt = std::max_element(conflictingShortcuts.begin(), conflictingShortcuts.end(),
-                [this](const AdvancedShortcut& a, const AdvancedShortcut& b) {
+                [this](const ShortcutBinding& a, const ShortcutBinding& b) {
                     return calculatePriority(a) < calculatePriority(b);
                 });
             return *maxIt;
@@ -561,11 +561,11 @@ AdvancedShortcut ConflictResolver::resolveConflict(const std::vector<AdvancedSho
     }
 }
 
-void ConflictResolver::setUserChoiceCallback(std::function<int(const std::vector<AdvancedShortcut>&)> callback) {
+void ConflictResolver::setUserChoiceCallback(std::function<int(const std::vector<ShortcutBinding>&)> callback) {
     userChoiceCallback_ = callback;
 }
 
-int ConflictResolver::calculatePriority(const AdvancedShortcut& shortcut) const {
+int ConflictResolver::calculatePriority(const ShortcutBinding& shortcut) const {
     int priority = 0;
 
     // System shortcuts have highest priority
@@ -585,7 +585,7 @@ int ConflictResolver::calculatePriority(const AdvancedShortcut& shortcut) const 
     return priority;
 }
 
-int ConflictResolver::automaticResolution(const std::vector<AdvancedShortcut>& shortcuts) const {
+int ConflictResolver::automaticResolution(const std::vector<ShortcutBinding>& shortcuts) const {
     // Use priority-based resolution as default automatic strategy
     int maxPriority = -1;
     int bestChoice = 0;

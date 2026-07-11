@@ -1,7 +1,11 @@
 #include "cron_validation.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <ctime>
+#include <set>
+#include <sstream>
 
 const std::unordered_map<std::string, std::string>
     CronValidation::specialExpressions_ = {
@@ -391,21 +395,166 @@ auto CronValidation::suggestOptimizations(const std::string& cronExpr)
     return suggestions;
 }
 
-auto CronValidation::calculateNextExecutions([[maybe_unused]] const std::string& cronExpr,
-                                            [[maybe_unused]] size_t count,
-                                            [[maybe_unused]] std::chrono::system_clock::time_point from)
+namespace {
+
+// Parses one cron field into the set of allowed integers within [lo, hi].
+// Supports '*', '*/step', 'a', 'a-b', 'a-b/step', 'a/step', and comma lists of
+// those. Returns false on any malformed token. Field semantics follow the
+// classic 5-field crontab (Vixie cron / POSIX).
+auto parseCronField(const std::string& field, int lo, int hi,
+                    std::set<int>& out) -> bool {
+    auto addStepped = [&](int start, int stop, int step) {
+        if (step <= 0) {
+            step = 1;
+        }
+        for (int v = start; v <= stop; v += step) {
+            if (v >= lo && v <= hi) {
+                out.insert(v);
+            }
+        }
+    };
+
+    std::stringstream tokens(field);
+    std::string token;
+    while (std::getline(tokens, token, ',')) {
+        if (token.empty()) {
+            return false;
+        }
+
+        int step = 1;
+        std::string rangePart = token;
+        if (auto slash = token.find('/'); slash != std::string::npos) {
+            rangePart = token.substr(0, slash);
+            try {
+                step = std::stoi(token.substr(slash + 1));
+            } catch (...) {
+                return false;
+            }
+            if (step <= 0) {
+                return false;
+            }
+        }
+
+        try {
+            if (rangePart == "*") {
+                addStepped(lo, hi, step);
+            } else if (auto dash = rangePart.find('-');
+                       dash != std::string::npos) {
+                int a = std::stoi(rangePart.substr(0, dash));
+                int b = std::stoi(rangePart.substr(dash + 1));
+                if (a > b) {
+                    return false;
+                }
+                addStepped(a, b, step);
+            } else {
+                int v = std::stoi(rangePart);
+                if (token.find('/') != std::string::npos) {
+                    // 'a/step' means a, a+step, ... up to hi.
+                    addStepped(v, hi, step);
+                } else {
+                    if (v < lo || v > hi) {
+                        return false;
+                    }
+                    out.insert(v);
+                }
+            }
+        } catch (...) {
+            return false;
+        }
+    }
+    return !out.empty();
+}
+
+}  // namespace
+
+auto CronValidation::calculateNextExecutions(
+    const std::string& cronExpr, size_t count,
+    std::chrono::system_clock::time_point from)
     -> std::vector<std::chrono::system_clock::time_point> {
-    std::vector<std::chrono::system_clock::time_point> result;
+    namespace ch = std::chrono;
+    std::vector<ch::system_clock::time_point> result;
+    if (count == 0) {
+        return result;
+    }
 
-    // This is a simplified implementation
-    // A full implementation would require complex date/time calculations
-    // For now, we'll return empty vector with a note that this needs full implementation
+    // Tokenise into fields, expanding @-style shortcuts (@daily, ...).
+    std::string expr = cronExpr;
+    if (!expr.empty() && expr.front() == '@') {
+        expr = convertSpecialExpression(expr);
+        if (expr.empty() || expr.front() == '@') {  // unknown or @reboot
+            return result;
+        }
+    }
 
-    // TODO: Implement full cron expression parsing and next execution calculation
-    // This would involve:
-    // 1. Parsing each field into allowed values
-    // 2. Finding next valid combination of minute/hour/day/month/weekday
-    // 3. Handling edge cases like leap years, month boundaries, etc.
+    std::array<std::string, 5> fields;
+    {
+        std::stringstream iss(expr);
+        std::string tok;
+        size_t i = 0;
+        while (iss >> tok) {
+            if (i >= fields.size()) {
+                return result;  // too many fields
+            }
+            fields[i++] = tok;
+        }
+        if (i != fields.size()) {
+            return result;  // not exactly 5 fields
+        }
+    }
+
+    std::set<int> minutes;
+    std::set<int> hours;
+    std::set<int> doms;
+    std::set<int> months;
+    std::set<int> dows;  // 0=Sunday..6=Saturday, 7 also accepted as Sunday
+    if (!parseCronField(fields[0], 0, 59, minutes) ||
+        !parseCronField(fields[1], 0, 23, hours) ||
+        !parseCronField(fields[2], 1, 31, doms) ||
+        !parseCronField(fields[3], 1, 12, months) ||
+        !parseCronField(fields[4], 0, 7, dows)) {
+        return result;
+    }
+
+    // Vixie-cron day semantics: when BOTH day-of-month and day-of-week are
+    // restricted, a match on EITHER fires the job; if only one is restricted,
+    // only that one applies.
+    const bool domRestricted = fields[2] != "*";
+    const bool dowRestricted = fields[4] != "*";
+
+    // Step minute by minute from the next whole minute after `from`.
+    auto t = ch::time_point_cast<ch::minutes>(from) + ch::minutes(1);
+    const auto limit = t + ch::hours(24 * 366 * 4);  // ~4 year safety bound
+    auto tp = ch::time_point_cast<ch::system_clock::duration>(t);
+    const auto limitTp = ch::time_point_cast<ch::system_clock::duration>(limit);
+
+    while (result.size() < count && tp < limitTp) {
+        std::time_t tt = ch::system_clock::to_time_t(tp);
+        std::tm lt{};
+#ifdef _WIN32
+        localtime_s(&lt, &tt);
+#else
+        localtime_r(&tt, &lt);
+#endif
+        const bool domMatch = doms.count(lt.tm_mday) > 0;
+        const bool dowMatch =
+            dows.count(lt.tm_wday) > 0 || (lt.tm_wday == 0 && dows.count(7) > 0);
+        bool dayOk;
+        if (domRestricted && dowRestricted) {
+            dayOk = domMatch || dowMatch;
+        } else if (domRestricted) {
+            dayOk = domMatch;
+        } else if (dowRestricted) {
+            dayOk = dowMatch;
+        } else {
+            dayOk = true;
+        }
+
+        if (minutes.count(lt.tm_min) > 0 && hours.count(lt.tm_hour) > 0 &&
+            months.count(lt.tm_mon + 1) > 0 && dayOk) {
+            result.push_back(tp);
+        }
+        tp += ch::minutes(1);
+    }
 
     return result;
 }

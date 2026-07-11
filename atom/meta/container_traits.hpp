@@ -32,6 +32,42 @@ namespace atom::meta {
 template <typename Container>
 struct ContainerTraits;
 
+namespace detail {
+
+/**
+ * \brief Detect Container::size_type, falling back to std::size_t
+ * \note std::conditional_t cannot be used here because it instantiates both
+ *       arms eagerly; a constrained partial specialization only names the
+ *       nested typedef when it actually exists.
+ */
+template <typename Container>
+struct ContainerSizeType {
+    using type = std::size_t;
+};
+
+template <typename Container>
+    requires requires { typename Container::size_type; }
+struct ContainerSizeType<Container> {
+    using type = typename Container::size_type;
+};
+
+/**
+ * \brief Detect Container::difference_type, falling back to void
+ *        (container adapters such as std::stack don't provide it)
+ */
+template <typename Container>
+struct ContainerDifferenceType {
+    using type = void;
+};
+
+template <typename Container>
+    requires requires { typename Container::difference_type; }
+struct ContainerDifferenceType<Container> {
+    using type = typename Container::difference_type;
+};
+
+}  // namespace detail
+
 /**
  * \brief Base traits for container types
  * \tparam T Element type
@@ -41,14 +77,11 @@ template <typename T, typename Container>
 struct ContainerTraitsBase {
     using value_type = T;
     using container_type = Container;
-    // Only define size_type and difference_type if present in Container
-    using size_type = std::conditional_t<requires {
-        typename Container::size_type;
-    }, typename Container::size_type, std::size_t>;
+    // Only define size_type if present in Container, otherwise std::size_t
+    using size_type = typename detail::ContainerSizeType<Container>::type;
     // Only define difference_type if present, otherwise void for adapters
-    using difference_type = std::conditional_t<requires {
-        typename Container::difference_type;
-    }, typename Container::difference_type, void>;
+    using difference_type =
+        typename detail::ContainerDifferenceType<Container>::type;
 
     // Default iterator types (will be overridden if available)
     using iterator = void;
@@ -677,7 +710,10 @@ constexpr bool supports_efficient_random_access() {
  */
 template <typename Container>
 constexpr bool can_grow_dynamically() {
+    // Container adapters (stack/queue/priority_queue) only grow through their
+    // underlying container, so they don't directly support dynamic growth.
     return !ContainerTraits<Container>::is_fixed_size &&
+           !ContainerTraits<Container>::is_container_adapter &&
            (ContainerTraits<Container>::has_push_back ||
             ContainerTraits<Container>::has_push_front ||
             ContainerTraits<Container>::has_insert);

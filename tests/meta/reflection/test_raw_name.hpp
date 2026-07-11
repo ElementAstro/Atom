@@ -270,10 +270,4 @@ TEST_F(RawNameTest, CompileTimeUsage) {
 
 }  // namespace atom::meta::test
 
-// Main function to run the tests
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
-
 #endif  // ATOM_META_TEST_RAW_NAME_HPP

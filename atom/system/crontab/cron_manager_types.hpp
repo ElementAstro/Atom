@@ -28,6 +28,28 @@ struct JobStats {
     std::chrono::system_clock::time_point last_execution;
     std::chrono::milliseconds avg_execution_time{0};
 
+    JobStats() = default;
+
+    // Atomics make JobStats non-copyable by default; provide value-snapshot
+    // copy semantics so it can be returned by value (e.g. std::optional).
+    JobStats(const JobStats& other)
+        : total_executions(other.total_executions.load()),
+          successful_executions(other.successful_executions.load()),
+          failed_executions(other.failed_executions.load()),
+          last_execution(other.last_execution),
+          avg_execution_time(other.avg_execution_time) {}
+
+    JobStats& operator=(const JobStats& other) {
+        if (this != &other) {
+            total_executions.store(other.total_executions.load());
+            successful_executions.store(other.successful_executions.load());
+            failed_executions.store(other.failed_executions.load());
+            last_execution = other.last_execution;
+            avg_execution_time = other.avg_execution_time;
+        }
+        return *this;
+    }
+
     double getSuccessRate() const {
         uint64_t total = total_executions.load();
         return total > 0

@@ -26,7 +26,7 @@
 namespace atom::meta {
 
 enum class constraint_level { none, nontrivial, nothrow, trivial };
-enum class thread_safety { none, synchronized, lockfree };
+enum class thread_safety { none, shared, synchronized, lockfree };
 
 struct proxiable_constraints {
     std::size_t max_size;
@@ -191,6 +191,24 @@ struct facade_impl {
 template <facade F>
 class proxy;
 
+/**
+ * @brief Concept for dispatch types that implement the generic skill
+ * protocol used by proxy<F>::call.
+ *
+ * A protocol-conforming dispatch type D provides:
+ * - `using uses_generic_skill_protocol = void;` (opt-in tag)
+ * - `template <class T> static constexpr bool applicable;` compile-time
+ *   guard deciding whether the skill can be instantiated for T
+ * - `template <class T> static const void* skill_entry();` returning an
+ *   erased pointer to the per-type implementation (function pointer or a
+ *   static table of function pointers)
+ * - `template <class R, ...> static R invoke_skill(const void* entry,
+ *   const void* obj, ...);` invoking the implementation
+ */
+template <class D>
+concept generic_skill_dispatch =
+    requires { typename D::uses_generic_skill_protocol; };
+
 template <class Cs, class Rs, proxiable_constraints C>
 struct facade_builder {
     template <class D, class... Os>
@@ -306,7 +324,7 @@ using default_builder =
                    proxiable_constraints{
                        .max_size = 256,
                        .max_align = alignof(std::max_align_t),
-                       .copyability = constraint_level::nothrow,
+                       .copyability = constraint_level::nontrivial,
                        .relocatability = constraint_level::nothrow,
                        .destructibility = constraint_level::nothrow,
                        .concurrency = thread_safety::none}>;
@@ -597,35 +615,31 @@ private:
         static_assert(sizeof(value_type) <= F::constraints.max_size);
         static_assert(alignof(value_type) <= F::constraints.max_align);
 
-        if constexpr (F::constraints.copyability == constraint_level::none) {
-            static_assert(!(std::is_copy_constructible_v<value_type> &&
-                            std::is_copy_assignable_v<value_type>));
+        if constexpr (F::constraints.copyability ==
+                      constraint_level::nontrivial) {
+            static_assert(std::is_copy_constructible_v<value_type>);
         } else if constexpr (F::constraints.copyability ==
                              constraint_level::nothrow) {
-            static_assert(std::is_nothrow_copy_constructible_v<value_type> &&
-                          std::is_nothrow_copy_assignable_v<value_type>);
+            static_assert(std::is_nothrow_copy_constructible_v<value_type>);
         } else if constexpr (F::constraints.copyability ==
                              constraint_level::trivial) {
-            static_assert(std::is_trivially_copy_constructible_v<value_type> &&
-                          std::is_trivially_copy_assignable_v<value_type>);
+            static_assert(std::is_trivially_copy_constructible_v<value_type>);
         }
 
-        if constexpr (F::constraints.relocatability == constraint_level::none) {
-            static_assert(!(std::is_move_constructible_v<value_type> &&
-                            std::is_move_assignable_v<value_type>));
+        if constexpr (F::constraints.relocatability ==
+                      constraint_level::nontrivial) {
+            static_assert(std::is_move_constructible_v<value_type>);
         } else if constexpr (F::constraints.relocatability ==
                              constraint_level::nothrow) {
-            static_assert(std::is_nothrow_move_constructible_v<value_type> &&
-                          std::is_nothrow_move_assignable_v<value_type>);
+            static_assert(std::is_nothrow_move_constructible_v<value_type>);
         } else if constexpr (F::constraints.relocatability ==
                              constraint_level::trivial) {
-            static_assert(std::is_trivially_move_constructible_v<value_type> &&
-                          std::is_trivially_move_assignable_v<value_type>);
+            static_assert(std::is_trivially_move_constructible_v<value_type>);
         }
 
         if constexpr (F::constraints.destructibility ==
-                      constraint_level::none) {
-            static_assert(!std::is_destructible_v<value_type>);
+                      constraint_level::nontrivial) {
+            static_assert(std::is_destructible_v<value_type>);
         } else if constexpr (F::constraints.destructibility ==
                              constraint_level::nothrow) {
             static_assert(std::is_nothrow_destructible_v<value_type>);
@@ -693,6 +707,26 @@ private:
             skill_vtable.push_back({reinterpret_cast<const void*>(
                                         &cloneable_dispatch::clone_impl<T, F>),
                                     &typeid(cloneable_dispatch)});
+        }
+
+        // Register every protocol-conforming dispatch declared as a
+        // convention of the facade.
+        register_convention_skills<T>(
+            static_cast<typename F::convention_types*>(nullptr));
+    }
+
+    template <class T, class... Cs>
+    void register_convention_skills(std::tuple<Cs...>*) {
+        (register_convention_skill<T, typename Cs::dispatch_type>(), ...);
+    }
+
+    template <class T, class D>
+    void register_convention_skill() {
+        if constexpr (generic_skill_dispatch<D>) {
+            if constexpr (D::template applicable<T>) {
+                skill_vtable.push_back(
+                    {D::template skill_entry<T>(), &typeid(D)});
+            }
         }
     }
 
@@ -927,6 +961,19 @@ public:
     }
 
     /**
+     * @brief Erased pointer to the stored object.
+     *
+     * Intended for skill implementations (generic_skill_dispatch) that
+     * receive another proxy as an argument and need its storage together
+     * with type() for a type-checked binary operation.
+     *
+     * @return Pointer to the stored object, or nullptr if empty
+     */
+    [[nodiscard]] const void* raw_data() const noexcept {
+        return vptr ? static_cast<const void*>(storage) : nullptr;
+    }
+
+    /**
      * @brief Call a function associated with a skill/convention
      * @tparam Convention Convention type
      * @tparam R Return type
@@ -942,7 +989,12 @@ public:
 
         for (const auto& record : skill_vtable) {
             if (*record.skill_type == typeid(Convention)) {
-                if constexpr (std::is_same_v<Convention, print_dispatch>) {
+                if constexpr (generic_skill_dispatch<Convention>) {
+                    return Convention::template invoke_skill<R>(
+                        record.func_ptr, static_cast<const void*>(storage),
+                        std::forward<Args>(args)...);
+                } else if constexpr (std::is_same_v<Convention,
+                                                    print_dispatch>) {
                     auto func =
                         reinterpret_cast<typename print_dispatch::print_func_t>(
                             record.func_ptr);

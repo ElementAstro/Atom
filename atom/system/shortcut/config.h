@@ -7,7 +7,7 @@
 #include <functional>
 #include <chrono>
 #include <variant>
-#include "advanced_shortcut.h"
+#include "shortcut_binding.h"
 #include "monitoring.h"
 
 namespace shortcut_detector {
@@ -59,14 +59,14 @@ struct ShortcutProfile {
     std::string name;
     std::string description;
     std::string category;
-    std::vector<AdvancedShortcut> shortcuts;
+    std::vector<ShortcutBinding> shortcuts;
     std::unordered_map<std::string, ConfigValue> settings;
     bool isActive{false};
 
     ShortcutProfile(const std::string& n = "", const std::string& desc = "", const std::string& cat = "")
         : name(n), description(desc), category(cat) {}
 
-    void addShortcut(const AdvancedShortcut& shortcut) {
+    void addShortcut(const ShortcutBinding& shortcut) {
         shortcuts.push_back(shortcut);
     }
 

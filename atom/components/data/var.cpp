@@ -87,7 +87,7 @@ auto VariableManager::getGroup(const std::string& name) const -> std::string {
 }
 
 void VariableManager::removeVariable(const std::string& name) {
-    spdlog::info("Removing variable: {}", name);
+    spdlog::trace("Removing variable: {}", name);
 
     std::string primaryToRemove;
 
@@ -389,7 +389,7 @@ void VariableManager::importVariablesFromJson(const std::string& filePath) {
             bool aliasExists = !alias.empty() && has(alias);
 
             if (nameExists) {
-                spdlog::info("Variable '{}' already exists, updating value.",
+                spdlog::trace("Variable '{}' already exists, updating value.",
                              name);
                 try {
                     if (type == "int") {
@@ -433,7 +433,7 @@ void VariableManager::importVariablesFromJson(const std::string& filePath) {
                     "exists as a variable or alias.",
                     name, alias);
             } else {
-                spdlog::info("Adding new variable '{}' from JSON.", name);
+                spdlog::trace("Adding new variable '{}' from JSON.", name);
                 try {
                     if (type == "int") {
                         int value = varData["value"].get<int>();
@@ -506,7 +506,7 @@ void VariableManager::importVariablesFromJson(const std::string& filePath) {
 
 void VariableManager::setStringOptions(const std::string& name,
                                        std::span<const std::string> options) {
-    spdlog::info("Setting string options for variable: {}", name);
+    spdlog::trace("Setting string options for variable: {}", name);
 
     std::unique_lock lock(mutex_);
 
@@ -565,10 +565,9 @@ void VariableManager::setStringOptions(const std::string& name,
                 currentValue, primaryName);
             stringOptions_.erase(primaryName);
             THROW_INVALID_ARGUMENT(
-                "Current value '{}' is not valid with the new options for "
-                "variable "
-                "'{}'",
-                currentValue, primaryName);
+                fmt::format("Current value '{}' is not valid with the new "
+                            "options for variable '{}'",
+                            currentValue, primaryName));
         }
     }
 
@@ -578,8 +577,9 @@ void VariableManager::setStringOptions(const std::string& name,
             const auto& currentOpts = stringOptions_[primaryName];
             if (std::find(currentOpts.begin(), currentOpts.end(), newValue) ==
                 currentOpts.end()) {
-                THROW_INVALID_ARGUMENT("Invalid option '{}' for variable '{}'",
-                                       newValue, primaryName);
+                THROW_INVALID_ARGUMENT(
+                    fmt::format("Invalid option '{}' for variable '{}'",
+                                newValue, primaryName));
             }
         });
 

@@ -1,4 +1,4 @@
-// filepath: /home/max/Atom-1/atom/meta/test_vany.hpp
+// filepath: tests/meta/proxy/test_vany.hpp
 #ifndef ATOM_META_TEST_VANY_HPP
 #define ATOM_META_TEST_VANY_HPP
 
@@ -8,10 +8,39 @@
 #include <algorithm>
 #include <list>
 #include <memory>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+namespace atom::meta::test {
+
+// Type with custom hash and equality operator.
+// Defined at namespace scope so std::hash can be specialized for it; the
+// vtable's hash slot only uses a real hash when std::hash<T> is available.
+struct HashableType {
+    int key;
+    std::string value;
+
+    HashableType(int k, std::string v) : key(k), value(std::move(v)) {}
+
+    bool operator==(const HashableType& other) const {
+        return key == other.key && value == other.value;
+    }
+};
+
+}  // namespace atom::meta::test
+
+template <>
+struct std::hash<atom::meta::test::HashableType> {
+    std::size_t operator()(
+        const atom::meta::test::HashableType& obj) const noexcept {
+        return std::hash<int>{}(obj.key) ^
+               (std::hash<std::string>{}(obj.value) << 1);
+    }
+};
 
 namespace atom::meta::test {
 
@@ -87,17 +116,6 @@ protected:
         }
     };
 
-    // Type with custom hash and equality operator
-    struct HashableType {
-        int key;
-        std::string value;
-
-        HashableType(int k, std::string v) : key(k), value(std::move(v)) {}
-
-        bool operator==(const HashableType& other) const {
-            return key == other.key && value == other.value;
-        }
-    };
 };
 
 // Test default constructor
@@ -464,7 +482,9 @@ TEST_F(AnyTest, MemoryManagement) {
         Any any3(std::move(any1));  // Move
         EXPECT_EQ(constructCount,
                   4);  // Move constructor still creates a new object
-        EXPECT_EQ(destructCount, 1);
+        // Moving empties the source, so the moved-from object inside any1's
+        // small buffer is destroyed as part of the move.
+        EXPECT_EQ(destructCount, 2);
     }
     // All destroyed
     EXPECT_EQ(destructCount, 4);
@@ -621,6 +641,474 @@ TEST_F(AnyTest, TypeInfo) {
     EXPECT_EQ(anyInt.vptr_->size(), sizeof(int));
     EXPECT_EQ(anyString.vptr_->size(), sizeof(std::string));
     EXPECT_EQ(anyComplex.vptr_->size(), sizeof(ComplexTestType));
+}
+
+// ---------------------------------------------------------------------------
+// Helper types used by the new tests (defined at namespace scope so they can
+// be used as template arguments and have std::hash specialised).
+// ---------------------------------------------------------------------------
+
+// Non-streamable, non-arithmetic, non-string type — exercises the
+// "Object of type ..." fallback in defaultToString (lines 104-106).
+struct NonStreamableType {
+    int x;
+    explicit NonStreamableType(int v) : x(v) {}
+    // deliberately no operator<< and no operator==
+};
+
+// Non-equality-comparable, non-hashable type — exercises the pointer-
+// comparison fallback in defaultEquals (line 136) and the pointer-cast
+// fallback in defaultHash (line 146).
+struct NoEqNoHash {
+    double d;
+    explicit NoEqNoHash(double v) : d(v) {}
+    // no operator== and no std::hash specialisation
+};
+
+// A type whose copy constructor throws — used to exercise the catch blocks
+// in the copy constructor (lines 288-301) and in the value constructor
+// (lines 367-369).  The type is small enough for inline storage.
+struct ThrowOnCopy {
+    int value;
+    bool should_throw = false;
+
+    explicit ThrowOnCopy(int v, bool t = false) : value(v), should_throw(t) {}
+
+    ThrowOnCopy(const ThrowOnCopy& other) : value(other.value), should_throw(other.should_throw) {
+        if (should_throw) {
+            throw std::runtime_error("ThrowOnCopy triggered");
+        }
+    }
+
+    ThrowOnCopy(ThrowOnCopy&&) noexcept = default;
+    ThrowOnCopy& operator=(const ThrowOnCopy&) = default;
+    ThrowOnCopy& operator=(ThrowOnCopy&&) noexcept = default;
+};
+
+// A large type whose copy constructor throws — exercises the heap-copy
+// catch (lines 296-301).
+struct LargeThrowOnCopy {
+    std::array<char, 1024> data{};
+    bool should_throw = false;
+
+    explicit LargeThrowOnCopy(bool t = false) : should_throw(t) {}
+
+    LargeThrowOnCopy(const LargeThrowOnCopy& other)
+        : data(other.data), should_throw(other.should_throw) {
+        if (should_throw) {
+            throw std::runtime_error("LargeThrowOnCopy triggered");
+        }
+    }
+
+    LargeThrowOnCopy(LargeThrowOnCopy&&) noexcept = default;
+    LargeThrowOnCopy& operator=(const LargeThrowOnCopy&) = default;
+    LargeThrowOnCopy& operator=(LargeThrowOnCopy&&) noexcept = default;
+};
+
+// A type (small enough for inline storage) whose constructor always throws —
+// exercises the outer catch block in the value constructor (lines 367-369).
+struct SmallThrowOnConstruct {
+    int value;
+
+    explicit SmallThrowOnConstruct(int v) : value(v) {
+        throw std::runtime_error("SmallThrowOnConstruct triggered");
+    }
+
+    SmallThrowOnConstruct(const SmallThrowOnConstruct&) = default;
+    SmallThrowOnConstruct(SmallThrowOnConstruct&&) noexcept = default;
+};
+
+// A large type whose constructor always throws — exercises the inner catch
+// in the heap path (lines 360-362) AND the outer catch (lines 367-369).
+struct LargeThrowOnConstruct {
+    std::array<char, 1024> data{};
+
+    explicit LargeThrowOnConstruct(bool) {
+        throw std::runtime_error("LargeThrowOnConstruct triggered");
+    }
+
+    LargeThrowOnConstruct(const LargeThrowOnConstruct&) = default;
+    LargeThrowOnConstruct(LargeThrowOnConstruct&&) noexcept = default;
+};
+
+}  // namespace atom::meta::test
+
+// std::hash is not specialised for NoEqNoHash intentionally.
+
+namespace atom::meta::test {
+
+// ---------------------------------------------------------------------------
+// New tests
+// ---------------------------------------------------------------------------
+
+// ---- defaultToString fallback for non-streamable type (lines 104-106) ----
+TEST_F(AnyTest, DefaultToStringFallback) {
+    Any any(NonStreamableType{99});
+    std::string s = any.toString();
+    // The fallback returns "Object of type <mangled name>"; just verify it's
+    // non-empty and doesn't crash.
+    EXPECT_FALSE(s.empty());
+    // Verify it contains the expected prefix
+    EXPECT_NE(s.find("Object of type"), std::string::npos);
+}
+
+// ---- defaultEquals pointer fallback for non-comparable type (line 136) ----
+TEST_F(AnyTest, DefaultEqualsFallback) {
+    Any a(NoEqNoHash{1.0});
+    Any b(NoEqNoHash{1.0});
+    // Different objects, different storage addresses → pointer comparison → false
+    EXPECT_FALSE(a == b);
+    // Self-comparison via operator== routes through same pointer → true
+    // (operator== checks type first, then calls defaultEquals on same ptr)
+    Any a2 = a;  // copy — same value but different storage
+    EXPECT_FALSE(a == a2);  // still different addresses
+}
+
+// ---- defaultHash pointer fallback for non-hashable type (line 146) ----
+TEST_F(AnyTest, DefaultHashFallback) {
+    Any a(NoEqNoHash{3.14});
+    // hash() should return the uintptr_t of the storage pointer — just
+    // verify it doesn't crash and returns something non-zero for a live object.
+    size_t h = a.hash();
+    EXPECT_NE(h, static_cast<size_t>(0));
+}
+
+// ---- isTriviallyDestructible vtable entry (lines 162-163) ----
+TEST_F(AnyTest, IsTriviallyDestructible) {
+    // int is trivially destructible
+    Any anyInt(42);
+    EXPECT_TRUE(anyInt.vptr_->is_trivially_destructible());
+
+    // ComplexTestType (has std::string + std::vector) is NOT trivially
+    // destructible.
+    Any anyComplex(ComplexTestType("TD", {1, 2}));
+    EXPECT_FALSE(anyComplex.vptr_->is_trivially_destructible());
+}
+
+// ---- copy lambda throw for non-copy-constructible type (line 177) ----
+TEST_F(AnyTest, CopyOfNonCopyableThrows) {
+    // MoveOnlyType is not copy-constructible.  Attempting to copy-construct
+    // an Any that holds it should throw std::runtime_error.
+    MoveOnlyType m(42);
+    Any original(std::move(m));
+    EXPECT_THROW({ Any copy(original); }, std::runtime_error);
+}
+
+// ---- copy constructor catch — inline type whose copy throws (lines 288-291) ----
+TEST_F(AnyTest, CopyConstructorInlineThrowSafety) {
+    // Create an Any with a ThrowOnCopy that does NOT throw yet.
+    ThrowOnCopy safe(10, false);
+    Any original(safe);
+    // Make the contained value's next copy throw by modifying should_throw
+    // on the stored object via unsafe cast.
+    original.as<ThrowOnCopy>()->should_throw = true;
+    // Now copy-constructing should throw and leave original intact.
+    EXPECT_THROW({ Any copy(original); }, std::runtime_error);
+    // original must still be valid
+    EXPECT_FALSE(original.empty());
+}
+
+// ---- copy constructor catch — heap type whose copy throws (lines 296-301) ----
+TEST_F(AnyTest, CopyConstructorHeapThrowSafety) {
+    LargeThrowOnCopy lobj(false);
+    Any original(lobj);
+    // Flip the throw flag on the stored large object.
+    original.as<LargeThrowOnCopy>()->should_throw = true;
+    EXPECT_THROW({ Any copy(original); }, std::runtime_error);
+    // original must still be valid
+    EXPECT_FALSE(original.empty());
+}
+
+// ---- value constructor outer catch for small object (lines 367-369) ----
+// Pass a ThrowOnCopy with should_throw=true as an LVALUE so the copy
+// constructor runs inside new(addr) — that throw is caught by the outer try.
+TEST_F(AnyTest, ValueConstructorSmallThrowSafety) {
+    ThrowOnCopy toc(99, true);  // copy constructor will throw
+    EXPECT_THROW({ Any a(toc); }, std::runtime_error);
+}
+
+// ---- value constructor inner+outer catch for large object (lines 360-362, 367-369) ----
+// Pass a LargeThrowOnCopy with should_throw=true as an LVALUE so the copy
+// constructor throws inside new(temp) — inner catch frees temp, outer catch
+// calls reset().
+TEST_F(AnyTest, ValueConstructorLargeThrowSafety) {
+    LargeThrowOnCopy ltoc(true);  // copy constructor will throw
+    EXPECT_THROW({ Any a(ltoc); }, std::runtime_error);
+}
+
+// ---- swap two empty Any objects (line 438) ----
+TEST_F(AnyTest, SwapBothEmpty) {
+    Any a;
+    Any b;
+    // Should not crash; both remain empty.
+    a.swap(b);
+    EXPECT_TRUE(a.empty());
+    EXPECT_TRUE(b.empty());
+}
+
+// ---------------------------------------------------------------------------
+// Public API coverage
+// ---------------------------------------------------------------------------
+
+TEST_F(AnyTest, PublicApiEmpty) {
+    Any empty;
+    EXPECT_TRUE(empty.empty());
+    EXPECT_EQ(empty.type(), typeid(void));
+    EXPECT_EQ(empty.toString(), "[empty]");
+    EXPECT_EQ(empty.hash(), static_cast<size_t>(0));
+    EXPECT_FALSE(empty.is<int>());
+    EXPECT_THROW(empty.cast<int>(), std::bad_cast);
+    EXPECT_THROW(empty.invoke([](const void*) {}), std::runtime_error);
+    EXPECT_THROW(empty.foreach([](const Any&) {}), std::runtime_error);
+    // operator== on two empty objects
+    Any empty2;
+    EXPECT_TRUE(empty == empty2);
+    EXPECT_FALSE(empty != empty2);
+}
+
+TEST_F(AnyTest, PublicApiNonEmpty) {
+    Any a(42);
+    EXPECT_FALSE(a.empty());
+    EXPECT_EQ(a.type(), typeid(int));
+    EXPECT_EQ(a.toString(), "42");
+    EXPECT_TRUE(a.is<int>());
+    EXPECT_FALSE(a.is<double>());
+    EXPECT_EQ(a.cast<int>(), 42);
+    EXPECT_EQ(a.unsafeCast<int>(), 42);
+    EXPECT_THROW(a.cast<double>(), std::bad_cast);
+    EXPECT_TRUE(a.isSmallObject());
+    EXPECT_NE(a.hash(), static_cast<size_t>(0));
+
+    // invoke
+    bool called = false;
+    a.invoke([&called](const void* p) {
+        called = true;
+        EXPECT_EQ(*static_cast<const int*>(p), 42);
+    });
+    EXPECT_TRUE(called);
+
+    // foreach on non-iterable
+    EXPECT_THROW(a.foreach([](const Any&) {}), atom::error::InvalidArgument);
+
+    // operator==
+    Any b(42);
+    EXPECT_TRUE(a == b);
+    EXPECT_FALSE(a != b);
+
+    Any c(99);
+    EXPECT_FALSE(a == c);
+    EXPECT_TRUE(a != c);
+
+    // different types
+    Any d(42.0);
+    EXPECT_FALSE(a == d);
+
+    // one empty, one non-empty
+    Any empty;
+    EXPECT_FALSE(a == empty);
+    EXPECT_FALSE(empty == a);
+}
+
+TEST_F(AnyTest, PublicApiReset) {
+    Any a(42);
+    EXPECT_FALSE(a.empty());
+    a.reset();
+    EXPECT_TRUE(a.empty());
+    // reset again is safe
+    a.reset();
+    EXPECT_TRUE(a.empty());
+}
+
+TEST_F(AnyTest, ForeachOnVector) {
+    std::vector<int> v = {10, 20, 30};
+    Any a(v);
+    std::vector<int> out;
+    a.foreach([&out](const Any& elem) {
+        out.push_back(elem.cast<int>());
+    });
+    EXPECT_EQ(out, v);
+}
+
+TEST_F(AnyTest, ToStringVariants) {
+    // Arithmetic
+    Any anyDouble(3.14);
+    EXPECT_FALSE(anyDouble.toString().empty());
+
+    // std::string
+    Any anyStr(std::string("hello"));
+    EXPECT_EQ(anyStr.toString(), "hello");
+
+    // Streamable non-arithmetic (ComplexTestType has operator<<)
+    Any anyC(ComplexTestType("SC", {5, 6}));
+    EXPECT_NE(anyC.toString().find("SC"), std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// tryAnyCast and visitAny free functions
+// ---------------------------------------------------------------------------
+
+TEST_F(AnyTest, TryAnyCast) {
+    Any a(42);
+    auto ok = tryAnyCast<int>(a);
+    ASSERT_TRUE(ok.has_value());
+    EXPECT_EQ(*ok, 42);
+
+    auto bad = tryAnyCast<double>(a);
+    EXPECT_FALSE(bad.has_value());
+
+    Any empty;
+    auto none = tryAnyCast<int>(empty);
+    EXPECT_FALSE(none.has_value());
+}
+
+TEST_F(AnyTest, VisitAny) {
+    Any a(99);
+    const void* visited_ptr = nullptr;
+    visitAny(a, [&visited_ptr](const void* p) { visited_ptr = p; });
+    EXPECT_NE(visited_ptr, nullptr);
+
+    // visitAny on empty should throw (invoke throws)
+    Any empty;
+    EXPECT_THROW(visitAny(empty, [](const void*) {}), std::runtime_error);
+}
+
+// ---------------------------------------------------------------------------
+// AnyArray
+// ---------------------------------------------------------------------------
+
+TEST_F(AnyTest, AnyArrayBasic) {
+    AnyArray arr;
+    EXPECT_TRUE(arr.empty());
+    EXPECT_EQ(arr.size(), 0u);
+
+    arr.push_back(Any(1));
+    arr.push_back(Any(std::string("hi")));
+    arr.emplace_back(3.14);
+    EXPECT_EQ(arr.size(), 3u);
+    EXPECT_FALSE(arr.empty());
+
+    EXPECT_EQ(arr[0].cast<int>(), 1);
+    EXPECT_EQ(arr[1].cast<std::string>(), "hi");
+    EXPECT_DOUBLE_EQ(arr[2].cast<double>(), 3.14);
+
+    // const operator[]
+    const AnyArray& carr = arr;
+    EXPECT_EQ(carr[0].cast<int>(), 1);
+
+    // iterators
+    int count = 0;
+    for (const auto& elem : arr) {
+        (void)elem;
+        ++count;
+    }
+    EXPECT_EQ(count, 3);
+}
+
+TEST_F(AnyTest, AnyArrayVariadicConstructor) {
+    AnyArray arr(42, std::string("world"), 2.71);
+    EXPECT_EQ(arr.size(), 3u);
+    EXPECT_EQ(arr[0].cast<int>(), 42);
+}
+
+TEST_F(AnyTest, AnyArrayFilterByType) {
+    AnyArray arr;
+    arr.emplace_back(1);
+    arr.emplace_back(std::string("a"));
+    arr.emplace_back(2);
+    arr.emplace_back(std::string("b"));
+
+    AnyArray ints = arr.filterByType<int>();
+    EXPECT_EQ(ints.size(), 2u);
+
+    AnyArray strs = arr.filterByType<std::string>();
+    EXPECT_EQ(strs.size(), 2u);
+}
+
+TEST_F(AnyTest, AnyArrayExtractAll) {
+    AnyArray arr;
+    arr.emplace_back(10);
+    arr.emplace_back(std::string("skip"));
+    arr.emplace_back(20);
+
+    auto ints = arr.extractAll<int>();
+    ASSERT_EQ(ints.size(), 2u);
+    EXPECT_EQ(ints[0], 10);
+    EXPECT_EQ(ints[1], 20);
+}
+
+TEST_F(AnyTest, AnyArrayToStrings) {
+    AnyArray arr;
+    arr.emplace_back(7);
+    arr.emplace_back(std::string("hello"));
+
+    auto strs = arr.toStrings();
+    ASSERT_EQ(strs.size(), 2u);
+    EXPECT_EQ(strs[0], "7");
+    EXPECT_EQ(strs[1], "hello");
+}
+
+// ---------------------------------------------------------------------------
+// AnyMap
+// ---------------------------------------------------------------------------
+
+TEST_F(AnyTest, AnyMapBasic) {
+    AnyMap m;
+    EXPECT_TRUE(m.empty());
+    EXPECT_EQ(m.size(), 0u);
+
+    m.set("x", 42);
+    m.set("y", std::string("val"));
+    EXPECT_EQ(m.size(), 2u);
+    EXPECT_FALSE(m.empty());
+    EXPECT_TRUE(m.contains("x"));
+    EXPECT_FALSE(m.contains("z"));
+
+    auto opt = m.get("x");
+    ASSERT_TRUE(opt.has_value());
+    EXPECT_EQ(opt->get().cast<int>(), 42);
+
+    auto missing = m.get("z");
+    EXPECT_FALSE(missing.has_value());
+
+    auto asInt = m.getAs<int>("x");
+    ASSERT_TRUE(asInt.has_value());
+    EXPECT_EQ(*asInt, 42);
+
+    auto wrongType = m.getAs<double>("x");
+    EXPECT_FALSE(wrongType.has_value());
+
+    auto missingKey = m.getAs<int>("z");
+    EXPECT_FALSE(missingKey.has_value());
+
+    m.remove("x");
+    EXPECT_FALSE(m.contains("x"));
+    EXPECT_EQ(m.size(), 1u);
+
+    auto keys = m.keys();
+    ASSERT_EQ(keys.size(), 1u);
+    EXPECT_EQ(keys[0], "y");
+}
+
+// ---------------------------------------------------------------------------
+// Large-object (heap) path public API
+// ---------------------------------------------------------------------------
+
+TEST_F(AnyTest, LargeObjectPublicApi) {
+    LargeType large(999);
+    Any a(large);
+    EXPECT_FALSE(a.empty());
+    EXPECT_FALSE(a.isSmallObject());
+    EXPECT_EQ(a.type(), typeid(LargeType));
+    EXPECT_EQ(a.cast<LargeType>().value, 999);
+    EXPECT_EQ(a.unsafeCast<LargeType>().value, 999);
+
+    Any b(large);
+    EXPECT_TRUE(a == b);
+    EXPECT_FALSE(a != b);
+
+    // reset large object
+    a.reset();
+    EXPECT_TRUE(a.empty());
 }
 
 }  // namespace atom::meta::test

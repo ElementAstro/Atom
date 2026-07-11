@@ -18,6 +18,7 @@ Description: Registry Pattern Implementation
 #include <chrono>
 
 #include "atom/error/exception.hpp"
+#include "atom/meta/ffi.hpp"
 #include "atom/utils/to_string.hpp"
 #include "fmt/format.h"
 #include "spdlog/spdlog.h"
@@ -33,7 +34,7 @@ auto Registry::instance() -> Registry& {
 void Registry::registerModule(const std::string& name,
                               Component::InitFunc init_func) {
     std::scoped_lock lock(mutex_);
-    spdlog::info("Registering module: {}", name);
+    spdlog::debug("Registering module: {}", name);
     module_initializers_[name] = std::move(init_func);
 
     if (!componentInfos_.contains(name)) {
@@ -54,7 +55,7 @@ void Registry::addInitializer(const std::string& name,
         return;
     }
 
-    spdlog::info("Adding initializer for component: {}", name);
+    spdlog::debug("Adding initializer for component: {}", name);
 
     initializers_[name] = std::make_shared<Component>(name);
     // Store initializer for deferred execution via
@@ -76,23 +77,53 @@ void Registry::addInitializer(const std::string& name,
     componentInfos_[name].isInitialized = false;
 }
 
+void Registry::registerComponentInstance(const std::string& name,
+                                         std::shared_ptr<Component> instance,
+                                         Component::InitFunc init_func,
+                                         Component::CleanupFunc cleanup_func) {
+    if (!instance) {
+        THROW_REGISTRY_EXCEPTION("Cannot register null component instance: {}",
+                                 name);
+    }
+
+    std::scoped_lock lock(mutex_);
+    spdlog::debug("Registering component instance: {}", name);
+
+    initializers_[name] = std::move(instance);
+    if (init_func) {
+        module_initializers_[name] = std::move(init_func);
+    }
+    if (cleanup_func) {
+        initializers_[name]->cleanupFunc = std::move(cleanup_func);
+    }
+
+    if (!componentInfos_.contains(name)) {
+        ComponentInfo info;
+        info.name = name;
+        info.loadTime = std::chrono::system_clock::now();
+        componentInfos_[name] = std::move(info);
+    }
+    componentInfos_[name].isInitialized = false;
+}
+
 void Registry::addDependency(const std::string& name,
                              const std::string& dependency, bool isOptional) {
     std::unique_lock lock(mutex_);
 
     if (name == dependency) {
         spdlog::error("Component '{}' cannot depend on itself", name);
-        THROW_RUNTIME_ERROR("Component '{}' cannot depend on itself", name);
+        THROW_RUNTIME_ERROR(
+            fmt::format("Component '{}' cannot depend on itself", name));
     }
 
     if (hasCircularDependency(name, dependency)) {
         spdlog::error("Circular dependency detected: {} -> {}", name,
                       dependency);
-        THROW_RUNTIME_ERROR("Circular dependency detected: {} -> {}", name,
-                            dependency);
+        THROW_RUNTIME_ERROR(fmt::format("Circular dependency detected: {} -> {}",
+                                        name, dependency));
     }
 
-    spdlog::info("Adding {} dependency: {} -> {}",
+    spdlog::debug("Adding {} dependency: {} -> {}",
                  isOptional ? "optional" : "required", name, dependency);
 
     if (isOptional) {
@@ -131,7 +162,7 @@ void Registry::initializeAll(bool forceReload) {
 
     for (const auto& name : initializationOrder_) {
         std::unordered_set<std::string> initStack;
-        spdlog::info("Initializing component: {}", name);
+        spdlog::debug("Initializing component: {}", name);
 
         auto startTime = std::chrono::high_resolution_clock::now();
         initializeComponent(name, initStack);
@@ -173,7 +204,7 @@ void Registry::cleanupAll(bool force) {
         }
 
         try {
-            spdlog::info("Cleaning up component: {}", name);
+            spdlog::debug("Cleaning up component: {}", name);
             component->cleanupFunc();
             if (componentInfos_.contains(name)) {
                 componentInfos_[name].isInitialized = false;
@@ -373,7 +404,7 @@ auto Registry::getOrLoadComponent(const std::string& name)
         return initializers_[name];
     }
 
-    spdlog::info("Lazy loading component: {}", name);
+    spdlog::debug("Lazy loading component: {}", name);
 
     if (!module_initializers_.contains(name)) {
         spdlog::error("Cannot lazy load unregistered component: {}", name);
@@ -489,12 +520,57 @@ bool Registry::loadComponentFromFile(const std::string& path [[maybe_unused]]) {
         return false;
     }
 
-    std::string name = fs::path(path).stem().string();
+    const std::string name = fs::path(path).stem().string();
     spdlog::info("Loading component from file: {} (name: {})", path, name);
 
-    componentFileTimestamps_[name] = fs::last_write_time(path);
+    // Load the shared object. ATOM_MODULE exports C entry points named
+    // "<name>_initialize_registry" / "<name>_getVersion".
+    std::shared_ptr<atom::meta::DynamicLibrary> library;
+    try {
+        atom::meta::DynamicLibrary::Options options;
+        options.strategy = atom::meta::DynamicLibrary::LoadStrategy::Immediate;
+        library = std::make_shared<atom::meta::DynamicLibrary>(path, options);
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to load component library {}: {}", path, e.what());
+        return false;
+    }
 
-    spdlog::warn("Dynamic library loading not implemented yet");
+    auto initFn = library->getFunction<void()>(name + "_initialize_registry");
+    if (!initFn.has_value()) {
+        spdlog::error(
+            "Component library {} does not export '{}_initialize_registry'",
+            path, name);
+        return false;
+    }
+
+    // The plugin registers its component into this same Registry singleton.
+    // Call it before taking mutex_ to avoid re-entrant locking.
+    try {
+        initFn.value()();
+    } catch (const std::exception& e) {
+        spdlog::error("Initialization of component {} failed: {}", name,
+                      e.what());
+        return false;
+    }
+
+    {
+        std::unique_lock lock(mutex_);
+        loadedLibraries_[name] = library;
+        componentFileTimestamps_[name] = fs::last_write_time(path);
+
+        ComponentInfo& info = componentInfos_[name];
+        info.name = name;
+        info.isHotReload = true;
+        if (auto versionFn =
+                library->getFunction<const char*()>(name + "_getVersion");
+            versionFn.has_value()) {
+            if (const char* version = versionFn.value()(); version != nullptr) {
+                info.version = version;
+            }
+        }
+    }
+
+    spdlog::info("Loaded component '{}' from {}", name, path);
     return true;
 #else
     spdlog::error("Hot reload not enabled, cannot load component from file");
@@ -642,22 +718,20 @@ bool Registry::removeComponent(const std::string& name) {
 #if ENABLE_EVENT_SYSTEM
 atom::components::EventCallbackId Registry::subscribeToEvent(
     const std::string& eventName, atom::components::EventCallback callback) {
-    std::unique_lock lock(mutex_);
+    std::unique_lock lock(eventMutex_);
 
-    EventSubscription sub;
-    sub.id = nextEventId_++;
-    sub.callback = std::move(callback);
+    const auto id = nextEventId_++;
+    eventSubscriptions_[eventName].push_back(
+        EventSubscription{id, std::move(callback)});
 
-    eventSubscriptions_[eventName].push_back(std::move(sub));
-
-    spdlog::info("Subscribed to event '{}' with ID {}", eventName, sub.id);
-    return sub.id;
+    spdlog::trace("Subscribed to event '{}' with ID {}", eventName, id);
+    return id;
 }
 
 bool Registry::unsubscribeFromEvent(
     const std::string& eventName,
     atom::components::EventCallbackId callbackId) {
-    std::unique_lock lock(mutex_);
+    std::unique_lock lock(eventMutex_);
 
     auto it = eventSubscriptions_.find(eventName);
     if (it == eventSubscriptions_.end()) {
@@ -678,7 +752,7 @@ bool Registry::unsubscribeFromEvent(
     }
 
     subs.erase(subIt);
-    spdlog::info("Unsubscribed from event '{}' with ID {}", eventName,
+    spdlog::trace("Unsubscribed from event '{}' with ID {}", eventName,
                  callbackId);
 
     if (subs.empty()) {
@@ -692,7 +766,7 @@ void Registry::triggerEvent(const atom::components::Event& event) {
     std::vector<atom::components::EventCallback> callbacks;
 
     {
-        std::shared_lock lock(mutex_);
+        std::shared_lock lock(eventMutex_);
         auto it = eventSubscriptions_.find(event.name);
         if (it != eventSubscriptions_.end()) {
             callbacks.reserve(it->second.size());
@@ -711,7 +785,7 @@ void Registry::triggerEvent(const atom::components::Event& event) {
         }
     }
 
-    spdlog::info("Triggered event '{}' from source '{}'", event.name,
+    spdlog::trace("Triggered event '{}' from source '{}'", event.name,
                  event.source);
 }
 #endif
@@ -744,7 +818,7 @@ void Registry::initializeComponent(
     }
 
     if (componentInfos_.contains(name) && !componentInfos_[name].isEnabled) {
-        spdlog::info("Skipping disabled component: {}", name);
+        spdlog::debug("Skipping disabled component: {}", name);
         return;
     }
 
@@ -777,7 +851,7 @@ void Registry::initializeComponent(
             initializers_[name] = std::make_shared<Component>(name);
         }
 
-        spdlog::info("Running initializer for component: {}", name);
+        spdlog::debug("Running initializer for component: {}", name);
         try {
             auto startTime = std::chrono::high_resolution_clock::now();
             it->second(*initializers_[name]);
@@ -790,7 +864,7 @@ void Registry::initializeComponent(
             }
 
             // Mark as initialized after successful module initializer execution
-            spdlog::info("Component initialized successfully: {}", name);
+            spdlog::debug("Component initialized successfully: {}", name);
             componentInfos_[name].isInitialized = true;
             componentInfos_[name].lastUsed = std::chrono::system_clock::now();
         } catch (const std::exception& e) {

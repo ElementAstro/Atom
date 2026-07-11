@@ -56,56 +56,61 @@
         THROW_OBJ_NOT_EXIST("Component: ", Constants::id);  \
     }
 
+// NOTE: the macros below use a reserved-style local name so they never shadow
+// (and silently self-assign) a caller variable that is also called "ptr".
 #define GET_OR_CREATE_PTR_WITH_CAPTURE(variable, type, constant, capture) \
-    if (auto ptr = GetPtrOrCreate<type>(constant, [capture] {             \
+    if (auto atom_gp_tmp_ptr_ = GetPtrOrCreate<type>(constant, [capture] { \
             return atom::memory::makeShared<type>(capture);               \
         })) {                                                             \
-        variable = ptr;                                                   \
+        variable = atom_gp_tmp_ptr_;                                      \
     } else {                                                              \
         THROW_UNLAWFUL_OPERATION("Failed to create " #type ".");          \
     }
 
 #define GET_OR_CREATE_PTR(variable, type, constant, ...)                     \
-    if (auto ptr = GetPtrOrCreate<type>(                                     \
+    if (auto atom_gp_tmp_ptr_ = GetPtrOrCreate<type>(                        \
             constant, [] { return std::make_shared<type>(__VA_ARGS__); })) { \
-        variable = ptr;                                                      \
+        variable = atom_gp_tmp_ptr_;                                         \
     } else {                                                                 \
         THROW_UNLAWFUL_OPERATION("Failed to create " #type ".");             \
     }
 
-#define GET_OR_CREATE_PTR_THIS(variable, type, constant, ...)    \
-    if (auto ptr = GetPtrOrCreate<type>(constant, [this] {       \
-            return std::make_shared<type>(__VA_ARGS__);          \
-        })) {                                                    \
-        variable = ptr;                                          \
-    } else {                                                     \
-        THROW_UNLAWFUL_OPERATION("Failed to create " #type "."); \
+#define GET_OR_CREATE_PTR_THIS(variable, type, constant, ...)       \
+    if (auto atom_gp_tmp_ptr_ = GetPtrOrCreate<type>(constant, [this] { \
+            return std::make_shared<type>(__VA_ARGS__);             \
+        })) {                                                       \
+        variable = atom_gp_tmp_ptr_;                                \
+    } else {                                                        \
+        THROW_UNLAWFUL_OPERATION("Failed to create " #type ".");    \
     }
 
 #define GET_OR_CREATE_WEAK_PTR(variable, type, constant, ...)                \
-    if (auto ptr = GetPtrOrCreate<type>(                                     \
+    if (auto atom_gp_tmp_ptr_ = GetPtrOrCreate<type>(                        \
             constant, [] { return std::make_shared<type>(__VA_ARGS__); })) { \
-        variable = std::weak_ptr(ptr);                                       \
+        variable = std::weak_ptr(atom_gp_tmp_ptr_);                          \
     } else {                                                                 \
         THROW_UNLAWFUL_OPERATION("Failed to create " #type ".");             \
     }
 
-#define GET_OR_CREATE_PTR_WITH_DELETER(variable, type, constant, deleter) \
-    if (auto ptr = GetPtrOrCreate<type>(constant, [deleter] {             \
-            return std::shared_ptr<type>(new type, deleter);              \
-        })) {                                                             \
-        variable = ptr;                                                   \
-    } else {                                                              \
-        THROW_UNLAWFUL_OPERATION("Failed to create " #type ".");          \
+#define GET_OR_CREATE_PTR_WITH_DELETER(variable, type, constant, deleter)  \
+    if (auto atom_gp_tmp_ptr_ = GetPtrOrCreate<type>(constant, [deleter] { \
+            return std::shared_ptr<type>(new type, deleter);               \
+        })) {                                                              \
+        GlobalSharedPtrManager::getInstance().markCustomDeleter(constant); \
+        variable = atom_gp_tmp_ptr_;                                       \
+    } else {                                                               \
+        THROW_UNLAWFUL_OPERATION("Failed to create " #type ".");           \
     }
 
 /**
  * @brief Optimized structure to hold pointer metadata
  */
 struct PointerMetadata {
-    uint64_t creation_time_micros;          // Compact time representation
-    std::atomic<uint32_t> access_count{0};  // Lock-free access counting
-    std::atomic<uint32_t> ref_count{0};     // Lock-free ref counting
+    uint64_t creation_time_micros;  // Compact time representation
+    // mutable: counters are updated from const accessors under a shared lock
+    mutable std::atomic<uint32_t> access_count{0};  // Lock-free access counting
+    mutable std::atomic<uint32_t> ref_count{0};     // Lock-free ref counting
+    mutable std::atomic<uint64_t> last_access_micros{0};  // Idle tracking
     std::string type_name;
 
     // Pack flags into single byte for better memory efficiency
@@ -121,6 +126,7 @@ struct PointerMetadata {
     explicit PointerMetadata(std::string_view type_name_view,
                              bool is_weak = false, bool has_deleter = false)
         : creation_time_micros(getCurrentTimeMicros()),
+          last_access_micros(creation_time_micros),
           type_name(type_name_view) {
         flags.is_weak = is_weak;
         flags.has_custom_deleter = has_deleter;
@@ -132,6 +138,8 @@ struct PointerMetadata {
         : creation_time_micros(other.creation_time_micros),
           access_count(other.access_count.load(std::memory_order_relaxed)),
           ref_count(other.ref_count.load(std::memory_order_relaxed)),
+          last_access_micros(
+              other.last_access_micros.load(std::memory_order_relaxed)),
           type_name(other.type_name),
           flags(other.flags) {}
 
@@ -144,10 +152,20 @@ struct PointerMetadata {
                 std::memory_order_relaxed);
             ref_count.store(other.ref_count.load(std::memory_order_relaxed),
                             std::memory_order_relaxed);
+            last_access_micros.store(
+                other.last_access_micros.load(std::memory_order_relaxed),
+                std::memory_order_relaxed);
             type_name = other.type_name;
             flags = other.flags;
         }
         return *this;
+    }
+
+    //! Record an access: bump the counter and refresh the idle timestamp.
+    void recordAccess() const noexcept {
+        access_count.fetch_add(1, std::memory_order_relaxed);
+        last_access_micros.store(getCurrentTimeMicros(),
+                                 std::memory_order_relaxed);
     }
 
 private:
@@ -164,22 +182,35 @@ private:
 struct PointerEntry {
     std::any ptr_data;
     PointerMetadata metadata;
+    std::function<bool()> expired_check;  // Set for weak pointer entries
+    std::function<long()> use_count_fn;   // Non-owning live use_count probe
 
     template <typename T>
     PointerEntry(std::shared_ptr<T> ptr, std::string_view type_name,
                  bool is_weak = false, bool has_deleter = false)
-        : ptr_data(std::move(ptr)), metadata(type_name, is_weak, has_deleter) {}
+        : metadata(type_name, is_weak, has_deleter) {
+        // Capture a weak reference for the probe *before* moving the pointer
+        // into the std::any so the probe never extends the object's lifetime.
+        std::weak_ptr<T> weak_probe = ptr;
+        use_count_fn = [weak_probe] {
+            return static_cast<long>(weak_probe.use_count());
+        };
+        ptr_data = std::move(ptr);
+    }
 
     template <typename T>
     PointerEntry(std::weak_ptr<T> ptr, std::string_view type_name)
-        : ptr_data(std::move(ptr)), metadata(type_name, true, false) {}
+        : ptr_data(ptr),
+          metadata(type_name, true, false),
+          expired_check([ptr] { return ptr.expired(); }),
+          use_count_fn([ptr] { return static_cast<long>(ptr.use_count()); }) {}
 };
 
 /**
  * @brief Enhanced GlobalSharedPtrManager with improved functionality and
  * performance
  */
-class GlobalSharedPtrManager : public NonCopyable {
+class GlobalSharedPtrManager : public atom::type::NonCopyable {
 public:
     using Clock = std::chrono::system_clock;
     using TimePoint = Clock::time_point;
@@ -241,6 +272,25 @@ public:
     void addSharedPtr(std::string_view key, std::shared_ptr<T> ptr);
 
     /**
+     * @brief Register a weak pointer with key
+     * @tparam T Pointer type
+     * @param key Lookup key
+     * @param ptr Weak pointer to register
+     */
+    template <typename T>
+    void addWeakPtr(std::string_view key, const std::weak_ptr<T>& ptr);
+
+    /**
+     * @brief Lock a registered weak pointer into a shared pointer
+     * @tparam T Pointer type
+     * @param key Lookup key
+     * @return Shared pointer (nullptr if missing, type mismatch, or expired)
+     */
+    template <typename T>
+    [[nodiscard]] auto getSharedPtrFromWeakPtr(std::string_view key)
+        -> std::shared_ptr<T>;
+
+    /**
      * @brief Remove pointer by key
      * @param key Key to remove
      */
@@ -255,6 +305,12 @@ public:
     template <typename T>
     void addDeleter(std::string_view key,
                     const std::function<void(T*)>& deleter);
+
+    /**
+     * @brief Mark an existing entry as having a custom deleter
+     * @param key Lookup key
+     */
+    void markCustomDeleter(std::string_view key);
 
     /**
      * @brief Get metadata for pointer
@@ -401,19 +457,17 @@ auto GlobalSharedPtrManager::getSharedPtr(std::string_view key)
 
     if (auto iter = pointer_map_.find(std::string(key));
         iter != pointer_map_.end()) {
-        try {
-            auto ptr = std::any_cast<std::shared_ptr<T>>(iter->second.ptr_data);
+        if (const auto* stored =
+                std::any_cast<std::shared_ptr<T>>(&iter->second.ptr_data)) {
+            auto ptr = *stored;
 
             // Lock-free metadata updates
-            iter->second.metadata.access_count.fetch_add(
-                1, std::memory_order_relaxed);
+            iter->second.metadata.recordAccess();
             iter->second.metadata.ref_count.store(ptr.use_count(),
                                                   std::memory_order_relaxed);
             total_access_count_.fetch_add(1, std::memory_order_relaxed);
 
             return ptr;
-        } catch (const std::bad_any_cast&) {
-            return std::nullopt;
         }
     }
     return std::nullopt;
@@ -426,19 +480,19 @@ auto GlobalSharedPtrManager::getOrCreateSharedPtr(
     std::unique_lock lock(mutex_);
 
     if (auto iter = pointer_map_.find(str_key); iter != pointer_map_.end()) {
-        try {
-            auto ptr = std::any_cast<std::shared_ptr<T>>(iter->second.ptr_data);
+        if (const auto* stored =
+                std::any_cast<std::shared_ptr<T>>(&iter->second.ptr_data)) {
+            auto ptr = *stored;
             // Update metadata atomically
-            iter->second.metadata.access_count.fetch_add(
-                1, std::memory_order_relaxed);
+            iter->second.metadata.recordAccess();
             iter->second.metadata.ref_count.store(ptr.use_count(),
                                                   std::memory_order_relaxed);
             return ptr;
-        } catch (const std::bad_any_cast&) {
+        } else {
+            // Stored entry has a different type; replace it.
             auto ptr = creator();
-            iter->second.ptr_data = ptr;
-            iter->second.metadata.access_count.fetch_add(
-                1, std::memory_order_relaxed);
+            iter->second = PointerEntry{ptr, typeid(T).name()};
+            iter->second.metadata.recordAccess();
             iter->second.metadata.ref_count.store(ptr.use_count(),
                                                   std::memory_order_relaxed);
             return ptr;
@@ -458,22 +512,20 @@ auto GlobalSharedPtrManager::getWeakPtr(std::string_view key)
 
     if (auto iter = pointer_map_.find(std::string(key));
         iter != pointer_map_.end()) {
-        try {
-            if (auto shared_ptr =
-                    std::any_cast<std::shared_ptr<T>>(iter->second.ptr_data)) {
-                iter->second.metadata.access_count.fetch_add(
-                    1, std::memory_order_relaxed);
-                total_access_count_.fetch_add(1, std::memory_order_relaxed);
-                return std::weak_ptr<T>(shared_ptr);
-            }
-            auto weak_ptr =
-                std::any_cast<std::weak_ptr<T>>(iter->second.ptr_data);
-            iter->second.metadata.access_count.fetch_add(
-                1, std::memory_order_relaxed);
+        // Use the pointer form of any_cast: the value form throws on type
+        // mismatch, which previously prevented falling through to the
+        // weak_ptr branch for entries registered via addWeakPtr().
+        if (const auto* shared_ptr =
+                std::any_cast<std::shared_ptr<T>>(&iter->second.ptr_data)) {
+            iter->second.metadata.recordAccess();
             total_access_count_.fetch_add(1, std::memory_order_relaxed);
-            return weak_ptr;
-        } catch (const std::bad_any_cast&) {
-            return std::weak_ptr<T>();
+            return std::weak_ptr<T>(*shared_ptr);
+        }
+        if (const auto* weak_ptr =
+                std::any_cast<std::weak_ptr<T>>(&iter->second.ptr_data)) {
+            iter->second.metadata.recordAccess();
+            total_access_count_.fetch_add(1, std::memory_order_relaxed);
+            return *weak_ptr;
         }
     }
     return std::weak_ptr<T>();
@@ -488,19 +540,63 @@ void GlobalSharedPtrManager::addSharedPtr(std::string_view key,
 }
 
 template <typename T>
+void GlobalSharedPtrManager::addWeakPtr(std::string_view key,
+                                        const std::weak_ptr<T>& ptr) {
+    std::unique_lock lock(mutex_);
+    const std::string str_key{key};
+    pointer_map_.insert_or_assign(str_key, PointerEntry{ptr, typeid(T).name()});
+}
+
+template <typename T>
+auto GlobalSharedPtrManager::getSharedPtrFromWeakPtr(std::string_view key)
+    -> std::shared_ptr<T> {
+    std::shared_lock lock(mutex_);
+
+    if (auto iter = pointer_map_.find(std::string(key));
+        iter != pointer_map_.end()) {
+        if (const auto* weak_ptr =
+                std::any_cast<std::weak_ptr<T>>(&iter->second.ptr_data)) {
+            iter->second.metadata.recordAccess();
+            total_access_count_.fetch_add(1, std::memory_order_relaxed);
+            return weak_ptr->lock();
+        }
+    }
+    return nullptr;
+}
+
+template <typename T>
 void GlobalSharedPtrManager::addDeleter(
     std::string_view key, const std::function<void(T*)>& deleter) {
     std::unique_lock lock(mutex_);
 
     if (auto iter = pointer_map_.find(std::string(key));
         iter != pointer_map_.end()) {
-        try {
-            auto ptr = std::any_cast<std::shared_ptr<T>>(iter->second.ptr_data);
-            ptr.reset(ptr.get(), deleter);
-            iter->second.ptr_data = ptr;
+        if (const auto* stored =
+                std::any_cast<std::shared_ptr<T>>(&iter->second.ptr_data)) {
+            // A shared_ptr's deleter cannot be replaced after creation, and
+            // naively doing `ptr.reset(ptr.get(), deleter)` creates a SECOND
+            // control block that also owns the raw pointer -> double free /
+            // heap corruption when both groups eventually release it.
+            //
+            // Instead, transfer deletion responsibility: the manager's entry
+            // becomes a new ownership group whose deleter (a) invokes the
+            // custom deleter exactly once and (b) permanently detaches the
+            // original control block so its default deleter can never run on
+            // the already-destroyed object. Detaching intentionally leaks one
+            // control block (a few dozen bytes); this is the only safe way to
+            // honor a retroactively registered deleter.
+            std::shared_ptr<T> wrapped(
+                stored->get(), [keep = *stored, deleter](T* raw_ptr) mutable {
+                    deleter(raw_ptr);
+                    // Detach: leak one reference to the original group.
+                    new std::shared_ptr<T>(std::move(keep));
+                });
+            std::weak_ptr<T> weak_probe = wrapped;
+            iter->second.ptr_data = std::move(wrapped);
+            iter->second.use_count_fn = [weak_probe] {
+                return static_cast<long>(weak_probe.use_count());
+            };
             iter->second.metadata.flags.has_custom_deleter = true;
-        } catch (const std::bad_any_cast&) {
-            // Ignore type mismatch
         }
     }
 }

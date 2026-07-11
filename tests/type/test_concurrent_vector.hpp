@@ -18,6 +18,12 @@ using namespace atom::type;
 using ::testing::ElementsAre;
 using ::testing::Eq;
 
+// Named namespace isolates the test helpers (e.g. TestObject) from
+// identically-named helpers in other header-only test files aggregated into
+// test_header_only.cpp. (An anonymous namespace would still leak names into
+// unqualified lookup and cause ambiguity.)
+namespace concurrent_vector_test {
+
 // Custom class for testing with non-trivial types
 class TestObject {
 public:
@@ -73,7 +79,7 @@ private:
 int TestObject::copy_count_ = 0;
 int TestObject::move_count_ = 0;
 
-// Fixture for concurrent_vector tests
+// Fixture for ConcurrentVector tests
 class ConcurrentVectorTest : public ::testing::Test {
 protected:
     void SetUp() override { TestObject::resetCounters(); }
@@ -159,31 +165,31 @@ protected:
 
 // Basic construction and initial state tests
 TEST_F(ConcurrentVectorTest, DefaultConstruction) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
     EXPECT_EQ(vec.size(), 0);
     EXPECT_EQ(vec.capacity(), 0);
     EXPECT_TRUE(vec.empty());
 }
 
 TEST_F(ConcurrentVectorTest, ConstructionWithCapacity) {
-    concurrent_vector<int> vec(100);
+    ConcurrentVector<int> vec(100);
     EXPECT_EQ(vec.size(), 0);
     EXPECT_GE(vec.capacity(), 100);
     EXPECT_TRUE(vec.empty());
 }
 
 TEST_F(ConcurrentVectorTest, ConstructionWithZeroThreads) {
-    EXPECT_THROW(concurrent_vector<int>(0, 0), std::invalid_argument);
+    EXPECT_THROW(ConcurrentVector<int>(0, 0), std::invalid_argument);
 }
 
 TEST_F(ConcurrentVectorTest, ConstructionWithCustomThreadCount) {
-    concurrent_vector<int> vec(0, 4);
+    ConcurrentVector<int> vec(0, 4);
     EXPECT_EQ(vec.thread_count(), 4);
 }
 
 // Basic operations tests
 TEST_F(ConcurrentVectorTest, PushBack) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
 
     vec.push_back(1);
     EXPECT_EQ(vec.size(), 1);
@@ -197,7 +203,7 @@ TEST_F(ConcurrentVectorTest, PushBack) {
 }
 
 TEST_F(ConcurrentVectorTest, PushBackMove) {
-    concurrent_vector<std::string> vec;
+    ConcurrentVector<std::string> vec;
 
     std::string s1 = "Hello";
     vec.push_back(std::move(s1));
@@ -214,7 +220,7 @@ TEST_F(ConcurrentVectorTest, PushBackMove) {
 }
 
 TEST_F(ConcurrentVectorTest, EmplaceBack) {
-    concurrent_vector<TestObject> vec;
+    ConcurrentVector<TestObject> vec;
 
     TestObject::resetCounters();
     vec.emplace_back(42);
@@ -230,7 +236,7 @@ TEST_F(ConcurrentVectorTest, EmplaceBack) {
 }
 
 TEST_F(ConcurrentVectorTest, PopBack) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
     vec.push_back(1);
     vec.push_back(2);
     vec.push_back(3);
@@ -250,13 +256,13 @@ TEST_F(ConcurrentVectorTest, PopBack) {
 }
 
 TEST_F(ConcurrentVectorTest, PopBackEmptyVector) {
-    concurrent_vector<int> vec;
-    EXPECT_THROW(vec.pop_back(), concurrent_vector_error);
+    ConcurrentVector<int> vec;
+    EXPECT_THROW(vec.pop_back(), ConcurrentVectorError);
 }
 
 // Access methods tests
 TEST_F(ConcurrentVectorTest, At) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
     vec.push_back(1);
     vec.push_back(2);
     vec.push_back(3);
@@ -265,27 +271,27 @@ TEST_F(ConcurrentVectorTest, At) {
     EXPECT_EQ(vec.at(1), 2);
     EXPECT_EQ(vec.at(2), 3);
 
-    EXPECT_THROW(vec.at(3), concurrent_vector_error);
-    EXPECT_THROW(vec.at(100), concurrent_vector_error);
+    EXPECT_THROW(vec.at(3), ConcurrentVectorError);
+    EXPECT_THROW(vec.at(100), ConcurrentVectorError);
 }
 
 TEST_F(ConcurrentVectorTest, AtConst) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
     vec.push_back(1);
     vec.push_back(2);
     vec.push_back(3);
 
-    const concurrent_vector<int>& const_vec = vec;
+    const ConcurrentVector<int>& const_vec = vec;
     EXPECT_EQ(const_vec.at(0), 1);
     EXPECT_EQ(const_vec.at(1), 2);
     EXPECT_EQ(const_vec.at(2), 3);
 
-    EXPECT_THROW(const_vec.at(3), concurrent_vector_error);
-    EXPECT_THROW(const_vec.at(100), concurrent_vector_error);
+    EXPECT_THROW(const_vec.at(3), ConcurrentVectorError);
+    EXPECT_THROW(const_vec.at(100), ConcurrentVectorError);
 }
 
 TEST_F(ConcurrentVectorTest, SubscriptOperator) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
     vec.push_back(1);
     vec.push_back(2);
     vec.push_back(3);
@@ -300,21 +306,21 @@ TEST_F(ConcurrentVectorTest, SubscriptOperator) {
 }
 
 TEST_F(ConcurrentVectorTest, SubscriptOperatorConst) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
     vec.push_back(1);
     vec.push_back(2);
     vec.push_back(3);
 
-    const concurrent_vector<int>& const_vec = vec;
+    const ConcurrentVector<int>& const_vec = vec;
     EXPECT_EQ(const_vec[0], 1);
     EXPECT_EQ(const_vec[1], 2);
     EXPECT_EQ(const_vec[2], 3);
 }
 
 TEST_F(ConcurrentVectorTest, Front) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
 
-    EXPECT_THROW(vec.front(), concurrent_vector_error);
+    EXPECT_THROW(vec.front(), ConcurrentVectorError);
 
     vec.push_back(42);
     EXPECT_EQ(vec.front(), 42);
@@ -329,18 +335,18 @@ TEST_F(ConcurrentVectorTest, Front) {
 }
 
 TEST_F(ConcurrentVectorTest, FrontConst) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
     vec.push_back(42);
     vec.push_back(43);
 
-    const concurrent_vector<int>& const_vec = vec;
+    const ConcurrentVector<int>& const_vec = vec;
     EXPECT_EQ(const_vec.front(), 42);
 }
 
 TEST_F(ConcurrentVectorTest, Back) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
 
-    EXPECT_THROW(vec.back(), concurrent_vector_error);
+    EXPECT_THROW(vec.back(), ConcurrentVectorError);
 
     vec.push_back(42);
     EXPECT_EQ(vec.back(), 42);
@@ -355,17 +361,17 @@ TEST_F(ConcurrentVectorTest, Back) {
 }
 
 TEST_F(ConcurrentVectorTest, BackConst) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
     vec.push_back(42);
     vec.push_back(43);
 
-    const concurrent_vector<int>& const_vec = vec;
+    const ConcurrentVector<int>& const_vec = vec;
     EXPECT_EQ(const_vec.back(), 43);
 }
 
 // Capacity management tests
 TEST_F(ConcurrentVectorTest, Reserve) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
     vec.reserve(100);
 
     EXPECT_EQ(vec.size(), 0);
@@ -386,7 +392,7 @@ TEST_F(ConcurrentVectorTest, Reserve) {
 }
 
 TEST_F(ConcurrentVectorTest, ShrinkToFit) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
     vec.reserve(100);
 
     // Add some elements
@@ -400,7 +406,7 @@ TEST_F(ConcurrentVectorTest, ShrinkToFit) {
 }
 
 TEST_F(ConcurrentVectorTest, Clear) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
 
     for (int i = 0; i < 50; i++) {
         vec.push_back(i);
@@ -418,7 +424,7 @@ TEST_F(ConcurrentVectorTest, Clear) {
 }
 
 TEST_F(ConcurrentVectorTest, ClearRange) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
 
     for (int i = 0; i < 10; i++) {
         vec.push_back(i);
@@ -450,15 +456,15 @@ TEST_F(ConcurrentVectorTest, ClearRange) {
 
     // Test invalid ranges
     EXPECT_THROW(vec.clear_range(1, 1),
-                 concurrent_vector_error);  // start == end
+                 ConcurrentVectorError);  // start == end
     EXPECT_THROW(vec.clear_range(2, 1),
-                 concurrent_vector_error);  // start > end
-    EXPECT_THROW(vec.clear_range(0, 2), concurrent_vector_error);  // end > size
+                 ConcurrentVectorError);                         // start > end
+    EXPECT_THROW(vec.clear_range(0, 2), ConcurrentVectorError);  // end > size
 }
 
 // Batch operations tests
 TEST_F(ConcurrentVectorTest, BatchInsert) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
 
     // Create batch
     std::vector<int> batch(100);
@@ -490,7 +496,7 @@ TEST_F(ConcurrentVectorTest, BatchInsert) {
 }
 
 TEST_F(ConcurrentVectorTest, BatchInsertMove) {
-    concurrent_vector<std::string> vec;
+    ConcurrentVector<std::string> vec;
 
     // Create batch
     std::vector<std::string> batch;
@@ -512,7 +518,7 @@ TEST_F(ConcurrentVectorTest, BatchInsertMove) {
 }
 
 TEST_F(ConcurrentVectorTest, ParallelBatchInsert) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
 
     // Create batch
     std::vector<int> batch(1000);
@@ -535,7 +541,7 @@ TEST_F(ConcurrentVectorTest, ParallelBatchInsert) {
 
 // Parallel operation tests
 TEST_F(ConcurrentVectorTest, ParallelForEach) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
 
     // Add elements
     for (int i = 0; i < 100; i++) {
@@ -552,7 +558,7 @@ TEST_F(ConcurrentVectorTest, ParallelForEach) {
 }
 
 TEST_F(ConcurrentVectorTest, ParallelForEachConst) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
 
     // Add elements
     for (int i = 0; i < 100; i++) {
@@ -561,7 +567,7 @@ TEST_F(ConcurrentVectorTest, ParallelForEachConst) {
 
     // Use parallel_for_each const version to compute sum
     std::atomic<int> sum(0);
-    const concurrent_vector<int>& const_vec = vec;
+    const ConcurrentVector<int>& const_vec = vec;
 
     const_vec.parallel_for_each([&sum](const int& val) { sum += val; });
 
@@ -571,7 +577,7 @@ TEST_F(ConcurrentVectorTest, ParallelForEachConst) {
 }
 
 TEST_F(ConcurrentVectorTest, ParallelFind) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
 
     // Add elements
     for (int i = 0; i < 1000; i++) {
@@ -592,13 +598,13 @@ TEST_F(ConcurrentVectorTest, ParallelFind) {
     EXPECT_FALSE(idx1000.has_value());
 
     // Test with empty vector
-    concurrent_vector<int> empty_vec;
+    ConcurrentVector<int> empty_vec;
     auto empty_result = empty_vec.parallel_find(0);
     EXPECT_FALSE(empty_result.has_value());
 }
 
 TEST_F(ConcurrentVectorTest, ParallelTransform) {
-    concurrent_vector<std::string> vec;
+    ConcurrentVector<std::string> vec;
 
     // Add elements
     for (int i = 0; i < 100; i++) {
@@ -619,7 +625,7 @@ TEST_F(ConcurrentVectorTest, ParallelTransform) {
 
 // Thread safety tests
 TEST_F(ConcurrentVectorTest, ConcurrentPushBack) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
 
     // Spawn multiple threads that all push_back values
     std::vector<std::thread> threads;
@@ -653,7 +659,7 @@ TEST_F(ConcurrentVectorTest, ConcurrentPushBack) {
 }
 
 TEST_F(ConcurrentVectorTest, ConcurrentReadWrite) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
 
     // Initialize with some values
     for (int i = 0; i < 100; i++) {
@@ -701,7 +707,7 @@ TEST_F(ConcurrentVectorTest, ConcurrentReadWrite) {
 }
 
 TEST_F(ConcurrentVectorTest, ConcurrentParallelOperations) {
-    concurrent_vector<int> vec;
+    ConcurrentVector<int> vec;
 
     // Initialize with some values
     for (int i = 0; i < 1000; i++) {
@@ -749,7 +755,7 @@ TEST_F(ConcurrentVectorTest, ConcurrentParallelOperations) {
 
 // Move semantics tests
 TEST_F(ConcurrentVectorTest, MoveConstructor) {
-    concurrent_vector<std::unique_ptr<int>> vec1;
+    ConcurrentVector<std::unique_ptr<int>> vec1;
 
     // Add some elements
     for (int i = 0; i < 10; i++) {
@@ -757,7 +763,7 @@ TEST_F(ConcurrentVectorTest, MoveConstructor) {
     }
 
     // Move to a new vector
-    concurrent_vector<std::unique_ptr<int>> vec2(std::move(vec1));
+    ConcurrentVector<std::unique_ptr<int>> vec2(std::move(vec1));
 
     // Check that elements were moved
     EXPECT_EQ(vec2.size(), 10);
@@ -768,8 +774,8 @@ TEST_F(ConcurrentVectorTest, MoveConstructor) {
 }
 
 TEST_F(ConcurrentVectorTest, MoveAssignment) {
-    concurrent_vector<std::unique_ptr<int>> vec1;
-    concurrent_vector<std::unique_ptr<int>> vec2;
+    ConcurrentVector<std::unique_ptr<int>> vec1;
+    ConcurrentVector<std::unique_ptr<int>> vec2;
 
     // Add some elements to vec1
     for (int i = 0; i < 10; i++) {
@@ -794,7 +800,7 @@ TEST_F(ConcurrentVectorTest, MoveAssignment) {
 
 // Exception safety tests
 TEST_F(ConcurrentVectorTest, ExceptionInPushBack) {
-    concurrent_vector<ThrowingObject> vec;
+    ConcurrentVector<ThrowingObject> vec;
 
     // Add some normal elements
     vec.push_back(ThrowingObject(1));
@@ -802,7 +808,7 @@ TEST_F(ConcurrentVectorTest, ExceptionInPushBack) {
 
     // Try to add an element that throws on copy
     ThrowingObject throwing(3, true);
-    EXPECT_THROW(vec.push_back(throwing), concurrent_vector_error);
+    EXPECT_THROW(vec.push_back(throwing), ConcurrentVectorError);
 
     // Vector should still contain the original elements
     EXPECT_EQ(vec.size(), 2);
@@ -811,17 +817,23 @@ TEST_F(ConcurrentVectorTest, ExceptionInPushBack) {
 }
 
 TEST_F(ConcurrentVectorTest, ExceptionInEmplaceBack) {
-    concurrent_vector<ThrowingObject> vec;
+    ConcurrentVector<ThrowingObject> vec;
 
     // Add some normal elements
     vec.emplace_back(1);
     vec.emplace_back(2);
 
-    // Try to construct an element that throws
-    EXPECT_THROW(vec.emplace_back(3, true), concurrent_vector_error);
+    // Construct an object configured to throw on copy, then insert it by copy.
+    // The copy constructor throws and must surface as ConcurrentVectorError.
+    // (emplace_back constructs in place, so it never copies and cannot trigger
+    // throw_on_copy.)
+    ThrowingObject thrower(3, /*throw_on_copy=*/true);
+    EXPECT_THROW(vec.push_back(thrower), ConcurrentVectorError);
 
     // Vector should still contain the original elements
     EXPECT_EQ(vec.size(), 2);
     EXPECT_EQ(vec[0].getValue(), 1);
     EXPECT_EQ(vec[1].getValue(), 2);
 }
+
+}  // namespace concurrent_vector_test

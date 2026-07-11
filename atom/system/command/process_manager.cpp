@@ -10,6 +10,7 @@
 #include <atomic>
 #include <chrono>
 #include <fstream>
+#include <regex>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -21,6 +22,7 @@
 // clang-format off
 #include <windows.h>
 #include <tlhelp32.h>
+#include <psapi.h>  // GetModuleBaseNameA
 // clang-format on
 #else
 #include <sys/wait.h>

@@ -235,8 +235,8 @@ std::shared_ptr<CompiledScript> ScriptLoader::compileForLanguage(
                 compiled->isValid = true;
                 break;
 
-            case ScriptLanguage::ChaiScript:
-                // Simulate ChaiScript compilation
+            case ScriptLanguage::Python:
+                // Simulate Python compilation
                 compiled->bytecode.assign(source.begin(), source.end());
                 compiled->isValid = true;
                 break;

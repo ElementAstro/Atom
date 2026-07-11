@@ -172,7 +172,9 @@ TEST_F(TemplateTraitsTest, IsTemplate) {
     EXPECT_TRUE(is_template_v<SimpleTemplate<double>>);
     EXPECT_TRUE((is_template_v<PairTemplate<int, float>>));
     EXPECT_FALSE(is_template_v<int>);
-    EXPECT_FALSE(is_template_v<std::string>);  // std::string is an alias
+    // std::string is an alias for std::basic_string<char, ...>, which is a
+    // template instantiation on every implementation
+    EXPECT_TRUE(is_template_v<std::string>);
 
     // Test TemplateInstantiation concept
     static_assert(TemplateInstantiation<std::vector<int>>);
@@ -329,10 +331,12 @@ TEST_F(TemplateTraitsTest, AliasTemplate) {
 //------------------------------------------------------------------------------
 
 TEST_F(TemplateTraitsTest, CountOccurrences) {
-    // Test count_occurrences
+    // Test count_occurrences: the first parameter is the type searched for,
+    // the remaining pack {double, int, char, int, float} contains int twice
+    // (consistent with the FindAllIndices test below)
     constexpr auto count =
         count_occurrences_v<int, double, int, char, int, float>;
-    EXPECT_EQ(count, 3);
+    EXPECT_EQ(count, 2);
 
     constexpr auto noMatches =
         count_occurrences_v<bool, double, int, char, float>;
@@ -447,7 +451,8 @@ TEST_F(TemplateTraitsTest, ExtractFunctionTraits) {
     EXPECT_TRUE(NoexceptFuncTraits::is_noexcept);
 
     // Test lambda
-    auto lambda = [](int x, double y) -> char { return 'a'; };
+    auto lambda = []([[maybe_unused]] int x,
+                     [[maybe_unused]] double y) -> char { return 'a'; };
     using LambdaTraits = extract_function_traits<decltype(lambda)>;
     static_assert(std::is_same_v<LambdaTraits::return_type, char>);
     static_assert(LambdaTraits::arity == 2);
@@ -487,17 +492,17 @@ TEST_F(TemplateTraitsTest, TupleLikeTests) {
 //------------------------------------------------------------------------------
 
 TEST_F(TemplateTraitsTest, ConstraintLevelTests) {
-    // Test has_copyability
-    EXPECT_TRUE(has_copyability<int>(constraint_level::trivial));
-    EXPECT_TRUE(has_copyability<std::string>(constraint_level::nontrivial));
-    EXPECT_FALSE(
-        has_copyability<std::unique_ptr<int>>(constraint_level::nontrivial));
+    // Test has_copy_operations
+    EXPECT_TRUE(has_copy_operations<int>(constraint_level::trivial));
+    EXPECT_TRUE(has_copy_operations<std::string>(constraint_level::nontrivial));
+    EXPECT_FALSE(has_copy_operations<std::unique_ptr<int>>(
+        constraint_level::nontrivial));
 
-    // Test has_relocatability
-    EXPECT_TRUE(has_relocatability<int>(constraint_level::trivial));
-    EXPECT_TRUE(has_relocatability<std::string>(constraint_level::nothrow));
+    // Test has_move_operations
+    EXPECT_TRUE(has_move_operations<int>(constraint_level::trivial));
+    EXPECT_TRUE(has_move_operations<std::string>(constraint_level::nothrow));
     EXPECT_TRUE(
-        has_relocatability<std::unique_ptr<int>>(constraint_level::nothrow));
+        has_move_operations<std::unique_ptr<int>>(constraint_level::nothrow));
 
     // Test has_destructibility
     EXPECT_TRUE(has_destructibility<int>(constraint_level::trivial));
@@ -591,9 +596,3 @@ TEST_F(TemplateTraitsTest, StaticDiagnosticsTests) {
 }
 
 }  // namespace atom::meta::test
-
-// Main function
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
